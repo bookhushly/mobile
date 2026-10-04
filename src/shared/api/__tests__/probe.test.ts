@@ -8,7 +8,7 @@ function apiReturning(res: Response) {
     baseUrl: 'https://api.test',
     fetchFn: jest.fn(() => Promise.resolve(res)),
     getAccessToken: () => Promise.resolve('tok'),
-    refreshSession: () => Promise.resolve(null),
+    refreshSession: () => Promise.resolve({ failure: 'invalid' }),
     clock: { recordServerDate: () => Promise.resolve() },
     appVersion: '1.0.0 (1)',
     platform: 'android',

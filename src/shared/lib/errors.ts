@@ -8,6 +8,7 @@ export type ApiError =
   | { kind: 'rateLimited'; retryAfterSec?: number }
   | { kind: 'unavailable'; status: number; code?: string }
   | { kind: 'validation' }
+  | { kind: 'aborted' }
   | { kind: 'unknown'; status?: number };
 
 type HeaderReader = { get(name: string): string | null };
@@ -51,6 +52,7 @@ export function isRetryable(e: ApiError): boolean {
     case 'notFound':
     case 'conflict':
     case 'validation':
+    case 'aborted':
     case 'unknown':
       return false;
   }

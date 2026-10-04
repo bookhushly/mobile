@@ -23,7 +23,7 @@ function make(responses: (Response | Error)[], over: Partial<Deps> = {}) {
     baseUrl: 'https://api.test',
     fetchFn,
     getAccessToken: () => Promise.resolve('tok1'),
-    refreshSession: () => Promise.resolve('tok2'),
+    refreshSession: () => Promise.resolve({ token: 'tok2' }),
     clock: {
       recordServerDate: (d) => {
         dates.push(d);
@@ -73,7 +73,9 @@ describe('api client', () => {
   });
 
   it('returns auth when refresh fails', async () => {
-    const { client } = make([res(401, {})], { refreshSession: () => Promise.resolve(null) });
+    const { client } = make([res(401, {})], {
+      refreshSession: () => Promise.resolve({ failure: 'invalid' }),
+    });
     expect(await client.request('/api/x', { schema })).toEqual({
       ok: false,
       error: { kind: 'auth' },
@@ -136,5 +138,48 @@ describe('api client', () => {
     const { client } = make([res(409, { code: 'already_checked_in' })]);
     const r = await client.request('/api/x', { method: 'POST', body: {}, schema });
     expect(r).toMatchObject({ ok: false, error: { kind: 'conflict', code: 'already_checked_in' } });
+  });
+
+  it('reports a transient refresh failure as network (retryable), not auth', async () => {
+    const { client } = make([res(401, {})], {
+      refreshSession: () => Promise.resolve({ failure: 'network' }),
+    });
+    expect(await client.request('/api/x', { schema })).toEqual({
+      ok: false,
+      error: { kind: 'network' },
+    });
+  });
+
+  it('does not send anything when the caller already aborted', async () => {
+    const { client, fetchFn } = make([res(200, { ok: true })]);
+    const c = new AbortController();
+    c.abort();
+    const r = await client.request('/api/x', { schema, signal: c.signal });
+    expect(r).toEqual({ ok: false, error: { kind: 'aborted' } });
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('treats a caller abort mid-flight as aborted and does not retry', async () => {
+    const c = new AbortController();
+    const abort = Object.assign(new Error('aborted'), { name: 'AbortError' });
+    const { client, fetchFn } = make([abort], { maxRetries: 2 });
+    (fetchFn as unknown as jest.Mock).mockImplementationOnce(() => {
+      c.abort();
+      return Promise.reject(abort);
+    });
+    const r = await client.request('/api/x', { schema, signal: c.signal });
+    expect(r).toEqual({ ok: false, error: { kind: 'aborted' } });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a path that could redirect the bearer token to another host', async () => {
+    const { client, fetchFn } = make([res(200, { ok: true })]);
+    for (const bad of ['@evil.com/x', 'api/x', '//evil.com/x', 'https://evil.com/x']) {
+      expect(await client.request(bad, { schema })).toEqual({
+        ok: false,
+        error: { kind: 'validation' },
+      });
+    }
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 });

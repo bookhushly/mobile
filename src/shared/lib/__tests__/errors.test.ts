@@ -50,6 +50,7 @@ describe('isRetryable', () => {
     [{ kind: 'notFound' }, false],
     [{ kind: 'conflict', code: 'x' }, false],
     [{ kind: 'validation' }, false],
+    [{ kind: 'aborted' }, false],
   ];
   it.each(cases)('%j -> %p', (e, expected) => {
     expect(isRetryable(e)).toBe(expected);

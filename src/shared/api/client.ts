@@ -14,11 +14,13 @@ export type RequestOptions<T> = {
   signal?: AbortSignal;
 };
 
+export type RefreshOutcome = { token: string } | { failure: 'network' | 'invalid' };
+
 type Deps = {
   baseUrl: string;
   fetchFn: typeof fetch;
   getAccessToken: () => Promise<string | null>;
-  refreshSession: () => Promise<string | null>;
+  refreshSession: () => Promise<RefreshOutcome>;
   clock: Pick<Clock, 'recordServerDate'>;
   appVersion: string;
   platform: string;
@@ -45,9 +47,10 @@ export function createApiClient(deps: Deps) {
     const timer = setTimeout(() => {
       controller.abort();
     }, timeoutMs);
-    outerSignal?.addEventListener('abort', () => {
+    const onOuterAbort = () => {
       controller.abort();
-    });
+    };
+    outerSignal?.addEventListener('abort', onOuterAbort);
     try {
       const headers: Record<string, string> = {
         Accept: 'application/json',
@@ -62,10 +65,12 @@ export function createApiClient(deps: Deps) {
       await deps.clock.recordServerDate(res.headers.get('date'));
       return ok(res);
     } catch (e) {
+      if (outerSignal?.aborted) return err({ kind: 'aborted' });
       const aborted = e instanceof Error && e.name === 'AbortError';
       return err(aborted ? { kind: 'timeout' } : { kind: 'network' });
     } finally {
       clearTimeout(timer);
+      outerSignal?.removeEventListener('abort', onOuterAbort);
     }
   }
 
@@ -78,6 +83,8 @@ export function createApiClient(deps: Deps) {
   }
 
   async function request<T>(path: string, opts: RequestOptions<T>): Promise<Result<T, ApiError>> {
+    // The bearer token must only ever go to our own origin.
+    if (!path.startsWith('/') || path.startsWith('//')) return err({ kind: 'validation' });
     const method = opts.method ?? 'GET';
     const canRetry = method === 'GET' || opts.idempotent === true;
     let token = await deps.getAccessToken();
@@ -85,6 +92,7 @@ export function createApiClient(deps: Deps) {
     let attempt = 0;
 
     for (;;) {
+      if (opts.signal?.aborted) return err({ kind: 'aborted' });
       const sent = await once(path, method, opts.body, token, opts.signal);
       let failure: ApiError;
       if (!sent.ok) {
@@ -98,8 +106,10 @@ export function createApiClient(deps: Deps) {
         if (res.status === 401 && !refreshed) {
           refreshed = true;
           const next = await deps.refreshSession();
-          if (next === null) return err({ kind: 'auth' });
-          token = next;
+          if ('failure' in next) {
+            return err(next.failure === 'network' ? { kind: 'network' } : { kind: 'auth' });
+          }
+          token = next.token;
           continue;
         }
         failure = errorFromResponse(res.status, await readBody(res), res.headers);

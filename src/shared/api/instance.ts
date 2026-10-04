@@ -18,8 +18,13 @@ export const api = createApiClient({
   baseUrl: env.apiBaseUrl,
   fetchFn: (...a) => fetch(...a),
   getAccessToken: async () => (await supabase.auth.getSession()).data.session?.access_token ?? null,
-  refreshSession: async () =>
-    (await supabase.auth.refreshSession()).data.session?.access_token ?? null,
+  refreshSession: async () => {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (data.session) return { token: data.session.access_token };
+    const transient =
+      error?.name === 'AuthRetryableFetchError' || (error?.status ?? 0) >= 500 || error?.status === 0;
+    return { failure: transient ? ('network' as const) : ('invalid' as const) };
+  },
   clock,
   appVersion: `${version} (${build})`,
   platform: Platform.OS,
