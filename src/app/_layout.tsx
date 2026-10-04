@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react-native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -11,8 +12,12 @@ import { useRouteStore } from '@/features/mode/hooks/useRouteStore';
 import { APP_VERSION } from '@/shared/api/instance';
 import { setupQueryManagers } from '@/shared/api/queryClient';
 import { isVersionSupported, MIN_SUPPORTED_VERSION } from '@/shared/lib/version';
+import { initMonitoring } from '@/shared/monitoring';
 import { AppProviders } from '@/shared/providers/AppProviders';
 
+export { ScreenError as ErrorBoundary } from '@/shared/ui/ScreenError';
+
+initMonitoring(APP_VERSION);
 void SplashScreen.preventAutoHideAsync();
 
 function Navigator() {
@@ -59,7 +64,7 @@ function Navigator() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   useEffect(() => startSessionListener(), []);
   useEffect(() => setupQueryManagers(), []);
   return (
@@ -69,3 +74,5 @@ export default function RootLayout() {
     </AppProviders>
   );
 }
+
+export default Sentry.wrap(RootLayout);
