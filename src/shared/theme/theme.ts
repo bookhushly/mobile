@@ -22,7 +22,7 @@ export const color = {
   },
   outcome: {
     admitted: { bg: palette.gateAdmitted, fg: palette.white },
-    used: { bg: palette.gateUsed, fg: palette.white },
+    used: { bg: palette.gateUsedBg, fg: palette.ink },
     refused: { bg: palette.gateRefused, fg: palette.white },
     retry: { bg: palette.gateRetry, fg: palette.white },
   },

@@ -9,7 +9,13 @@ export function Screen({ children, scroll }: { children: ReactNode; scroll?: boo
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: color.canvas }}>
       {scroll ? (
-        <ScrollView contentContainerStyle={body}>{children}</ScrollView>
+        <ScrollView
+          contentContainerStyle={body}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+        >
+          {children}
+        </ScrollView>
       ) : (
         <View style={[{ flex: 1 }, body]}>{children}</View>
       )}

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import { useModeSwitcher } from '@/features/mode/hooks/useModeSwitcher';
+import { ModeSwitcher } from '@/features/mode/screens/ModeSwitcher';
 import { CustomerShell } from '@/features/customer/screens/CustomerShell';
 import { api } from '@/shared/api/instance';
 import { probeAuthedCall } from '@/shared/api/probe';
@@ -9,6 +11,7 @@ import { probeAuthedCall } from '@/shared/api/probe';
 export default function CustomerHomeRoute() {
   const state = useAuth((s) => s.state);
   const signOut = useAuth((s) => s.signOut);
+  const { modes, choose } = useModeSwitcher(state.status === 'signedIn' ? state.userId : null);
   const [probe, setProbe] = useState('API check: running…');
 
   useEffect(() => {
@@ -24,6 +27,8 @@ export default function CustomerHomeRoute() {
       onSignOut={() => {
         void signOut();
       }}
-    />
+    >
+      <ModeSwitcher modes={modes} current="customer" onChoose={choose} />
+    </CustomerShell>
   );
 }

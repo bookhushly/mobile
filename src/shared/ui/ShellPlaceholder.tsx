@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import { Button } from './Button';
 import { Card } from './Card';
 import { Screen } from './Screen';
@@ -10,13 +12,23 @@ type Props = {
   identity: string;
   onSignOut: () => void;
   footnote?: string;
+  children?: ReactNode;
 };
 
-export function ShellPlaceholder({ title, subtitle, identity, onSignOut, footnote }: Props) {
+export function ShellPlaceholder({
+  title,
+  subtitle,
+  identity,
+  onSignOut,
+  footnote,
+  children,
+}: Props) {
   return (
     <Screen>
       <Stack gap="s3">
-        <Text variant="titleLg">{title}</Text>
+        <Text variant="titleLg" accessibilityRole="header">
+          {title}
+        </Text>
         <Text variant="body" tone="textSecondary">
           {subtitle}
         </Text>
@@ -31,6 +43,7 @@ export function ShellPlaceholder({ title, subtitle, identity, onSignOut, footnot
           </Text>
         </Stack>
       </Card>
+      {children}
       {footnote ? (
         <Text variant="caption" tone="textMuted" testID="shell-footnote">
           {footnote}

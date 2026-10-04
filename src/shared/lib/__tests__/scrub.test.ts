@@ -24,7 +24,10 @@ describe('scrubBreadcrumb', () => {
     expect(scrubBreadcrumb({ category: 'console', message: 'hi' })).toBeNull();
   });
   it('strips query strings from http breadcrumbs', () => {
-    const b = scrubBreadcrumb({ category: 'xhr', data: { url: 'https://a.co/x?id=1', method: 'GET' } });
+    const b = scrubBreadcrumb({
+      category: 'xhr',
+      data: { url: 'https://a.co/x?id=1', method: 'GET' },
+    });
     expect(b).toMatchObject({ data: { url: 'https://a.co/x' } });
   });
 });

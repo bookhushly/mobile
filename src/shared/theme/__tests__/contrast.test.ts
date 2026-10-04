@@ -37,7 +37,12 @@ describe('contrast', () => {
   });
 
   it('gate outcome fills reach 7:1 for sunlight legibility', () => {
-    for (const o of [color.outcome.admitted, color.outcome.refused, color.outcome.retry]) {
+    for (const o of [
+      color.outcome.admitted,
+      color.outcome.used,
+      color.outcome.refused,
+      color.outcome.retry,
+    ]) {
       expect(contrastRatio(o.fg, o.bg)).toBeGreaterThanOrEqual(7);
     }
   });

@@ -25,7 +25,7 @@ export const palette = {
   infoInk: '#1E3A8A',
   gateAdmitted: '#166534',
   gateRefused: '#991B1B',
-  gateUsed: '#B45309',
+  gateUsedBg: '#FBBF24',
   gateRetry: '#4A4670',
 } as const;
 

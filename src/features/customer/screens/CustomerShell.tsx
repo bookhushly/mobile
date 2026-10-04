@@ -1,8 +1,10 @@
+import type { ReactNode } from 'react';
+
 import { ShellPlaceholder } from '@/shared/ui';
 
-type Props = { identity: string; onSignOut: () => void; footnote?: string };
+type Props = { identity: string; onSignOut: () => void; children?: ReactNode; footnote?: string };
 
-export function CustomerShell({ identity, onSignOut, footnote }: Props) {
+export function CustomerShell({ identity, onSignOut, footnote, children }: Props) {
   return (
     <ShellPlaceholder
       title="Bookhushly"
@@ -10,6 +12,8 @@ export function CustomerShell({ identity, onSignOut, footnote }: Props) {
       identity={identity}
       onSignOut={onSignOut}
       {...(footnote ? { footnote } : {})}
-    />
+    >
+      {children}
+    </ShellPlaceholder>
   );
 }

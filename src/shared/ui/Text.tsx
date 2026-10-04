@@ -11,6 +11,8 @@ type Props = {
   align?: TextStyle['textAlign'];
   numberOfLines?: number;
   testID?: string;
+  accessibilityRole?: 'header' | 'link' | 'text' | 'alert';
+  accessibilityLiveRegion?: 'none' | 'polite' | 'assertive';
   style?: StyleProp<TextStyle>;
   children: ReactNode;
 };
@@ -22,6 +24,8 @@ export function Text({
   align,
   numberOfLines,
   testID,
+  accessibilityRole,
+  accessibilityLiveRegion,
   style,
   children,
 }: Props) {
@@ -29,6 +33,8 @@ export function Text({
   return (
     <RNText
       testID={testID}
+      accessibilityRole={accessibilityRole}
+      accessibilityLiveRegion={accessibilityLiveRegion}
       numberOfLines={numberOfLines}
       maxFontSizeMultiplier={v.maxScale}
       style={[

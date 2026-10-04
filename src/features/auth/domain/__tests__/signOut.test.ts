@@ -4,7 +4,11 @@ describe('performSignOut', () => {
   it('does nothing extra when the remote sign-out succeeds', async () => {
     const removeLocal = jest.fn(() => Promise.resolve());
     const onSignedOut = jest.fn();
-    await performSignOut({ remote: () => Promise.resolve({ error: null }), removeLocal, onSignedOut });
+    await performSignOut({
+      remote: () => Promise.resolve({ error: null }),
+      removeLocal,
+      onSignedOut,
+    });
     expect(removeLocal).not.toHaveBeenCalled();
     expect(onSignedOut).toHaveBeenCalledTimes(1);
   });
@@ -22,7 +26,11 @@ describe('performSignOut', () => {
   it('signs out locally even if the remote call throws', async () => {
     const removeLocal = jest.fn(() => Promise.resolve());
     const onSignedOut = jest.fn();
-    await performSignOut({ remote: () => Promise.reject(new Error('boom')), removeLocal, onSignedOut });
+    await performSignOut({
+      remote: () => Promise.reject(new Error('boom')),
+      removeLocal,
+      onSignedOut,
+    });
     expect(removeLocal).toHaveBeenCalledTimes(1);
     expect(onSignedOut).toHaveBeenCalledTimes(1);
   });

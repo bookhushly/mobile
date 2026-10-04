@@ -1,7 +1,4 @@
-import {
-  parseStoredSession,
-  resolveInitialSession,
-} from '@/features/auth/domain/storedSession';
+import { parseStoredSession, resolveInitialSession } from '@/features/auth/domain/storedSession';
 
 const good = JSON.stringify({
   access_token: 'a',

@@ -22,7 +22,9 @@ export const api = createApiClient({
     const { data, error } = await supabase.auth.refreshSession();
     if (data.session) return { token: data.session.access_token };
     const transient =
-      error?.name === 'AuthRetryableFetchError' || (error?.status ?? 0) >= 500 || error?.status === 0;
+      error?.name === 'AuthRetryableFetchError' ||
+      (error?.status ?? 0) >= 500 ||
+      error?.status === 0;
     return { failure: transient ? ('network' as const) : ('invalid' as const) };
   },
   clock,

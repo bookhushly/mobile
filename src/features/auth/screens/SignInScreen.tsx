@@ -3,7 +3,7 @@ import { Linking, Pressable } from 'react-native';
 
 import { signInCopy, type SignInError } from '@/features/auth/domain/signInErrors';
 import { signInSchema } from '@/features/auth/schemas/signIn';
-import { color } from '@/shared/theme';
+import { color, density } from '@/shared/theme';
 import { Box, Button, Input, Screen, Stack, Text } from '@/shared/ui';
 
 type Props = {
@@ -33,15 +33,22 @@ export function SignInScreen({ onSubmit }: Props) {
     }
     setFieldErrors({});
     setSubmitting(true);
-    const failure = await onSubmit(parsed.data.email, parsed.data.password);
-    setError(failure ? signInCopy[failure] : null);
-    setSubmitting(false);
+    try {
+      const failure = await onSubmit(parsed.data.email, parsed.data.password);
+      setError(failure ? signInCopy[failure] : null);
+    } catch {
+      setError(signInCopy.unknown);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
     <Screen scroll>
       <Stack gap="s3">
-        <Text variant="displaySm">Welcome back</Text>
+        <Text variant="displaySm" accessibilityRole="header">
+          Welcome back
+        </Text>
         <Text variant="body" tone="textSecondary">
           Sign in to your Bookhushly account.
         </Text>
@@ -52,6 +59,7 @@ export function SignInScreen({ onSubmit }: Props) {
           value={email}
           onChangeText={setEmail}
           error={fieldErrors.email}
+          returnKeyType="next"
           keyboardType="email-address"
           autoCapitalize="none"
           autoComplete="email"
@@ -63,12 +71,20 @@ export function SignInScreen({ onSubmit }: Props) {
           onChangeText={setPassword}
           error={fieldErrors.password}
           secureTextEntry
+          returnKeyType="go"
+          onSubmitEditing={() => {
+            void submit();
+          }}
           autoComplete="password"
           textContentType="password"
         />
         {error ? (
           <Box p="s4" rounded="r3" style={{ backgroundColor: color.status.danger.bg }}>
-            <Text variant="bodySm" style={{ color: color.status.danger.fg }}>
+            <Text
+              variant="bodySm"
+              accessibilityLiveRegion="polite"
+              style={{ color: color.status.danger.fg }}
+            >
               {error}
             </Text>
           </Box>
@@ -83,12 +99,14 @@ export function SignInScreen({ onSubmit }: Props) {
       </Stack>
       <Pressable
         accessibilityRole="link"
-        accessibilityLabel="Create your account on bookhushly.com"
+        accessibilityLabel="New to Bookhushly? Create your account on bookhushly.com."
+        hitSlop={8}
+        style={{ minHeight: density.customer.controlHeight, justifyContent: 'center' }}
         onPress={() => {
           void Linking.openURL('https://www.bookhushly.com');
         }}
       >
-        <Text variant="bodySm" tone="textMuted">
+        <Text variant="bodySm" tone="linkText">
           New to Bookhushly? Create your account on bookhushly.com.
         </Text>
       </Pressable>

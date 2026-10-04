@@ -45,3 +45,30 @@ it('passes the normalised email to onSubmit', async () => {
     expect(onSubmit).toHaveBeenCalledWith('a@b.com', 'pw');
   });
 });
+
+it('announces errors politely so screen readers hear them', async () => {
+  const onSubmit = jest.fn().mockResolvedValue('invalidCredentials');
+  await render(<SignInScreen onSubmit={onSubmit} />);
+  await fill('a@b.com', 'pw');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  const msg = await screen.findByText(/email or password is not right/i);
+  expect(msg.props.accessibilityLiveRegion).toBe('polite');
+});
+
+it('never gets stuck loading if onSubmit throws', async () => {
+  const onSubmit = jest.fn().mockRejectedValue(new Error('storage down'));
+  await render(<SignInScreen onSubmit={onSubmit} />);
+  await fill('a@b.com', 'pw');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
+  });
+  expect(screen.getByText(/couldn’t sign you in/i)).toBeTruthy();
+});
+
+it('the account link label matches its visible text', async () => {
+  await render(<SignInScreen onSubmit={jest.fn()} />);
+  expect(
+    screen.getByRole('link', { name: 'New to Bookhushly? Create your account on bookhushly.com.' }),
+  ).toBeTruthy();
+});

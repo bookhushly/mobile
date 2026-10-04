@@ -136,7 +136,7 @@ Web's `success-600 #16A34A` is **3.30:1** with white (fails AA) and `danger-600 
 
 Violet is never decorative, a large fill, or a status colour. Red = errors/destructive only.
 
-**Gate exception (D9):** results are full-screen solid fills — deliberately outside 70/20/10 because they must be read from arm's length. Use the **dark** stops (`#166534`, `#991B1B`, amber `#B45309`/ink-on-`#FBBF24`) with white at ≥7:1 — pale washes vanish in sun. Always colour **+ large icon + word + haptic/audio** (never colour alone). **"Couldn't check" is neutral/warning, never red.** Four outcomes only: Admitted · Already used (time + by whom) · Refused (reason) · Couldn't check.
+**Gate exception (D9):** results are full-screen solid fills — deliberately outside 70/20/10 because they must be read from arm's length. Use the **dark** stops (`#166534`, `#991B1B`, **amber `#FBBF24` with ink text (10.4:1) for 'Already used'** (white on `#B45309` is only 5.0:1)) with white at ≥7:1 — pale washes vanish in sun. Always colour **+ large icon + word + haptic/audio** (never colour alone). **"Couldn't check" is neutral/warning, never red.** Four outcomes only: Admitted · Already used (time + by whom) · Refused (reason) · Couldn't check.
 
 ## 5. Shape and elevation
 
