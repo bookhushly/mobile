@@ -4,9 +4,15 @@ import { Screen } from './Screen';
 import { Stack } from './Stack';
 import { Text } from './Text';
 
-type Props = { title: string; subtitle: string; identity: string; onSignOut: () => void };
+type Props = {
+  title: string;
+  subtitle: string;
+  identity: string;
+  onSignOut: () => void;
+  footnote?: string;
+};
 
-export function ShellPlaceholder({ title, subtitle, identity, onSignOut }: Props) {
+export function ShellPlaceholder({ title, subtitle, identity, onSignOut, footnote }: Props) {
   return (
     <Screen>
       <Stack gap="s3">
@@ -25,6 +31,11 @@ export function ShellPlaceholder({ title, subtitle, identity, onSignOut }: Props
           </Text>
         </Stack>
       </Card>
+      {footnote ? (
+        <Text variant="caption" tone="textMuted" testID="shell-footnote">
+          {footnote}
+        </Text>
+      ) : null}
       <Button variant="secondary" label="Sign out" onPress={onSignOut} testID="shell-sign-out" />
     </Screen>
   );
