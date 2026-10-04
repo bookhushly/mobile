@@ -12,14 +12,16 @@ import { createEncryptedStore } from './encryptedStore';
 
 export const STORAGE_KEY = 'bh-auth';
 
+export const sessionStore = createEncryptedStore({
+  secure: secureKv,
+  plain: plainKv,
+  randomBytes: (n) => crypto.getRandomValues(new Uint8Array(n)),
+  storageKey: STORAGE_KEY,
+});
+
 export const supabase = createClient(env.supabaseUrl, env.supabaseAnonKey, {
   auth: {
-    storage: createEncryptedStore({
-      secure: secureKv,
-      plain: plainKv,
-      randomBytes: (n) => crypto.getRandomValues(new Uint8Array(n)),
-      storageKey: STORAGE_KEY,
-    }),
+    storage: sessionStore,
     storageKey: STORAGE_KEY,
     autoRefreshToken: true,
     persistSession: true,

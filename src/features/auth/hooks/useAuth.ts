@@ -2,7 +2,9 @@ import { create } from 'zustand';
 
 import { reduceAuth, type AuthState, type SessionEvent } from '@/features/auth/domain/authState';
 import { mapSignInError, type SignInError } from '@/features/auth/domain/signInErrors';
-import { supabase } from '@/shared/supabase/client';
+import { performSignOut } from '@/features/auth/domain/signOut';
+import { queryClient } from '@/shared/api/queryClient';
+import { sessionStore, STORAGE_KEY, supabase } from '@/shared/supabase/client';
 
 type Store = {
   state: AuthState;
@@ -21,6 +23,13 @@ export const useAuth = create<Store>((set, get) => ({
     return error ? mapSignInError(error) : null;
   },
   async signOut() {
-    await supabase.auth.signOut();
+    await performSignOut({
+      remote: () => supabase.auth.signOut(),
+      removeLocal: () => sessionStore.removeItem(STORAGE_KEY),
+      onSignedOut: () => {
+        queryClient.clear();
+        get().dispatch({ type: 'SIGNED_OUT' });
+      },
+    });
   },
 }));

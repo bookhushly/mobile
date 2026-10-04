@@ -1,6 +1,8 @@
 import type { SessionLite } from '@/features/auth/domain/authState';
+import { resolveInitialSession } from '@/features/auth/domain/storedSession';
 import { useAuth } from '@/features/auth/hooks/useAuth';
-import { supabase } from '@/shared/supabase/client';
+import { queryClient } from '@/shared/api/queryClient';
+import { sessionStore, STORAGE_KEY, supabase } from '@/shared/supabase/client';
 
 type RawSession = { user: { id: string; email?: string | undefined } } | null;
 
@@ -14,7 +16,9 @@ export function startSessionListener(): () => void {
     const s = lite(session);
     switch (event) {
       case 'INITIAL_SESSION':
-        dispatch({ type: 'INITIAL_SESSION', session: s });
+        void resolveInitialSession(s, () => sessionStore.getItem(STORAGE_KEY)).then((resolved) => {
+          dispatch({ type: 'INITIAL_SESSION', session: resolved });
+        });
         break;
       case 'SIGNED_IN':
         if (s) dispatch({ type: 'SIGNED_IN', session: s });
@@ -26,6 +30,7 @@ export function startSessionListener(): () => void {
         dispatch({ type: 'USER_UPDATED', session: s });
         break;
       case 'SIGNED_OUT':
+        queryClient.clear();
         dispatch({ type: 'SIGNED_OUT' });
         break;
       case 'PASSWORD_RECOVERY':

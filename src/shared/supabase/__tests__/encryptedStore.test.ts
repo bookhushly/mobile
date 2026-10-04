@@ -70,3 +70,31 @@ describe('encrypted store', () => {
     expect(await second.getItem('bh-auth')).toBe('keep-me');
   });
 });
+
+describe('encrypted store robustness', () => {
+  it('returns null (does not throw) when the secure store read throws', async () => {
+    const secure = memoryKv();
+    const plain = memoryKv();
+    const { store } = make({ secure, plain });
+    await store.setItem('bh-auth', 'x');
+    const throwing = { ...secure, get: () => Promise.reject(new Error('keystore invalidated')) };
+    const broken = createEncryptedStore({
+      secure: throwing,
+      plain,
+      randomBytes,
+      storageKey: 'bh-auth',
+    });
+    expect(await broken.getItem('bh-auth')).toBeNull();
+  });
+  it('keeps working for the session if the first-launch wipe throws', async () => {
+    const secure = { ...memoryKv(), delete: () => Promise.reject(new Error('locked')) };
+    const store = createEncryptedStore({
+      secure,
+      plain: memoryKv(),
+      randomBytes,
+      storageKey: 'bh-auth',
+    });
+    expect(await store.getItem('bh-auth')).toBeNull();
+    await expect(store.setItem('bh-auth', 'v')).resolves.toBeUndefined();
+  });
+});
