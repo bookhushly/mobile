@@ -68,10 +68,7 @@ export function SignInScreen({ onSubmit }: Props) {
         />
         {error ? (
           <Box p="s4" rounded="r3" style={{ backgroundColor: color.status.danger.bg }}>
-            <Text
-              variant="bodySm"
-              style={{ color: color.status.danger.fg }}
-            >
+            <Text variant="bodySm" style={{ color: color.status.danger.fg }}>
               {error}
             </Text>
           </Box>

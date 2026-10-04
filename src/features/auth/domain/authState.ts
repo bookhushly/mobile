@@ -1,9 +1,7 @@
 export type SessionLite = { userId: string; email: string };
 
 export type AuthState =
-  | { status: 'loading' }
-  | { status: 'signedOut' }
-  | ({ status: 'signedIn' } & SessionLite);
+  { status: 'loading' } | { status: 'signedOut' } | ({ status: 'signedIn' } & SessionLite);
 
 export type SessionEvent =
   | { type: 'INITIAL_SESSION'; session: SessionLite | null }

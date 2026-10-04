@@ -9,14 +9,7 @@ export type ModeState =
 export type AuthKind = 'loading' | 'signedOut' | 'signedIn';
 
 export type AppRoute =
-  | 'loading'
-  | 'update'
-  | 'auth'
-  | 'modeError'
-  | 'webOnly'
-  | 'gate'
-  | 'receptionist'
-  | 'customer';
+  'loading' | 'update' | 'auth' | 'modeError' | 'webOnly' | 'gate' | 'receptionist' | 'customer';
 
 type Input = { versionOk: boolean; auth: AuthKind; mode: ModeState; chosenMode: Mode | null };
 

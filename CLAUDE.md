@@ -46,8 +46,9 @@ Light UI only. Violet `#7C3AED`, ink `#1A0D4D`, tints `#FFFFFF` / `#F8F7FB`. Fon
 ## Workflow
 
 1. Before any Expo/RN API use, check the SDK 57 docs (`https://docs.expo.dev/versions/v57.0.0/`) — don't rely on memory.
-2. Non-trivial features: brainstorm → short plan → implement (superpowers skills). Pure logic gets tests first (TDD).
-3. Before declaring done: `npx tsc --noEmit` and `npx expo lint` must pass, plus tests for what you touched. Report failures honestly.
-4. Commits only when asked; branch off `main` (never commit straight to `main`); stage specific paths.
-5. Backend gaps found while working go into `docs/BACKEND_STATUS.md` §9 rather than being worked around silently.
-6. Phase order: 0 foundations → 1 gate online → 2 gate offline → 3 receptionist → 4 customer (blocked on web work, see BACKEND_STATUS §9).
+2. Tests: `@testing-library/react-native` v14 is async (`await render`, `await fireEvent…`); Jest can't do dynamic `import()`; zod is v4 (`z.url()`, `z.email()`).
+3. Non-trivial features: brainstorm → short plan → implement (superpowers skills). Pure logic gets tests first (TDD).
+4. Before declaring done: `npx tsc --noEmit` and `npx expo lint` must pass, plus tests for what you touched. Report failures honestly.
+5. Commits only when asked; branch off `main` (never commit straight to `main`); stage specific paths.
+6. Backend gaps found while working go into `docs/BACKEND_STATUS.md` §9 rather than being worked around silently.
+7. Phase order: 0 foundations → 1 gate online → 2 gate offline → 3 receptionist → 4 customer (blocked on web work, see BACKEND_STATUS §9).

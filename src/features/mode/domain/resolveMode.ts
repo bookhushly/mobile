@@ -8,8 +8,7 @@ export type ModeInputs = {
 };
 
 export type ModeResolution =
-  | { kind: 'webOnly' }
-  | { kind: 'modes'; modes: Mode[]; defaultMode: Mode };
+  { kind: 'webOnly' } | { kind: 'modes'; modes: Mode[]; defaultMode: Mode };
 
 export function resolveMode(i: ModeInputs, lastMode: Mode | null = null): ModeResolution {
   if (i.role === 'vendor' || i.role === 'admin' || i.role === 'support') {

@@ -101,3 +101,11 @@ Web paths below are relative to `/Users/mac/Developer/bookhushly/web/`. `../web-
 ## 9. Web-side work to request (not mobile work)
 
 Signup route/trigger · hotel-booking JSON route · apartment booking JSON · my-bookings route · scannable-events route · universal links + AASA/assetlinks + app return for payments · native push (REQ-5) · claim-by-email (REQ-11) · account deletion · min-version/maintenance endpoint · staging Bearer exemption · confirm `TICKET_TOKEN_FORMAT=2` + keys in production.
+
+## 10. Verified during Phase 0 (2026-10-04)
+
+- `GET /api/customer/kyc` (Bearer works; `public` rate tier, 60/min/IP): 200 `{ kyc: null | { id, status: 'verified'|'rejected'|'pending', submitted_at, admin_note: string|null, nin_verified: boolean } }`; **401 body is `{ status: null }`** (no `error`/`code` — branch on the HTTP status); **a DB failure also returns 200 `{ kyc: null }`**, indistinguishable from "no KYC"; no `Cache-Control`. The column default `status='verified'` looks odd (insert path not read).
+- `GET /api/health` (public, no staging Basic-auth wall): 200 `{ ok: true, db: 'up', ts }`; 503 `{ ok: false, db: 'down', ts }`; `no-store`.
+- Mode resolution reads (RLS, verified in the baseline migration): `users` select own, `hotel_staff` (`hotel_staff_read_own`), `event_scanners` (`event_scanners_self_select`). Scan/roster also need an active `vendor_scanners` row, which mobile cannot see → a mismatch surfaces later as `forbidden`.
+- Production Supabase issues the **legacy anon JWT** key (`role: anon`), not a publishable key.
+- Still missing on the backend (see §9): sign-up/forgot-password routes, universal links, min-version endpoint, staging Bearer exemption, scannable-events route.

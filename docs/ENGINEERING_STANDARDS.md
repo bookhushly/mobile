@@ -122,3 +122,14 @@ Researched 2026-10-04 for **Expo SDK 57 / React Native 0.86 / React 19.2 / TypeS
 | Boundaries | `no-restricted-imports` from the start |
 
 **Verify before coding:** TS 6 compiler defaults; React Compiler behaviour on SDK 57 (the fetched page covers SDK 52–55); SecureStore option names and enrolment-change behaviour; 50k-row SQLite timings; scrypt timing; whether noble needs explicit sha512 wiring; `expo-haptics`, `expo-network`, NetInfo APIs; Reanimated 4.5 flag availability; FlashList v2 `estimatedItemSize` status; the exact Supabase RN storage-adapter code.
+
+## 10. Verified while building Phase 0 (2026-10-04)
+
+- **Zod is v4** (`^4.6.5`): use `z.url()` / `z.email()` (the `.url()`/`.email()` string methods are deprecated and fail lint).
+- **`@testing-library/react-native` is v14 and fully async**: `await render(...)`, `await fireEvent.press(...)`, and it needs `test-renderer` (installed with it). `toBeEnabled` etc. matchers are built in.
+- **Jest (CJS) cannot run dynamic `import()`** — use static imports in tests.
+- `expo-secure-store` exposes `WHEN_UNLOCKED_THIS_DEVICE_ONLY`; `expo-network` has `getNetworkStateAsync` / `addNetworkStateListener` / `isConnected` (typecheck confirms); `lucide-react-native` + `react-native-svg` pass `expo-doctor`; `aes-js` 3.1.2 bundles under Metro/Hermes (**on-device behaviour still to be confirmed**).
+- Fonts: Radio-Canada/Source Serif 4 static TTFs copied into `assets/fonts/`; iOS PostScript names match the files (`RadioCanada-Regular|Medium|SemiBold`, `SourceSerif4-Medium`); Android family = file name. **On-device rendering still to be confirmed.**
+- File-name collision: `Money.tsx` and `money.ts` clash in TS resolution on case-insensitive filesystems — name helpers distinctly (`formatNaira.ts`).
+- **A JDK is not installed on this Mac** (`/usr/bin/java` is only a stub), so `npx expo run:android` / Gradle cannot run locally until one is installed (e.g. Temurin 17) — or use EAS cloud builds. Metro bundling (`npx expo export --platform android`) works without it and is used as the bundling check.
+- Sentry: JS SDK installed and initialised only when a DSN exists; the config plugin / `getSentryExpoConfig` metro wiring is deferred until the Sentry project and auth token exist.

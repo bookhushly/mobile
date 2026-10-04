@@ -6,7 +6,9 @@ const randomBytes = (() => {
   return (len: number) => Uint8Array.from({ length: len }, () => n++ % 251);
 })();
 
-function make(over: { secure?: ReturnType<typeof memoryKv>; plain?: ReturnType<typeof memoryKv> } = {}) {
+function make(
+  over: { secure?: ReturnType<typeof memoryKv>; plain?: ReturnType<typeof memoryKv> } = {},
+) {
   const secure = over.secure ?? memoryKv();
   const plain = over.plain ?? memoryKv();
   const store = createEncryptedStore({ secure, plain, randomBytes, storageKey: 'bh-auth' });

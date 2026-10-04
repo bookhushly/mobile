@@ -22,7 +22,9 @@ describe('probeAuthedCall', () => {
     expect(r).toEqual({ ok: true, value: { hasKyc: false } });
   });
   it('returns ok with hasKyc for a kyc row', async () => {
-    const body = { kyc: { id: 'k', status: 'pending', submitted_at: 'x', admin_note: null, nin_verified: false } };
+    const body = {
+      kyc: { id: 'k', status: 'pending', submitted_at: 'x', admin_note: null, nin_verified: false },
+    };
     const r = await probeAuthedCall(apiReturning(new Response(JSON.stringify(body))));
     expect(r).toEqual({ ok: true, value: { hasKyc: true } });
   });

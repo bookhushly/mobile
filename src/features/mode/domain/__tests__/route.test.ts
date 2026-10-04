@@ -7,13 +7,18 @@ const single: ModeState = {
 
 describe('resolveRoute', () => {
   it('update gate wins over everything', () => {
-    expect(resolveRoute({ versionOk: false, auth: 'signedIn', mode: single, chosenMode: null })).toBe(
-      'update',
-    );
+    expect(
+      resolveRoute({ versionOk: false, auth: 'signedIn', mode: single, chosenMode: null }),
+    ).toBe('update');
   });
   it('shows loading while auth or mode is loading', () => {
     expect(
-      resolveRoute({ versionOk: true, auth: 'loading', mode: { status: 'idle' }, chosenMode: null }),
+      resolveRoute({
+        versionOk: true,
+        auth: 'loading',
+        mode: { status: 'idle' },
+        chosenMode: null,
+      }),
     ).toBe('loading');
     expect(
       resolveRoute({
@@ -59,9 +64,9 @@ describe('resolveRoute', () => {
       status: 'ready',
       resolution: { kind: 'modes', modes: ['gate', 'customer'], defaultMode: 'gate' },
     };
-    expect(resolveRoute({ versionOk: true, auth: 'signedIn', mode: m, chosenMode: 'customer' })).toBe(
-      'customer',
-    );
+    expect(
+      resolveRoute({ versionOk: true, auth: 'signedIn', mode: m, chosenMode: 'customer' }),
+    ).toBe('customer');
     expect(
       resolveRoute({ versionOk: true, auth: 'signedIn', mode: m, chosenMode: 'receptionist' }),
     ).toBe('gate');
