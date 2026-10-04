@@ -42,8 +42,12 @@ export function createApiClient(deps: Deps) {
     outerSignal?: AbortSignal,
   ): Promise<Result<Response, ApiError>> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    outerSignal?.addEventListener('abort', () => controller.abort());
+    const timer = setTimeout(() => {
+      controller.abort();
+    }, timeoutMs);
+    outerSignal?.addEventListener('abort', () => {
+      controller.abort();
+    });
     try {
       const headers: Record<string, string> = {
         Accept: 'application/json',
