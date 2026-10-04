@@ -34,6 +34,18 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/RadioCanada_400Regular.ttf",
+            "./assets/fonts/RadioCanada_500Medium.ttf",
+            "./assets/fonts/RadioCanada_600SemiBold.ttf",
+            "./assets/fonts/SourceSerif4_500Medium.ttf",
+            "./assets/fonts/SourceSerif4_500Medium_Italic.ttf"
+          ]
+        }
       ]
     ],
     "experiments": {

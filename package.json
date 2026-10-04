@@ -3,6 +3,8 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "@expo-google-fonts/radio-canada": "^0.4.1",
+    "@expo-google-fonts/source-serif-4": "^0.4.1",
     "@expo/ui": "~57.0.21",
     "@types/jest": "29.5.14",
     "expo": "~57.0.26",
