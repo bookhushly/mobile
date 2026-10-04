@@ -46,6 +46,12 @@
             "./assets/fonts/SourceSerif4_500Medium_Italic.ttf"
           ]
         }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true
+        }
       ]
     ],
     "experiments": {

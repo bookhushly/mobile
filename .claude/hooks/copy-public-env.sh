@@ -8,6 +8,14 @@ dst="$(cd "$(dirname "$0")/../.." && pwd)/.env.local"
 get() { awk -v k="$1" 'index($0,k"=")==1 { v=substr($0,length(k)+2); gsub(/^["'\'']|["'\'']$/,"",v); print v; exit }' "$src"; }
 url="$(get NEXT_PUBLIC_SUPABASE_URL)"; key="$(get NEXT_PUBLIC_SUPABASE_ANON_KEY)"
 [ -n "$url" ] && [ -n "$key" ] || { echo "one of the two public values is missing" >&2; exit 1; }
+# Refuse anything that is not provably a public/anon key (a service-role key must never be bundled).
+case "$key" in
+  sb_publishable_*) ;;
+  eyJ*)
+    role=$(printf '%s' "$key" | cut -d. -f2 | tr '_-' '/+' | base64 -d 2>/dev/null | grep -o '"role":"[a-z_]*"' || true)
+    [ "$role" = '"role":"anon"' ] || { echo "refusing: key is not an anon JWT (${role:-no role claim})" >&2; exit 1; } ;;
+  *) echo "refusing: unrecognised key format" >&2; exit 1 ;;
+esac
 umask 077
 {
   echo "EXPO_PUBLIC_SUPABASE_URL=$url"
