@@ -14,6 +14,8 @@ export type OverlayView = {
 export type SessionView = { current: OverlayView | null; waiting: number; pending: number };
 
 export type ScanSessionDeps = Omit<ScanQueueDeps, 'onResult'> & {
+  // Overlay hold timing. Separate from `now` (server clock, re-synced on every response, can step back).
+  localNow: () => number;
   onChange: (v: SessionView) => void;
   onCue: (cue: Cue) => void;
   onAdmitted: () => void;
@@ -24,7 +26,7 @@ const JUNK_COOLDOWN_MS = 2_000;
 
 // Phase 2 swaps `submit` for roster + outbox; nothing else here changes.
 export function createScanSession(deps: ScanSessionDeps) {
-  const overlays = createOverlayQueue({ now: deps.now });
+  const overlays = createOverlayQueue({ now: deps.localNow });
   const junkUntil = new Map<string, number>();
   let shownId: number | null = null;
 

@@ -38,6 +38,8 @@ export function useScanSession(
     createScanSession({
       submit: (code) => submitScan(api, eventId, code),
       now: () => clock.serverNow(),
+      // Monotonic: hold times must not move when the wall clock or server offset does.
+      localNow: () => performance.now(),
       random: Math.random,
       sleep: (ms) => new Promise<void>((r) => setTimeout(r, ms)),
       onChange: setView,
@@ -71,16 +73,21 @@ export function useScanSession(
   // Timed overlays advance on their own deadline; no polling interval.
   const currentId = useScanView((s) => s.view.current?.id ?? null);
   useEffect(() => {
-    const deadline = session.nextDeadline();
-    if (deadline === null) return;
-    const t = setTimeout(
-      () => {
-        session.tick();
-      },
-      Math.max(0, deadline - clock.serverNow()),
-    );
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      const deadline = session.nextDeadline();
+      if (deadline === null) return;
+      timer = setTimeout(
+        () => {
+          session.tick();
+          arm();
+        },
+        Math.max(0, deadline - performance.now()),
+      );
+    };
+    arm();
     return () => {
-      clearTimeout(t);
+      clearTimeout(timer);
     };
   }, [session, currentId]);
 

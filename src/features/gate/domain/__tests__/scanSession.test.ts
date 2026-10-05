@@ -11,6 +11,7 @@ const flush = () => new Promise<void>((r) => setImmediate(r));
 
 function harness(responses: ScanResponse[]) {
   let t = 0;
+  let local = 0;
   const views: SessionView[] = [];
   const cues: string[] = [];
   const onAdmitted = jest.fn();
@@ -22,6 +23,7 @@ function harness(responses: ScanResponse[]) {
   const s = createScanSession({
     submit,
     now: () => t,
+    localNow: () => local,
     random: () => 0,
     sleep: () => Promise.resolve(),
     maxRetries: 0,
@@ -39,7 +41,16 @@ function harness(responses: ScanResponse[]) {
     onAdmitted,
     onNotAssigned,
     currentId,
-    at: (ms: number) => (t = ms),
+    at: (ms: number) => {
+      t = ms;
+      local = ms;
+    },
+    setServer: (ms: number) => {
+      t = ms;
+    },
+    setLocal: (ms: number) => {
+      local = ms;
+    },
   };
 }
 
@@ -141,6 +152,17 @@ describe('scan session', () => {
     h.s.scan(U1, 'camera');
     await flush();
     h.at(1600);
+    h.s.tick();
+    expect(h.s.view().current).toBeNull();
+  });
+
+  it('overlays advance on the local clock when the server clock steps backwards', async () => {
+    const h = harness([ok(admitBody.parse(fx.admitted.body))]);
+    h.at(5000);
+    h.s.scan(U1, 'camera');
+    await flush();
+    h.setServer(5000 - 999);
+    h.setLocal(5000 + 1600);
     h.s.tick();
     expect(h.s.view().current).toBeNull();
   });
