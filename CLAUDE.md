@@ -40,7 +40,7 @@ Light UI only. Violet `#7C3AED`, ink `#1A0D4D`, tints `#FFFFFF` / `#F8F7FB`. Fon
 ## Project tooling (`.claude/`)
 
 - **Rules** (`rules/*.md`, path-scoped, load automatically when you touch matching files): routing, domain-logic, components-ui, design-system, motion, api-client, gate-scanning, offline-storage, payments-customer, testing.
-- **Hooks** (enforced, not advisory): block edits to `.env*`/`ios/`/`android/`/`../web`/`package-lock.json`; block `npm|yarn|pnpm|bun add`, force-push, `git add -A`, and commit/push on `main`/`master`; reject `any`, `@ts-ignore`, `console.log`, raw hex, `fontWeight`, animated layout props, secrets, domain→React imports and cross-feature imports after each source edit; require a clean `tsc` before a turn can finish when `src/` changed. A hook hit is a real rule — fix the code; if it is a false positive, say so.
+- **Hooks** (enforced, not advisory): block edits to `.env*`/`ios/`/`android/`/`../web`/`package-lock.json`; block `npm|yarn|pnpm|bun add`, plain force-push (only `--force-with-lease`, never on main), Claude co-author trailers on commit/push, `git add -A`, and commit/push on `main`/`master`; reject `any`, `@ts-ignore`, `console.log`, raw hex, `fontWeight`, animated layout props, secrets, domain→React imports and cross-feature imports after each source edit; require a clean `tsc` before a turn can finish when `src/` changed. A hook hit is a real rule — fix the code; if it is a false positive, say so.
 - **Subagents:** `expo-docs-researcher` (verify SDK 57 APIs before coding), `backend-contract-checker`, `rn-code-reviewer`, `mobile-security-reviewer`, `perf-auditor`, `offline-scan-reviewer`, `ux-design-reviewer`.
 - **Commands:** `/new-feature`, `/expo-docs`, `/backend-check`, `/verify`, `/review-changes`, `/phase-status`. **Skill:** `add-api-call`.
 
@@ -50,6 +50,6 @@ Light UI only. Violet `#7C3AED`, ink `#1A0D4D`, tints `#FFFFFF` / `#F8F7FB`. Fon
 2. Tests: `@testing-library/react-native` v14 is async (`await render`, `await fireEvent…`); Jest can't do dynamic `import()`; zod is v4 (`z.url()`, `z.email()`).
 3. Non-trivial features: brainstorm → short plan → implement (superpowers skills). Pure logic gets tests first (TDD).
 4. Before declaring done: `npx tsc --noEmit` and `npx expo lint` must pass, plus tests for what you touched. Report failures honestly.
-5. Commits only when asked; branch off `main` (never commit straight to `main`); stage specific paths.
+5. **Never add a Claude/Anthropic co-author trailer to commits** — owner rule, enforced by `guard-bash.sh` on commit and push. Commits only when asked; branch off `main` (never commit straight to `main`); stage specific paths.
 6. Backend gaps found while working go into `docs/BACKEND_STATUS.md` §9 rather than being worked around silently.
 7. Phase order: 0 foundations → 1 gate online → 2 gate offline → 3 receptionist → 4 customer (blocked on web work, see BACKEND_STATUS §9).
