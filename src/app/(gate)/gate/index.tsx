@@ -20,7 +20,7 @@ export default function GateEventsRoute() {
   const { refresh } = events;
   const reload = useCallback(() => {
     setNowMs(Date.now());
-    refresh();
+    void refresh();
   }, [refresh]);
 
   const open = useCallback(

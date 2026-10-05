@@ -18,7 +18,7 @@ class SummaryError extends Error {
 export function useScanSummary(
   eventId: string,
   focused: boolean,
-): { summary: ScanSummary | null; stale: boolean } {
+): { summary: ScanSummary | null; stale: boolean; forbidden: boolean } {
   const q = useQuery({
     queryKey: gateKeys.summary(eventId),
     queryFn: async () => {
@@ -30,5 +30,10 @@ export function useScanSummary(
     staleTime: 0,
   });
   // Stale on any error, even before the first success, so "— / —" reads "not updated".
-  return { summary: q.data ?? null, stale: q.isError };
+  return {
+    summary: q.data ?? null,
+    stale: q.isError,
+    // A hint only: the 403 has no code, so the caller must confirm before showing a refusal.
+    forbidden: q.error instanceof SummaryError && q.error.kind === 'forbidden',
+  };
 }

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useCallback } from 'react';
 
 import { gateKeys } from '@/features/gate/api/keys';
 import { loadScannableEvents, type ScannableEvent } from '@/shared/api/scannableEvents';
@@ -20,7 +21,8 @@ class EventsError extends Error {
 export function useScannableEvents(userId: string | null): {
   state: State;
   refreshing: boolean;
-  refresh: () => void;
+  /** Resolves to the fresh list, or null when the refetch failed. */
+  refresh: () => Promise<ScannableEvent[] | null>;
 } {
   const q = useQuery({
     queryKey: gateKeys.events(userId ?? ''),
@@ -31,14 +33,18 @@ export function useScannableEvents(userId: string | null): {
       return r.value;
     },
   });
+  const { refetch } = q;
+  // Stable: the scanner route runs an effect keyed on it.
+  const refresh = useCallback(async () => {
+    const r = await refetch();
+    return r.isError ? null : (r.data ?? null);
+  }, [refetch]);
   let state: State = { status: 'loading' };
   if (q.data !== undefined) state = { status: 'ready', events: q.data };
   else if (q.isError) state = { status: 'error' };
   return {
     state,
     refreshing: q.isRefetching,
-    refresh: () => {
-      void q.refetch();
-    },
+    refresh,
   };
 }

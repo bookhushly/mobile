@@ -36,6 +36,7 @@ export function createScanSession(deps: ScanSessionDeps) {
   const overlays = createOverlayQueue({ now: deps.localNow });
   const junkUntil = new Map<string, number>();
   let shownId: number | null = null;
+  let notAssignedShown = false;
   let last: Snapshot | null = null;
 
   const queue = createScanQueue({
@@ -108,6 +109,13 @@ export function createScanSession(deps: ScanSessionDeps) {
       const r = queue.enqueue(code, { manual: source === 'manual' });
       if (r === 'queued' || r === 'replayed') publish();
     },
+    // A confirmed lost assignment (not a scan result): shown at most once per session.
+    showNotAssigned() {
+      if (notAssignedShown) return;
+      notAssignedShown = true;
+      overlays.push(null, { kind: 'refused', reason: 'notAssigned', fixable: false });
+      publish();
+    },
     // Both take the id the staff member saw: a double tap must not dismiss the next overlay unseen.
     tryAgain(id: number) {
       const c = overlays.current();
@@ -129,6 +137,7 @@ export function createScanSession(deps: ScanSessionDeps) {
       queue.reset();
       overlays.clear();
       junkUntil.clear();
+      notAssignedShown = false;
       shownId = null;
       const v = view();
       last = { id: null, extra: 0, waiting: v.waiting, pending: v.pending };

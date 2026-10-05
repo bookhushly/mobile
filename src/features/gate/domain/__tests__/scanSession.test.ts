@@ -152,6 +152,28 @@ describe('scan session', () => {
     });
   });
 
+  it('showNotAssigned shows the not-assigned overlay once, cued', () => {
+    const h = harness([]);
+    h.s.showNotAssigned();
+    h.s.showNotAssigned();
+    expect(h.s.view().current?.outcome).toEqual({
+      kind: 'refused',
+      reason: 'notAssigned',
+      fixable: false,
+    });
+    expect(h.s.view().current?.code).toBeNull();
+    expect(h.s.view().waiting).toBe(0);
+    expect(h.cues).toHaveLength(1);
+  });
+
+  it('showNotAssigned does not come back after it was dismissed', () => {
+    const h = harness([]);
+    h.s.showNotAssigned();
+    h.s.dismiss(h.currentId());
+    h.s.showNotAssigned();
+    expect(h.s.view().current).toBeNull();
+  });
+
   it('a codeless 403 is a couldn’t check, not a lost assignment', async () => {
     const h = harness([err(errorFromResponse(403, { error: 'Forbidden' }, { get: () => null }))]);
     h.s.scan(U1, 'camera');

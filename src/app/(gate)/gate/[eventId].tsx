@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { gateKeys } from '@/features/gate/api/keys';
 import { eventLabel } from '@/features/gate/domain/eventList';
+import { shouldShowNotAssigned } from '@/features/gate/domain/lostAssignment';
 import { useLastEvent } from '@/features/gate/hooks/useLastEvent';
 import { useScannableEvents } from '@/features/gate/hooks/useScannableEvents';
 import { useScanSession } from '@/features/gate/hooks/useScanSession';
@@ -28,7 +29,7 @@ function Scanner({ eventId }: { eventId: string }) {
   const events = useScannableEvents(userId);
   const { forget } = useLastEvent(userId);
   const camera = useCameraAccess();
-  const { summary, stale } = useScanSummary(eventId, focused);
+  const { summary, stale, forbidden } = useScanSummary(eventId, focused);
   const leave = () => {
     if (router.canGoBack()) router.back();
     else router.replace('/gate');
@@ -41,6 +42,17 @@ function Scanner({ eventId }: { eventId: string }) {
     leave();
   };
   const { session, muted, toggleMute } = useScanSession(eventId);
+
+  // A summary 403 is codeless, so only a fresh events list can confirm the assignment is gone.
+  const { refresh: refreshEvents } = events;
+  useEffect(() => {
+    if (!forbidden) return;
+    void refreshEvents().then((fresh) => {
+      if (shouldShowNotAssigned({ summaryForbidden: true, events: fresh, eventId })) {
+        session.showNotAssigned();
+      }
+    });
+  }, [forbidden, refreshEvents, eventId, session]);
 
   const { permission, request } = camera;
   useEffect(() => {
