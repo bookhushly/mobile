@@ -1,6 +1,7 @@
 import { CircleAlert, CircleCheck, CircleX, RotateCw } from 'lucide-react-native';
+import { useContext } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 
 import type { OverlayView } from '@/features/gate/domain/scanSession';
 import { present, type Tone } from '@/features/gate/domain/present';
@@ -60,6 +61,8 @@ export function OutcomeOverlay({ view, nowMs, onDismiss, onTryAgain, onSignIn }:
   const announced = [p.title, p.detail, p.secondary, chip]
     .filter((s): s is string => s !== null && s !== '')
     .join('. ');
+  // Context, not the hook: the hook throws without a provider, which bare unit renders lack.
+  const insets = useContext(SafeAreaInsetsContext) ?? { top: 0, bottom: 0 };
   const dismiss = () => {
     onDismiss(view.id);
   };
@@ -77,7 +80,15 @@ export function OutcomeOverlay({ view, nowMs, onDismiss, onTryAgain, onSignIn }:
         backgroundColor: bg,
       }}
     >
-      <SafeAreaView edges={['bottom']} style={{ flex: 1, padding: space.s7 }}>
+      <View
+        testID="outcome-content"
+        style={{
+          flex: 1,
+          padding: space.s7,
+          paddingTop: insets.top + space.s7,
+          paddingBottom: insets.bottom + space.s7,
+        }}
+      >
         <ScrollView style={{ flexGrow: 0, flexShrink: 1 }}>
           <View
             accessible
@@ -138,7 +149,7 @@ export function OutcomeOverlay({ view, nowMs, onDismiss, onTryAgain, onSignIn }:
             ) : null}
           </View>
         ) : null}
-      </SafeAreaView>
+      </View>
     </Pressable>
   );
 }

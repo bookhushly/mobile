@@ -1,9 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { OverlayView } from '@/features/gate/domain/scanSession';
 import { OutcomeOverlay } from '@/features/gate/ui/OutcomeOverlay';
-import { color } from '@/shared/theme';
+import { color, space } from '@/shared/theme';
 
 const NOW = Date.parse('2026-10-05T18:05:00.000Z');
 const view = (outcome: OverlayView['outcome'], extraAdmitted = 0): OverlayView => ({
@@ -201,4 +202,30 @@ it('pins the actions to the bottom and does not scale gate text past 1.0', async
   for (const t of ['Refused', 'This ticket is for a different event', 'Done']) {
     expect(screen.getByText(t).props.maxFontSizeMultiplier).toBe(1);
   }
+});
+
+it('keeps the content clear of the notch and home indicator while the fill stays full-bleed', async () => {
+  await render(
+    <SafeAreaProvider
+      initialMetrics={{
+        frame: { x: 0, y: 0, width: 390, height: 844 },
+        insets: { top: 47, left: 0, right: 0, bottom: 34 },
+      }}
+    >
+      <OutcomeOverlay
+        view={view({ kind: 'refused', reason: 'wrongEvent', fixable: false })}
+        nowMs={NOW}
+        {...handlers}
+      />
+    </SafeAreaProvider>,
+  );
+  const content = StyleSheet.flatten(
+    screen.getByTestId('outcome-content').props.style as StyleProp<ViewStyle>,
+  );
+  expect(content.paddingTop).toBe(47 + space.s7);
+  expect(content.paddingBottom).toBe(34 + space.s7);
+  const f = StyleSheet.flatten(
+    screen.getByTestId('outcome-overlay').props.style as StyleProp<ViewStyle>,
+  );
+  expect(f).toMatchObject({ top: 0, bottom: 0, left: 0, right: 0 });
 });
