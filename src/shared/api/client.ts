@@ -12,6 +12,7 @@ export type RequestOptions<T> = {
   schema: z.ZodType<T>;
   idempotent?: boolean;
   signal?: AbortSignal;
+  timeoutMs?: number;
 };
 
 export type RefreshOutcome = { token: string } | { failure: 'network' | 'invalid' };
@@ -41,12 +42,13 @@ export function createApiClient(deps: Deps) {
     method: Method,
     body: unknown,
     token: string | null,
-    outerSignal?: AbortSignal,
+    outerSignal: AbortSignal | undefined,
+    limitMs: number,
   ): Promise<Result<Response, ApiError>> {
     const controller = new AbortController();
     const timer = setTimeout(() => {
       controller.abort();
-    }, timeoutMs);
+    }, limitMs);
     const onOuterAbort = () => {
       controller.abort();
     };
@@ -93,7 +95,14 @@ export function createApiClient(deps: Deps) {
 
     for (;;) {
       if (opts.signal?.aborted) return err({ kind: 'aborted' });
-      const sent = await once(path, method, opts.body, token, opts.signal);
+      const sent = await once(
+        path,
+        method,
+        opts.body,
+        token,
+        opts.signal,
+        opts.timeoutMs ?? timeoutMs,
+      );
       let failure: ApiError;
       if (!sent.ok) {
         failure = sent.error;

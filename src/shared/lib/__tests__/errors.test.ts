@@ -37,6 +37,18 @@ describe('errorFromResponse', () => {
     });
     expect(errorFromResponse(418, null, h())).toEqual({ kind: 'unknown', status: 418 });
   });
+  it('keeps the code on a 400', () => {
+    const headers = { get: () => null };
+    expect(errorFromResponse(400, { code: 'invalid_code' }, headers)).toEqual({
+      kind: 'unknown',
+      status: 400,
+      code: 'invalid_code',
+    });
+    expect(errorFromResponse(400, { error: 'x' }, headers)).toEqual({
+      kind: 'unknown',
+      status: 400,
+    });
+  });
 });
 
 describe('isRetryable', () => {

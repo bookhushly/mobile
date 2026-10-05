@@ -9,7 +9,7 @@ export type ApiError =
   | { kind: 'unavailable'; status: number; code?: string }
   | { kind: 'validation' }
   | { kind: 'aborted' }
-  | { kind: 'unknown'; status?: number };
+  | { kind: 'unknown'; status?: number; code?: string };
 
 type HeaderReader = { get(name: string): string | null };
 
@@ -37,7 +37,7 @@ export function errorFromResponse(status: number, body: unknown, headers: Header
   if (status >= 500) {
     return code ? { kind: 'unavailable', status, code } : { kind: 'unavailable', status };
   }
-  return { kind: 'unknown', status };
+  return code ? { kind: 'unknown', status, code } : { kind: 'unknown', status };
 }
 
 export function isRetryable(e: ApiError): boolean {

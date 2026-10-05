@@ -182,4 +182,37 @@ describe('api client', () => {
     }
     expect(fetchFn).not.toHaveBeenCalled();
   });
+
+  it('honours a per-request timeout and does not retry a POST', async () => {
+    jest.useFakeTimers();
+    try {
+      const fetchFn = jest.fn(
+        (_url: string, init: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () => {
+              const e = new Error('aborted');
+              e.name = 'AbortError';
+              reject(e);
+            });
+          }),
+      ) as unknown as typeof fetch;
+      const { client } = make([], { fetchFn });
+      const p = client.request('/api/x', { method: 'POST', body: {}, schema, timeoutMs: 8000 });
+      await jest.advanceTimersByTimeAsync(8000);
+      await expect(p).resolves.toEqual({ ok: false, error: { kind: 'timeout' } });
+      expect(fetchFn).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  }, 10000);
+
+  it('never retries a non-idempotent POST on 503', async () => {
+    const { client, calls } = make([res(503, { code: 'lookup_failed' })]);
+    const r = await client.request('/api/x', { method: 'POST', body: {}, schema });
+    expect(r).toEqual({
+      ok: false,
+      error: { kind: 'unavailable', status: 503, code: 'lookup_failed' },
+    });
+    expect(calls).toHaveLength(1);
+  });
 });
