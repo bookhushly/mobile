@@ -1,9 +1,9 @@
 ---
 paths:
-  - "src/lib/db/**"
-  - "src/lib/storage/**"
-  - "src/lib/supabase/**"
-  - "src/lib/crypto/**"
+  - "src/shared/db/**"
+  - "src/shared/platform/**"
+  - "src/shared/supabase/**"
+  - "src/shared/crypto/**"
   - "src/features/**/offline/**"
   - "src/features/auth/**"
 ---

@@ -1,6 +1,6 @@
 ---
 paths:
-  - "src/lib/api/**"
+  - "src/shared/api/**"
   - "src/features/**/api/**"
 ---
 # API layer

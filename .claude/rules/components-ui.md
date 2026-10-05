@@ -1,6 +1,6 @@
 ---
 paths:
-  - "src/components/**"
+  - "src/shared/ui/**"
   - "src/features/**/components/**"
   - "src/features/**/screens/**"
 ---

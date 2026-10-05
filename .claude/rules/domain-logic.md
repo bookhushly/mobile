@@ -1,7 +1,7 @@
 ---
 paths:
   - "src/features/**/domain/**"
-  - "src/lib/**"
+  - "src/shared/lib/**"
 ---
 # Pure domain / lib code
 

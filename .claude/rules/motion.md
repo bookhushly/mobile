@@ -1,6 +1,6 @@
 ---
 paths:
-  - "src/ui/motion/**"
+  - "src/shared/ui/motion/**"
   - "src/**/*animation*"
   - "src/**/*motion*"
   - "src/features/**/animations/**"

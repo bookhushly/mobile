@@ -1,14 +1,14 @@
 ---
 paths:
-  - "src/theme/**"
-  - "src/ui/**"
-  - "src/components/**"
+  - "src/shared/theme/**"
+  - "src/shared/ui/**"
+  - "src/shared/ui/**"
   - "src/features/**/screens/**"
   - "src/features/**/components/**"
 ---
 # Design system (docs/DESIGN_SYSTEM.md)
 
-- Screens consume **semantic theme roles** and `src/ui` primitives only: never the raw palette, hex, numeric spacing/radius/font size, or `fontWeight`. Spacing from the `s1…s11` scale; radius `r1…r4`; type from the named variants.
+- Screens consume **semantic theme roles** and `src/shared/ui` primitives only: never the raw palette, hex, numeric spacing/radius/font size, or `fontWeight`. Spacing from the `s1…s11` scale; radius `r1…r4`; type from the named variants.
 - 70/20/10: ~70 % neutral surface, ~20 % ink/structure, ~10 % violet. Violet only for the single primary action, links, active/selected state, progress, focus ring — never decoration, large fills or status. Red = error/destructive only.
 - Small violet text uses `#6D28D9`-level contrast (7.1:1); never violet-500 or muted `#9E98BB` for text. Inputs get 3:1 borders (`lineStrong`).
 - Density: `customer` / `work` (receptionist) / `gate` — gate controls ≥56 pt, ≥16 apart, lower third.

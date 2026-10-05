@@ -9,7 +9,7 @@ Expo (SDK 57) / React Native app for iOS + Android: **customer**, **gate staff**
 - `docs/MOBILE_APP_REQUIREMENTS.md` — product requirements, FR/NFR IDs, phasing, decisions (§13).
 - `docs/BACKEND_STATUS.md` — **verified backend state and exact API contracts; wins over the requirements doc where they differ.** Check the web code before trusting a contract for anything not listed there.
 - `docs/ENGINEERING_STANDARDS.md` — researched performance, architecture, security, offline and release rules (with confidence markers and open items). Follow it; if a rule is marked [U] or listed under "verify before coding", verify before relying on it.
-- `docs/DESIGN_SYSTEM.md` (tokens, 70/20/10, contrast, UX per mode, Mobbin references, decisions D1–D10, all answered) and `docs/MOTION.md` (Lottie/Reanimated rules, performance budget, motion tiers, animation inventory, decisions M1–M7; M6/M7 still need an owner). Build UI to these; keep values behind tokens.
+- `docs/DESIGN_SYSTEM.md` (tokens, 70/20/10, contrast, UX per mode, Mobbin references, decisions D1–D10, all answered) and `docs/MOTION.md` (Lottie/Reanimated rules, performance budget, motion tiers, animation inventory, decisions M1–M7, all decided). Build UI to these; keep values behind tokens.
 - `../web/CLAUDE.md` and `../web/docs/superpowers/specs/` for backend behaviour.
 
 ## Rules specific to this project
@@ -32,7 +32,7 @@ Light UI only. Violet `#7C3AED`, ink `#1A0D4D`, tints `#FFFFFF` / `#F8F7FB`. Fon
 ## Code conventions
 
 - TypeScript strict; path alias `@/*` → `src/*`. Routes only in `src/app/`; everything else (components, hooks, `lib/`, features) outside it.
-- Organise by feature (`src/features/{auth,gate,receptionist,customer}`) with shared code in `src/lib` and `src/components`. Keep pure logic (scan queue, BH2 verification, decisioning, outbox) free of React so it's unit-testable.
+- Organise by feature (`src/features/{auth,gate,receptionist,customer}`) with shared code in `src/shared/{api,config,lib,platform,supabase,theme,ui,providers}`. Keep pure logic (scan queue, BH2 verification, decisioning, outbox) free of React so it's unit-testable.
 - One API client wrapper: adds `Authorization`, `X-App-Version`, `X-Platform`, timeouts, bounded retries with jitter, and maps statuses to a typed error taxonomy (401/403/404/409/429/503).
 - Match the surrounding code's style; no speculative abstractions.
 - Install packages with `npx expo install <pkg>`. Native modules need a dev build, not Expo Go.

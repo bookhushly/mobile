@@ -17,7 +17,7 @@ Inputs: `docs/MOBILE_APP_REQUIREMENTS.md`, `docs/BACKEND_STATUS.md`, `docs/ENGIN
 
 **Out of scope (deferred, with reason):** sign-up (server action only → web work), forgot/reset password (needs universal links → web work), onboarding (Phase 4, customer), any gate/receptionist/customer feature, Lottie (not installed in v1), push, SQLite/offline storage (Phase 2), biometric app lock (FR-1.7, later).
 
-**Backend target:** production Supabase (`https://wdhhbgxdpjjuqjideqws.supabase.co`) and `https://www.bookhushly.com` — carefully: no destructive calls, test accounts via real flows. Switch to staging once the web team exempts Bearer from the Basic-auth wall (BACKEND_STATUS §8).
+**Backend target:** production Supabase (`https://wdhhbgxdpjjuqjideqws.supabase.co`) and `https://bookhushly.com` (apex) — carefully: no destructive calls, test accounts via real flows. Switch to staging once the web team exempts Bearer from the Basic-auth wall (BACKEND_STATUS §8).
 
 ## 2. Architecture
 
@@ -50,7 +50,7 @@ Note: `docs/DESIGN_SYSTEM.md` sketches `src/theme` + `src/ui`; this spec places 
 
 ### 2.2 Config and environment
 
-- `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` (the web project names it `…ANON_KEY`; confirm the key type it actually issues before wiring), `EXPO_PUBLIC_API_BASE_URL` (`https://www.bookhushly.com`), `EXPO_PUBLIC_SENTRY_DSN`. Static `process.env.EXPO_PUBLIC_X` access only.
+- `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` (the web project names it `…ANON_KEY`; confirm the key type it actually issues before wiring), `EXPO_PUBLIC_API_BASE_URL` (`https://bookhushly.com` — the apex; `www` redirects and drops the Bearer header, found 2026-10-05), `EXPO_PUBLIC_SENTRY_DSN`. Static `process.env.EXPO_PUBLIC_X` access only.
 - `src/shared/config/env.ts` parses once with zod and throws a readable error at startup. `.env.local` gitignored, `.env.example` committed (no values for secrets; there are none client-side). **Never read `../web/.env*`:** the owner supplies the two public values (or I copy them with explicit permission).
 - Build-time values via `eas.json` profile `env`; secrets (`SENTRY_AUTH_TOKEN`) only as EAS secret variables.
 
