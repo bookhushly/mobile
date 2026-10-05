@@ -5,6 +5,12 @@ cmd=$(jq -r '.tool_input.command // empty')
 if echo "$cmd" | grep -Eq '(^|[;&|] *)(npm (i|install|add)|yarn add|pnpm (add|i|install)|bun (add|i|install)) +[^-]'; then
   echo "Blocked: add packages with 'npx expo install <pkg>' so versions match SDK 57." >&2; exit 2
 fi
+# Normalise `git -C dir` / `git -c k=v` so the push/commit checks below still match.
+cmd=$(printf '%s' "$cmd" | sed -E 's/git( +-[cC] +[^ ]+)+/git/g')
+# A leading '+' on a refspec is a force push in disguise.
+if echo "$cmd" | grep -Eq 'git +push( +[^ ]+)* +\+[^ ]'; then
+  echo "Blocked: '+refspec' is a force push. Use --force-with-lease on a feature branch if a rewrite is really needed." >&2; exit 2
+fi
 # Force pushes: only --force-with-lease, and never to main/master.
 if echo "$cmd" | grep -Eq 'git +push.*(--force([^-]|$)|-f( |$))'; then
   echo "Blocked: no plain force pushes. Use --force-with-lease on a feature branch if a rewrite is really needed." >&2; exit 2
