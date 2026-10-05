@@ -9,7 +9,11 @@
       "@/assets/*": [
         "./assets/*"
       ]
-    }
+    },
+    "noUncheckedIndexedAccess": true,
+    "types": [
+      "jest"
+    ]
   },
   "include": [
     "**/*.ts",

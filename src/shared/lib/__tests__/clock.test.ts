@@ -1,0 +1,32 @@
+import { createClock } from '@/shared/lib/clock';
+import { memoryKv } from '@/shared/lib/kv';
+
+const DEVICE_NOW = Date.parse('2026-10-04T12:00:00Z');
+
+describe('clock', () => {
+  it('records the offset from a valid Date header and persists it', async () => {
+    const kv = memoryKv();
+    const clock = createClock({ storage: kv, now: () => DEVICE_NOW });
+    await clock.recordServerDate('Sun, 04 Oct 2026 12:05:00 GMT');
+    expect(clock.offsetMs()).toBe(5 * 60 * 1000);
+    expect(clock.serverNow()).toBe(DEVICE_NOW + 5 * 60 * 1000);
+
+    const reloaded = createClock({ storage: kv, now: () => DEVICE_NOW });
+    await reloaded.load();
+    expect(reloaded.offsetMs()).toBe(5 * 60 * 1000);
+  });
+
+  it('ignores a missing or garbled header and keeps the previous offset', async () => {
+    const clock = createClock({ storage: memoryKv(), now: () => DEVICE_NOW });
+    await clock.recordServerDate('Sun, 04 Oct 2026 12:00:30 GMT');
+    await clock.recordServerDate(null);
+    await clock.recordServerDate('not a date');
+    expect(clock.offsetMs()).toBe(30_000);
+  });
+
+  it('ignores an absurd offset (>1 day) rather than trusting it', async () => {
+    const clock = createClock({ storage: memoryKv(), now: () => DEVICE_NOW });
+    await clock.recordServerDate('Sun, 05 Oct 2027 12:00:00 GMT');
+    expect(clock.offsetMs()).toBe(0);
+  });
+});
