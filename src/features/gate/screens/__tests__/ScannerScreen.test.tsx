@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+
 import { ScannerScreen } from '@/features/gate/screens/ScannerScreen';
 import { useScanView } from '@/features/gate/state/scanView';
 
@@ -97,4 +99,11 @@ it('renders the current overlay over the camera', async () => {
 it('has no undo control anywhere', async () => {
   await render(<ScannerScreen {...base} />);
   expect(screen.queryByText(/undo|un-admit/i)).toBeNull();
+});
+
+it('keeps the Change event target at least 44 pt tall', async () => {
+  await render(<ScannerScreen {...base} />);
+  const link = screen.getByRole('link', { name: 'Change event' });
+  const style = StyleSheet.flatten(link.props.style as StyleProp<ViewStyle>);
+  expect(style.minHeight).toBeGreaterThanOrEqual(44);
 });

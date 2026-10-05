@@ -161,7 +161,11 @@ export function ScannerScreen(p: Props) {
           <Text variant="bodyStrong" numberOfLines={1}>
             {p.title}
           </Text>
-          <Pressable accessibilityRole="link" onPress={p.onChangeEvent} hitSlop={12}>
+          <Pressable
+            accessibilityRole="link"
+            onPress={p.onChangeEvent}
+            style={{ minHeight: 44, justifyContent: 'center' }}
+          >
             <Text variant="labelSm" tone="linkText">
               Change event
             </Text>

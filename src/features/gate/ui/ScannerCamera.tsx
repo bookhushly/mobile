@@ -1,15 +1,34 @@
-import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
-import { useCallback } from 'react';
+import {
+  CameraView,
+  PermissionStatus,
+  useCameraPermissions,
+  type BarcodeScanningResult,
+} from 'expo-camera';
+import { useCallback, useEffect } from 'react';
+import { AppState } from 'react-native';
 
 export type CameraPermission = 'unknown' | 'granted' | 'denied';
 
 export function useCameraAccess() {
-  const [perm, request] = useCameraPermissions();
+  const [perm, request, get] = useCameraPermissions();
+  // Granting in system Settings does not restart the app: re-read on return to foreground.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void get();
+    });
+    return () => {
+      sub.remove();
+    };
+  }, [get]);
   const ask = useCallback(() => {
     void request();
   }, [request]);
   const permission: CameraPermission =
-    perm === null ? 'unknown' : perm.granted ? 'granted' : 'denied';
+    perm === null || (!perm.granted && perm.status === PermissionStatus.UNDETERMINED)
+      ? 'unknown'
+      : perm.granted
+        ? 'granted'
+        : 'denied';
   return {
     permission,
     canAsk: perm?.canAskAgain ?? true,
