@@ -62,6 +62,14 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Bookhushly uses the camera to scan tickets at the door.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
         "expo-audio",
         {
           "microphonePermission": false,
