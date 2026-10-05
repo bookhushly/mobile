@@ -8,5 +8,3 @@ export const profileRow = z.object({
 });
 
 export const hotelStaffRow = z.object({ hotel_id: z.string() }).nullable();
-
-export const scannerRows = z.array(z.object({ id: z.string() }));

@@ -1,4 +1,4 @@
-import { hotelStaffRow, profileRow, scannerRows } from '@/features/mode/schemas/rows';
+import { hotelStaffRow, profileRow } from '@/features/mode/schemas/rows';
 
 describe('mode row schemas', () => {
   it('accepts a valid profile and rejects an unknown role', () => {
@@ -8,8 +8,5 @@ describe('mode row schemas', () => {
   it('accepts null hotel staff and a hotel row', () => {
     expect(hotelStaffRow.safeParse(null).success).toBe(true);
     expect(hotelStaffRow.safeParse({ hotel_id: 'h' }).success).toBe(true);
-  });
-  it('accepts an empty scanner list', () => {
-    expect(scannerRows.safeParse([]).success).toBe(true);
   });
 });
