@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Linking } from 'react-native';
 import { z } from 'zod';
 
@@ -14,6 +14,7 @@ import { useScanSession } from '@/features/gate/hooks/useScanSession';
 import { useScanSummary } from '@/features/gate/hooks/useScanSummary';
 import { ScannerScreen } from '@/features/gate/screens/ScannerScreen';
 import { useAppActive, useCameraAccess } from '@/features/gate/ui/ScannerCamera';
+import { onceGuard } from '@/shared/lib/once';
 
 const eventIdParam = z.uuid();
 
@@ -34,12 +35,16 @@ function Scanner({ eventId }: { eventId: string }) {
     if (router.canGoBack()) router.back();
     else router.replace('/gate');
   };
+  // Once per screen: Done on two consecutive not-assigned overlays must not navigate twice.
+  const [leaveOnce] = useState(onceGuard);
   // Staff read the not-assigned refusal and pressed Done: refresh the list and stop auto-opening
   // this event, so the next launch does not drop them straight back in here.
   const leaveLostAssignment = () => {
-    if (userId !== null) void qc.invalidateQueries({ queryKey: gateKeys.events(userId) });
-    forget();
-    leave();
+    leaveOnce(() => {
+      if (userId !== null) void qc.invalidateQueries({ queryKey: gateKeys.events(userId) });
+      forget();
+      leave();
+    });
   };
   const { session, muted, toggleMute } = useScanSession(eventId);
 
