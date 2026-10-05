@@ -11,22 +11,36 @@ const mine = { id: EV, title: 'A', startsAt: null, location: null };
 
 describe('shouldShowNotAssigned', () => {
   it('shows when the summary was forbidden and the fresh list no longer has the event', () => {
-    expect(shouldShowNotAssigned({ summaryForbidden: true, events: [other], eventId: EV })).toBe(
-      true,
-    );
-    expect(shouldShowNotAssigned({ summaryForbidden: true, events: [], eventId: EV })).toBe(true);
+    expect(
+      shouldShowNotAssigned({ userId: 'u1', summaryForbidden: true, events: [other], eventId: EV }),
+    ).toBe(true);
+    expect(
+      shouldShowNotAssigned({ userId: 'u1', summaryForbidden: true, events: [], eventId: EV }),
+    ).toBe(true);
   });
   it('does not show while the event is still listed', () => {
     expect(
-      shouldShowNotAssigned({ summaryForbidden: true, events: [other, mine], eventId: EV }),
+      shouldShowNotAssigned({
+        userId: 'u1',
+        summaryForbidden: true,
+        events: [other, mine],
+        eventId: EV,
+      }),
     ).toBe(false);
   });
   it('does not show when the refetch failed (no list)', () => {
-    expect(shouldShowNotAssigned({ summaryForbidden: true, events: null, eventId: EV })).toBe(
-      false,
-    );
+    expect(
+      shouldShowNotAssigned({ userId: 'u1', summaryForbidden: true, events: null, eventId: EV }),
+    ).toBe(false);
   });
   it('does not show without a forbidden summary', () => {
-    expect(shouldShowNotAssigned({ summaryForbidden: false, events: [], eventId: EV })).toBe(false);
+    expect(
+      shouldShowNotAssigned({ userId: 'u1', summaryForbidden: false, events: [], eventId: EV }),
+    ).toBe(false);
+  });
+  it('does not show without a signed-in user (the list was fetched for no one)', () => {
+    expect(
+      shouldShowNotAssigned({ userId: null, summaryForbidden: true, events: [], eventId: EV }),
+    ).toBe(false);
   });
 });

@@ -14,6 +14,7 @@ import { useScanSession } from '@/features/gate/hooks/useScanSession';
 import { useScanSummary } from '@/features/gate/hooks/useScanSummary';
 import { ScannerScreen } from '@/features/gate/screens/ScannerScreen';
 import { useAppActive, useCameraAccess } from '@/features/gate/ui/ScannerCamera';
+import { latestOnly } from '@/shared/lib/latest';
 import { onceGuard } from '@/shared/lib/once';
 
 const eventIdParam = z.uuid();
@@ -50,14 +51,21 @@ function Scanner({ eventId }: { eventId: string }) {
 
   // A summary 403 is codeless, so only a fresh events list can confirm the assignment is gone.
   const { refresh: refreshEvents } = events;
+  const [latest] = useState(latestOnly);
   useEffect(() => {
-    if (!forbidden) return;
+    if (!forbidden || userId === null) return;
+    const current = latest.begin();
     void refreshEvents().then((fresh) => {
-      if (shouldShowNotAssigned({ summaryForbidden: true, events: fresh, eventId })) {
+      // A superseded or cancelled refresh may resolve with cached data: ignore it.
+      if (!current()) return;
+      if (shouldShowNotAssigned({ userId, summaryForbidden: true, events: fresh, eventId })) {
         session.showNotAssigned();
       }
     });
-  }, [forbidden, refreshEvents, eventId, session]);
+    return () => {
+      latest.begin();
+    };
+  }, [forbidden, userId, refreshEvents, eventId, session, latest]);
 
   const { permission, request } = camera;
   useEffect(() => {
