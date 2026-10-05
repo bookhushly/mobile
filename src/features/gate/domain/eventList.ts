@@ -24,12 +24,14 @@ export function groupEvents(events: readonly ScannableEvent[], nowMs: number): E
   return { upcoming, earlier };
 }
 
+// Only an upcoming event: reopening last week's event would refuse every valid ticket tonight.
 export function pickAutoOpen(
   events: readonly ScannableEvent[],
   lastEventId: string | null,
+  nowMs: number,
 ): string | null {
   if (lastEventId === null) return null;
-  return events.some((e) => e.id === lastEventId) ? lastEventId : null;
+  return groupEvents(events, nowMs).upcoming.some((e) => e.id === lastEventId) ? lastEventId : null;
 }
 
 export function eventLabel(e: ScannableEvent): string {

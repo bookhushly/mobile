@@ -1,7 +1,9 @@
 import { dbErrorToApiError } from '@/shared/lib/dbError';
 
 it('maps PostgREST failures to the api taxonomy', () => {
-  expect(dbErrorToApiError({ status: 401 })).toEqual({ kind: 'forbidden' });
+  expect(dbErrorToApiError({ status: 401 })).toEqual({ kind: 'auth' });
+  expect(dbErrorToApiError({ status: 429 })).toEqual({ kind: 'rateLimited' });
+  expect(dbErrorToApiError({ status: 408 })).toEqual({ kind: 'timeout' });
   expect(dbErrorToApiError({ status: 403 })).toEqual({ kind: 'forbidden' });
   expect(dbErrorToApiError({ status: 503 })).toEqual({ kind: 'unavailable', status: 503 });
   expect(dbErrorToApiError({ status: 0 })).toEqual({ kind: 'network' });

@@ -17,6 +17,28 @@ describe('scan schemas', () => {
     });
     expect(JSON.stringify(r)).not.toMatch(/guest@example|2348000000000/);
   });
+  it('accepts any 200 with ok: true, falling back to null for drifted fields', () => {
+    const r = admitBody.parse({ ok: true, ticket: { id: 5 }, booking: 'x' });
+    expect(r.ticket).toEqual({
+      id: null,
+      ticket_type: null,
+      ticket_index: null,
+      checked_in_at: null,
+    });
+    expect(r.booking).toBeNull();
+    expect(admitBody.parse({ ok: true })).toEqual({ ok: true, ticket: null, booking: null });
+    expect(admitBody.safeParse({ ok: false }).success).toBe(false);
+  });
+  it('still strips unknown keys from a drifted admission', () => {
+    const r = admitBody.parse({
+      ok: true,
+      contact_email: 'guest@example.com',
+      ticket: { ticket_type: 7, contact_phone: '+2348000000000' },
+      booking: { total_tickets: 'two', contact_email: 'guest@example.com' },
+    });
+    expect(JSON.stringify(r)).not.toMatch(/guest@example|2348000000000/);
+    expect(r.booking).toEqual({ id: null, total_tickets: null, checked_in_count: null });
+  });
   it('parses an already-used body with a name or an email', () => {
     expect(usedBody.parse(fx.usedByName.body).scanned_by).toBe('Ada Gate');
     expect(usedBody.parse(fx.usedByEmail.body).scanned_by).toBe('scanner@example.com');

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 import { createApiClient } from '@/shared/api/client';
+import { createClock } from '@/shared/lib/clock';
+import { memoryKv } from '@/shared/lib/kv';
 
 type Call = { url: string; init: RequestInit };
 type Deps = Parameters<typeof createApiClient>[0];
@@ -27,7 +29,6 @@ function make(responses: (Response | Error)[], over: Partial<Deps> = {}) {
     clock: {
       recordServerDate: (d) => {
         dates.push(d);
-        return Promise.resolve();
       },
     },
     appVersion: '1.0.0 (7)',
@@ -215,4 +216,27 @@ describe('api client', () => {
     });
     expect(calls).toHaveLength(1);
   });
+});
+
+it('a failing clock write never turns a response into a network error', async () => {
+  const storage = { ...memoryKv(), set: () => Promise.reject(new Error('disk full')) };
+  const clock = createClock({ storage, now: () => Date.parse('2026-10-05T18:00:00Z') });
+  const { client } = make([res(200, { ok: true }, { date: 'Mon, 05 Oct 2026 18:00:05 GMT' })], {
+    clock,
+  });
+  const r = await client.request('/api/x', { schema: z.object({ ok: z.boolean() }) });
+  expect(r).toEqual({ ok: true, value: { ok: true } });
+  expect(clock.offsetMs()).toBe(5_000);
+});
+
+it('a clock that throws never turns a response into a network error', async () => {
+  const { client } = make([res(200, { ok: true })], {
+    clock: {
+      recordServerDate: () => {
+        throw new Error('boom');
+      },
+    },
+  });
+  const r = await client.request('/api/x', { schema: z.object({ ok: z.boolean() }) });
+  expect(r.ok).toBe(true);
 });

@@ -1,6 +1,6 @@
 import { useKeepAwake } from 'expo-keep-awake';
 import { Flashlight, Keyboard, ListChecks, Volume2, VolumeX } from 'lucide-react-native';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -28,6 +28,8 @@ type Props = {
   session: Pick<ScanSession, 'scan' | 'tryAgain' | 'dismiss'>;
   onSignIn: () => void;
   onChangeEvent: () => void;
+  /** Staff pressed Done on "You aren't assigned to this event": leave the scanner. */
+  onLostAssignment: () => void;
 };
 
 const CORNER = 32;
@@ -108,33 +110,70 @@ function Control({
   );
 }
 
+type OverlayProps = Pick<Props, 'session' | 'onSignIn' | 'onLostAssignment'>;
+
+const lostAssignment = (v: OverlayView) =>
+  v.outcome.kind === 'refused' && v.outcome.reason === 'notAssigned';
+
 // Keyed by overlay id so the time used for wording is fixed when each overlay appears.
-function OverlayFor(p: Pick<Props, 'session' | 'onSignIn'> & { view: OverlayView }) {
+function OverlayFor(p: OverlayProps & { view: OverlayView }) {
   const [nowMs] = useState(() => Date.now());
   return (
     <OutcomeOverlay
       view={p.view}
       nowMs={nowMs}
-      onDismiss={p.session.dismiss}
+      onDismiss={(id) => {
+        p.session.dismiss(id);
+        // The refusal explains why; only leave once staff have read it and pressed Done.
+        if (lostAssignment(p.view)) p.onLostAssignment();
+      }}
       onTryAgain={p.session.tryAgain}
       onSignIn={p.onSignIn}
     />
   );
 }
 
-function Overlay(p: Pick<Props, 'session' | 'onSignIn'>) {
+function Overlay(p: OverlayProps) {
   const current = useScanView((s) => s.view.current);
   if (current === null) return null;
-  return <OverlayFor key={current.id} view={current} session={p.session} onSignIn={p.onSignIn} />;
+  return <OverlayFor key={current.id} view={current} {...p} />;
 }
 
 function Checking() {
   const pending = useScanView((s) => s.view.pending);
   if (pending === 0) return null;
   return (
-    <Text variant="label" tone="onAction" accessibilityLiveRegion="polite">
-      {`Checking ${String(pending)}…`}
-    </Text>
+    <View
+      testID="checking-pill"
+      style={{
+        backgroundColor: color.textPrimary,
+        borderRadius: radius.r2,
+        paddingVertical: space.s3,
+        paddingHorizontal: space.s4,
+      }}
+    >
+      <Text variant="label" tone="onAction" accessibilityLiveRegion="polite">
+        {`Checking ${String(pending)}…`}
+      </Text>
+    </View>
+  );
+}
+
+// Its own component so summary updates re-render only the counter.
+function DoorCounter({ summary, stale }: { summary: ScanSummary | null; stale: boolean }) {
+  const counter =
+    summary === null ? '— / —' : `${String(summary.admitted)} / ${String(summary.total)}`;
+  return (
+    <View accessible accessibilityLabel={`Admitted ${counter}${stale ? ', not updated' : ''}`}>
+      <Text variant="num" tabular>
+        {counter}
+      </Text>
+      {stale ? (
+        <Text variant="caption" tone="textMuted">
+          not updated
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -143,8 +182,14 @@ export function ScannerScreen(p: Props) {
   const [torch, setTorch] = useState(false);
   const [entering, setEntering] = useState(false);
   const [showRecent, setShowRecent] = useState(false);
-  const counter =
-    p.summary === null ? '— / —' : `${String(p.summary.admitted)} / ${String(p.summary.total)}`;
+  // Stable so the memoised camera never re-renders for unrelated screen state (perf budget).
+  const session = p.session;
+  const onCode = useCallback(
+    (raw: string) => {
+      session.scan(raw, 'camera');
+    },
+    [session],
+  );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: color.textPrimary }}>
@@ -164,28 +209,24 @@ export function ScannerScreen(p: Props) {
           <Pressable
             accessibilityRole="link"
             onPress={p.onChangeEvent}
-            style={{ minHeight: 44, justifyContent: 'center' }}
+            style={{ minHeight: density.gate.minTarget, justifyContent: 'center' }}
           >
             <Text variant="labelSm" tone="linkText">
               Change event
             </Text>
           </Pressable>
         </View>
-        <View accessibilityLabel={`Admitted ${counter}`}>
-          <Text variant="num" tabular>
-            {counter}
-          </Text>
-          {p.summaryStale ? (
-            <Text variant="caption" tone="textMuted">
-              not updated
-            </Text>
-          ) : null}
-        </View>
+        <DoorCounter summary={p.summary} stale={p.summaryStale} />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={p.muted ? 'Sound off' : 'Sound on'}
           onPress={p.onToggleMute}
-          style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+          style={{
+            minWidth: density.gate.minTarget,
+            minHeight: density.gate.minTarget,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
         >
           <Icon as={p.muted ? VolumeX : Volume2} color={color.textPrimary} />
         </Pressable>
@@ -194,12 +235,7 @@ export function ScannerScreen(p: Props) {
       <View style={{ flex: 1 }}>
         {p.permission === 'granted' && p.focused ? (
           <>
-            <ScannerCamera
-              torch={torch}
-              onCode={(raw) => {
-                p.session.scan(raw, 'camera');
-              }}
-            />
+            <ScannerCamera torch={torch} paused={entering || showRecent} onCode={onCode} />
             <Viewfinder />
           </>
         ) : null}
@@ -225,9 +261,10 @@ export function ScannerScreen(p: Props) {
       </View>
 
       <View
+        testID="scanner-controls"
         style={{
           flexDirection: 'row',
-          gap: space.s4,
+          gap: density.gate.targetGap,
           padding: space.s4,
           backgroundColor: color.surface,
         }}
@@ -256,7 +293,7 @@ export function ScannerScreen(p: Props) {
         />
       </View>
 
-      <Overlay session={p.session} onSignIn={p.onSignIn} />
+      <Overlay session={p.session} onSignIn={p.onSignIn} onLostAssignment={p.onLostAssignment} />
 
       <EnterCodeSheet
         visible={entering}

@@ -1,5 +1,12 @@
 import { createOverlayQueue } from '@/features/gate/domain/overlayQueue';
 import type { ScanOutcome } from '@/features/gate/domain/outcome';
+import { parseTicketCode, type TicketCode } from '@/features/gate/domain/parseTicketCode';
+
+const code = (n: number): TicketCode => {
+  const p = parseTicketCode(`00000000-0000-4000-8000-${String(n).padStart(12, '0')}`);
+  if (!p) throw new Error('bad fixture');
+  return p.value;
+};
 
 const A: ScanOutcome = {
   kind: 'admitted',
@@ -98,5 +105,32 @@ describe('overlay queue', () => {
     q.push(null, R);
     q.dismiss();
     expect(q.current()?.id).not.toBe(first);
+  });
+
+  it('drops a push identical in code and kind to the current or a waiting item', () => {
+    const { q } = harness();
+    expect(q.push(code(1), R)).toBe(true);
+    expect(q.push(code(1), R)).toBe(false);
+    expect(q.push(code(2), C)).toBe(true);
+    expect(q.push(code(2), C)).toBe(false);
+    expect(q.waitingCount()).toBe(1);
+    expect(q.push(code(1), U)).toBe(true);
+    expect(q.waitingCount()).toBe(2);
+  });
+  it('never drops codeless pushes', () => {
+    const { q } = harness();
+    q.push(null, R);
+    expect(q.push(null, R)).toBe(true);
+    expect(q.waitingCount()).toBe(1);
+  });
+  it('hasCode sees the current and waiting items only', () => {
+    const { q } = harness();
+    q.push(code(1), R);
+    q.push(code(2), R);
+    expect(q.hasCode(code(1))).toBe(true);
+    expect(q.hasCode(code(2))).toBe(true);
+    expect(q.hasCode(code(3))).toBe(false);
+    q.dismiss();
+    expect(q.hasCode(code(1))).toBe(false);
   });
 });

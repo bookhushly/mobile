@@ -1,4 +1,4 @@
-import type { RefusalReason, ScanOutcome, ScannedBy } from './outcome';
+import type { CouldntCheckCause, RefusalReason, ScanOutcome, ScannedBy } from './outcome';
 
 export type Tone = 'admitted' | 'used' | 'refused' | 'retry';
 export type Cue = 'success' | 'warning' | 'error' | 'retry';
@@ -26,6 +26,15 @@ const REASON: Record<RefusalReason, string> = {
   staticNotAllowed: 'Printed QR not accepted — ask for the live ticket',
   notAssigned: "You aren't assigned to this event — call the organiser",
   other: "This ticket can't be admitted",
+};
+
+const COULDNT_CHECK: Record<CouldntCheckCause, string> = {
+  network: "We couldn't reach the server — scan again",
+  timeout: "We couldn't reach the server — scan again",
+  rateLimited: 'Too many scans at once — wait a moment, then scan again',
+  server: 'The server had a problem — scan again',
+  unreadable: 'Unexpected reply from the server — scan again',
+  auth: 'Your session expired — sign in again, then scan again',
 };
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -100,10 +109,7 @@ export function present(o: ScanOutcome, nowMs: number): Presentation {
         cue: 'retry',
         holdMs: null,
         title: "Couldn't check",
-        detail:
-          o.cause === 'auth'
-            ? 'Your session expired — sign in again, then scan again'
-            : "We couldn't reach the server — scan again",
+        detail: COULDNT_CHECK[o.cause],
         secondary: null,
         action: o.cause === 'auth' ? 'signIn' : 'tryAgain',
       };

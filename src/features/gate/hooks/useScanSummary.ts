@@ -29,5 +29,6 @@ export function useScanSummary(
     refetchInterval: focused ? 15_000 : false,
     staleTime: 0,
   });
-  return { summary: q.data ?? null, stale: q.isError && q.data !== undefined };
+  // Stale on any error, even before the first success, so "— / —" reads "not updated".
+  return { summary: q.data ?? null, stale: q.isError };
 }

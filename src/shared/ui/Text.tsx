@@ -13,6 +13,8 @@ type Props = {
   testID?: string;
   accessibilityRole?: 'header' | 'link' | 'text' | 'alert';
   accessibilityLiveRegion?: 'none' | 'polite' | 'assertive';
+  /** Overrides the variant's Dynamic Type cap (gate results use 1 so actions never leave the screen). */
+  maxScale?: number;
   style?: StyleProp<TextStyle>;
   children: ReactNode;
 };
@@ -26,6 +28,7 @@ export function Text({
   testID,
   accessibilityRole,
   accessibilityLiveRegion,
+  maxScale,
   style,
   children,
 }: Props) {
@@ -36,7 +39,7 @@ export function Text({
       accessibilityRole={accessibilityRole}
       accessibilityLiveRegion={accessibilityLiveRegion}
       numberOfLines={numberOfLines}
-      maxFontSizeMultiplier={v.maxScale}
+      maxFontSizeMultiplier={maxScale ?? v.maxScale}
       style={[
         {
           fontFamily: fontFamily(v.font, v.weight),

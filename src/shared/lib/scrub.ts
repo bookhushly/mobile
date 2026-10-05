@@ -3,6 +3,9 @@
 const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const JWT = /eyJ[\w-]+\.[\w-]+\.[\w-]+/g;
 const BEARER = /Bearer\s+[\w.~+/=-]+/gi;
+// Ticket codes and ids identify a guest's ticket: never let them reach a report.
+const TICKET_CODE = /BH[12]\.[A-Za-z0-9._~-]+/g;
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 
 export function stripQuery(url: string): string {
   const cut = url.search(/[?#]/);
@@ -10,7 +13,12 @@ export function stripQuery(url: string): string {
 }
 
 export function redactText(text: string): string {
-  return text.replace(JWT, '[token]').replace(BEARER, 'Bearer [token]').replace(EMAIL, '[email]');
+  return text
+    .replace(TICKET_CODE, '[code]')
+    .replace(JWT, '[token]')
+    .replace(BEARER, 'Bearer [token]')
+    .replace(EMAIL, '[email]')
+    .replace(UUID, '[id]');
 }
 
 type Breadcrumb = { category?: string; message?: string; data?: Record<string, unknown> };

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 
 import type { OverlayView } from '@/features/gate/domain/scanSession';
 import { OutcomeOverlay } from '@/features/gate/ui/OutcomeOverlay';
@@ -107,4 +108,97 @@ it('shows the +N admitted chip', async () => {
     />,
   );
   expect(screen.getByText('+4 admitted')).toBeTruthy();
+});
+
+// iOS collapses an accessible element's children: no button may sit inside one.
+type Node = ReturnType<typeof screen.getByTestId>;
+function insideAccessibleAncestor(node: Node): boolean {
+  for (let n = node.parent; n !== null; n = n.parent) {
+    if (n.props.accessible === true) return true;
+  }
+  return false;
+}
+
+it.each([
+  [{ kind: 'refused', reason: 'notFound', fixable: false }, ['Done']],
+  [{ kind: 'couldntCheck', cause: 'network' }, ['Try again', 'Dismiss']],
+  [{ kind: 'couldntCheck', cause: 'auth' }, ['Sign in again', 'Dismiss']],
+] as const)('%o: every action is its own reachable button', async (outcome, labels) => {
+  await render(<OutcomeOverlay view={view(outcome)} nowMs={NOW} {...handlers} />);
+  for (const name of labels) {
+    const button = screen.getByRole('button', { name });
+    expect(insideAccessibleAncestor(button)).toBe(false);
+  }
+  expect(screen.getByTestId('outcome-overlay').props.accessible).not.toBe(true);
+});
+
+it('announces title, detail, secondary line and the +N chip as one alert', async () => {
+  await render(
+    <OutcomeOverlay
+      view={view(
+        {
+          kind: 'admitted',
+          ticketType: 'Regular',
+          ticketIndex: 2,
+          totalTickets: 3,
+          checkedInCount: 2,
+          checkedInAt: null,
+        },
+        4,
+      )}
+      nowMs={NOW}
+      {...handlers}
+    />,
+  );
+  const alert = screen.getByRole('alert');
+  expect(alert.props.accessibilityLiveRegion).toBe('assertive');
+  expect(alert.props.accessibilityLabel).toBe(
+    'Admitted. Regular · ticket 2 of 3. 2 of 3 on this booking are in. +4 admitted',
+  );
+  expect(alert.props.onClick).toBeUndefined();
+});
+
+it('a timed overlay still dismisses on tap; a held one does not', async () => {
+  const onDismiss = jest.fn();
+  const admitted = {
+    kind: 'admitted',
+    ticketType: null,
+    ticketIndex: null,
+    totalTickets: null,
+    checkedInCount: null,
+    checkedInAt: null,
+  } as const;
+  const { rerender } = await render(
+    <OutcomeOverlay view={view(admitted)} nowMs={NOW} {...handlers} onDismiss={onDismiss} />,
+  );
+  await fireEvent.press(screen.getByTestId('outcome-overlay'));
+  expect(onDismiss).toHaveBeenCalledWith(1);
+  onDismiss.mockClear();
+  await rerender(
+    <OutcomeOverlay
+      view={view({ kind: 'refused', reason: 'notFound', fixable: false })}
+      nowMs={NOW}
+      {...handlers}
+      onDismiss={onDismiss}
+    />,
+  );
+  await fireEvent.press(screen.getByTestId('outcome-overlay'));
+  expect(onDismiss).not.toHaveBeenCalled();
+});
+
+it('pins the actions to the bottom and does not scale gate text past 1.0', async () => {
+  await render(
+    <OutcomeOverlay
+      view={view({ kind: 'refused', reason: 'wrongEvent', fixable: false })}
+      nowMs={NOW}
+      {...handlers}
+    />,
+  );
+  const actions = StyleSheet.flatten(
+    screen.getByTestId('outcome-actions').props.style as StyleProp<ViewStyle>,
+  );
+  expect(actions.marginTop).toBe('auto');
+  for (const t of ['Refused', 'This ticket is for a different event', 'Done']) {
+    expect(screen.getByText(t).props.maxFontSizeMultiplier).toBe(1);
+  }
 });

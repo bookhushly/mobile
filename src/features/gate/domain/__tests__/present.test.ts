@@ -1,4 +1,4 @@
-import type { ScanOutcome } from '@/features/gate/domain/outcome';
+import type { CouldntCheckCause, ScanOutcome } from '@/features/gate/domain/outcome';
 import { present } from '@/features/gate/domain/present';
 
 const NOW = Date.parse('2026-10-05T18:05:00.000Z');
@@ -79,5 +79,17 @@ describe('present', () => {
       action: 'tryAgain',
     });
     expect(present({ kind: 'couldntCheck', cause: 'auth' }, NOW).action).toBe('signIn');
+  });
+  it.each<[CouldntCheckCause, string]>([
+    ['network', "We couldn't reach the server — scan again"],
+    ['timeout', "We couldn't reach the server — scan again"],
+    ['rateLimited', 'Too many scans at once — wait a moment, then scan again'],
+    ['server', 'The server had a problem — scan again'],
+    ['unreadable', 'Unexpected reply from the server — scan again'],
+    ['auth', 'Your session expired — sign in again, then scan again'],
+  ])("couldn't check copy for %s", (cause, detail) => {
+    const p = present({ kind: 'couldntCheck', cause }, NOW);
+    expect(p.detail).toBe(detail);
+    expect(p.tone).toBe('retry');
   });
 });

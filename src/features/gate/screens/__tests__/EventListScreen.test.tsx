@@ -54,6 +54,19 @@ it('auto-opens the last event once when it is still listed', async () => {
   expect(onOpen).toHaveBeenCalledTimes(1);
 });
 
+it('does not auto-open a remembered event that is in the past', async () => {
+  const onOpen = jest.fn();
+  await render(
+    <EventListScreen
+      {...base}
+      onOpen={onOpen}
+      lastEventId="old"
+      state={{ status: 'ready', events: [ev('old', 'Last week', '2026-09-28T18:00:00Z')] }}
+    />,
+  );
+  expect(onOpen).not.toHaveBeenCalled();
+});
+
 it('does not auto-open an event that is no longer listed', async () => {
   const onOpen = jest.fn();
   await render(

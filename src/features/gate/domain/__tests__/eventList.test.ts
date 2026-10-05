@@ -33,9 +33,14 @@ describe('groupEvents', () => {
 describe('pickAutoOpen', () => {
   it('reopens the last event only if it is still listed', () => {
     const list = [ev('a', null), ev('b', null)];
-    expect(pickAutoOpen(list, 'b')).toBe('b');
-    expect(pickAutoOpen(list, 'gone')).toBeNull();
-    expect(pickAutoOpen(list, null)).toBeNull();
+    expect(pickAutoOpen(list, 'b', NOW)).toBe('b');
+    expect(pickAutoOpen(list, 'gone', NOW)).toBeNull();
+    expect(pickAutoOpen(list, null, NOW)).toBeNull();
+  });
+  it('never reopens a past event, only an upcoming one', () => {
+    const list = [ev('lastWeek', '2026-09-28T18:00:00Z'), ev('tonight', '2026-10-05T18:00:00Z')];
+    expect(pickAutoOpen(list, 'lastWeek', NOW)).toBeNull();
+    expect(pickAutoOpen(list, 'tonight', NOW)).toBe('tonight');
   });
 });
 

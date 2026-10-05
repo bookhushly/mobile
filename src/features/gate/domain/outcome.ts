@@ -80,6 +80,9 @@ function scannedByFrom(
 
 function fromConflict(code: string, body: unknown, ctx: ClassifyContext): ScanOutcome {
   switch (code) {
+    case 'conflict':
+      // The client's default when the 409 had no code: not the scan route speaking.
+      return couldnt('server');
     case 'already_checked_in': {
       const p = usedBody.safeParse(body);
       const d = p.success ? p.data : null;
@@ -112,24 +115,26 @@ function fromConflict(code: string, body: unknown, ctx: ClassifyContext): ScanOu
 
 export function classify(res: ScanResponse, ctx: ClassifyContext): ScanOutcome {
   if (res.ok) {
+    // A 200 is an admission even when the body has drifted; unknown details show as "Ticket".
     const { ticket, booking } = res.value;
     return {
       kind: 'admitted',
-      ticketType: ticket.ticket_type,
-      ticketIndex: ticket.ticket_index,
-      totalTickets: booking.total_tickets,
-      checkedInCount: booking.checked_in_count,
-      checkedInAt: ticket.checked_in_at,
+      ticketType: ticket?.ticket_type ?? null,
+      ticketIndex: ticket?.ticket_index ?? null,
+      totalTickets: booking?.total_tickets ?? null,
+      checkedInCount: booking?.checked_in_count ?? null,
+      checkedInAt: ticket?.checked_in_at ?? null,
     };
   }
   const e = res.error;
   switch (e.kind) {
     case 'conflict':
       return fromConflict(e.code, e.body, ctx);
+    // The scan route always sends these codes; a codeless 403/404 is an edge, WAF or older deploy.
     case 'notFound':
-      return refused('notFound');
+      return e.code === 'not_found' ? refused('notFound') : couldnt('server');
     case 'forbidden':
-      return refused('notAssigned');
+      return e.code === 'forbidden' ? refused('notAssigned') : couldnt('server');
     case 'unknown':
       return e.status === 400 && e.code === 'invalid_code'
         ? refused('invalid')

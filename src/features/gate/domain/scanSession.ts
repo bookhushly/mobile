@@ -13,29 +13,36 @@ export type OverlayView = {
 };
 export type SessionView = { current: OverlayView | null; waiting: number; pending: number };
 
+// `localNow` (monotonic) drives overlay holds and cooldowns; `now` (server clock) only feeds
+// uncertainSince and the wording of times.
 export type ScanSessionDeps = Omit<ScanQueueDeps, 'onResult'> & {
-  // Overlay hold timing. Separate from `now` (server clock, re-synced on every response, can step back).
-  localNow: () => number;
   onChange: (v: SessionView) => void;
   onCue: (cue: Cue) => void;
   onAdmitted: () => void;
-  onNotAssigned: () => void;
 };
 
 const JUNK_COOLDOWN_MS = 2_000;
+
+type Snapshot = { id: number | null; extra: number; waiting: number; pending: number };
+const sameSnapshot = (a: Snapshot | null, b: Snapshot) =>
+  a !== null &&
+  a.id === b.id &&
+  a.extra === b.extra &&
+  a.waiting === b.waiting &&
+  a.pending === b.pending;
 
 // Phase 2 swaps `submit` for roster + outbox; nothing else here changes.
 export function createScanSession(deps: ScanSessionDeps) {
   const overlays = createOverlayQueue({ now: deps.localNow });
   const junkUntil = new Map<string, number>();
   let shownId: number | null = null;
+  let last: Snapshot | null = null;
 
   const queue = createScanQueue({
     ...deps,
     onResult: (code, outcome) => {
       overlays.push(code, outcome);
       if (outcome.kind === 'admitted') deps.onAdmitted();
-      if (outcome.kind === 'refused' && outcome.reason === 'notAssigned') deps.onNotAssigned();
       publish();
     },
   });
@@ -53,29 +60,53 @@ export function createScanSession(deps: ScanSessionDeps) {
   }
 
   function publish() {
-    const c = overlays.current();
-    if (c !== null && c.id !== shownId) deps.onCue(present(c.outcome, deps.now()).cue);
+    const v = view();
+    const c = v.current;
+    if (c !== null && c.id !== shownId) {
+      try {
+        deps.onCue(present(c.outcome, deps.now()).cue);
+      } catch {
+        // A failing cue must never hide an outcome.
+      }
+    }
     shownId = c?.id ?? null;
-    deps.onChange(view());
+    const snap: Snapshot = {
+      id: c?.id ?? null,
+      extra: c?.extraAdmitted ?? 0,
+      waiting: v.waiting,
+      pending: v.pending,
+    };
+    if (sameSnapshot(last, snap)) return;
+    last = snap;
+    deps.onChange(v);
+  }
+
+  // Sliding: a junk QR held in view keeps extending its own cooldown.
+  function junkCoolingDown(raw: string): boolean {
+    const now = deps.localNow();
+    const until = junkUntil.get(raw);
+    if (junkUntil.size > 200) junkUntil.clear();
+    junkUntil.set(raw, now + JUNK_COOLDOWN_MS);
+    return until !== undefined && now < until;
   }
 
   return {
     scan(raw: string, source: 'camera' | 'manual') {
       const parsed = parseTicketCode(raw);
       if (parsed === null) {
-        if (source === 'camera') {
-          const now = deps.now();
-          const until = junkUntil.get(raw);
-          if (until !== undefined && now < until) return;
-          if (junkUntil.size > 200) junkUntil.clear();
-          junkUntil.set(raw, now + JUNK_COOLDOWN_MS);
-        }
+        if (source === 'camera' && junkCoolingDown(raw)) return;
         overlays.push(null, refusedLocally);
         publish();
         return;
       }
-      queue.enqueue(parsed.value, { manual: source === 'manual' });
-      publish();
+      const code = parsed.value;
+      // The camera keeps reporting a code that is on screen: that is the same presentation.
+      if (source === 'camera' && overlays.hasCode(code)) {
+        queue.touch(code);
+        return;
+      }
+      const r = queue.enqueue(code, { manual: source === 'manual' });
+      if (r === 'queued' || r === 'replayed') publish();
     },
     // Both take the id the staff member saw: a double tap must not dismiss the next overlay unseen.
     tryAgain(id: number) {
@@ -99,7 +130,9 @@ export function createScanSession(deps: ScanSessionDeps) {
       overlays.clear();
       junkUntil.clear();
       shownId = null;
-      deps.onChange(view());
+      const v = view();
+      last = { id: null, extra: 0, waiting: v.waiting, pending: v.pending };
+      deps.onChange(v);
     },
     view,
   };

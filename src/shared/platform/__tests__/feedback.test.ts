@@ -37,14 +37,58 @@ it('respects silent mode and preloads four sounds', async () => {
   expect(createAudioPlayer).toHaveBeenCalledTimes(4);
 });
 
-it('plays the sound from the start and fires the haptic', async () => {
+const flush = () => new Promise<void>((r) => setImmediate(r));
+
+it('plays the sound from the start (after the seek) and fires the haptic', async () => {
   const f = createFeedback({ kv: memoryKv() });
   await f.load();
   f.cue('error');
   const p = players()[2];
   expect(p?.seekTo).toHaveBeenCalledWith(0);
+  expect(p?.play).not.toHaveBeenCalled();
+  await flush();
   expect(p?.play).toHaveBeenCalled();
   expect(Haptics.notificationAsync).toHaveBeenCalledWith('error');
+});
+
+it('still creates the players when the audio mode cannot be set', async () => {
+  (setAudioModeAsync as jest.Mock).mockImplementationOnce(() =>
+    Promise.reject(new Error('audio session busy')),
+  );
+  const f = createFeedback({ kv: memoryKv() });
+  await expect(f.load()).resolves.toBeUndefined();
+  expect(createAudioPlayer).toHaveBeenCalledTimes(4);
+  f.cue('success');
+  await flush();
+  expect(players()[0]?.play).toHaveBeenCalled();
+});
+
+it('a release during load leaves no players behind', async () => {
+  let finishMode: () => void = () => undefined;
+  (setAudioModeAsync as jest.Mock).mockImplementationOnce(
+    () =>
+      new Promise<void>((r) => {
+        finishMode = r;
+      }),
+  );
+  const f = createFeedback({ kv: memoryKv() });
+  const loading = f.load();
+  await flush();
+  f.release();
+  finishMode();
+  await loading;
+  const made = players();
+  expect(made.every((p) => p.remove.mock.calls.length > 0)).toBe(true);
+  f.cue('success');
+  await flush();
+  expect(made.some((p) => p.play.mock.calls.length > 0)).toBe(false);
+});
+
+it('load after release is a no-op', async () => {
+  const f = createFeedback({ kv: memoryKv() });
+  f.release();
+  await f.load();
+  expect(createAudioPlayer).not.toHaveBeenCalled();
 });
 
 it('mute silences sound but keeps haptics, and persists', async () => {

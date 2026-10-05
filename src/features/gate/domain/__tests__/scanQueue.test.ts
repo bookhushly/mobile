@@ -16,12 +16,14 @@ const ADMIT: ScanResponse = ok(admitBody.parse(fx.admitted.body));
 const fail = (f: { status: number; body: unknown }): ScanResponse =>
   err(errorFromResponse(f.status, f.body, H));
 const TIMEOUT: ScanResponse = err({ kind: 'timeout' });
+const NETWORK: ScanResponse = err({ kind: 'network' });
 
 type Deferred = { resolve: (r: ScanResponse) => void };
 const flush = () => new Promise<void>((r) => setImmediate(r));
 
 function harness(over: Partial<ScanQueueDeps> = {}) {
   let t = Date.parse('2026-10-05T18:00:00.000Z');
+  let local = 0;
   const pending: Deferred[] = [];
   const results: { code: TicketCode; outcome: ScanOutcome }[] = [];
   const sleeps: number[] = [];
@@ -35,6 +37,7 @@ function harness(over: Partial<ScanQueueDeps> = {}) {
     submit,
     onResult: (c, o) => results.push({ code: c, outcome: o }),
     now: () => t,
+    localNow: () => local,
     random: () => 0,
     sleep: (ms) => {
       sleeps.push(ms);
@@ -48,6 +51,10 @@ function harness(over: Partial<ScanQueueDeps> = {}) {
     results,
     sleeps,
     advance: (ms: number) => {
+      t += ms;
+      local += ms;
+    },
+    serverJump: (ms: number) => {
       t += ms;
     },
     answer: async (r: ScanResponse) => {
@@ -124,11 +131,81 @@ describe('scan queue', () => {
   it("gives up after two retries with couldn't check", async () => {
     const h = harness();
     h.q.enqueue(code(1));
-    await h.answer(TIMEOUT);
-    await h.answer(TIMEOUT);
-    await h.answer(TIMEOUT);
+    await h.answer(NETWORK);
+    await h.answer(fail(fx.lookupFailed));
+    await h.answer(NETWORK);
     expect(h.submit).toHaveBeenCalledTimes(3);
+    expect(h.results[0]?.outcome).toEqual({ kind: 'couldntCheck', cause: 'network' });
+  });
+
+  it("retries a timeout only once: timeout, timeout → couldn't check after 2 submits", async () => {
+    const h = harness();
+    h.q.enqueue(code(1));
+    await h.answer(TIMEOUT);
+    await h.answer(TIMEOUT);
+    expect(h.submit).toHaveBeenCalledTimes(2);
+    expect(h.sleeps).toEqual([400]);
     expect(h.results[0]?.outcome).toEqual({ kind: 'couldntCheck', cause: 'timeout' });
+  });
+
+  it('a timeout uses up the timeout budget but other transients can still retry', async () => {
+    const h = harness();
+    h.q.enqueue(code(1));
+    await h.answer(TIMEOUT);
+    await h.answer(NETWORK);
+    await h.answer(ADMIT);
+    expect(h.submit).toHaveBeenCalledTimes(3);
+    expect(h.results.map((r) => r.outcome.kind)).toEqual(['admitted']);
+  });
+
+  it('a camera sighting during the cooldown slides it forward', async () => {
+    const h = harness();
+    h.q.enqueue(code(1));
+    await h.answer(fail(fx.notFound));
+    h.advance(1900);
+    expect(h.q.enqueue(code(1))).toBe('cooldown');
+    h.advance(1900);
+    expect(h.q.enqueue(code(1))).toBe('cooldown');
+    h.advance(2001);
+    expect(h.q.enqueue(code(1))).toBe('queued');
+    expect(h.submit).toHaveBeenCalledTimes(2);
+  });
+
+  it('a code seen every 100 ms for 10 s after admission is submitted once and never replayed', async () => {
+    const h = harness();
+    h.q.enqueue(code(1));
+    await h.answer(ADMIT);
+    for (let i = 0; i < 100; i++) {
+      h.advance(100);
+      h.q.enqueue(code(1));
+    }
+    expect(h.submit).toHaveBeenCalledTimes(1);
+    expect(h.results.map((r) => r.outcome.kind)).toEqual(['admitted']);
+    h.advance(2001);
+    expect(h.q.enqueue(code(1))).toBe('replayed');
+    expect(h.results.map((r) => r.outcome.kind)).toEqual(['admitted', 'used']);
+  });
+
+  it('touch extends an existing cooldown without submitting', async () => {
+    const h = harness();
+    h.q.enqueue(code(1));
+    await h.answer(fail(fx.notFound));
+    h.advance(1900);
+    h.q.touch(code(1));
+    h.advance(1900);
+    expect(h.q.enqueue(code(1))).toBe('cooldown');
+    expect(h.submit).toHaveBeenCalledTimes(1);
+  });
+
+  it('cooldowns run on the local clock, not the server clock', async () => {
+    const h = harness();
+    h.q.enqueue(code(1));
+    await h.answer(fail(fx.notFound));
+    h.serverJump(60_000);
+    expect(h.q.enqueue(code(1))).toBe('cooldown');
+    h.serverJump(-120_000);
+    h.advance(2001);
+    expect(h.q.enqueue(code(1))).toBe('queued');
   });
 
   it.each([fx.notFound, fx.forbidden, fx.wrongEvent, fx.unauthorized, fx.invalidStatic])(
@@ -164,7 +241,6 @@ describe('scan queue', () => {
   it("remembers an uncertain couldn't-check so Try again shows used by me", async () => {
     const h = harness();
     h.q.enqueue(code(1));
-    await h.answer(TIMEOUT);
     await h.answer(TIMEOUT);
     await h.answer(TIMEOUT);
     h.q.enqueue(code(1), { manual: true });

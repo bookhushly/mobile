@@ -46,3 +46,16 @@ describe('scrubEvent', () => {
     expect(e.request).toEqual({ url: 'https://a.co/x' });
   });
 });
+
+describe('redactText masks codes and ids', () => {
+  it('masks rotating ticket codes', () => {
+    expect(redactText('scan BH2.abc-DEF_1.2~x failed')).toBe('scan [code] failed');
+    expect(redactText('BH1.eyJhbGciOi')).toBe('[code]');
+  });
+  it('masks UUIDs', () => {
+    expect(redactText('ticket 3f2b8c4e-1a2b-4c3d-8e9f-0a1b2c3d4e5f not found')).toBe(
+      'ticket [id] not found',
+    );
+    expect(redactText('3F2B8C4E-1A2B-4C3D-8E9F-0A1B2C3D4E5F')).toBe('[id]');
+  });
+});

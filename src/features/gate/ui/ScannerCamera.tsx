@@ -4,8 +4,8 @@ import {
   useCameraPermissions,
   type BarcodeScanningResult,
 } from 'expo-camera';
-import { useCallback, useEffect } from 'react';
-import { AppState } from 'react-native';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 
 export type CameraPermission = 'unknown' | 'granted' | 'denied';
 
@@ -36,19 +36,43 @@ export function useCameraAccess() {
   };
 }
 
-type Props = { torch: boolean; onCode: (raw: string) => void };
+// Spec §5: the camera is unmounted while the app is in the background.
+export function useAppActive(): boolean {
+  const [state, setState] = useState<AppStateStatus>(AppState.currentState);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', setState);
+    return () => {
+      sub.remove();
+    };
+  }, []);
+  return state === 'active';
+}
 
-// Mounted only while the screen is focused (the parent unmounts it on blur).
-export function ScannerCamera({ torch, onCode }: Props) {
+type Props = { torch: boolean; paused: boolean; onCode: (raw: string) => void };
+
+const SCANNER_SETTINGS = { barcodeTypes: ['qr' as const] };
+// The camera reports a code on every decoded frame. Forward the same code at most every 500 ms:
+// enough for the session's sliding 2 s cooldown to see that it is still in view.
+const SAME_FRAME_MS = 500;
+
+// Mounted only while the screen is focused and the app is active (the parent unmounts it).
+// memo: the camera subtree must not re-render on summary or overlay changes (perf budget).
+export const ScannerCamera = memo(function ScannerCamera({ torch, paused, onCode }: Props) {
+  const last = useRef<{ raw: string; at: number } | null>(null);
+  const onScanned = (r: BarcodeScanningResult) => {
+    const at = performance.now();
+    const prev = last.current;
+    if (prev !== null && prev.raw === r.data && at - prev.at < SAME_FRAME_MS) return;
+    last.current = { raw: r.data, at };
+    onCode(r.data);
+  };
   return (
     <CameraView
       style={{ flex: 1 }}
       facing="back"
       enableTorch={torch}
-      barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-      onBarcodeScanned={(r: BarcodeScanningResult) => {
-        onCode(r.data);
-      }}
+      barcodeScannerSettings={SCANNER_SETTINGS}
+      onBarcodeScanned={paused ? undefined : onScanned}
     />
   );
-}
+});

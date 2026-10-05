@@ -5,7 +5,8 @@ import type { ApiClient } from '@/shared/api/client';
 import type { ApiError } from '@/shared/lib/errors';
 import type { Result } from '@/shared/lib/result';
 
-export const SCAN_TIMEOUT_MS = 8_000;
+// Worst case to an answer: 6 s + backoff + one 6 s retry ≈ 12.6 s (scanQueue retries a timeout once).
+export const SCAN_TIMEOUT_MS = 6_000;
 
 type Requester = Pick<ApiClient, 'request'>;
 

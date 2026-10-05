@@ -46,12 +46,23 @@ export function createOverlayQueue(deps: { now: () => number; collapseAfter?: nu
     current = next === null ? null : { ...next, shownAt: deps.now() };
   }
 
+  const items = () => (current === null ? waiting : [current, ...waiting]);
+
   return {
-    push(code: TicketCode | null, outcome: ScanOutcome) {
+    /** False when an identical (code, kind) is already showing or waiting: one overlay per presentation. */
+    push(code: TicketCode | null, outcome: ScanOutcome): boolean {
+      if (
+        code !== null &&
+        items().some((i) => i.code === code && i.outcome.kind === outcome.kind)
+      ) {
+        return false;
+      }
       const item: OverlayItem = { id: nextId++, code, outcome, shownAt: null, extraAdmitted: 0 };
       if (current === null) current = { ...item, shownAt: deps.now() };
       else waiting.push(item);
+      return true;
     },
+    hasCode: (code: TicketCode) => items().some((i) => i.code === code),
     current: () => current,
     dismiss() {
       if (current !== null) advance();

@@ -14,7 +14,7 @@
 
 - Four outcomes only: **Admitted · Already used · Refused (reason) · Couldn't check**. 401/429/5xx/timeout/network/unparseable body → _Couldn't check_, never a refusal. "Couldn't check" uses the neutral `color.outcome.retry` fill, never red.
 - No undo or un-admit anywhere in gate mode (FR-3.13).
-- The API client never retries the scan POST. The scan queue owns retries: at most 2, transient only, `400 ms × attempt + jitter(0–199 ms)`.
+- The API client never retries the scan POST. The scan queue owns retries, transient only, `400 ms × attempt + jitter(0–199 ms)`: at most 2 retries for network/429/5xx, at most 1 for a timeout; 6 s scan timeout.
 - A held overlay (refused / couldn't check) is never replaced by a later result.
 - Hold times: admitted 1600 ms, already used 3200 ms, refused and couldn't check held until dismissed.
 - Gate fills: `color.outcome.{admitted,used,refused,retry}` only (DESIGN_SYSTEM D9). No raw hex, no `fontWeight`, no Lottie, no entrance animation on outcomes.

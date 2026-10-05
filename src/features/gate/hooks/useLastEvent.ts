@@ -8,6 +8,7 @@ export function useLastEvent(userId: string | null): {
   lastEventId: string | null;
   loaded: boolean;
   remember: (id: string) => void;
+  forget: () => void;
 } {
   const [state, setState] = useState<{ id: string | null; loaded: boolean }>({
     id: null,
@@ -32,5 +33,9 @@ export function useLastEvent(userId: string | null): {
     },
     [userId],
   );
-  return { lastEventId: state.id, loaded: state.loaded, remember };
+  const forget = useCallback(() => {
+    setState((s) => ({ ...s, id: null }));
+    if (userId !== null) void plainKv.delete(key(userId)).catch(() => undefined);
+  }, [userId]);
+  return { lastEventId: state.id, loaded: state.loaded, remember, forget };
 }

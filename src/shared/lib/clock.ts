@@ -11,14 +11,16 @@ export function createClock(deps: { storage: KeyValue; now: () => number }) {
       const n = raw === null ? NaN : Number(raw);
       if (Number.isFinite(n)) offset = n;
     },
-    async recordServerDate(header: string | null): Promise<void> {
+    // Synchronous in memory; persisted in the background so a slow or failing storage write is
+    // never on the request path.
+    recordServerDate(header: string | null): void {
       if (header === null) return;
       const server = Date.parse(header);
       if (!Number.isFinite(server)) return;
       const next = server - deps.now();
       if (Math.abs(next) > MAX_ABS_OFFSET_MS) return;
       offset = next;
-      await deps.storage.set(KEY, String(next));
+      void deps.storage.set(KEY, String(next)).catch(() => undefined);
     },
     offsetMs: () => offset,
     serverNow: () => deps.now() + offset,

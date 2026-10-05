@@ -70,14 +70,14 @@ export function EventListScreen(p: Props) {
   const [showEarlier, setShowEarlier] = useState(false);
   const autoOpened = useRef(false);
   const events = p.state.status === 'ready' ? p.state.events : null;
-  const { onOpen, lastEventId } = p;
+  const { onOpen, lastEventId, nowMs } = p;
 
   useEffect(() => {
     if (autoOpened.current || events === null) return;
     autoOpened.current = true;
-    const id = pickAutoOpen(events, lastEventId);
+    const id = pickAutoOpen(events, lastEventId, nowMs);
     if (id !== null) onOpen(id);
-  }, [events, lastEventId, onOpen]);
+  }, [events, lastEventId, nowMs, onOpen]);
 
   let body: ReactNode;
   if (p.state.status === 'loading') {

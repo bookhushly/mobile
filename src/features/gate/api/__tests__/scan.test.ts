@@ -16,7 +16,7 @@ function fake() {
   return { client, calls };
 }
 
-it('posts the code with an 8 s timeout and no retry flag', async () => {
+it('posts the code with a 6 s timeout and no retry flag', async () => {
   const { client, calls } = fake();
   const code = parseTicketCode('3f2b8c4e-1a2b-4c3d-8e9f-0a1b2c3d4e5f');
   if (!code) throw new Error('fixture');
@@ -29,6 +29,7 @@ it('posts the code with an 8 s timeout and no retry flag', async () => {
       timeoutMs: SCAN_TIMEOUT_MS,
     }),
   );
+  expect(SCAN_TIMEOUT_MS).toBe(6_000);
   expect(calls[0]?.opts).not.toHaveProperty('idempotent');
 });
 

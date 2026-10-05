@@ -40,24 +40,50 @@ export function createFeedback(deps: { kv?: KeyValue } = {}): Feedback {
   const kv = deps.kv ?? plainKv;
   const players = new Map<CueKind, AudioPlayer>();
   let muted = false;
+  let released = false;
+  // A call, not the variable: load() must re-read it after each await (release() may run meanwhile).
+  const isReleased = () => released;
+
+  function removeAll() {
+    for (const p of players.values()) p.remove();
+    players.clear();
+  }
 
   return {
+    // Never rejects: a sound setup failure must not leave the shift silent or unhandled.
     async load() {
+      if (isReleased()) return;
       try {
         muted = (await kv.get(MUTE_KEY)) === '1';
       } catch {
         muted = false;
       }
-      await setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' });
-      for (const k of ORDER) if (!players.has(k)) players.set(k, createAudioPlayer(SOURCES[k]));
+      try {
+        await setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' });
+      } catch {
+        // Players still work with the default audio mode.
+      }
+      if (isReleased()) return;
+      try {
+        for (const k of ORDER) if (!players.has(k)) players.set(k, createAudioPlayer(SOURCES[k]));
+      } catch {
+        // Haptics, colour, icon and text still carry the outcome.
+      }
+      // A release() that raced this load must not leave players behind.
+      if (isReleased()) removeAll();
     },
     cue(kind) {
       void haptic(hapticFor(kind)).catch(() => undefined);
       if (muted) return;
       const p = players.get(kind);
       if (!p) return;
-      void p.seekTo(0).catch(() => undefined);
-      p.play();
+      // Play after the seek, so a repeat cue starts from the beginning, not the old position.
+      void p
+        .seekTo(0)
+        .then(() => {
+          p.play();
+        })
+        .catch(() => undefined);
     },
     isMuted: () => muted,
     async setMuted(next) {
@@ -65,8 +91,8 @@ export function createFeedback(deps: { kv?: KeyValue } = {}): Feedback {
       await kv.set(MUTE_KEY, next ? '1' : '0');
     },
     release() {
-      for (const p of players.values()) p.remove();
-      players.clear();
+      released = true;
+      removeAll();
     },
   };
 }

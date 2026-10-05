@@ -18,6 +18,19 @@ const failWith = (e: ApiError) => err(e);
 const ctx = { uncertainSince: null };
 
 describe('classify', () => {
+  it('a 200 whose body has drifted is still an admission, shown as Ticket', () => {
+    const r = admitBody.safeParse({ ok: true, ticket: { id: 5 }, booking: 'x' });
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(classify(ok(r.data), ctx)).toEqual({
+      kind: 'admitted',
+      ticketType: null,
+      ticketIndex: null,
+      totalTickets: null,
+      checkedInCount: null,
+      checkedInAt: null,
+    });
+  });
   it('200 → admitted with ticket and booking progress', () => {
     expect(classify(ok(admitBody.parse(fx.admitted.body)), ctx)).toEqual({
       kind: 'admitted',
@@ -95,6 +108,15 @@ describe('classify', () => {
     });
   });
   it.each<[Fixture, CouldntCheckCause]>([
+    // Codeless 403/404/409 come from an edge, WAF or older deploy, not the scan route.
+    [{ status: 403, body: { error: 'Forbidden' } }, 'server'],
+    [{ status: 403, body: null }, 'server'],
+    [{ status: 403, body: { code: 'waf_block' } }, 'server'],
+    [{ status: 404, body: null }, 'server'],
+    [{ status: 404, body: { error: 'Not found' } }, 'server'],
+    [{ status: 404, body: { code: 'route_missing' } }, 'server'],
+    [{ status: 409, body: { error: 'Conflict' } }, 'server'],
+    [{ status: 409, body: null }, 'server'],
     [fx.lookupFailed, 'server'],
     [fx.rateLimited, 'rateLimited'],
     [fx.unauthorized, 'auth'],

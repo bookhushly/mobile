@@ -6,39 +6,31 @@ import { submitScan } from '@/features/gate/api/scan';
 import { createScanSession, type ScanSession } from '@/features/gate/domain/scanSession';
 import { useScanView } from '@/features/gate/state/scanView';
 import { api, clock } from '@/shared/api/instance';
+import { trailing } from '@/shared/lib/trailing';
 import { createFeedback } from '@/shared/platform/feedback';
 
-// Lets the once-built session call the newest callback without reading a ref during render.
-function latestCallback(initial: () => void) {
-  let fn = initial;
-  return {
-    set: (next: () => void) => {
-      fn = next;
-    },
-    call: () => {
-      fn();
-    },
-  };
-}
+// After admissions the door counter refreshes once things go quiet, not once per guest.
+const SUMMARY_REFRESH_MS = 2_000;
 
 // One Feedback instance per scanner screen: it plays the cues and owns the mute preference.
-export function useScanSession(
-  eventId: string,
-  opts: { onNotAssigned: () => void },
-): { session: ScanSession; muted: boolean; toggleMute: () => void } {
+export function useScanSession(eventId: string): {
+  session: ScanSession;
+  muted: boolean;
+  toggleMute: () => void;
+} {
   const qc = useQueryClient();
   const setView = useScanView((s) => s.set);
-  // Holder so the session (built once) always calls the latest callback.
-  const [notAssigned] = useState(() => latestCallback(opts.onNotAssigned));
-  useEffect(() => {
-    notAssigned.set(opts.onNotAssigned);
-  }, [notAssigned, opts.onNotAssigned]);
   const [feedback] = useState(createFeedback);
+  const [refreshSummary] = useState(() =>
+    trailing(() => {
+      void qc.invalidateQueries({ queryKey: gateKeys.summary(eventId) });
+    }, SUMMARY_REFRESH_MS),
+  );
   const [session] = useState(() =>
     createScanSession({
       submit: (code) => submitScan(api, eventId, code),
       now: () => clock.serverNow(),
-      // Monotonic: hold times must not move when the wall clock or server offset does.
+      // Monotonic: hold times and cooldowns must not move when the wall clock or server offset does.
       localNow: () => performance.now(),
       random: Math.random,
       sleep: (ms) => new Promise<void>((r) => setTimeout(r, ms)),
@@ -47,18 +39,20 @@ export function useScanSession(
         feedback.cue(cue);
       },
       onAdmitted: () => {
-        void qc.invalidateQueries({ queryKey: gateKeys.summary(eventId) });
+        refreshSummary.call();
       },
-      onNotAssigned: notAssigned.call,
     }),
   );
 
   const [muted, setMuted] = useState(false);
   useEffect(() => {
     let live = true;
-    void feedback.load().then(() => {
-      if (live) setMuted(feedback.isMuted());
-    });
+    void feedback
+      .load()
+      .then(() => {
+        if (live) setMuted(feedback.isMuted());
+      })
+      .catch(() => undefined);
     return () => {
       live = false;
       feedback.release();
@@ -93,9 +87,10 @@ export function useScanSession(
 
   useEffect(
     () => () => {
+      refreshSummary.cancel();
       session.reset();
     },
-    [session],
+    [session, refreshSummary],
   );
 
   return { session, muted, toggleMute };

@@ -37,6 +37,15 @@ export function createApiClient(deps: Deps) {
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const random = deps.random ?? Math.random;
 
+  // Never awaited and never fatal: a clock problem must not turn a response into "network".
+  function recordDate(res: Response) {
+    try {
+      deps.clock.recordServerDate(res.headers.get('date'));
+    } catch {
+      // Keep the previous offset.
+    }
+  }
+
   async function once(
     path: string,
     method: Method,
@@ -64,7 +73,7 @@ export function createApiClient(deps: Deps) {
       const init: RequestInit = { method, headers, signal: controller.signal };
       if (body !== undefined) init.body = JSON.stringify(body);
       const res = await deps.fetchFn(`${deps.baseUrl}${path}`, init);
-      await deps.clock.recordServerDate(res.headers.get('date'));
+      recordDate(res);
       return ok(res);
     } catch (e) {
       if (outerSignal?.aborted) return err({ kind: 'aborted' });

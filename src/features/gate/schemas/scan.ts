@@ -1,19 +1,28 @@
 import { z } from 'zod';
 
 // z.object strips unknown keys: contact_email / contact_phone / sibling tickets never leave here.
+// Tolerant on purpose: any 200 with ok: true is an admission, so drifted fields fall back to null.
+const nullString = z.string().nullable().catch(null);
+const nullInt = z.number().int().nullable().catch(null);
 export const admitBody = z.object({
   ok: z.literal(true),
-  ticket: z.object({
-    id: z.string(),
-    ticket_type: z.string().nullable(),
-    ticket_index: z.number().int().nullable(),
-    checked_in_at: z.string().nullable(),
-  }),
-  booking: z.object({
-    id: z.string(),
-    total_tickets: z.number().int().nullable(),
-    checked_in_count: z.number().int().nullable(),
-  }),
+  ticket: z
+    .object({
+      id: nullString,
+      ticket_type: nullString,
+      ticket_index: nullInt,
+      checked_in_at: nullString,
+    })
+    .nullable()
+    .catch(null),
+  booking: z
+    .object({
+      id: nullString,
+      total_tickets: nullInt,
+      checked_in_count: nullInt,
+    })
+    .nullable()
+    .catch(null),
 });
 export type AdmitBody = z.infer<typeof admitBody>;
 

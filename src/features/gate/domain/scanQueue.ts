@@ -15,11 +15,16 @@ export type EnqueueResult = 'queued' | 'inFlight' | 'replayed' | 'cooldown';
 export type ScanQueueDeps = {
   submit: (code: TicketCode) => Promise<ScanResponse>;
   onResult: (code: TicketCode, outcome: ScanOutcome) => void;
+  // Server clock: only for uncertainSince, which is compared with the server's checked_in_at.
   now: () => number;
+  // Monotonic local clock: cooldowns must not move when the server offset is re-derived.
+  localNow: () => number;
   random: () => number;
   sleep: (ms: number) => Promise<void>;
   concurrency?: number;
+  // Retries for network/429/5xx. A timeout already cost a full timeout, so it gets fewer.
   maxRetries?: number;
+  maxTimeoutRetries?: number;
   cooldownMs?: number;
   maxSettled?: number;
 };
@@ -30,6 +35,7 @@ export type ScanQueueDeps = {
 export function createScanQueue(deps: ScanQueueDeps) {
   const concurrency = deps.concurrency ?? 3;
   const maxRetries = deps.maxRetries ?? 2;
+  const maxTimeoutRetries = deps.maxTimeoutRetries ?? 1;
   const cooldownMs = deps.cooldownMs ?? 2_000;
   const maxSettled = deps.maxSettled ?? 5_000;
 
@@ -49,8 +55,9 @@ export function createScanQueue(deps: ScanQueueDeps) {
     }
   }
 
+  // Sliding: every camera sighting pushes the end forward, so a code held in view stays one presentation.
   function startCooldown(code: TicketCode) {
-    const now = deps.now();
+    const now = deps.localNow();
     cooldownUntil.set(code, now + cooldownMs);
     if (cooldownUntil.size > 1_000) {
       for (const [k, until] of cooldownUntil) if (until <= now) cooldownUntil.delete(k);
@@ -79,13 +86,16 @@ export function createScanQueue(deps: ScanQueueDeps) {
   // Resolves null when a reset happened mid-run: a stale run must not submit again.
   async function run(code: TicketCode, gen: number): Promise<RunResult | null> {
     let uncertainSince = uncertain.get(code) ?? null;
+    let timeouts = 0;
     for (let attempt = 0; ; attempt++) {
       if (gen !== generation) return null;
       const startedAt = deps.now();
       const res = await submitSafely(code);
       const outcome = classify(res, { uncertainSince });
       if (mayHaveCommitted(res)) uncertainSince ??= startedAt;
-      if (!isTransient(res) || attempt >= maxRetries) return { outcome, uncertainSince };
+      if (!res.ok && res.error.kind === 'timeout') timeouts += 1;
+      const retry = isTransient(res) && attempt < maxRetries && timeouts <= maxTimeoutRetries;
+      if (!retry) return { outcome, uncertainSince };
       await deps.sleep(400 * (attempt + 1) + Math.floor(deps.random() * 200));
       if (gen !== generation) return null;
     }
@@ -125,7 +135,10 @@ export function createScanQueue(deps: ScanQueueDeps) {
     enqueue(code: TicketCode, opts: { manual?: boolean } = {}): EnqueueResult {
       if (pending.has(code)) return 'inFlight';
       const until = cooldownUntil.get(code);
-      if (opts.manual !== true && until !== undefined && deps.now() < until) return 'cooldown';
+      if (opts.manual !== true && until !== undefined && deps.localNow() < until) {
+        startCooldown(code);
+        return 'cooldown';
+      }
       const s = settled.get(code);
       if (s) {
         startCooldown(code);
@@ -136,6 +149,10 @@ export function createScanQueue(deps: ScanQueueDeps) {
       waiting.push(code);
       drain();
       return 'queued';
+    },
+    /** A camera sighting that is otherwise ignored (the code is on screen): keep its cooldown sliding. */
+    touch(code: TicketCode) {
+      startCooldown(code);
     },
     pendingCount: () => pending.size,
     reset() {
