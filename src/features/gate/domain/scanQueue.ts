@@ -74,17 +74,20 @@ export function createScanQueue(deps: ScanQueueDeps) {
     }
   }
 
-  async function run(
-    code: TicketCode,
-  ): Promise<{ outcome: ScanOutcome; uncertainSince: number | null }> {
+  type RunResult = { outcome: ScanOutcome; uncertainSince: number | null };
+
+  // Resolves null when a reset happened mid-run: a stale run must not submit again.
+  async function run(code: TicketCode, gen: number): Promise<RunResult | null> {
     let uncertainSince = uncertain.get(code) ?? null;
     for (let attempt = 0; ; attempt++) {
+      if (gen !== generation) return null;
       const startedAt = deps.now();
       const res = await submitSafely(code);
       const outcome = classify(res, { uncertainSince });
       if (mayHaveCommitted(res)) uncertainSince ??= startedAt;
       if (!isTransient(res) || attempt >= maxRetries) return { outcome, uncertainSince };
       await deps.sleep(400 * (attempt + 1) + Math.floor(deps.random() * 200));
+      if (gen !== generation) return null;
     }
   }
 
@@ -94,20 +97,27 @@ export function createScanQueue(deps: ScanQueueDeps) {
       if (code === undefined) return;
       active += 1;
       const gen = generation;
-      void run(code).then(({ outcome, uncertainSince }) => {
-        if (gen !== generation) return;
-        active -= 1;
-        pending.delete(code);
-        if (outcome.kind === 'admitted' || outcome.kind === 'used') {
-          remember(code, outcome);
-          uncertain.delete(code);
-        } else if (outcome.kind === 'couldntCheck' && uncertainSince !== null) {
-          uncertain.set(code, uncertainSince);
-        }
-        startCooldown(code);
-        emit(code, outcome);
-        drain();
-      });
+      const failed: RunResult = {
+        outcome: { kind: 'couldntCheck', cause: 'network' },
+        uncertainSince: uncertain.get(code) ?? null,
+      };
+      void run(code, gen)
+        .catch(() => failed)
+        .then((result) => {
+          if (result === null || gen !== generation) return;
+          const { outcome, uncertainSince } = result;
+          active -= 1;
+          pending.delete(code);
+          if (outcome.kind === 'admitted' || outcome.kind === 'used') {
+            remember(code, outcome);
+            uncertain.delete(code);
+          } else if (outcome.kind === 'couldntCheck' && uncertainSince !== null) {
+            uncertain.set(code, uncertainSince);
+          }
+          startCooldown(code);
+          emit(code, outcome);
+          drain();
+        });
     }
   }
 

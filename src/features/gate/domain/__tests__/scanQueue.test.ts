@@ -227,4 +227,27 @@ describe('scan queue', () => {
     await h.answer(ADMIT);
     expect(h.submit).toHaveBeenCalledTimes(4);
   });
+
+  it('does not retry for an old event after reset', async () => {
+    const h = harness();
+    h.q.enqueue(code(1));
+    h.q.reset();
+    await h.answer(TIMEOUT);
+    await flush();
+    expect(h.submit).toHaveBeenCalledTimes(1);
+    expect(h.results).toEqual([]);
+  });
+
+  it("a run that throws still settles as couldn't check and frees the code", async () => {
+    const h = harness({
+      sleep: () => {
+        throw new Error('x');
+      },
+    });
+    h.q.enqueue(code(1));
+    await h.answer(TIMEOUT);
+    expect(h.results[0]?.outcome).toEqual({ kind: 'couldntCheck', cause: 'network' });
+    expect(h.q.pendingCount()).toBe(0);
+    expect(h.q.enqueue(code(1), { manual: true })).toBe('queued');
+  });
 });
