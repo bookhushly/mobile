@@ -22,6 +22,8 @@ export const usedBody = z.object({
   checked_in_at: z.string().nullable(),
   // coalesce(users.name, users.email) on the server — may be an email.
   scanned_by: z.string().nullable(),
+  // Server-side "this scanner admitted it". null = lookup failed; absent before web PR #192 deploys.
+  by_me: z.boolean().nullable().optional(),
   ticket: z
     .object({ ticket_type: z.string().nullable(), ticket_index: z.number().int().nullable() })
     .nullable(),

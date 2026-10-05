@@ -51,6 +51,22 @@ describe('classify', () => {
     const o = classify(fail(fx.usedByName), { uncertainSince: since });
     expect(o.kind === 'used' && o.scannedBy).toEqual({ kind: 'named', name: 'Ada Gate' });
   });
+  it('server by_me true → by me without any uncertain attempt', () => {
+    const o = classify(fail(fx.usedByMe), ctx);
+    expect(o.kind === 'used' && o.scannedBy).toEqual({ kind: 'me' });
+  });
+  it('server by_me false → never by me, even inside the uncertain window', () => {
+    const since = Date.parse('2026-10-05T17:29:58.000Z');
+    const o = classify(fail(fx.usedNotMe), { uncertainSince: since });
+    expect(o.kind === 'used' && o.scannedBy).toEqual({ kind: 'named', name: 'Ada Gate' });
+  });
+  it('server by_me null falls back to the uncertain-attempt heuristic', () => {
+    const since = Date.parse('2026-10-05T17:29:58.000Z');
+    const o = classify(fail({ status: 409, body: { ...fx.usedByName.body, by_me: null } }), {
+      uncertainSince: since,
+    });
+    expect(o.kind === 'used' && o.scannedBy).toEqual({ kind: 'me' });
+  });
   it('used with an unparseable check-in time after an uncertain attempt → by me', () => {
     const o = classify(
       fail({ status: 409, body: { code: 'already_checked_in', scanned_by: 'Ada Gate' } }),

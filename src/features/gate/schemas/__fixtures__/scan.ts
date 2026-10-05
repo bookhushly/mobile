@@ -45,6 +45,30 @@ export const fx = {
       ticket_count: null,
     },
   },
+  usedByMe: {
+    status: 409,
+    body: {
+      error: 'Ticket already checked in',
+      code: 'already_checked_in',
+      checked_in_at: '2026-10-05T17:30:00.000Z',
+      scanned_by: 'Ada Gate',
+      by_me: true,
+      ticket: { ticket_type: 'Regular', ticket_index: 1 },
+      ticket_count: null,
+    },
+  },
+  usedNotMe: {
+    status: 409,
+    body: {
+      error: 'Ticket already checked in',
+      code: 'already_checked_in',
+      checked_in_at: '2026-10-05T17:30:00.000Z',
+      scanned_by: 'Ada Gate',
+      by_me: false,
+      ticket: { ticket_type: 'Regular', ticket_index: 1 },
+      ticket_count: null,
+    },
+  },
   usedByEmail: {
     status: 409,
     body: {

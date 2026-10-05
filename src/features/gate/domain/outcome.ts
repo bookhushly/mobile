@@ -59,8 +59,15 @@ const couldnt = (cause: CouldntCheckCause): ScanOutcome => ({ kind: 'couldntChec
 
 export const refusedLocally: ScanOutcome = refused('notTicket');
 
-function scannedByFrom(raw: string | null, at: string | null, ctx: ClassifyContext): ScannedBy {
-  if (ctx.uncertainSince !== null) {
+function scannedByFrom(
+  raw: string | null,
+  at: string | null,
+  byMe: boolean | null,
+  ctx: ClassifyContext,
+): ScannedBy {
+  if (byMe === true) return { kind: 'me' };
+  // The server's answer wins; the uncertain-attempt heuristic only covers null/absent.
+  if (byMe === null && ctx.uncertainSince !== null) {
     const t = at === null ? NaN : Date.parse(at);
     if (!Number.isFinite(t) || t >= ctx.uncertainSince - BY_ME_SLACK_MS) return { kind: 'me' };
   }
@@ -80,7 +87,7 @@ function fromConflict(code: string, body: unknown, ctx: ClassifyContext): ScanOu
       return {
         kind: 'used',
         checkedInAt: at,
-        scannedBy: scannedByFrom(d?.scanned_by ?? null, at, ctx),
+        scannedBy: scannedByFrom(d?.scanned_by ?? null, at, d?.by_me ?? null, ctx),
         ticketType: d?.ticket?.ticket_type ?? null,
         replayed: false,
       };

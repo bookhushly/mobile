@@ -21,6 +21,12 @@ describe('scan schemas', () => {
     expect(usedBody.parse(fx.usedByName.body).scanned_by).toBe('Ada Gate');
     expect(usedBody.parse(fx.usedByEmail.body).scanned_by).toBe('scanner@example.com');
   });
+  it('parses by_me as true, false, null or absent', () => {
+    expect(usedBody.parse(fx.usedByMe.body).by_me).toBe(true);
+    expect(usedBody.parse(fx.usedNotMe.body).by_me).toBe(false);
+    expect(usedBody.parse({ ...fx.usedByName.body, by_me: null }).by_me).toBeNull();
+    expect(usedBody.parse(fx.usedByName.body).by_me).toBeUndefined();
+  });
   it('rejects a refusal body as already-used', () => {
     expect(usedBody.safeParse(fx.notFound.body).success).toBe(false);
   });
