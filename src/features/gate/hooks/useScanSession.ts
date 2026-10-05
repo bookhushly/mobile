@@ -9,8 +9,10 @@ import { api, clock } from '@/shared/api/instance';
 import { trailing } from '@/shared/lib/trailing';
 import { createFeedback } from '@/shared/platform/feedback';
 
-// After admissions the door counter refreshes once things go quiet, not once per guest.
+// After admissions the door counter refreshes once things go quiet, not once per guest; a steady
+// stream still refreshes at least every SUMMARY_MAX_WAIT_MS.
 const SUMMARY_REFRESH_MS = 2_000;
+const SUMMARY_MAX_WAIT_MS = 5_000;
 
 // One Feedback instance per scanner screen: it plays the cues and owns the mute preference.
 export function useScanSession(eventId: string): {
@@ -22,9 +24,13 @@ export function useScanSession(eventId: string): {
   const setView = useScanView((s) => s.set);
   const [feedback] = useState(createFeedback);
   const [refreshSummary] = useState(() =>
-    trailing(() => {
-      void qc.invalidateQueries({ queryKey: gateKeys.summary(eventId) });
-    }, SUMMARY_REFRESH_MS),
+    trailing(
+      () => {
+        void qc.invalidateQueries({ queryKey: gateKeys.summary(eventId) });
+      },
+      SUMMARY_REFRESH_MS,
+      { maxWaitMs: SUMMARY_MAX_WAIT_MS },
+    ),
   );
   const [session] = useState(() =>
     createScanSession({
