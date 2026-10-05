@@ -60,7 +60,8 @@
           "project": "react-native",
           "organization": "bookhushly"
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,
