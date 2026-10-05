@@ -29,7 +29,7 @@ Web paths below are relative to `/Users/mac/Developer/bookhushly/web/`. `../web-
 3. Hotel check-in has a new `room_occupied` code. Check-in GET preview is hotel-scoped.
 4. Event booking routes exist (`/api/bookings/event/create`, `/free`, `/[id]`, `/cancel`, `/transfer`) — the doc's §7 under-lists them.
 5. `POST /api/bookings/apartment` takes **multipart `formData`**, not JSON.
-6. Production base URL: `https://www.bookhushly.com` (confirm apex↔www redirect). Staging: `https://staging.bookhushly.com`.
+6. **Production API base URL: `https://bookhushly.com` (apex).** `www.bookhushly.com` answers with a **308 redirect to the apex**, and `fetch` drops the `Authorization` header on that cross-origin redirect, so Bearer calls via `www` come back 401 (verified 2026-10-05). Never use `www` for API calls. Staging: `https://staging.bookhushly.com`.
 7. Supabase URL: `https://wdhhbgxdpjjuqjideqws.supabase.co` (public). Anon key lives in `web/.env.local` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` — public by design; never touch the service-role key.
 
 ## 3. Gate staff contracts (all accept `Authorization: Bearer <access_token>`)
@@ -109,3 +109,4 @@ Signup route/trigger · hotel-booking JSON route · apartment booking JSON · my
 - Mode resolution reads (RLS, verified in the baseline migration): `users` select own, `hotel_staff` (`hotel_staff_read_own`), `event_scanners` (`event_scanners_self_select`). Scan/roster also need an active `vendor_scanners` row, which mobile cannot see → a mismatch surfaces later as `forbidden`.
 - Production Supabase issues the **legacy anon JWT** key (`role: anon`), not a publishable key.
 - Still missing on the backend (see §9): sign-up/forgot-password routes, universal links, min-version endpoint, staging Bearer exemption, scannable-events route.
+- **2026-10-05, verified with the QA customer account against production:** Bearer `GET https://bookhushly.com/api/customer/kyc` → 200 `{kyc:null}`; without Bearer → 401 `{status:null}`; via `www.` → 308 → header dropped → 401. RLS reads for mode resolution work (`users` own row, `hotel_staff` null, `event_scanners` 0 rows). **`/api/health` returns 404 on production** — production is deployed from a commit older than web `main` (health landed 2026-10-04); don't depend on routes newer than the live deploy without checking.

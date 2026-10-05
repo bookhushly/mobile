@@ -15,6 +15,7 @@ Expo (SDK 57) / React Native app for iOS + Android: **customer**, **gate staff**
 ## Rules specific to this project
 
 - **Never put secrets in the app or repo**: no service-role key, `TICKET_TOKEN_SECRET`, Paystack/NOWPayments secrets. Only the public Supabase URL + anon key (via `EXPO_PUBLIC_*` env). Don't read `../web/.env.local` — the one owner-approved exception is `.claude/hooks/copy-public-env.sh`, which copies only the two public Supabase values into this repo's gitignored `.env.local` (already run on 2026-10-04).
+- **API base URL is the apex `https://bookhushly.com`** — `www` 308-redirects and the redirect drops the Bearer header.
 - **Production Supabase is live.** No destructive calls, no test data left behind. Provision test accounts through real flows. Point dev builds at staging only once Bearer works there (see BACKEND_STATUS §8).
 - **Server-side authorisation is the truth**; hide UI the user can't use, but never rely on it.
 - **Never trust client prices**; send selections, the server recomputes.

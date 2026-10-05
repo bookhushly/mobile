@@ -20,7 +20,7 @@ umask 077
 {
   echo "EXPO_PUBLIC_SUPABASE_URL=$url"
   echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=$key"
-  echo "EXPO_PUBLIC_API_BASE_URL=https://www.bookhushly.com"
+  echo "EXPO_PUBLIC_API_BASE_URL=https://bookhushly.com"
 } > "$dst"
 echo "wrote $(basename "$dst"): EXPO_PUBLIC_SUPABASE_URL (len ${#url}), EXPO_PUBLIC_SUPABASE_ANON_KEY (len ${#key}), EXPO_PUBLIC_API_BASE_URL"
 case "$key" in eyJ*) echo "key looks like a JWT (legacy anon key)";; sb_publishable_*) echo "key is a publishable key";; *) echo "key format unrecognised";; esac

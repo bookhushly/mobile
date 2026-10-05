@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Bookhushly",
-    "slug": "bookhushly",
+    "slug": "book-h",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -57,6 +57,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "71d0cd71-ea71-415a-a8dd-e38e60d86711"
+      }
+    },
+    "owner": "dnl-bookhushly"
   }
 }
