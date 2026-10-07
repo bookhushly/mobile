@@ -1,3 +1,4 @@
+import type { OverrideAvailability } from '@/features/gate/offline/offlineGate';
 import type { OutboxState } from '@/features/gate/offline/outboxStore';
 import type { ClockState } from '@/shared/lib/clockGuard';
 import { parseIsoMs } from '@/shared/lib/isoTime';
@@ -14,6 +15,7 @@ export type SyncStatus = {
   blocked: boolean;
   clock: ClockState;
   localCounts: { admitted: number; total: number } | null;
+  override: OverrideAvailability;
 };
 
 export const EMPTY_SYNC: SyncStatus = {
@@ -26,6 +28,7 @@ export const EMPTY_SYNC: SyncStatus = {
   blocked: false,
   clock: { suspect: false, checkedAgoMs: null },
   localCounts: null,
+  override: { kind: 'none' },
 };
 
 export type SyncLine = {

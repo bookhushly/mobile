@@ -1,4 +1,4 @@
-import type { ScanResponse } from '@/features/gate/domain/outcome';
+import type { ScanOutcome, ScanResponse } from '@/features/gate/domain/outcome';
 import { createScanSession, type SessionView } from '@/features/gate/domain/scanSession';
 import { fx } from '@/features/gate/schemas/__fixtures__/scan';
 import { admitBody } from '@/features/gate/schemas/scan';
@@ -9,12 +9,16 @@ const U1 = '3f2b8c4e-1a2b-4c3d-8e9f-0a1b2c3d4e5f';
 const U2 = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 const flush = () => new Promise<void>((r) => setImmediate(r));
 
-function harness(responses: ScanResponse[], over: { onCue?: (c: string) => void } = {}) {
+function harness(
+  responses: ScanResponse[],
+  over: { onCue?: (c: string) => void; onOutcome?: (o: ScanOutcome) => void } = {},
+) {
   let t = 0;
   let local = 0;
   const views: SessionView[] = [];
   const cues: string[] = [];
   const onAdmitted = jest.fn();
+  const onOutcome = jest.fn(over.onOutcome);
   const submit = jest.fn(() => {
     const r = responses.shift();
     return r ? Promise.resolve(r) : Promise.reject(new Error('no response'));
@@ -33,6 +37,7 @@ function harness(responses: ScanResponse[], over: { onCue?: (c: string) => void 
         cues.push(c);
       }),
     onAdmitted,
+    onOutcome,
   });
   const currentId = () => s.view().current?.id ?? -1;
   return {
@@ -41,6 +46,7 @@ function harness(responses: ScanResponse[], over: { onCue?: (c: string) => void 
     views,
     cues,
     onAdmitted,
+    onOutcome,
     currentId,
     at: (ms: number) => {
       t = ms;
@@ -313,5 +319,55 @@ describe('scan session', () => {
     h.setServer(60_000);
     h.s.scan('junk', 'camera');
     expect(h.s.view().current).toBeNull();
+  });
+
+  describe('show and onOutcome', () => {
+    const lookupAdmit: ScanOutcome = {
+      kind: 'admitted',
+      offline: true,
+      via: 'lookup',
+      ticketType: 'Regular',
+      ticketIndex: 1,
+      totalTickets: 1,
+      checkedInCount: 1,
+      checkedInAt: '2026-10-07T18:00:00.000Z',
+    };
+
+    it('show pushes a code-less overlay, cues, and reports admission and outcome once', () => {
+      const h = harness([]);
+      h.s.show(lookupAdmit);
+      expect(h.s.view().current?.outcome).toEqual(lookupAdmit);
+      expect(h.s.view().current?.code).toBeNull();
+      expect(h.onAdmitted).toHaveBeenCalledTimes(1);
+      expect(h.onOutcome).toHaveBeenCalledTimes(1);
+      expect(h.onOutcome).toHaveBeenCalledWith(lookupAdmit);
+      expect(h.cues).toHaveLength(1);
+    });
+
+    it('a scan result reports its outcome once', async () => {
+      const h = harness([ok(admitBody.parse(fx.admitted.body))]);
+      h.s.scan(U1, 'camera');
+      await flush();
+      expect(h.onOutcome).toHaveBeenCalledTimes(1);
+      expect(h.onOutcome.mock.calls[0]?.[0]).toMatchObject({ kind: 'admitted' });
+    });
+
+    it('local refusals and the lost assignment are reported', () => {
+      const h = harness([]);
+      h.s.scan('junk', 'camera');
+      h.s.showNotAssigned();
+      expect(h.onOutcome).toHaveBeenCalledTimes(2);
+    });
+
+    it('a throwing onOutcome does not stop the overlay', () => {
+      const h = harness([], {
+        onOutcome: () => {
+          throw new Error('count failed');
+        },
+      });
+      h.s.show(lookupAdmit);
+      expect(h.s.view().current?.outcome).toEqual(lookupAdmit);
+      expect(h.onAdmitted).toHaveBeenCalledTimes(1);
+    });
   });
 });

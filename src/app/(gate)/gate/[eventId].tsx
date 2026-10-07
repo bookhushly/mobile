@@ -58,7 +58,7 @@ function Scanner({ eventId }: { eventId: string }) {
     () => controller?.attention() ?? Promise.resolve([]),
     [controller],
   );
-  const { session, muted, toggleMute } = useScanSession(eventId, offline.scan);
+  const { session, muted, toggleMute } = useScanSession(eventId, offline.scan, offline.controller?.tally);
 
   // A summary 403 is codeless, so only a fresh events list can confirm the assignment is gone.
   const { refresh: refreshEvents } = events;

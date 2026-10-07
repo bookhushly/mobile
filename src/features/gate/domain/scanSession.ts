@@ -19,6 +19,8 @@ export type ScanSessionDeps = Omit<ScanQueueDeps, 'onResult'> & {
   onChange: (v: SessionView) => void;
   onCue: (cue: Cue) => void;
   onAdmitted: () => void;
+  /** Every outcome pushed to the overlay (for the shift tally). Best effort: a throw is ignored. */
+  onOutcome?: (o: ScanOutcome) => void;
 };
 
 const JUNK_COOLDOWN_MS = 2_000;
@@ -38,10 +40,23 @@ export function createScanSession(deps: ScanSessionDeps) {
   let notAssignedShown = false;
   let last: Snapshot | null = null;
 
+  function shown(outcome: ScanOutcome) {
+    try {
+      deps.onOutcome?.(outcome);
+    } catch {
+      // Counting must never hide an outcome.
+    }
+  }
+
+  function pushShown(code: TicketCode | null, outcome: ScanOutcome) {
+    overlays.push(code, outcome);
+    shown(outcome);
+  }
+
   const queue = createScanQueue({
     ...deps,
     onResult: (code, outcome) => {
-      overlays.push(code, outcome);
+      pushShown(code, outcome);
       if (outcome.kind === 'admitted') deps.onAdmitted();
       publish();
     },
@@ -95,7 +110,7 @@ export function createScanSession(deps: ScanSessionDeps) {
       const parsed = parseTicketCode(raw);
       if (parsed === null) {
         if (source === 'camera' && junkCoolingDown(raw)) return;
-        overlays.push(null, refusedLocally);
+        pushShown(null, refusedLocally);
         publish();
         return;
       }
@@ -112,7 +127,13 @@ export function createScanSession(deps: ScanSessionDeps) {
     showNotAssigned() {
       if (notAssignedShown) return;
       notAssignedShown = true;
-      overlays.push(null, { kind: 'refused', reason: 'notAssigned', fixable: false });
+      pushShown(null, { kind: 'refused', reason: 'notAssigned', fixable: false });
+      publish();
+    },
+    // An outcome decided outside the scan queue (lookup, override): no code to retry or dedupe.
+    show(outcome: ScanOutcome) {
+      pushShown(null, outcome);
+      if (outcome.kind === 'admitted') deps.onAdmitted();
       publish();
     },
     // Both take the id the staff member saw: a double tap must not dismiss the next overlay unseen.

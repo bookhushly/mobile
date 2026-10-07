@@ -13,6 +13,17 @@ import { ok } from '@/shared/lib/result';
 const EV = 'e0000000-0000-4000-8000-000000000001';
 const T = '00000000-0000-4000-8000-000000000001';
 const flush = () => new Promise<void>((r) => setImmediate(r));
+// Known-answer verifier for PIN 123456 (see overridePin tests).
+const KAT = {
+  enabled: true,
+  alg: 'scrypt',
+  N: 8192,
+  r: 8,
+  p: 1,
+  dk_len: 32,
+  salt: 'ABEiM0RVZneImaq7zN3u_w',
+  hash: 'L8yIIos_9EAoJkqiN2s2Qv6pNMzKe65LM05K0fZtgeA',
+};
 const page = {
   event: {
     id: EV,
@@ -41,7 +52,7 @@ const page = {
   keys: [],
 };
 
-async function setup(over: Partial<ControllerDeps> = {}) {
+async function setup(over: Partial<ControllerDeps> = {}, pageOver: Record<string, unknown> = {}) {
   const db = nodeSql();
   await migrate(db, MIGRATIONS);
   const stores = {
@@ -52,7 +63,7 @@ async function setup(over: Partial<ControllerDeps> = {}) {
   };
   const status: Partial<SyncStatus>[] = [];
   const connectivity = createConnectivity();
-  const fetchPage = jest.fn(() => Promise.resolve(ok(page)));
+  const fetchPage = jest.fn(() => Promise.resolve(ok({ ...page, ...pageOver })));
   const post = jest.fn(() =>
     Promise.resolve(ok({ results: [{ client_seq: 1, ok: true, code: 'ok' }] })),
   );
@@ -138,5 +149,76 @@ describe('offline controller', () => {
     await expect(ctl.decide(T as never)).rejects.toThrow('open failed');
     await expect(ctl.decide(T as never)).resolves.toBeDefined();
     ctl.stop();
+  });
+
+  it('tally counts an admitted outcome in the device store', async () => {
+    const { ctl, stores } = await setup();
+    ctl.tally({
+      kind: 'admitted',
+      ticketType: null,
+      ticketIndex: null,
+      totalTickets: null,
+      checkedInCount: null,
+      checkedInAt: null,
+    });
+    await flush();
+    await flush();
+    expect(await stores.device.tally()).toMatchObject({ admitted: 1, used: 0 });
+  });
+
+  it('tally never throws when the store fails', async () => {
+    const report = jest.fn();
+    const { ctl, stores } = await setup({ report });
+    jest.spyOn(stores.device, 'addToTally').mockRejectedValue(new Error('disk'));
+    expect(() => {
+      ctl.tally({ kind: 'couldntCheck', cause: 'noOfflineList' });
+    }).not.toThrow();
+    await flush();
+    expect(report).toHaveBeenCalled();
+  });
+
+  it('a lookup admission is synced at once and the status is refreshed', async () => {
+    const { ctl, post, status } = await setup();
+    ctl.start();
+    await flush();
+    await flush();
+    post.mockClear();
+    status.length = 0;
+    const o = await ctl.admitFromLookup(T, null);
+    expect(o).toMatchObject({ kind: 'admitted', offline: true, via: 'lookup' });
+    for (let i = 0; i < 6; i++) await flush();
+    expect(post).toHaveBeenCalled();
+    expect(status.some((st) => typeof st.pending === 'number' && st.pending >= 0)).toBe(true);
+    ctl.stop();
+  });
+
+  it('gate errors from an override reach the caller', async () => {
+    const { ctl } = await setup({}, { override: KAT });
+    ctl.start();
+    await flush();
+    await flush();
+    await expect(ctl.override(T as never, { approvedBy: 'Ada', reason: 'phone died' })).rejects.toThrow(
+      'approval required',
+    );
+    ctl.stop();
+  });
+
+  it('refreshStatus publishes the override availability', async () => {
+    const { ctl, status } = await setup({}, { override: KAT });
+    ctl.start();
+    await flush();
+    await flush();
+    expect(status).toContainEqual(expect.objectContaining({ override: { kind: 'open', triesLeft: 5 } }));
+    ctl.stop();
+  });
+
+  it('activity pages 50 rows and exportRows delegates to the outbox', async () => {
+    const { ctl, stores } = await setup();
+    const list = jest.spyOn(stores.outbox, 'list');
+    const rows = jest.spyOn(stores.outbox, 'exportRows');
+    await ctl.activity('toSync', null);
+    await ctl.exportRows();
+    expect(list).toHaveBeenCalledWith(EV, 'toSync', null, 50);
+    expect(rows).toHaveBeenCalledWith(EV);
   });
 });
