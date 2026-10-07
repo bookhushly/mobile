@@ -34,13 +34,20 @@ describe('clock guard', () => {
     r.tick(90_000);
     expect(r.guard.state()).toEqual({ suspect: false, checkedAgoMs: 90_000 });
   });
-  it('a wall-clock jump over 2 minutes is suspect until the server is heard again', () => {
+  // Jump tests start with no server contact so the "behind last contact" rule can't fire too.
+  it('a clock set back over 2 minutes is suspect until the server is heard again', () => {
     const r = rig();
-    r.moveWall(3 * 60_000);
+    r.noContact();
+    r.moveWall(-5 * 60_000);
     expect(r.guard.state().suspect).toBe(true);
     r.tick(1_000);
     expect(r.guard.state().suspect).toBe(true);
     r.contactNow();
+    expect(r.guard.state().suspect).toBe(false);
+  });
+  it('a forward jump of 3 minutes is never a jump', () => {
+    const r = rig();
+    r.moveWall(3 * 60_000);
     expect(r.guard.state().suspect).toBe(false);
   });
   it('a small correction is not a jump', () => {
@@ -53,10 +60,19 @@ describe('clock guard', () => {
     r.moveWall(-30_000);
     expect(r.guard.state().suspect).toBe(true);
   });
-  it('after the phone slept (monotonic clock paused), rebase prevents a false alarm', () => {
+  it('the phone slept 10 min (wall +10 min, monotonic paused), then rebase: not suspect', () => {
     const r = rig();
     r.moveWall(10 * 60_000);
     r.guard.rebase();
+    expect(r.guard.state().suspect).toBe(false);
+  });
+  it('the clock set back 5 min while in the background is recorded by rebase', () => {
+    const r = rig();
+    r.noContact();
+    r.moveWall(-5 * 60_000);
+    r.guard.rebase();
+    expect(r.guard.state().suspect).toBe(true);
+    r.contactNow();
     expect(r.guard.state().suspect).toBe(false);
   });
   it('no contact yet: nothing to compare, not suspect', () => {
