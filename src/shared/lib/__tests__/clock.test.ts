@@ -41,4 +41,25 @@ describe('clock', () => {
     expect(storage.set).toHaveBeenCalled();
     await new Promise<void>((r) => setImmediate(r));
   });
+
+  it('remembers when the server was last heard from, across reloads', async () => {
+    const kv = memoryKv();
+    const clock = createClock({ storage: kv, now: () => DEVICE_NOW });
+    clock.recordServerDate('Sun, 04 Oct 2026 12:30:00 GMT');
+    await Promise.resolve();
+    expect(clock.lastContactMs()).toBe(Date.parse('Sun, 04 Oct 2026 12:30:00 GMT'));
+    const reloaded = createClock({ storage: kv, now: () => DEVICE_NOW });
+    await reloaded.load();
+    expect(reloaded.lastContactMs()).toBe(Date.parse('Sun, 04 Oct 2026 12:30:00 GMT'));
+    expect(reloaded.offsetMs()).toBe(clock.offsetMs());
+  });
+
+  it('loads an offset saved by Phase 1 (a bare number) with no contact time', async () => {
+    const kv = memoryKv();
+    await kv.set('bh.clock.offset', '1500');
+    const clock = createClock({ storage: kv, now: () => DEVICE_NOW });
+    await clock.load();
+    expect(clock.offsetMs()).toBe(1500);
+    expect(clock.lastContactMs()).toBeNull();
+  });
 });
