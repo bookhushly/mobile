@@ -50,7 +50,7 @@ export type OverrideInput = {
   code: string;
   scannedAt: string;
   appVersion: string;
-  approval: Approval;
+  approval: { approvedBy: string; reason: string };
 };
 export type ActivityTab = 'toSync' | 'attention' | 'synced';
 export type RecordResult =

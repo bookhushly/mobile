@@ -6,6 +6,7 @@ import { createOutboxStore } from '@/features/gate/offline/outboxStore';
 import { createRosterStore } from '@/features/gate/offline/rosterStore';
 import { MIGRATIONS } from '@/features/gate/offline/schema';
 import type { SyncStatus } from '@/features/gate/domain/syncLine';
+import { memoryKv } from '@/shared/lib/kv';
 import { createConnectivity } from '@/shared/lib/connectivity';
 import { ok } from '@/shared/lib/result';
 
@@ -46,7 +47,7 @@ async function setup(over: Partial<ControllerDeps> = {}) {
   const stores = {
     roster: createRosterStore(db),
     outbox: createOutboxStore(db, { newDeviceId: () => 'device-abcdef12' }),
-    device: createDeviceStore(db),
+    device: createDeviceStore(db, { lockKv: memoryKv() }),
     close: () => Promise.resolve(),
   };
   const status: Partial<SyncStatus>[] = [];

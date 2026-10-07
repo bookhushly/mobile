@@ -3,6 +3,7 @@ import * as Crypto from 'expo-crypto';
 import { deleteDatabase, isWrongKey, openEncrypted } from '@/shared/db/expoSql';
 import { migrate } from '@/shared/db/sql';
 import { captureException } from '@/shared/monitoring';
+import type { KeyValue } from '@/shared/lib/kv';
 import { secureKv } from '@/shared/platform/secureStore';
 
 import { createDeviceStore, type DeviceStore } from './deviceStore';
@@ -16,6 +17,15 @@ export type GateDb = { roster: RosterStore; outbox: OutboxStore; device: DeviceS
 // another's admissions; "Sign in again" after a session expiry finds its outbox intact.
 const fileOf = (userId: string) => `gate-${userId}.db`;
 const keyName = (userId: string) => `bh.gate.dbkey.${userId}`;
+// Not removed by wipeGateDb: the lockout must survive sign-out.
+const lockKvFor = (userId: string): KeyValue => {
+  const k = (name: string) => `bh.gate.overridelock.${userId}.${name}`;
+  return {
+    get: (name) => secureKv.get(k(name)),
+    set: (name, v) => secureKv.set(k(name), v),
+    delete: (name) => secureKv.delete(k(name)),
+  };
+};
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
 
 async function keyFor(userId: string): Promise<string> {
@@ -48,7 +58,7 @@ async function open(userId: string): Promise<GateDb> {
   await migrate(conn.sql, MIGRATIONS);
   const roster = createRosterStore(conn.sql);
   const outbox = createOutboxStore(conn.sql, { newDeviceId: () => Crypto.randomUUID() });
-  const device = createDeviceStore(conn.sql);
+  const device = createDeviceStore(conn.sql, { lockKv: lockKvFor(userId) });
   await outbox.resetSending();
   await sweepExpired(roster, outbox, Date.now());
   return { roster, outbox, device, close: conn.close };
