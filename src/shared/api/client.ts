@@ -12,6 +12,7 @@ export type RequestOptions<T> = {
   schema: z.ZodType<T>;
   idempotent?: boolean;
   signal?: AbortSignal;
+  timeoutMs?: number;
 };
 
 export type RefreshOutcome = { token: string } | { failure: 'network' | 'invalid' };
@@ -28,6 +29,7 @@ type Deps = {
   maxRetries?: number;
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
+  onReach?: (reached: boolean) => void;
 };
 
 export function createApiClient(deps: Deps) {
@@ -36,17 +38,36 @@ export function createApiClient(deps: Deps) {
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const random = deps.random ?? Math.random;
 
+  // Never awaited and never fatal: a clock problem must not turn a response into "network".
+  function recordDate(res: Response) {
+    try {
+      deps.clock.recordServerDate(res.headers.get('date'));
+    } catch {
+      // Keep the previous offset.
+    }
+  }
+
+  // Never fatal: connectivity tracking must not change a request's result.
+  function reach(reached: boolean) {
+    try {
+      deps.onReach?.(reached);
+    } catch {
+      // Ignore.
+    }
+  }
+
   async function once(
     path: string,
     method: Method,
     body: unknown,
     token: string | null,
-    outerSignal?: AbortSignal,
+    outerSignal: AbortSignal | undefined,
+    limitMs: number,
   ): Promise<Result<Response, ApiError>> {
     const controller = new AbortController();
     const timer = setTimeout(() => {
       controller.abort();
-    }, timeoutMs);
+    }, limitMs);
     const onOuterAbort = () => {
       controller.abort();
     };
@@ -62,10 +83,12 @@ export function createApiClient(deps: Deps) {
       const init: RequestInit = { method, headers, signal: controller.signal };
       if (body !== undefined) init.body = JSON.stringify(body);
       const res = await deps.fetchFn(`${deps.baseUrl}${path}`, init);
-      await deps.clock.recordServerDate(res.headers.get('date'));
+      recordDate(res);
+      reach(res.status < 500);
       return ok(res);
     } catch (e) {
       if (outerSignal?.aborted) return err({ kind: 'aborted' });
+      reach(false);
       const aborted = e instanceof Error && e.name === 'AbortError';
       return err(aborted ? { kind: 'timeout' } : { kind: 'network' });
     } finally {
@@ -93,7 +116,14 @@ export function createApiClient(deps: Deps) {
 
     for (;;) {
       if (opts.signal?.aborted) return err({ kind: 'aborted' });
-      const sent = await once(path, method, opts.body, token, opts.signal);
+      const sent = await once(
+        path,
+        method,
+        opts.body,
+        token,
+        opts.signal,
+        opts.timeoutMs ?? timeoutMs,
+      );
       let failure: ApiError;
       if (!sent.ok) {
         failure = sent.error;

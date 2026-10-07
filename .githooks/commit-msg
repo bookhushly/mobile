@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Owner rule: no Claude/Anthropic co-author trailers in commit messages.
+if grep -Eiq '^[[:space:]]*co-authored-by:.*(claude|anthropic)' "$1"; then
+  echo "commit-msg: remove the Claude/Anthropic Co-Authored-By line (owner rule)." >&2
+  exit 1
+fi

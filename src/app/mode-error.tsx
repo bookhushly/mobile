@@ -1,10 +1,11 @@
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import { useSignOut } from '@/features/auth/hooks/useSignOut';
 import { useModeState } from '@/features/mode/hooks/useModeState';
 import { Button, Screen, Stack, Text } from '@/shared/ui';
 
 export default function ModeError() {
   const auth = useAuth((s) => s.state);
-  const signOut = useAuth((s) => s.signOut);
+  const signOut = useSignOut();
   const { retry } = useModeState(auth.status === 'signedIn' ? auth.userId : null);
   return (
     <Screen>
@@ -20,7 +21,7 @@ export default function ModeError() {
           variant="secondary"
           label="Sign out"
           onPress={() => {
-            void signOut();
+            signOut();
           }}
         />
       </Stack>

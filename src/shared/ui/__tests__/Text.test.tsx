@@ -12,3 +12,12 @@ it('renders text with tabular numerals when requested', async () => {
   expect(node.props.style).toEqual(expect.arrayContaining([{ fontVariant: ['tabular-nums'] }]));
   expect(node.props.maxFontSizeMultiplier).toBe(1.6);
 });
+
+it('maxScale overrides the variant cap', async () => {
+  await render(
+    <Text maxScale={1} testID="t">
+      Admitted
+    </Text>,
+  );
+  expect(screen.getByTestId('t').props.maxFontSizeMultiplier).toBe(1);
+});

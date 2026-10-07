@@ -1,11 +1,11 @@
 import { Linking } from 'react-native';
 
-import { useAuth } from '@/features/auth/hooks/useAuth';
+import { useSignOut } from '@/features/auth/hooks/useSignOut';
 import { WEB_URL } from '@/shared/config/store';
 import { Button, Screen, Stack, Text } from '@/shared/ui';
 
 export default function WebOnly() {
-  const signOut = useAuth((s) => s.signOut);
+  const signOut = useSignOut();
   return (
     <Screen>
       <Stack gap="s3">
@@ -25,7 +25,7 @@ export default function WebOnly() {
           variant="secondary"
           label="Sign out"
           onPress={() => {
-            void signOut();
+            signOut();
           }}
         />
       </Stack>

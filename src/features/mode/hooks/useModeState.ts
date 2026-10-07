@@ -5,30 +5,18 @@ import { loadModeInputs, type ModeDb } from '@/features/mode/api/loadModeInputs'
 import { useChosenMode } from '@/features/mode/hooks/useChosenMode';
 import { resolveMode, type Mode } from '@/features/mode/domain/resolveMode';
 import type { ModeState } from '@/features/mode/domain/route';
+import { loadScannableEvents } from '@/shared/api/scannableEvents';
 import type { ApiError } from '@/shared/lib/errors';
 import { supabase } from '@/shared/supabase/client';
-
-type Builder = PromiseLike<{
-  data: unknown;
-  error: { code?: string } | null;
-  status: number;
-}>;
-
-const wrap = async (b: Builder) => {
-  const r = await b;
-  return {
-    data: r.data,
-    error: r.error ? { code: r.error.code, status: r.status } : null,
-  };
-};
+import { scannerDb } from '@/shared/supabase/scannerDb';
+import { wrap } from '@/shared/supabase/wrap';
 
 const db: ModeDb = {
   profile: (id) =>
     wrap(supabase.from('users').select('id,role,name,email').eq('id', id).maybeSingle()),
   hotelStaff: (id) =>
     wrap(supabase.from('hotel_staff').select('hotel_id').eq('user_id', id).maybeSingle()),
-  activeScanners: (id) =>
-    wrap(supabase.from('event_scanners').select('id').eq('user_id', id).eq('is_active', true)),
+  scannableEvents: (id) => loadScannableEvents(scannerDb, id),
 };
 
 // Carries the typed ApiError (has `kind`) so the query retry policy can classify it.
