@@ -45,6 +45,7 @@ export type ScanOutcome =
       checkedInCount: number | null;
       checkedInAt: string | null;
       offline?: true;
+      via?: 'lookup' | 'override';
     }
   | {
       kind: 'used';

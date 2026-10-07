@@ -87,7 +87,14 @@ export function present(o: ScanOutcome, nowMs: number): Presentation {
           many && o.checkedInCount !== null
             ? `${String(o.checkedInCount)} of ${String(o.totalTickets)} on this booking are in`
             : null,
-        tag: o.offline === true ? 'Offline · will sync' : null,
+        tag:
+          o.via === 'lookup'
+            ? 'Lookup · will sync'
+            : o.via === 'override'
+              ? 'Override · will sync'
+              : o.offline === true
+                ? 'Offline · will sync'
+                : null,
         action: null,
       };
     }

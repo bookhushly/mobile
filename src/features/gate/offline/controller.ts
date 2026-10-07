@@ -65,6 +65,7 @@ export function createOfflineController(deps: ControllerDeps) {
           eventId,
           roster: d.roster,
           outbox: d.outbox,
+          device: d.device,
           serverNow: deps.serverNow,
           clockState: deps.clockState,
           appVersion: deps.appVersion,

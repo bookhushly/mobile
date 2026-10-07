@@ -1,6 +1,8 @@
 import { migrate } from '@/shared/db/sql';
 import { nodeSql } from '@/shared/db/__tests__/nodeSql';
 import { parseTicketCode, type TicketCode } from '@/features/gate/domain/parseTicketCode';
+import { memoryKv } from '@/shared/lib/kv';
+import { createDeviceStore } from '@/features/gate/offline/deviceStore';
 import { createOfflineGate } from '@/features/gate/offline/offlineGate';
 import { createOutboxStore } from '@/features/gate/offline/outboxStore';
 import { createRosterStore, type RosterRow } from '@/features/gate/offline/rosterStore';
@@ -31,7 +33,7 @@ async function setup(opts: { ready?: boolean } = {}) {
   const onKeysOutdated = jest.fn();
   const onAdmitted = jest.fn();
   const gate = createOfflineGate({
-    eventId: EV, roster, outbox, serverNow: () => BH2_AT, clockState: () => ({ suspect: false, checkedAgoMs: 0 }),
+    eventId: EV, roster, outbox, device: createDeviceStore(db, { lockKv: memoryKv() }), serverNow: () => BH2_AT, clockState: () => ({ suspect: false, checkedAgoMs: 0 }),
     appVersion: '1.0.0 (7)', onKeysOutdated, onAdmitted,
   });
   return { roster, outbox, gate, onKeysOutdated, onAdmitted };

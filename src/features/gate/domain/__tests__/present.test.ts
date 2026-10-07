@@ -134,4 +134,9 @@ describe('present', () => {
     );
     expect(p.detail).toMatch(/^Checked in at \d\d:\d\d by you$/);
   });
+  it('lookup and override admissions say how they were made', () => {
+    const a = { kind: 'admitted', ticketType: 'VIP', ticketIndex: 1, totalTickets: 1, checkedInCount: 1, checkedInAt: null } as const;
+    expect(present({ ...a, offline: true, via: 'lookup' }, NOW).tag).toBe('Lookup · will sync');
+    expect(present({ ...a, offline: true, via: 'override' }, NOW).tag).toBe('Override · will sync');
+  });
 });
