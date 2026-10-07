@@ -382,6 +382,28 @@ describe('supervisor override', () => {
     expect(base.override).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps camera reads paused while the override records', async () => {
+    notInList();
+    let resolve: (o: typeof OVERRIDE_ADMITTED) => void = () => undefined;
+    base.override.mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+    );
+    await render(<ScannerScreen {...base} />);
+    await approve();
+    await screen.findByRole('button', { name: 'Overriding…' });
+    await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
+    expect(session.scan).not.toHaveBeenCalled();
+    await act(() => {
+      resolve(OVERRIDE_ADMITTED);
+    });
+    await waitFor(() => {
+      expect(session.show).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('cancelling the PIN sheet leaves the refusal as it was', async () => {
     notInList();
     await render(<ScannerScreen {...base} />);

@@ -1,5 +1,12 @@
 import { useKeepAwake } from 'expo-keep-awake';
-import { Flashlight, Keyboard, ListChecks, UserSearch, Volume2, VolumeX } from 'lucide-react-native';
+import {
+  Flashlight,
+  Keyboard,
+  ListChecks,
+  UserSearch,
+  Volume2,
+  VolumeX,
+} from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -55,7 +62,10 @@ type Props = {
   checkPin: (pin: string) => Promise<PinCheck>;
   admitFromLookup: (ticketId: string, approval: Approval | null) => Promise<ScanOutcome>;
   /** Supervisor override of a "Not in offline list" code; needs a fresh checkPin grant. */
-  override: (code: TicketCode, approval: { approvedBy: string; reason: string }) => Promise<ScanOutcome>;
+  override: (
+    code: TicketCode,
+    approval: { approvedBy: string; reason: string },
+  ) => Promise<ScanOutcome>;
   /** Server-corrected now (clock.serverNow). */
   serverNow: () => number;
 };
@@ -214,7 +224,10 @@ function DoorCounter({ summary, stale }: { summary: ScanSummary | null; stale: b
   const counter = shown === null ? '— / —' : `${String(shown.admitted)} / ${String(shown.total)}`;
   const caption = local !== null ? 'offline' : stale ? 'not updated' : null;
   return (
-    <View accessible accessibilityLabel={`Admitted ${counter}${caption !== null ? `, ${caption}` : ''}`}>
+    <View
+      accessible
+      accessibilityLabel={`Admitted ${counter}${caption !== null ? `, ${caption}` : ''}`}
+    >
       <Text variant="num" tabular>
         {counter}
       </Text>
@@ -326,13 +339,18 @@ export function ScannerScreen(p: Props) {
       <View style={{ flex: 1 }}>
         {p.permission === 'granted' && p.focused ? (
           <>
-            <ScannerCamera torch={torch} paused={
+            <ScannerCamera
+              torch={torch}
+              paused={
                 entering ||
                 showRecent ||
                 activityTab !== null ||
                 finding ||
-                overrideFlow?.phase === 'pin'
-              } onCode={onCode} />
+                overrideFlow?.phase === 'pin' ||
+                overrideFlow?.phase === 'busy'
+              }
+              onCode={onCode}
+            />
             <Viewfinder />
           </>
         ) : null}
