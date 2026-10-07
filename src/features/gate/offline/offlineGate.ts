@@ -1,5 +1,5 @@
-import { decideOffline, ticketIdOf } from '@/features/gate/domain/offlineDecide';
-import type { ScanOutcome, ScannedBy } from '@/features/gate/domain/outcome';
+import { decideOffline, scannedBy, ticketIdOf } from '@/features/gate/domain/offlineDecide';
+import type { ScanOutcome } from '@/features/gate/domain/outcome';
 import type { TicketCode } from '@/features/gate/domain/parseTicketCode';
 import type { ClockState } from '@/shared/lib/clockGuard';
 
@@ -15,11 +15,6 @@ export type OfflineGateDeps = {
   appVersion: string;
   onKeysOutdated: () => void;
   onAdmitted: () => void;
-};
-
-const byOf = (byMe: boolean | null, name: string | null): ScannedBy => {
-  if (byMe !== false) return { kind: 'me' };
-  return name === null || name.trim() === '' ? { kind: 'unknown' } : { kind: 'named', name };
 };
 
 export function createOfflineGate(deps: OfflineGateDeps) {
@@ -43,7 +38,13 @@ export function createOfflineGate(deps: OfflineGateDeps) {
       listUpdatedAt: meta.syncedAt ?? 0,
     });
     if (d.kind === 'outcome') {
-      if (d.outcome.kind === 'couldntCheck' && d.outcome.cause === 'keysOutdated') deps.onKeysOutdated();
+      if (d.outcome.kind === 'couldntCheck' && d.outcome.cause === 'keysOutdated') {
+        try {
+          deps.onKeysOutdated();
+        } catch {
+          // A throwing callback must not replace the outcome.
+        }
+      }
       return d.outcome;
     }
 
@@ -63,12 +64,16 @@ export function createOfflineGate(deps: OfflineGateDeps) {
       return {
         kind: 'used',
         checkedInAt: t?.checkedInAt ?? scannedAt,
-        scannedBy: byOf(t?.byMe ?? null, t?.scannedBy ?? null),
+        scannedBy: t === null ? { kind: 'me' } : scannedBy(t),
         ticketType: t?.ticketType ?? null,
         replayed: false,
       };
     }
-    deps.onAdmitted();
+    try {
+      deps.onAdmitted();
+    } catch {
+      // The admission is already committed; a failing callback must not report it as an error.
+    }
     // Group context is a nicety: a failed read must not turn a recorded admission into an error.
     let progress: { total: number; checkedIn: number } | null = null;
     try {

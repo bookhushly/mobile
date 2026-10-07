@@ -46,7 +46,7 @@ export function ticketIdOf(code: TicketCode): string | null {
 
 const outcome = (o: ScanOutcome): OfflineDecision => ({ kind: 'outcome', outcome: o });
 
-function scannedBy(t: RosterTicket): ScannedBy {
+export function scannedBy(t: RosterTicket): ScannedBy {
   if (t.byMe === true) return { kind: 'me' };
   const name = t.scannedBy?.trim() ?? '';
   return name === '' ? { kind: 'unknown' } : { kind: 'named', name };

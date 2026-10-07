@@ -51,6 +51,20 @@ describe('offline gate', () => {
     expect(onAdmitted).toHaveBeenCalledTimes(1);
   });
 
+  it('a throwing onAdmitted or onKeysOutdated never changes the outcome', async () => {
+    const { outbox, gate, roster, onAdmitted, onKeysOutdated } = await setup();
+    onAdmitted.mockImplementation(() => {
+      throw new Error('boom');
+    });
+    onKeysOutdated.mockImplementation(() => {
+      throw new Error('boom');
+    });
+    expect((await gate.decide(code(BH2_TOKEN))).kind).toBe('admitted');
+    expect(await outbox.due(EV, 0, 10)).toHaveLength(1);
+    await roster.setKeys(EV, []);
+    expect(await gate.decide(code(BH2_TOKEN))).toEqual({ kind: 'couldntCheck', cause: 'keysOutdated' });
+  });
+
   it('the same ticket as a printed code right after is already used by you', async () => {
     const { gate } = await setup();
     await gate.decide(code(BH2_TOKEN));
