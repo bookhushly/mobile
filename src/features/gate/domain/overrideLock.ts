@@ -1,5 +1,6 @@
 // FR-3.15: lock the override for 15 minutes after 5 wrong PINs, persisted across restarts (the
-// caller stores the record in the encrypted DB). Times are the server-corrected clock.
+// caller stores the record in SecureStore per account, so it also survives sign-out; the shift
+// tally stays in the encrypted DB). Times are the server-corrected clock.
 export const MAX_FAILURES = 5;
 export const LOCK_MS = 15 * 60_000;
 

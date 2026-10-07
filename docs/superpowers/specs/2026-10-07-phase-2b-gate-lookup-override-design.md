@@ -14,7 +14,7 @@ Done when: a guest is found by name or phone digits and admitted from the list; 
 2. **Lookup and override admissions are local first**, online or offline: written to the outbox (write-ahead, as in 2a) before the overlay shows, then a sync is triggered at once. The live scan route cannot carry these modes. A duplicate the server catches appears afterwards under "needs attention"; the lookup list itself shows who is already in.
 3. **The CSV export has no names or phone numbers:** ticket type and number, a short ticket reference (first 8 hex of the ticket id), scan time, mode, sync state, the server's note, reason and approver. The organiser has full details on the web; a CSV shared from a phone is where PII leaks.
 4. **PIN check on the phone with `scryptAsync` from `@noble/hashes`** (made a direct dependency), constant-time compare, against the web's known-answer vector. Verifiers with parameters outside `N ≤ 2^15, r ≤ 16, p ≤ 4, dk_len = 32` are refused (treated as "no override"), so a tampered roster can't freeze the phone.
-5. **Lockout:** 5 wrong PINs lock the override for 15 minutes; failures and lock-until live in the encrypted DB's `device` table (survive restarts, wiped with sign-out). A correct PIN resets the count. The lock uses the server-corrected clock.
+5. **Lockout:** 5 wrong PINs lock the override for 15 minutes; failures and lock-until live in SecureStore, keyed per account (survive restarts and sign-out, so signing out and in can't reset the count); the shift tally stays in the encrypted DB's `device` table and is wiped with sign-out. A correct PIN resets the count. The lock uses the server-corrected clock.
 6. **Shift summary:** per-account counts of outcomes shown (Admitted, Already used, Refused, Couldn't check — online and offline alike) plus "still to sync"; shown in the sign-out dialog with a "Reset counts" action. Counts only, no PII.
 7. **A removed PIN stops working at the next roster sync**: a first page with `override: null` clears the stored verifier (web decision 6).
 
@@ -30,7 +30,7 @@ Done when: a guest is found by name or phone digits and admitted from the list; 
 
 **Supervisor override (FR-3.15).** The "Not in offline list" refusal overlay gains a "Supervisor override" action when the roster carries a verifier and the override is not locked (when locked: "Override locked — try again in N min", no action).
 - The PIN sheet asks for the 6-digit PIN, a reason (3–200 characters) and the approver's name (1–80), shows "Checking…" while scrypt runs, and "Wrong PIN — N tries left" / the lock message on failure.
-- Success records `offline_override` with the scanned code, reason and approver (outbox only — the ticket is not in the roster), refused if this phone already has an outbox item for that ticket ("Already used — by you").
+- Success records `offline_override` with `code` = the ticket UUID (never the scanned BH2 code, which the server would re-verify and refuse as expired after ~5 min; the server skips the liveness proof for override mode, and the phone checked the signature before "Not in offline list"), reason and approver (outbox only — the ticket is not in the roster), refused if this phone already has an outbox item for that ticket ("Already used — by you").
 - The server still decides: `not_found`, `not_confirmed` etc. come back as rejected items under "needs attention".
 
 **Activity (FR-3.14).** The attention sheet becomes an Activity screen (modal) with tabs **To sync**, **Needs attention**, **Synced**, newest first, paged; each row: ticket type + number, time, mode marker (lookup / override), state line (2a wording); "Sync now" and "Export CSV" (writes a temp file with `expo-file-system`, opens the share sheet with `expo-sharing`, deletes the file afterwards). The sync bar's "N need attention" opens it on the Needs attention tab.
@@ -49,7 +49,7 @@ Done when: a guest is found by name or phone digits and admitted from the list; 
 | migration 2 | `features/gate/offline/schema.ts` | `roster_meta.override TEXT`, `outbox.reason TEXT`, `outbox.approved_by TEXT`; index `roster_ticket (event_id, booking_id)` already exists. |
 | `rosterStore` | `offline/` | `search(eventId, q)`, `bookingTickets(eventId, bookingId)`, verifier stored by `beginSync` (first page). |
 | `outboxStore` | `offline/` | `recordAdmission(… mode, reason, approvedBy)`; `recordOverride(input)`; `list(eventId, tab, beforeSeq, limit)`; `listAll(eventId)` for export. |
-| `deviceStore` | `offline/` | small typed get/set over `device`: lockout state, shift tally. |
+| `deviceStore` | `offline/` | lockout state over a per-account SecureStore key (survives sign-out); shift tally over the encrypted DB's `device` table (wiped at sign-out). |
 | `batchSync` | `offline/` | items carry `mode`, `reason`, `approved_by`. |
 | `offlineGate` / controller | `offline/` | `admitFromLookup(ticketId, approval?)`, `override(code, approval)`, `lockState()`, `tally(outcome)`, `summary()`. |
 | roster schema | `schemas/roster.ts` | parse `override` (object or null). |
