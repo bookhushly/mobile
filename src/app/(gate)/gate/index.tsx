@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
 
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import { useSignOut } from '@/features/auth/hooks/useSignOut';
 import { useLastEvent } from '@/features/gate/hooks/useLastEvent';
 import { useScannableEvents } from '@/features/gate/hooks/useScannableEvents';
 import { EventListScreen } from '@/features/gate/screens/EventListScreen';
@@ -10,7 +11,7 @@ import { ModeSwitcher } from '@/features/mode/screens/ModeSwitcher';
 
 export default function GateEventsRoute() {
   const state = useAuth((s) => s.state);
-  const signOut = useAuth((s) => s.signOut);
+  const signOut = useSignOut();
   const userId = state.status === 'signedIn' ? state.userId : null;
   const { modes, choose } = useModeSwitcher(userId);
   const events = useScannableEvents(userId);
@@ -42,7 +43,7 @@ export default function GateEventsRoute() {
       onRetry={reload}
       onOpen={open}
       onSignOut={() => {
-        void signOut();
+        signOut();
       }}
       header={<ModeSwitcher modes={modes} current="gate" onChoose={choose} />}
     />

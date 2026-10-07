@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 
 import { startSessionListener } from '@/features/auth/api/session';
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import '@/features/gate/offline/signOutGuard';
 import { resolveRoute } from '@/features/mode/domain/route';
 import { useModeState } from '@/features/mode/hooks/useModeState';
 import { useRouteStore } from '@/features/mode/hooks/useRouteStore';

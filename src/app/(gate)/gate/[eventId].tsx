@@ -91,7 +91,7 @@ function Scanner({ eventId }: { eventId: string }) {
       onToggleMute={toggleMute}
       session={session}
       onSignIn={() => {
-        void signOut();
+        void signOut({ keepOfflineData: true });
       }}
       onChangeEvent={leave}
       onLostAssignment={leaveLostAssignment}
