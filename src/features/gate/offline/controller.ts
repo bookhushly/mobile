@@ -38,12 +38,19 @@ const KEYS_GAP_MS = 60_000;
 export function createOfflineController(deps: ControllerDeps) {
   const { eventId } = deps;
   let running = false;
+  // Set by stop(): work still in flight finishes (the stores stay consistent) but publishes nothing
+  // into a screen that has moved on.
+  let stopped = false;
   let listBusy = false;
   let outboxBusy = false;
   let lastKeysAt = -Infinity;
   let timers: ReturnType<typeof setInterval>[] = [];
   let unsubscribe: (() => void) | null = null;
   let gatePromise: Promise<OfflineGate> | null = null;
+
+  const publish = (st: Partial<SyncStatus>) => {
+    if (!stopped) deps.publish(st);
+  };
 
   const fail = (e: unknown) => {
     deps.report(e);
@@ -82,7 +89,7 @@ export function createOfflineController(deps: ControllerDeps) {
       const meta = await d.roster.meta(eventId);
       const counts = await d.roster.counts(eventId);
       const s = await d.outbox.status(eventId);
-      deps.publish({
+      publish({
         mode: deps.connectivity.isDegraded() ? 'offline' : 'online',
         list: meta?.ready === true ? { count: counts.total, syncedAt: meta.syncedAt ?? 0 } : null,
         localCounts: meta?.ready === true ? counts : null,
@@ -107,7 +114,7 @@ export function createOfflineController(deps: ControllerDeps) {
           fetchPage: deps.fetchPage,
           eventId,
           onProgress: (p) => {
-            deps.publish({ download: p });
+            publish({ download: p });
           },
         },
         kind,
@@ -121,7 +128,7 @@ export function createOfflineController(deps: ControllerDeps) {
       fail(e);
     } finally {
       listBusy = false;
-      deps.publish({ download: null });
+      publish({ download: null });
       await refreshStatus();
     }
   }
@@ -129,7 +136,7 @@ export function createOfflineController(deps: ControllerDeps) {
   async function syncPending(): Promise<void> {
     if (outboxBusy) return;
     outboxBusy = true;
-    deps.publish({ syncing: true });
+    publish({ syncing: true });
     try {
       const d = await deps.db();
       await syncOutbox({
@@ -144,7 +151,7 @@ export function createOfflineController(deps: ControllerDeps) {
       fail(e);
     } finally {
       outboxBusy = false;
-      deps.publish({ syncing: false });
+      publish({ syncing: false });
       await refreshStatus();
     }
   }
@@ -184,18 +191,20 @@ export function createOfflineController(deps: ControllerDeps) {
     start(): void {
       if (running) return;
       running = true;
+      stopped = false;
       void tick();
       timers = [
         setInterval(() => void tick(), TICK_MS),
         setInterval(() => void refreshStatus(), STATUS_MS),
       ];
       unsubscribe = deps.connectivity.subscribe((degraded) => {
-        deps.publish({ mode: degraded ? 'offline' : 'online' });
+        publish({ mode: degraded ? 'offline' : 'online' });
         if (!degraded) void tick();
       });
     },
     stop(): void {
       running = false;
+      stopped = true;
       for (const t of timers) clearInterval(t);
       timers = [];
       unsubscribe?.();

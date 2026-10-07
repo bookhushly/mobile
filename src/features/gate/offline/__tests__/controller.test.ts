@@ -84,6 +84,16 @@ describe('offline controller', () => {
     ctl.stop();
   });
 
+  it('after stop, in-flight work finishes without publishing', async () => {
+    const { ctl, status, fetchPage } = await setup();
+    ctl.start();
+    ctl.stop();
+    const before = status.length;
+    for (let i = 0; i < 6; i++) await flush();
+    expect(fetchPage).toHaveBeenCalled();
+    expect(status).toHaveLength(before);
+  });
+
   it('an offline admission is synced when the server is back', async () => {
     const { ctl, post, connectivity } = await setup();
     ctl.start();
