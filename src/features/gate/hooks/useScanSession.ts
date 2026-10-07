@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { gateKeys } from '@/features/gate/api/keys';
 import { submitScan } from '@/features/gate/api/scan';
 import { createScanSession, type ScanSession } from '@/features/gate/domain/scanSession';
+import type { OfflineScanHooks } from '@/features/gate/hooks/useOfflineGate';
 import { useScanView } from '@/features/gate/state/scanView';
 import { api, clock } from '@/shared/api/instance';
 import { trailing } from '@/shared/lib/trailing';
@@ -15,7 +16,10 @@ const SUMMARY_REFRESH_MS = 2_000;
 const SUMMARY_MAX_WAIT_MS = 5_000;
 
 // One Feedback instance per scanner screen: it plays the cues and owns the mute preference.
-export function useScanSession(eventId: string): {
+export function useScanSession(
+  eventId: string,
+  offline: OfflineScanHooks = {},
+): {
   session: ScanSession;
   muted: boolean;
   toggleMute: () => void;
@@ -40,6 +44,7 @@ export function useScanSession(eventId: string): {
       localNow: () => performance.now(),
       random: Math.random,
       sleep: (ms) => new Promise<void>((r) => setTimeout(r, ms)),
+      ...offline,
       onChange: setView,
       onCue: (cue) => {
         feedback.cue(cue);

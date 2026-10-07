@@ -10,6 +10,7 @@ import { eventLabel } from '@/features/gate/domain/eventList';
 import { shouldShowNotAssigned } from '@/features/gate/domain/lostAssignment';
 import { useLastEvent } from '@/features/gate/hooks/useLastEvent';
 import { useScannableEvents } from '@/features/gate/hooks/useScannableEvents';
+import { useOfflineGate } from '@/features/gate/hooks/useOfflineGate';
 import { useScanSession } from '@/features/gate/hooks/useScanSession';
 import { useScanSummary } from '@/features/gate/hooks/useScanSummary';
 import { ScannerScreen } from '@/features/gate/screens/ScannerScreen';
@@ -30,6 +31,9 @@ function Scanner({ eventId }: { eventId: string }) {
   const userId = auth.status === 'signedIn' ? auth.userId : null;
   const events = useScannableEvents(userId);
   const { forget } = useLastEvent(userId);
+  const listed = events.state.status === 'ready' ? events.state.events : [];
+  const event = listed.find((e) => e.id === eventId);
+  const offline = useOfflineGate({ eventId, userId, focused, startsAt: event?.startsAt ?? null });
   const camera = useCameraAccess();
   const { summary, stale, forbidden } = useScanSummary(eventId, focused);
   const leave = () => {
@@ -43,11 +47,12 @@ function Scanner({ eventId }: { eventId: string }) {
   const leaveLostAssignment = () => {
     leaveOnce(() => {
       if (userId !== null) void qc.invalidateQueries({ queryKey: gateKeys.events(userId) });
+      void offline.controller?.dropList();
       forget();
       leave();
     });
   };
-  const { session, muted, toggleMute } = useScanSession(eventId);
+  const { session, muted, toggleMute } = useScanSession(eventId, offline.scan);
 
   // A summary 403 is codeless, so only a fresh events list can confirm the assignment is gone.
   const { refresh: refreshEvents } = events;
@@ -71,9 +76,6 @@ function Scanner({ eventId }: { eventId: string }) {
   useEffect(() => {
     if (permission === 'unknown') request();
   }, [permission, request]);
-
-  const listed = events.state.status === 'ready' ? events.state.events : [];
-  const event = listed.find((e) => e.id === eventId);
 
   return (
     <ScannerScreen
