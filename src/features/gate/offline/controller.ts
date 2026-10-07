@@ -1,7 +1,7 @@
 import { listExpiry } from '@/features/gate/domain/listExpiry';
 import type { ScanOutcome } from '@/features/gate/domain/outcome';
 import type { TicketCode } from '@/features/gate/domain/parseTicketCode';
-import type { ActivityRow } from '@/features/gate/domain/activityCsv';
+import { ACTIVITY_PAGE, type ActivityRow } from '@/features/gate/domain/activityCsv';
 import type { LookupQuery } from '@/features/gate/domain/lookupQuery';
 import type { SyncStatus } from '@/features/gate/domain/syncLine';
 import type { ClockState } from '@/shared/lib/clockGuard';
@@ -36,7 +36,6 @@ export const FULL_EVERY_MS = 30 * 60_000;
 const TICK_MS = 30_000;
 const STATUS_MS = 15_000;
 const KEYS_GAP_MS = 60_000;
-const ACTIVITY_PAGE = 50;
 
 const TALLY_KEY: Record<ScanOutcome['kind'], keyof ShiftTally> = {
   admitted: 'admitted',

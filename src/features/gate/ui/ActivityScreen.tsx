@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { FlatList, Modal, Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { activityCsv, type ActivityRow } from '@/features/gate/domain/activityCsv';
+import { ACTIVITY_PAGE, activityCsv, type ActivityRow } from '@/features/gate/domain/activityCsv';
 import { attentionLine } from '@/features/gate/domain/syncLine';
 import type { ActivityTab, AttentionItem } from '@/features/gate/offline/outboxStore';
 import { useSyncView } from '@/features/gate/state/syncView';
@@ -21,9 +21,8 @@ type Props = {
   onClose: () => void;
 };
 
-// The controller's page size: a full page means there may be more.
-const PAGE = 50;
 const EXPORT_FAILED = 'Couldn’t export — try again';
+const LOAD_FAILED = 'Couldn’t load the list — try again.';
 
 const TABS: readonly { tab: ActivityTab; label: string; empty: string }[] = [
   { tab: 'toSync', label: 'To sync', empty: 'Nothing waiting to sync.' },
@@ -48,17 +47,31 @@ const stateLine = (i: AttentionItem) => {
   return i.state === 'synced' ? 'Synced' : 'Waiting to sync';
 };
 
+// The last successful first page (plus pages appended to it). `key` names the request that
+// produced it: a count change while open is a new key, so a stale load-more can be recognised.
 type Page = {
   tab: ActivityTab;
-  rows: AttentionItem[] | 'failed';
+  key: string;
+  rows: AttentionItem[];
   more: boolean;
   moreState: 'idle' | 'loading' | 'failed';
 };
 
+const appendNew = (rows: AttentionItem[], next: AttentionItem[]) => {
+  const seen = new Set(rows.map((i) => i.seq));
+  return [...rows, ...next.filter((i) => !seen.has(i.seq))];
+};
+
 function Row({ item }: { item: AttentionItem }) {
   const m = marker(item);
+  const time = localTime(item.scannedAt);
+  const label = [ticketLabel(item), time, m, stateLine(item)]
+    .filter((x): x is string => x !== null && x !== '')
+    .join(', ');
   return (
     <View
+      accessible
+      accessibilityLabel={label}
       style={{
         minHeight: density.work.rowMin,
         justifyContent: 'center',
@@ -87,7 +100,7 @@ function Row({ item }: { item: AttentionItem }) {
         ) : null}
         <View style={{ flex: 1 }} />
         <Text variant="labelSm" tone="textSecondary" tabular>
-          {localTime(item.scannedAt)}
+          {time}
         </Text>
       </View>
       <Text variant="bodySm" tone="textSecondary">
@@ -109,6 +122,8 @@ export function ActivityScreen({
 }: Props) {
   const [tab, setTab] = useState<ActivityTab>(initialTab);
   const [page, setPage] = useState<Page | null>(null);
+  // The key whose first-page load failed (the previous rows stay visible under the error).
+  const [failedKey, setFailedKey] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [wasVisible, setWasVisible] = useState(visible);
@@ -128,6 +143,7 @@ export function ActivityScreen({
       setTab(initialTab);
     } else {
       setPage(null);
+      setFailedKey(null);
       setExporting(false);
       setExportError(null);
     }
@@ -140,41 +156,55 @@ export function ActivityScreen({
     }
   }, [visible]);
 
+  const key = `${tab}|${String(pending)}|${String(attention)}`;
   useEffect(() => {
     if (!visible) return;
     gen.current += 1;
     const mine = gen.current;
     load(tab, null).then(
       (rows) => {
-        if (mine === gen.current)
-          setPage({ tab, rows, more: rows.length === PAGE, moreState: 'idle' });
+        if (mine !== gen.current) return;
+        setPage({ tab, key, rows, more: rows.length === ACTIVITY_PAGE, moreState: 'idle' });
+        setFailedKey(null);
       },
       () => {
-        if (mine === gen.current) setPage({ tab, rows: 'failed', more: false, moreState: 'idle' });
+        if (mine === gen.current) setFailedKey(key);
       },
     );
-  }, [visible, tab, load, pending, attention]);
+  }, [visible, tab, key, load]);
 
   const shown = page !== null && page.tab === tab ? page : null;
+  const loadFailed = failedKey === key;
+  // A (re)load for the current key is still in flight: paging waits for it.
+  const reloading = !loadFailed && page?.key !== key;
 
   const loadMore = () => {
-    if (shown === null || shown.rows === 'failed' || shown.moreState === 'loading') return;
+    if (shown === null || reloading || shown.moreState === 'loading') return;
     const last = shown.rows.at(-1);
     if (last === undefined) return;
+    const forKey = shown.key;
     const mine = gen.current;
     setPage({ ...shown, moreState: 'loading' });
+    // Appends only onto the exact page it continues: a reload in between replaced that page.
+    const same = (p: Page | null): p is Page =>
+      p !== null && p.tab === tab && p.key === forKey && p.rows.at(-1)?.seq === last.seq;
     load(tab, last.seq).then(
       (rows) => {
         if (mine !== gen.current) return;
         setPage((p) =>
-          p === null || p.rows === 'failed'
-            ? p
-            : { ...p, rows: [...p.rows, ...rows], more: rows.length === PAGE, moreState: 'idle' },
+          same(p)
+            ? {
+                ...p,
+                rows: appendNew(p.rows, rows),
+                more: rows.length === ACTIVITY_PAGE,
+                moreState: 'idle',
+              }
+            : p,
         );
       },
       () => {
         if (mine !== gen.current) return;
-        setPage((p) => (p === null ? p : { ...p, moreState: 'failed' }));
+        setPage((p) => (same(p) ? { ...p, moreState: 'failed' } : p));
       },
     );
   };
@@ -187,7 +217,10 @@ export function ActivityScreen({
     setExportError(null);
     let failed = false;
     try {
-      await share(ACTIVITY_FILE, activityCsv(await exportRows()));
+      const text = activityCsv(await exportRows());
+      // Closed while the rows were read: the share sheet must not open over the scanner.
+      if (mine !== openGen.current) return;
+      await share(ACTIVITY_FILE, text);
     } catch {
       failed = true;
     }
@@ -198,7 +231,7 @@ export function ActivityScreen({
   }
 
   const empty = TABS.find((t) => t.tab === tab)?.empty ?? '';
-  const rows = shown === null || shown.rows === 'failed' ? [] : shown.rows;
+  const rows = shown === null ? [] : shown.rows;
 
   return (
     <Modal
@@ -258,6 +291,15 @@ export function ActivityScreen({
               );
             })}
           </View>
+          {loadFailed && shown !== null ? (
+            <Text
+              variant="bodySm"
+              accessibilityLiveRegion="polite"
+              style={{ color: color.status.danger.fg }}
+            >
+              {LOAD_FAILED}
+            </Text>
+          ) : null}
           <FlatList
             data={rows}
             style={{ flex: 1 }}
@@ -265,15 +307,11 @@ export function ActivityScreen({
             renderItem={({ item }) => <Row item={item} />}
             ListEmptyComponent={
               <Text variant="bodySm" tone="textMuted" accessibilityLiveRegion="polite">
-                {shown === null
-                  ? 'Loading…'
-                  : shown.rows === 'failed'
-                    ? 'Couldn’t load the list — try again.'
-                    : empty}
+                {shown !== null ? empty : loadFailed ? LOAD_FAILED : 'Loading…'}
               </Text>
             }
             ListFooterComponent={
-              shown !== null && shown.rows !== 'failed' && shown.more ? (
+              shown !== null && shown.more && !reloading ? (
                 <View style={{ paddingTop: space.s3, gap: space.s2 }}>
                   {shown.moreState === 'failed' ? (
                     <Text variant="bodySm" style={{ color: color.status.danger.fg }}>

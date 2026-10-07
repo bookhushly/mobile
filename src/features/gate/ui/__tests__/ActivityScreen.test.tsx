@@ -1,7 +1,9 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import type { ActivityRow } from '@/features/gate/domain/activityCsv';
+import { EMPTY_SYNC } from '@/features/gate/domain/syncLine';
 import type { ActivityTab, AttentionItem } from '@/features/gate/offline/outboxStore';
+import { useSyncView } from '@/features/gate/state/syncView';
 import { ActivityScreen } from '@/features/gate/ui/ActivityScreen';
 
 const item = (seq: number, over: Partial<AttentionItem> = {}): AttentionItem => ({
@@ -170,4 +172,136 @@ it('a failed load says so', async () => {
   const s = setup({ load: () => Promise.reject(new Error('db')) });
   await render(s.ui);
   expect(await screen.findByText('Couldn’t load the list — try again.')).toBeTruthy();
+});
+
+// Deferred promises so tests decide which request settles first.
+function deferred<T>() {
+  let resolve: (v: T) => void = () => undefined;
+  let reject: (e: unknown) => void = () => undefined;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+const seqs = (from: number, n: number) => Array.from({ length: n }, (_, i) => item(from - i));
+const bumpPending = async (n: number) => {
+  await act(() => {
+    useSyncView.setState({ status: { ...EMPTY_SYNC, pending: n } });
+  });
+};
+const shownTickets = () =>
+  screen.queryAllByText(/^VIP · ticket \d+$/).map((n) => String(n.props.children));
+
+describe('during a sync', () => {
+  afterEach(async () => {
+    await act(() => {
+      useSyncView.getState().reset();
+    });
+  });
+
+  it('a load-more that settles after a count-change reload is dropped (no duplicates)', async () => {
+    const calls: { before: number | null; d: ReturnType<typeof deferred<AttentionItem[]>> }[] = [];
+    const s = setup({
+      load: (_tab, before) => {
+        const d = deferred<AttentionItem[]>();
+        calls.push({ before, d });
+        return d.promise;
+      },
+    });
+    await render(s.ui);
+    await act(async () => {
+      calls[0]?.d.resolve(seqs(200, 50));
+      await Promise.resolve();
+    });
+    await fireEvent.press(await screen.findByRole('button', { name: 'Load more' }));
+    expect(calls[1]?.before).toBe(151);
+    await bumpPending(3);
+    expect(calls[2]?.before).toBeNull();
+    // The reload settles first (a short page, so the list renders it all), then the stale
+    // load-more, which belongs to the old page and must not be appended.
+    await act(async () => {
+      calls[2]?.d.resolve(seqs(199, 5));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      calls[1]?.d.resolve(seqs(150, 50));
+      await Promise.resolve();
+    });
+    expect(shownTickets()).toEqual(
+      [199, 198, 197, 196, 195].map((n) => `VIP · ticket ${String(n)}`),
+    );
+  });
+
+  it('"Load more" is hidden while a reload is pending', async () => {
+    const calls: ReturnType<typeof deferred<AttentionItem[]>>[] = [];
+    const s = setup({
+      load: () => {
+        const d = deferred<AttentionItem[]>();
+        calls.push(d);
+        return d.promise;
+      },
+    });
+    await render(s.ui);
+    await act(async () => {
+      calls[0]?.resolve(seqs(200, 50));
+      await Promise.resolve();
+    });
+    expect(await screen.findByRole('button', { name: 'Load more' })).toBeTruthy();
+    await bumpPending(1);
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+    await act(async () => {
+      calls[1]?.resolve(seqs(200, 50));
+      await Promise.resolve();
+    });
+    expect(await screen.findByRole('button', { name: 'Load more' })).toBeTruthy();
+  });
+
+  it('a failed reload keeps the rows and shows the error above them', async () => {
+    let n = 0;
+    const s = setup({
+      load: () => {
+        n += 1;
+        return n === 1 ? Promise.resolve([item(1)]) : Promise.reject(new Error('db'));
+      },
+    });
+    await render(s.ui);
+    expect(await screen.findByText('VIP · ticket 1')).toBeTruthy();
+    await bumpPending(2);
+    expect(await screen.findByText('Couldn’t load the list — try again.')).toBeTruthy();
+    expect(screen.getByText('VIP · ticket 1')).toBeTruthy();
+  });
+});
+
+it('closing during an export never opens the share sheet', async () => {
+  const rows = deferred<ActivityRow[]>();
+  const share = jest.fn(() => Promise.resolve());
+  const props = {
+    initialTab: 'toSync' as const,
+    load: () => Promise.resolve([]),
+    exportRows: () => rows.promise,
+    share,
+    onSyncNow: jest.fn(),
+    onClose: jest.fn(),
+  };
+  await render(<ActivityScreen visible {...props} />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Export CSV' }));
+  await screen.rerender(<ActivityScreen visible={false} {...props} />);
+  await act(async () => {
+    rows.resolve([ROW]);
+    await Promise.resolve();
+  });
+  expect(share).not.toHaveBeenCalled();
+});
+
+it('each row reads as one element with ticket, time, marker and state', async () => {
+  const s = setup({
+    load: () =>
+      Promise.resolve([item(4, { mode: 'manual_lookup', scannedAt: '2026-10-07T18:05:00Z' })]),
+  });
+  await render(s.ui);
+  await screen.findByText('Lookup');
+  const d = new Date(Date.parse('2026-10-07T18:05:00Z'));
+  const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  expect(screen.getByLabelText(`VIP · ticket 4, ${hhmm}, Lookup, Waiting to sync`)).toBeTruthy();
 });

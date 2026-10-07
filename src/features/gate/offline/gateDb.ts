@@ -83,6 +83,9 @@ export async function hasGateDb(userId: string): Promise<boolean> {
 }
 
 export async function wipeGateDb(userId: string): Promise<void> {
+  // First, so a failure below cannot skip it: a previous activity export may still sit in the
+  // cache (it is not deleted right after sharing). Best effort, never throws.
+  deleteSharedCsv(ACTIVITY_FILE);
   const p = opened.get(userId);
   opened.delete(userId);
   if (p !== undefined) {
@@ -91,6 +94,4 @@ export async function wipeGateDb(userId: string): Promise<void> {
   }
   await deleteDatabase(fileOf(userId)).catch(() => undefined);
   await secureKv.delete(keyName(userId));
-  // A previous activity export may still sit in the cache (it is not deleted right after sharing).
-  deleteSharedCsv(ACTIVITY_FILE);
 }

@@ -15,6 +15,9 @@ export type ActivityRow = {
   approvedBy: string | null;
 };
 
+/** Rows per Activity page: the controller reads this many; a full page means there may be more. */
+export const ACTIVITY_PAGE = 50;
+
 export const ACTIVITY_HEADER: readonly string[] = [
   'ticket_ref',
   'ticket_type',
