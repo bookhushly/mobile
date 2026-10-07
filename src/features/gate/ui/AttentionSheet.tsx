@@ -12,7 +12,7 @@ type Props = { visible: boolean; load: () => Promise<AttentionItem[]>; onClose: 
 const label = (i: AttentionItem) =>
   `${i.ticketType ?? 'Ticket'}${i.ticketIndex === null ? '' : ` · ticket ${String(i.ticketIndex)}`}`;
 
-// Read-only (FR-3.13: no undo). Duplicates and suspects surface to the organiser on the web.
+// Read-only (FR-3.13: no undo). Duplicates and suspects are for the organiser to review.
 export function AttentionSheet({ visible, load, onClose }: Props) {
   const [items, setItems] = useState<AttentionItem[] | null>(null);
   useEffect(() => {
@@ -27,10 +27,11 @@ export function AttentionSheet({ visible, load, onClose }: Props) {
       });
     return () => {
       live = false;
+      // Clear on close so a previous open's items never flash on the next one.
+      setItems(null);
     };
   }, [visible, load]);
 
-  const [now] = useState(Date.now);
   return (
     <Modal
       visible={visible}
@@ -44,10 +45,15 @@ export function AttentionSheet({ visible, load, onClose }: Props) {
             Needs attention
           </Text>
           <Text variant="bodySm" tone="textSecondary">
-            The organiser sees these on the web. Nothing to undo here.
+            Review these with the organiser. Nothing to undo here.
           </Text>
           <FlatList
             data={items ?? []}
+            ListEmptyComponent={
+              <Text variant="bodySm" tone="textMuted">
+                {items === null ? 'Loading…' : 'Nothing needs attention.'}
+              </Text>
+            }
             keyExtractor={(i) => String(i.seq)}
             renderItem={({ item }) => (
               <View
@@ -61,7 +67,7 @@ export function AttentionSheet({ visible, load, onClose }: Props) {
               >
                 <Text variant="bodyStrong">{label(item)}</Text>
                 <Text variant="bodySm" tone="textSecondary">
-                  {attentionLine(item, now)}
+                  {attentionLine(item)}
                 </Text>
               </View>
             )}

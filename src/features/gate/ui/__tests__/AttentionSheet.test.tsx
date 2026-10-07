@@ -24,8 +24,11 @@ it('lists items that need attention, read-only', async () => {
   await render(<AttentionSheet visible load={() => Promise.resolve([item])} onClose={jest.fn()} />);
   expect(await screen.findByText('VIP · ticket 2')).toBeTruthy();
   expect(screen.getByText(/^Also admitted by Ada/)).toBeTruthy();
-  expect(
-    screen.getByText('The organiser sees these on the web. Nothing to undo here.'),
-  ).toBeTruthy();
+  expect(screen.getByText('Review these with the organiser. Nothing to undo here.')).toBeTruthy();
   expect(screen.queryByRole('button', { name: /undo/i })).toBeNull();
+});
+
+it('says so when nothing needs attention', async () => {
+  await render(<AttentionSheet visible load={() => Promise.resolve([])} onClose={jest.fn()} />);
+  expect(await screen.findByText('Nothing needs attention.')).toBeTruthy();
 });

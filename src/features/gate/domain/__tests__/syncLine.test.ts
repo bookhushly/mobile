@@ -85,7 +85,7 @@ describe('attentionLine', () => {
     [{ state: 'blocked', result: null }, /^Not sent — you were removed from this event$/],
     [{ state: 'error', result: null }, /^Not sent — the server refused the request$/],
   ] as const)('%j', (item, re) => {
-    expect(attentionLine(item, NOW)).toMatch(re);
+    expect(attentionLine(item)).toMatch(re);
   });
 });
 

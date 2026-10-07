@@ -99,10 +99,10 @@ const clockTime = (iso: unknown) => {
   return ` at ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-export function attentionLine(
-  item: { state: OutboxState; result: Record<string, unknown> | null },
-  _nowMs: number,
-): string {
+export function attentionLine(item: {
+  state: OutboxState;
+  result: Record<string, unknown> | null;
+}): string {
   const r = item.result ?? {};
   switch (item.state) {
     case 'duplicate': {
