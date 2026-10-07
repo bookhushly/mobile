@@ -113,6 +113,8 @@ export function FindGuestSheet({
     }
   }, [visible]);
 
+  // Memoised for identity, not cost: the search effect depends on `query`, and a fresh object each
+  // render would restart the debounce on every unrelated re-render.
   const query = useMemo(() => parseLookup(text), [text]);
 
   useEffect(() => {

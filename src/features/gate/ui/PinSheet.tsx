@@ -16,16 +16,20 @@ type Props = {
   onClose: () => void;
 };
 
-const message = (r: PinCheck | 'failed' | null): string | null => {
+// A lookup approval is not an override: its copy never says "override".
+const message = (r: PinCheck | 'failed' | null, purpose: Props['purpose']): string | null => {
   if (r === null) return null;
-  if (r === 'failed') return 'Override isn’t available right now — try again';
+  const noun = purpose === 'override' ? 'Override' : 'Approval';
+  if (r === 'failed') return `${noun} isn’t available right now — try again`;
   switch (r.kind) {
     case 'wrong':
       return `Wrong PIN — ${String(r.triesLeft)} ${r.triesLeft === 1 ? 'try' : 'tries'} left`;
     case 'locked':
-      return `Override locked — try again in ${String(r.minutesLeft)} min`;
+      return `${noun} locked — try again in ${String(r.minutesLeft)} min`;
     case 'unavailable':
-      return 'Override isn’t available for this event';
+      return purpose === 'override'
+        ? 'Override isn’t available for this event'
+        : 'Supervisor approval isn’t set up for this event — ask the organiser to set an offline PIN';
     case 'ok':
       return null;
   }
@@ -90,7 +94,7 @@ export function PinSheet({ visible, purpose, check, onApproved, onClose }: Props
     setResult(r);
   }
 
-  const text = message(result);
+  const text = message(result, purpose);
   return (
     <Modal
       visible={visible}
@@ -109,7 +113,9 @@ export function PinSheet({ visible, purpose, check, onApproved, onClose }: Props
             {purpose === 'override' ? 'Supervisor override' : 'Supervisor approval'}
           </Text>
           <Text variant="bodySm" tone="textSecondary">
-            A supervisor enters the event PIN. Every override is logged.
+            {purpose === 'override'
+              ? 'A supervisor enters the event PIN. Every override is logged.'
+              : 'A supervisor enters the event PIN. Every approval is logged.'}
           </Text>
           <Input
             label="PIN"

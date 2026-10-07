@@ -38,6 +38,23 @@ it('does not need a reason for a lookup', async () => {
   await fill('123456', 'Ada');
   expect(confirm()).toBeEnabled();
   expect(screen.getByText('Supervisor approval')).toBeTruthy();
+  expect(screen.getByText('A supervisor enters the event PIN. Every approval is logged.')).toBeTruthy();
+  expect(screen.queryByText(/override/i)).toBeNull();
+});
+
+it('keeps the override wording for an override', async () => {
+  await setup('override', () => Promise.resolve({ kind: 'locked', minutesLeft: 12 }));
+  expect(screen.getByText('A supervisor enters the event PIN. Every override is logged.')).toBeTruthy();
+  await fill('123456', 'Ada', 'lost ticket');
+  await fireEvent.press(confirm());
+  expect(await screen.findByText('Override locked — try again in 12 min')).toBeTruthy();
+});
+
+it('says override is unavailable for an override', async () => {
+  await setup('override', () => Promise.resolve({ kind: 'unavailable' }));
+  await fill('123456', 'Ada', 'lost ticket');
+  await fireEvent.press(confirm());
+  expect(await screen.findByText('Override isn’t available for this event')).toBeTruthy();
 });
 
 it('never runs two checks at once', async () => {
@@ -70,23 +87,27 @@ it('shows the lock and keeps Confirm disabled when locked', async () => {
   await setup('lookup', () => Promise.resolve({ kind: 'locked', minutesLeft: 12 }));
   await fill('123456', 'Ada');
   await fireEvent.press(confirm());
-  expect(await screen.findByText('Override locked — try again in 12 min')).toBeTruthy();
+  expect(await screen.findByText('Approval locked — try again in 12 min')).toBeTruthy();
   await fill('123456', 'Ada');
   expect(confirm()).toBeDisabled();
 });
 
-it('says so when override is unavailable', async () => {
+it('says so when approval is not set up for a lookup', async () => {
   await setup('lookup', () => Promise.resolve({ kind: 'unavailable' }));
   await fill('123456', 'Ada');
   await fireEvent.press(confirm());
-  expect(await screen.findByText('Override isn’t available for this event')).toBeTruthy();
+  expect(
+    await screen.findByText(
+      'Supervisor approval isn’t set up for this event — ask the organiser to set an offline PIN',
+    ),
+  ).toBeTruthy();
 });
 
 it('recovers when the check rejects', async () => {
   await setup('lookup', () => Promise.reject(new Error('store')));
   await fill('123456', 'Ada');
   await fireEvent.press(confirm());
-  expect(await screen.findByText('Override isn’t available right now — try again')).toBeTruthy();
+  expect(await screen.findByText('Approval isn’t available right now — try again')).toBeTruthy();
   expect(confirm()).toBeEnabled();
 });
 
