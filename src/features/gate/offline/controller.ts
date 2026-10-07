@@ -50,22 +50,29 @@ export function createOfflineController(deps: ControllerDeps) {
   };
 
   function gate(): Promise<OfflineGate> {
-    gatePromise ??= deps.db().then((d) =>
-      createOfflineGate({
-        eventId,
-        roster: d.roster,
-        outbox: d.outbox,
-        serverNow: deps.serverNow,
-        clockState: deps.clockState,
-        appVersion: deps.appVersion,
-        onKeysOutdated: () => {
-          keysOutdated();
-        },
-        onAdmitted: () => {
-          void refreshStatus();
-        },
-      }),
-    );
+    // A failed open is not cached: the next decision tries again.
+    gatePromise ??= deps
+      .db()
+      .then((d) =>
+        createOfflineGate({
+          eventId,
+          roster: d.roster,
+          outbox: d.outbox,
+          serverNow: deps.serverNow,
+          clockState: deps.clockState,
+          appVersion: deps.appVersion,
+          onKeysOutdated: () => {
+            keysOutdated();
+          },
+          onAdmitted: () => {
+            void refreshStatus();
+          },
+        }),
+      )
+      .catch((e: unknown) => {
+        gatePromise = null;
+        throw e;
+      });
     return gatePromise;
   }
 
@@ -209,7 +216,11 @@ export function createOfflineController(deps: ControllerDeps) {
     },
     attention: async (): Promise<AttentionItem[]> => (await deps.db()).outbox.attention(eventId),
     dropList: async (): Promise<void> => {
-      await (await deps.db()).roster.drop(eventId);
+      try {
+        await (await deps.db()).roster.drop(eventId);
+      } catch (e) {
+        fail(e);
+      }
     },
   };
 }

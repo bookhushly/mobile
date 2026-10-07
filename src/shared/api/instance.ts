@@ -1,5 +1,5 @@
 import * as Application from 'expo-application';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { env } from '@/shared/config/env';
 import { createClock } from '@/shared/lib/clock';
@@ -20,6 +20,11 @@ export const clockGuard = createClockGuard({
   monoNow: () => performance.now(),
   serverNow: () => clock.serverNow(),
   lastContactMs: () => clock.lastContactMs(),
+});
+
+// App-lifetime listener: time asleep is not a clock change, wherever the user is when the phone wakes.
+AppState.addEventListener('change', (s) => {
+  if (s === 'active') clockGuard.rebase();
 });
 
 const version = Application.nativeApplicationVersion ?? '0.0.0';

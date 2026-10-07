@@ -1,6 +1,5 @@
 import * as Network from 'expo-network';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AppState } from 'react-native';
 
 import { postBatch } from '@/features/gate/api/batch';
 import { fetchRosterPage } from '@/features/gate/api/roster';
@@ -60,16 +59,6 @@ export function useOfflineGate(p: {
   useEffect(() => {
     const sub = Network.addNetworkStateListener((s) => {
       if (s.isConnected === false) connectivity.networkLost();
-    });
-    return () => {
-      sub.remove();
-    };
-  }, []);
-
-  // Time asleep is not a clock change (Review Focus 1).
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active') clockGuard.rebase();
     });
     return () => {
       sub.remove();
