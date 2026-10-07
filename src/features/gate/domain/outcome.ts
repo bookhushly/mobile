@@ -1,6 +1,7 @@
 import { usedBody, type AdmitBody } from '@/features/gate/schemas/scan';
 import type { ApiError } from '@/shared/lib/errors';
 import type { Result } from '@/shared/lib/result';
+import { parseIsoMs } from '@/shared/lib/isoTime';
 
 export type ScanResponse = Result<AdmitBody, ApiError>;
 
@@ -20,10 +21,20 @@ export type RefusalReason =
   | 'expired'
   | 'staticNotAllowed'
   | 'notAssigned'
+  | 'notInList'
   | 'other';
 
 export type CouldntCheckCause =
-  'network' | 'timeout' | 'rateLimited' | 'server' | 'auth' | 'unreadable';
+  | 'network'
+  | 'timeout'
+  | 'rateLimited'
+  | 'server'
+  | 'auth'
+  | 'unreadable'
+  | 'keysOutdated'
+  | 'clockChanged'
+  | 'offlineUnverifiable'
+  | 'noOfflineList';
 
 export type ScanOutcome =
   | {
@@ -33,6 +44,7 @@ export type ScanOutcome =
       totalTickets: number | null;
       checkedInCount: number | null;
       checkedInAt: string | null;
+      offline?: true;
     }
   | {
       kind: 'used';
@@ -41,7 +53,7 @@ export type ScanOutcome =
       ticketType: string | null;
       replayed: boolean;
     }
-  | { kind: 'refused'; reason: RefusalReason; fixable: boolean }
+  | { kind: 'refused'; reason: RefusalReason; fixable: boolean; listUpdatedAt?: number }
   | { kind: 'couldntCheck'; cause: CouldntCheckCause };
 
 /** uncertainSince: server-clock ms when an earlier attempt for this code may have committed. */
@@ -68,7 +80,7 @@ function scannedByFrom(
   if (byMe === true) return { kind: 'me' };
   // The server's answer wins; the uncertain-attempt heuristic only covers null/absent.
   if (byMe === null && ctx.uncertainSince !== null) {
-    const t = at === null ? NaN : Date.parse(at);
+    const t = parseIsoMs(at) ?? NaN;
     if (!Number.isFinite(t) || t >= ctx.uncertainSince - BY_ME_SLACK_MS) return { kind: 'me' };
   }
   const name = raw?.trim() ?? '';

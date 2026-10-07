@@ -1,3 +1,5 @@
+import { parseIsoMs } from '@/shared/lib/isoTime';
+import { ago } from './ago';
 import type { CouldntCheckCause, RefusalReason, ScanOutcome, ScannedBy } from './outcome';
 
 export type Tone = 'admitted' | 'used' | 'refused' | 'retry';
@@ -9,6 +11,7 @@ export type Presentation = {
   title: string;
   detail: string;
   secondary: string | null;
+  tag: string | null;
   action: 'tryAgain' | 'signIn' | 'done' | null;
 };
 
@@ -25,6 +28,7 @@ const REASON: Record<RefusalReason, string> = {
   expired: 'Code expired — ask them to refresh their ticket',
   staticNotAllowed: 'Printed QR not accepted — ask for the live ticket',
   notAssigned: "You aren't assigned to this event — call the organiser",
+  notInList: 'Not in offline list',
   other: "This ticket can't be admitted",
 };
 
@@ -35,12 +39,17 @@ const COULDNT_CHECK: Record<CouldntCheckCause, string> = {
   server: 'The server had a problem — scan again',
   unreadable: 'Unexpected reply from the server — scan again',
   auth: 'Your session expired — sign in again, then scan again',
+  keysOutdated: "This phone's ticket keys are out of date — connect to the internet, then scan again",
+  clockChanged: "This phone's time changed — connect to the internet once, then scan again",
+  offlineUnverifiable: "Can't check this code offline — ask them to reopen their ticket when online",
+  noOfflineList:
+    "We couldn't reach the server and there's no offline list on this phone — scan again",
 };
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
 function when(iso: string | null, nowMs: number): string {
-  const t = iso === null ? NaN : Date.parse(iso);
+  const t = parseIsoMs(iso) ?? NaN;
   if (!Number.isFinite(t)) return '';
   if (Math.abs(nowMs - t) < 60_000) return 'just now';
   const d = new Date(t);
@@ -78,6 +87,7 @@ export function present(o: ScanOutcome, nowMs: number): Presentation {
           many && o.checkedInCount !== null
             ? `${String(o.checkedInCount)} of ${String(o.totalTickets)} on this booking are in`
             : null,
+        tag: o.offline === true ? 'Offline · will sync' : null,
         action: null,
       };
     }
@@ -90,6 +100,7 @@ export function present(o: ScanOutcome, nowMs: number): Presentation {
         title: 'Already used',
         detail: parts.filter((p) => p !== '').join(' '),
         secondary: null,
+        tag: null,
         action: null,
       };
     }
@@ -100,7 +111,11 @@ export function present(o: ScanOutcome, nowMs: number): Presentation {
         holdMs: null,
         title: 'Refused',
         detail: REASON[o.reason],
-        secondary: null,
+        secondary:
+          o.reason === 'notInList' && o.listUpdatedAt !== undefined
+            ? `Offline list updated ${ago(o.listUpdatedAt, nowMs)}`
+            : null,
+        tag: null,
         action: 'done',
       };
     case 'couldntCheck':
@@ -111,6 +126,7 @@ export function present(o: ScanOutcome, nowMs: number): Presentation {
         title: "Couldn't check",
         detail: COULDNT_CHECK[o.cause],
         secondary: null,
+        tag: null,
         action: o.cause === 'auth' ? 'signIn' : 'tryAgain',
       };
   }

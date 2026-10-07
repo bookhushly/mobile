@@ -20,6 +20,7 @@ describe('present', () => {
       title: 'Admitted',
       detail: 'Regular · ticket 2 of 3',
       secondary: '2 of 3 on this booking are in',
+      tag: null,
       action: null,
     });
   });
@@ -59,6 +60,7 @@ describe('present', () => {
       title: 'Refused',
       detail: 'This ticket is for a different event',
       secondary: null,
+      tag: null,
       action: 'done',
     });
     expect(present({ kind: 'refused', reason: 'expired', fixable: true }, NOW)).toMatchObject({
@@ -76,6 +78,7 @@ describe('present', () => {
       title: "Couldn't check",
       detail: "We couldn't reach the server — scan again",
       secondary: null,
+      tag: null,
       action: 'tryAgain',
     });
     expect(present({ kind: 'couldntCheck', cause: 'auth' }, NOW).action).toBe('signIn');
@@ -91,5 +94,44 @@ describe('present', () => {
     const p = present({ kind: 'couldntCheck', cause }, NOW);
     expect(p.detail).toBe(detail);
     expect(p.tone).toBe('retry');
+  });
+  it('offline admission carries the "will sync" tag', () => {
+    expect(present({ ...admitted, offline: true }, NOW).tag).toBe('Offline · will sync');
+    expect(present(admitted, NOW).tag).toBeNull();
+  });
+  it('not in offline list says how fresh the list is', () => {
+    const p = present(
+      { kind: 'refused', reason: 'notInList', fixable: false, listUpdatedAt: NOW - 4 * 60_000 },
+      NOW,
+    );
+    expect(p).toMatchObject({
+      tone: 'refused',
+      title: 'Refused',
+      detail: 'Not in offline list',
+      secondary: 'Offline list updated 4 min ago',
+      action: 'done',
+    });
+  });
+  it.each<[CouldntCheckCause, string]>([
+    ['keysOutdated', "This phone's ticket keys are out of date — connect to the internet, then scan again"],
+    ['clockChanged', "This phone's time changed — connect to the internet once, then scan again"],
+    ['offlineUnverifiable', "Can't check this code offline — ask them to reopen their ticket when online"],
+    ['noOfflineList', "We couldn't reach the server and there's no offline list on this phone — scan again"],
+  ])('couldnt check %s: neutral, never red', (cause, detail) => {
+    const p = present({ kind: 'couldntCheck', cause }, NOW);
+    expect(p).toMatchObject({ tone: 'retry', title: "Couldn't check", detail, action: 'tryAgain' });
+  });
+  it('reads microsecond timestamps from the roster', () => {
+    const p = present(
+      {
+        kind: 'used',
+        checkedInAt: '2026-10-05T17:04:00.123456+00:00',
+        scannedBy: { kind: 'me' },
+        ticketType: null,
+        replayed: false,
+      },
+      NOW,
+    );
+    expect(p.detail).toMatch(/^Checked in at \d\d:\d\d by you$/);
   });
 });
