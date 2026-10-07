@@ -7,12 +7,14 @@ import { z } from 'zod';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { gateKeys } from '@/features/gate/api/keys';
 import { eventLabel } from '@/features/gate/domain/eventList';
+import type { LookupQuery } from '@/features/gate/domain/lookupQuery';
 import { shouldShowNotAssigned } from '@/features/gate/domain/lostAssignment';
 import { useLastEvent } from '@/features/gate/hooks/useLastEvent';
 import { useScannableEvents } from '@/features/gate/hooks/useScannableEvents';
 import { useOfflineGate } from '@/features/gate/hooks/useOfflineGate';
 import { useScanSession } from '@/features/gate/hooks/useScanSession';
 import { useScanSummary } from '@/features/gate/hooks/useScanSummary';
+import type { Approval } from '@/features/gate/offline/outboxStore';
 import { ScannerScreen } from '@/features/gate/screens/ScannerScreen';
 import { useAppActive, useCameraAccess } from '@/features/gate/ui/ScannerCamera';
 import { clock } from '@/shared/api/instance';
@@ -57,6 +59,29 @@ function Scanner({ eventId }: { eventId: string }) {
   const loadAttention = useCallback(
     () => controller?.attention() ?? Promise.resolve([]),
     [controller],
+  );
+  // Before the offline gate is ready the sheet reads as "no list" (search) or "couldn't admit".
+  const notReady = useCallback(() => Promise.reject(new Error('offline gate not ready')), []);
+  const searchGuests = useCallback(
+    (q: LookupQuery) => controller?.search(q) ?? Promise.resolve([]),
+    [controller],
+  );
+  const bookingTickets = useCallback(
+    (bookingId: string) => controller?.bookingTickets(bookingId) ?? notReady(),
+    [controller, notReady],
+  );
+  const needsPinForLookup = useCallback(
+    () => controller?.needsPinForLookup() ?? notReady(),
+    [controller, notReady],
+  );
+  const checkPin = useCallback(
+    (pin: string) => controller?.checkPin(pin) ?? notReady(),
+    [controller, notReady],
+  );
+  const admitFromLookup = useCallback(
+    (ticketId: string, approval: Approval | null) =>
+      controller?.admitFromLookup(ticketId, approval) ?? notReady(),
+    [controller, notReady],
   );
   const { session, muted, toggleMute } = useScanSession(eventId, offline.scan, offline.controller?.tally);
 
@@ -110,6 +135,11 @@ function Scanner({ eventId }: { eventId: string }) {
         controller?.syncNow();
       }}
       loadAttention={loadAttention}
+      searchGuests={searchGuests}
+      bookingTickets={bookingTickets}
+      needsPinForLookup={needsPinForLookup}
+      checkPin={checkPin}
+      admitFromLookup={admitFromLookup}
       serverNow={clock.serverNow}
     />
   );

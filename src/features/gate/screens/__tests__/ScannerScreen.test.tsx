@@ -1,10 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 
 import type { OverlayView } from '@/features/gate/domain/scanSession';
 import { ScannerScreen } from '@/features/gate/screens/ScannerScreen';
 import { useScanView } from '@/features/gate/state/scanView';
+import { useSyncView } from '@/features/gate/state/syncView';
 import { color, density, radius } from '@/shared/theme';
 
 const TICKET = '3f2b8c4e-1a2b-4c3d-8e9f-0a1b2c3d4e5f';
@@ -34,7 +35,28 @@ jest.mock('expo-camera', () => {
 });
 jest.mock('expo-keep-awake', () => ({ useKeepAwake: jest.fn() }));
 
-const session = { scan: jest.fn(), tryAgain: jest.fn(), dismiss: jest.fn() };
+const session = { scan: jest.fn(), tryAgain: jest.fn(), dismiss: jest.fn(), show: jest.fn() };
+const GUEST = {
+  id: 't1',
+  ticketType: 'VIP',
+  ticketIndex: 2,
+  bookingId: 'b1',
+  bookingStatus: 'confirmed',
+  checkedInAt: null,
+  scannedBy: null,
+  byMe: null,
+  holderName: 'Ada Obi',
+  phoneMasked: null,
+};
+const LOOKUP_ADMITTED = {
+  kind: 'admitted' as const,
+  ticketType: 'VIP',
+  ticketIndex: 2,
+  totalTickets: null,
+  checkedInCount: null,
+  checkedInAt: null,
+  via: 'lookup' as const,
+};
 const base = {
   title: 'Afro Night',
   summary: { admitted: 41, total: 120, recent: [] },
@@ -53,6 +75,11 @@ const base = {
   onRefreshList: jest.fn(),
   onSyncNow: jest.fn(),
   loadAttention: () => Promise.resolve([]),
+  searchGuests: jest.fn(() => Promise.resolve([GUEST])),
+  bookingTickets: jest.fn(() => Promise.resolve([GUEST])),
+  needsPinForLookup: jest.fn(() => Promise.resolve(false)),
+  checkPin: jest.fn(() => Promise.resolve({ kind: 'ok' as const })),
+  admitFromLookup: jest.fn(() => Promise.resolve(LOOKUP_ADMITTED)),
   serverNow: () => Date.parse('2026-10-07T18:00:30Z'),
 };
 
@@ -180,6 +207,34 @@ it('pauses camera reads while Enter code or Recent is open', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'Enter code' }));
   await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
   expect(session.scan).not.toHaveBeenCalled();
+});
+
+it('pauses camera reads while Find guest is open', async () => {
+  await render(<ScannerScreen {...base} />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Find guest' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
+  expect(session.scan).not.toHaveBeenCalled();
+});
+
+it('a lookup admission shows through the session and closes Find guest', async () => {
+  useSyncView.setState({
+    status: { ...useSyncView.getState().status, list: { count: 1, syncedAt: 1 } },
+  });
+  await render(<ScannerScreen {...base} />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Find guest' }));
+  await fireEvent.changeText(screen.getByLabelText('Search guests'), 'Ada');
+  await fireEvent.press(await screen.findByRole('button', { name: /Ada Obi/ }));
+  await fireEvent.press(await screen.findByRole('button', { name: /^Admit/ }));
+  await waitFor(() => {
+    expect(session.show).toHaveBeenCalledWith(LOOKUP_ADMITTED);
+  });
+  expect(base.admitFromLookup).toHaveBeenCalledWith('t1', null);
+  await waitFor(() => {
+    expect(screen.queryByPlaceholderText('Name or last phone digits')).toBeNull();
+  });
+  await act(() => {
+    useSyncView.getState().reset();
+  });
 });
 
 it('marks the counter not updated when the summary failed before any success', async () => {

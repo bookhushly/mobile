@@ -1,16 +1,21 @@
 import { useKeepAwake } from 'expo-keep-awake';
-import { Flashlight, Keyboard, ListChecks, Volume2, VolumeX } from 'lucide-react-native';
+import { Flashlight, Keyboard, ListChecks, UserSearch, Volume2, VolumeX } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import type { LookupQuery } from '@/features/gate/domain/lookupQuery';
+import type { ScanOutcome } from '@/features/gate/domain/outcome';
 import type { OverlayView, ScanSession } from '@/features/gate/domain/scanSession';
-import type { AttentionItem } from '@/features/gate/offline/outboxStore';
+import type { PinCheck } from '@/features/gate/offline/offlineGate';
+import type { Approval, AttentionItem } from '@/features/gate/offline/outboxStore';
+import type { GuestRow } from '@/features/gate/offline/rosterStore';
 import type { ScanSummary } from '@/features/gate/schemas/scan';
 import { useScanView } from '@/features/gate/state/scanView';
 import { useSyncView } from '@/features/gate/state/syncView';
 import { AttentionSheet } from '@/features/gate/ui/AttentionSheet';
 import { EnterCodeSheet } from '@/features/gate/ui/EnterCodeSheet';
+import { FindGuestSheet } from '@/features/gate/ui/FindGuestSheet';
 import { OutcomeOverlay } from '@/features/gate/ui/OutcomeOverlay';
 import { RecentSheet } from '@/features/gate/ui/RecentSheet';
 import { ScannerCamera, type CameraPermission } from '@/features/gate/ui/ScannerCamera';
@@ -29,7 +34,7 @@ type Props = {
   onOpenSettings: () => void;
   muted: boolean;
   onToggleMute: () => void;
-  session: Pick<ScanSession, 'scan' | 'tryAgain' | 'dismiss'>;
+  session: Pick<ScanSession, 'scan' | 'tryAgain' | 'dismiss' | 'show'>;
   onSignIn: () => void;
   onChangeEvent: () => void;
   /** Staff pressed Done on "You aren't assigned to this event": leave the scanner. */
@@ -37,6 +42,12 @@ type Props = {
   onRefreshList: () => void;
   onSyncNow: () => void;
   loadAttention: () => Promise<AttentionItem[]>;
+  /** Find guest (offline roster lookup); keep these stable, the search re-runs when they change. */
+  searchGuests: (q: LookupQuery) => Promise<GuestRow[]>;
+  bookingTickets: (bookingId: string) => Promise<GuestRow[]>;
+  needsPinForLookup: () => Promise<boolean>;
+  checkPin: (pin: string) => Promise<PinCheck>;
+  admitFromLookup: (ticketId: string, approval: Approval | null) => Promise<ScanOutcome>;
   /** Server-corrected now (clock.serverNow). */
   serverNow: () => number;
 };
@@ -196,6 +207,7 @@ export function ScannerScreen(p: Props) {
   const [entering, setEntering] = useState(false);
   const [showRecent, setShowRecent] = useState(false);
   const [showAttention, setShowAttention] = useState(false);
+  const [finding, setFinding] = useState(false);
   // Stable so the memoised camera never re-renders for unrelated screen state (perf budget).
   const session = p.session;
   const onCode = useCallback(
@@ -257,7 +269,7 @@ export function ScannerScreen(p: Props) {
       <View style={{ flex: 1 }}>
         {p.permission === 'granted' && p.focused ? (
           <>
-            <ScannerCamera torch={torch} paused={entering || showRecent || showAttention} onCode={onCode} />
+            <ScannerCamera torch={torch} paused={entering || showRecent || showAttention || finding} onCode={onCode} />
             <Viewfinder />
           </>
         ) : null}
@@ -313,6 +325,13 @@ export function ScannerScreen(p: Props) {
             setShowRecent(true);
           }}
         />
+        <Control
+          label="Find guest"
+          glyph={UserSearch}
+          onPress={() => {
+            setFinding(true);
+          }}
+        />
       </View>
 
       <Overlay
@@ -337,6 +356,21 @@ export function ScannerScreen(p: Props) {
         recent={p.summary?.recent ?? null}
         onClose={() => {
           setShowRecent(false);
+        }}
+      />
+      <FindGuestSheet
+        visible={finding}
+        search={p.searchGuests}
+        bookingTickets={p.bookingTickets}
+        needsPin={p.needsPinForLookup}
+        checkPin={p.checkPin}
+        admit={p.admitFromLookup}
+        onAdmitted={(o) => {
+          setFinding(false);
+          p.session.show(o);
+        }}
+        onClose={() => {
+          setFinding(false);
         }}
       />
       <AttentionSheet
