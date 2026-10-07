@@ -15,6 +15,8 @@ const gateGuard: SignOutGuard = {
     if (!(await hasGateDb(userId))) return;
     const { outbox } = await gateDb(userId);
     for (const eventId of await outbox.eventsWithUnsynced()) {
+      // The person is waiting to sign out: send now, even items that are backing off.
+      await outbox.retryNow(eventId);
       await syncOutbox({
         store: outbox,
         eventId,

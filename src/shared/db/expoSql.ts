@@ -4,6 +4,9 @@ import { serialSql, type Sql, type SqlValue } from './sql';
 
 const HEX_KEY = /^[0-9a-f]{64}$/;
 
+// Deliberately unlike "not a database": isWrongKey must not match it, or the file would be deleted.
+export const SQLCIPHER_MISSING = 'SQLCipher is not in this build; refusing to store data unencrypted';
+
 function wrap(db: SQLite.SQLiteDatabase): Sql {
   return serialSql({
     exec: (s) => db.execAsync(s),
@@ -24,6 +27,10 @@ export async function openEncrypted(
   const db = await SQLite.openDatabaseAsync(name);
   try {
     await db.execAsync(`PRAGMA key = "x'${keyHex}'"`);
+    // Plain SQLite ignores PRAGMA key and has no cipher_version: never write roster PII in clear.
+    const cipher = await db.getFirstAsync<{ cipher_version?: unknown }>('PRAGMA cipher_version');
+    const v = cipher?.cipher_version;
+    if (typeof v !== 'string' || v.trim() === '') throw new Error(SQLCIPHER_MISSING);
     // Throws "file is not a database" when the key doesn't open this file.
     await db.getFirstAsync('SELECT count(*) AS n FROM sqlite_master');
     await db.execAsync('PRAGMA journal_mode = WAL');
