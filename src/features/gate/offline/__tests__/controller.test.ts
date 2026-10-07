@@ -1,6 +1,7 @@
 import { migrate } from '@/shared/db/sql';
 import { nodeSql } from '@/shared/db/__tests__/nodeSql';
 import { createOfflineController, type ControllerDeps } from '@/features/gate/offline/controller';
+import { createDeviceStore } from '@/features/gate/offline/deviceStore';
 import { createOutboxStore } from '@/features/gate/offline/outboxStore';
 import { createRosterStore } from '@/features/gate/offline/rosterStore';
 import { MIGRATIONS } from '@/features/gate/offline/schema';
@@ -45,6 +46,7 @@ async function setup(over: Partial<ControllerDeps> = {}) {
   const stores = {
     roster: createRosterStore(db),
     outbox: createOutboxStore(db, { newDeviceId: () => 'device-abcdef12' }),
+    device: createDeviceStore(db),
     close: () => Promise.resolve(),
   };
   const status: Partial<SyncStatus>[] = [];

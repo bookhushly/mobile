@@ -5,6 +5,8 @@ import type { AttentionItem } from '@/features/gate/offline/outboxStore';
 
 const item: AttentionItem = {
   seq: 1,
+  reason: null,
+  approvedBy: null,
   eventId: 'e',
   ticketId: 't',
   code: 't',

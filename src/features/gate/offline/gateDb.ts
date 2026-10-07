@@ -5,11 +5,12 @@ import { migrate } from '@/shared/db/sql';
 import { captureException } from '@/shared/monitoring';
 import { secureKv } from '@/shared/platform/secureStore';
 
+import { createDeviceStore, type DeviceStore } from './deviceStore';
 import { createOutboxStore, type OutboxStore } from './outboxStore';
 import { createRosterStore, type RosterStore } from './rosterStore';
 import { MIGRATIONS } from './schema';
 
-export type GateDb = { roster: RosterStore; outbox: OutboxStore; close: () => Promise<void> };
+export type GateDb = { roster: RosterStore; outbox: OutboxStore; device: DeviceStore; close: () => Promise<void> };
 
 // One encrypted database per account: a different account on this phone never sees, or syncs,
 // another's admissions; "Sign in again" after a session expiry finds its outbox intact.
@@ -47,9 +48,10 @@ async function open(userId: string): Promise<GateDb> {
   await migrate(conn.sql, MIGRATIONS);
   const roster = createRosterStore(conn.sql);
   const outbox = createOutboxStore(conn.sql, { newDeviceId: () => Crypto.randomUUID() });
+  const device = createDeviceStore(conn.sql);
   await outbox.resetSending();
   await sweepExpired(roster, outbox, Date.now());
-  return { roster, outbox, close: conn.close };
+  return { roster, outbox, device, close: conn.close };
 }
 
 const opened = new Map<string, Promise<GateDb>>();
