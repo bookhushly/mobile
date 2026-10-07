@@ -67,7 +67,7 @@ const DELTA_MERGE = `ON CONFLICT (event_id, id) DO UPDATE SET
   phone_masked = excluded.phone_masked,
   seat = excluded.seat`;
 
-// After a full swap, admissions this phone made (and may not have synced before the snapshot)
+// After a full swap or a delta, admissions this phone made (and may not have synced before the snapshot)
 // are put back so a second presentation is still "already used". Every outbox state counts —
 // even a rejected or blocked item means this phone physically let the person in (spec §4 rule 11).
 const REAPPLY_OUTBOX = `UPDATE roster_ticket
@@ -310,12 +310,14 @@ export function createRosterStore(db: Sql) {
             [eventId],
           );
           await t.run('DELETE FROM roster_staging WHERE event_id = ?', [eventId]);
-          await t.run(REAPPLY_OUTBOX, [eventId, eventId]);
           await t.run('UPDATE roster_meta SET ready = 1, full_at = ? WHERE event_id = ?', [
             at,
             eventId,
           ]);
         }
+        // A delta can be the first to list a ticket this phone already let in (an override), with
+        // checked_in_at still null: the outbox puts the admission back either way.
+        await t.run(REAPPLY_OUTBOX, [eventId, eventId]);
         await t.run(
           `UPDATE roster_meta SET since_mark = pending_mark, synced_at = ?, sync_kind = NULL,
              cursor = NULL, pending_mark = NULL WHERE event_id = ?`,

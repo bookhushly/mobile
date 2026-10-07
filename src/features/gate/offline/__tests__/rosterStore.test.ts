@@ -111,6 +111,23 @@ describe('roster store', () => {
     });
   });
 
+  it('a delta that first lists an overridden ticket keeps it checked in by this phone', async () => {
+    const { db, store } = await setup();
+    await fullSync(store, [row(1)]);
+    // Override of a ticket the list did not have yet: only the outbox knows about it.
+    await db.run(
+      "INSERT INTO outbox (event_id, ticket_id, code, scanned_at, mode, app_version, state, reason, approved_by) VALUES (?, ?, ?, ?, 'offline_override', '1', 'pending', 'Paid at door', 'Ada')",
+      [EV, row(2).id, row(2).id, '2026-10-07T18:01:00.000Z'],
+    );
+    await store.beginSync(EV, 'delta', MARK2, INFO, null);
+    await store.writePage(EV, 'delta', [row(2)], null);
+    await store.finishSync(EV, 'delta');
+    expect(await store.ticket(EV, row(2).id)).toMatchObject({
+      checkedInAt: '2026-10-07T18:01:00.000Z',
+      byMe: true,
+    });
+  });
+
   it('a delta merges server admissions but never erases a local one', async () => {
     const { store } = await setup();
     await fullSync(store, [row(1), row(2)]);
