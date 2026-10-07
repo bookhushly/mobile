@@ -327,3 +327,102 @@ describe('scan queue', () => {
     expect(h.q.enqueue(code(1), { manual: true })).toBe('queued');
   });
 });
+
+describe('offline fallback (Phase 2a)', () => {
+  const OFFLINE_ADMIT: ScanOutcome = {
+    kind: 'admitted',
+    offline: true,
+    ticketType: null,
+    ticketIndex: null,
+    totalTickets: null,
+    checkedInCount: null,
+    checkedInAt: null,
+  };
+
+  it('network failure after retries → the local decision is shown', async () => {
+    const fallback = jest.fn(() => Promise.resolve(OFFLINE_ADMIT));
+    const h = harness({ fallback, maxRetries: 0 });
+    h.q.enqueue(code(1));
+    await h.answer(NETWORK);
+    expect(fallback).toHaveBeenCalledWith(code(1));
+    expect(h.results).toEqual([{ code: code(1), outcome: OFFLINE_ADMIT }]);
+  });
+
+  it('a rate limit is not a reason to decide locally', async () => {
+    const fallback = jest.fn(() => Promise.resolve(OFFLINE_ADMIT));
+    const h = harness({ fallback, maxRetries: 0 });
+    h.q.enqueue(code(1));
+    await h.answer(fail({ status: 429, body: {} }));
+    expect(fallback).not.toHaveBeenCalled();
+    expect(h.results[0]?.outcome).toEqual({ kind: 'couldntCheck', cause: 'rateLimited' });
+  });
+
+  it('a server answer is final and teaches the list', async () => {
+    const fallback = jest.fn(() => Promise.resolve(OFFLINE_ADMIT));
+    const onLive = jest.fn();
+    const h = harness({ fallback, onLive });
+    h.q.enqueue(code(1));
+    await h.answer(ADMIT);
+    expect(fallback).not.toHaveBeenCalled();
+    expect(onLive).toHaveBeenCalledWith(code(1), expect.objectContaining({ kind: 'admitted' }));
+  });
+
+  it('degraded: decides locally without calling the server', async () => {
+    const fallback = jest.fn(() => Promise.resolve(OFFLINE_ADMIT));
+    const h = harness({ fallback, skipOnline: () => true });
+    h.q.enqueue(code(1));
+    await flush();
+    expect(h.submit).not.toHaveBeenCalled();
+    expect(h.results[0]?.outcome).toEqual(OFFLINE_ADMIT);
+  });
+
+  it('degraded but no offline list: tries the server anyway', async () => {
+    const fallback = jest.fn(() =>
+      Promise.resolve<ScanOutcome>({ kind: 'couldntCheck', cause: 'noOfflineList' }),
+    );
+    const h = harness({ fallback, skipOnline: () => true });
+    h.q.enqueue(code(1));
+    await flush();
+    expect(h.submit).toHaveBeenCalled();
+  });
+
+  it('a failing local decision leaves the live "couldnt check"', async () => {
+    const h = harness({ fallback: () => Promise.reject(new Error('disk')), maxRetries: 0 });
+    h.q.enqueue(code(1));
+    await h.answer(TIMEOUT);
+    expect(h.results[0]?.outcome).toEqual({ kind: 'couldntCheck', cause: 'timeout' });
+  });
+
+  it('a reset during the local decision emits nothing', async () => {
+    let release: (o: ScanOutcome) => void = () => undefined;
+    const fallback = jest.fn(
+      () =>
+        new Promise<ScanOutcome>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const h = harness({ fallback, maxRetries: 0 });
+    h.q.enqueue(code(1));
+    await h.answer(NETWORK);
+    h.q.reset();
+    release(OFFLINE_ADMIT);
+    await flush();
+    expect(h.results).toEqual([]);
+  });
+
+  it('an offline admission replays as already used on this phone', async () => {
+    const h = harness({
+      fallback: () => Promise.resolve(OFFLINE_ADMIT),
+      skipOnline: () => true,
+      cooldownMs: 0,
+    });
+    h.q.enqueue(code(1));
+    await flush();
+    h.q.enqueue(code(1));
+    expect(h.results[1]?.outcome).toMatchObject({
+      kind: 'used',
+      scannedBy: { kind: 'me' },
+      replayed: true,
+    });
+  });
+});

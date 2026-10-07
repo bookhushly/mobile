@@ -31,7 +31,6 @@ const sameSnapshot = (a: Snapshot | null, b: Snapshot) =>
   a.waiting === b.waiting &&
   a.pending === b.pending;
 
-// Phase 2 swaps `submit` for roster + outbox; nothing else here changes.
 export function createScanSession(deps: ScanSessionDeps) {
   const overlays = createOverlayQueue({ now: deps.localNow });
   const junkUntil = new Map<string, number>();

@@ -27,11 +27,18 @@ export type ScanQueueDeps = {
   maxTimeoutRetries?: number;
   cooldownMs?: number;
   maxSettled?: number;
+  /** Phase 2a: the phone's own decision when the server can't be reached. Throwing = none. */
+  fallback?: (code: TicketCode) => Promise<ScanOutcome>;
+  /** Degraded connection: decide locally first instead of waiting on the server. */
+  skipOnline?: () => boolean;
+  /** Every non-transient server answer; lets the offline list learn from live scans. */
+  onLive?: (code: TicketCode, outcome: ScanOutcome) => void;
 };
 
 // Port of web lib/scan/queue.js: queue, don't drop; de-dupe on the code; replay settled codes.
 // Differences: the queue (not the API client) owns retries because the scan POST is not
 // idempotent, and it tracks when an attempt may have committed (see classify's uncertainSince).
+// Phase 2a: when the server can't be reached, `fallback` decides on the phone.
 export function createScanQueue(deps: ScanQueueDeps) {
   const concurrency = deps.concurrency ?? 3;
   const maxRetries = deps.maxRetries ?? 2;
@@ -83,9 +90,41 @@ export function createScanQueue(deps: ScanQueueDeps) {
 
   type RunResult = { outcome: ScanOutcome; uncertainSince: number | null };
 
+  async function local(code: TicketCode): Promise<ScanOutcome | null> {
+    if (deps.fallback === undefined) return null;
+    try {
+      return await deps.fallback(code);
+    } catch {
+      return null;
+    }
+  }
+
+  function live(code: TicketCode, outcome: ScanOutcome) {
+    try {
+      deps.onLive?.(code, outcome);
+    } catch {
+      // Learning is best effort.
+    }
+  }
+
+  // Unreachable server only: a 429 means it is reachable, and a refusal is the server's answer.
+  const unreachable = (res: ScanResponse) =>
+    !res.ok &&
+    (res.error.kind === 'network' ||
+      res.error.kind === 'timeout' ||
+      res.error.kind === 'unavailable');
+
   // Resolves null when a reset happened mid-run: a stale run must not submit again.
   async function run(code: TicketCode, gen: number): Promise<RunResult | null> {
     let uncertainSince = uncertain.get(code) ?? null;
+    if (deps.skipOnline?.() === true) {
+      const o = await local(code);
+      if (gen !== generation) return null;
+      // No offline list on this phone: the server is still the only one who can answer.
+      if (o !== null && !(o.kind === 'couldntCheck' && o.cause === 'noOfflineList')) {
+        return { outcome: o, uncertainSince };
+      }
+    }
     let timeouts = 0;
     for (let attempt = 0; ; attempt++) {
       if (gen !== generation) return null;
@@ -95,7 +134,15 @@ export function createScanQueue(deps: ScanQueueDeps) {
       if (mayHaveCommitted(res)) uncertainSince ??= startedAt;
       if (!res.ok && res.error.kind === 'timeout') timeouts += 1;
       const retry = isTransient(res) && attempt < maxRetries && timeouts <= maxTimeoutRetries;
-      if (!retry) return { outcome, uncertainSince };
+      if (!retry) {
+        if (!isTransient(res)) live(code, outcome);
+        if (unreachable(res)) {
+          const o = await local(code);
+          if (gen !== generation) return null;
+          if (o !== null) return { outcome: o, uncertainSince };
+        }
+        return { outcome, uncertainSince };
+      }
       await deps.sleep(400 * (attempt + 1) + Math.floor(deps.random() * 200));
       if (gen !== generation) return null;
     }
