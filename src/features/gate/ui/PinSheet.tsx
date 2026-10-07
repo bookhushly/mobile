@@ -40,7 +40,7 @@ export function PinSheet({ visible, purpose, check, onApproved, onClose }: Props
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<PinCheck | 'failed' | null>(null);
   const busy = useRef(false);
-  const open = useRef(visible);
+  const gen = useRef(0);
   const [wasVisible, setWasVisible] = useState(visible);
 
   // Reset on close (adjusting state during render, not in an effect).
@@ -55,8 +55,10 @@ export function PinSheet({ visible, purpose, check, onApproved, onClose }: Props
     }
   }
   useEffect(() => {
-    open.current = visible;
-    if (!visible) busy.current = false;
+    if (!visible) {
+      gen.current += 1;
+      busy.current = false;
+    }
   }, [visible]);
 
   const who = approver.trim();
@@ -68,6 +70,7 @@ export function PinSheet({ visible, purpose, check, onApproved, onClose }: Props
   async function confirm() {
     if (busy.current || !valid || locked) return;
     busy.current = true;
+    const mine = gen.current;
     setChecking(true);
     setResult(null);
     let r: PinCheck | 'failed';
@@ -76,7 +79,7 @@ export function PinSheet({ visible, purpose, check, onApproved, onClose }: Props
     } catch {
       r = 'failed';
     }
-    if (!open.current) return;
+    if (mine !== gen.current) return;
     busy.current = false;
     setChecking(false);
     if (r !== 'failed' && r.kind === 'ok') {
@@ -98,6 +101,8 @@ export function PinSheet({ visible, purpose, check, onApproved, onClose }: Props
       <SafeAreaView style={{ flex: 1, backgroundColor: color.surface }}>
         <ScrollView
           keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+          keyboardDismissMode="interactive"
           contentContainerStyle={{ padding: space.s5, gap: space.s4 }}
         >
           <Text variant="title" accessibilityRole="header">
@@ -115,13 +120,18 @@ export function PinSheet({ visible, purpose, check, onApproved, onClose }: Props
             maxLength={6}
             autoComplete="off"
           />
-          <Input label="Approver" value={approver} onChangeText={setApprover} maxLength={80} />
           <Input
-            label="Reason"
+            label="Approver"
+            value={approver}
+            onChangeText={setApprover}
+            maxLength={80}
+            autoCapitalize="words"
+          />
+          <Input
+            label={purpose === 'override' ? 'Reason' : 'Reason (optional)'}
             value={reason}
             onChangeText={setReason}
             maxLength={200}
-            placeholder={purpose === 'override' ? 'Required' : 'Optional'}
           />
           {text !== null ? (
             <Text

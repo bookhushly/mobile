@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import type { PinCheck } from '@/features/gate/offline/offlineGate';
 import { PinSheet } from '@/features/gate/ui/PinSheet';
@@ -16,7 +16,7 @@ async function setup(purpose: Purpose, check: (pin: string) => Promise<PinCheck>
 const fill = async (pin: string, who: string, reason?: string) => {
   await fireEvent.changeText(screen.getByLabelText('PIN'), pin);
   await fireEvent.changeText(screen.getByLabelText('Approver'), who);
-  if (reason !== undefined) await fireEvent.changeText(screen.getByLabelText('Reason'), reason);
+  if (reason !== undefined) await fireEvent.changeText(screen.getByLabelText(/^Reason/), reason);
 };
 const confirm = () => screen.getByRole('button', { name: /^(Confirm|Checking…)$/ });
 
@@ -104,4 +104,43 @@ it('passes a trimmed reason for an override', async () => {
   await fireEvent.press(confirm());
   await waitFor(() => { expect(onApproved).toHaveBeenCalledWith({ approvedBy: 'Ada', reason: 'lost ticket' }); },
   );
+});
+
+it('ignores a stale check after close and reopen', async () => {
+  let resolve: (v: PinCheck) => void = () => undefined;
+  const check = jest.fn(
+    () =>
+      new Promise<PinCheck>((r) => {
+        resolve = r;
+      }),
+  );
+  const onApproved = jest.fn();
+  const ui = (visible: boolean) => (
+    <PinSheet visible={visible} purpose="lookup" check={check} onApproved={onApproved} onClose={jest.fn()} />
+  );
+  const { rerender } = await render(ui(true));
+  await fill('123456', 'Ada');
+  await fireEvent.press(confirm());
+  await rerender(ui(false));
+  await rerender(ui(true));
+  resolve({ kind: 'ok' });
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(onApproved).not.toHaveBeenCalled();
+  expect(confirm()).toBeDisabled();
+});
+
+it('clears the fields when closed', async () => {
+  const check = () => Promise.resolve<PinCheck>({ kind: 'ok' });
+  const ui = (visible: boolean) => (
+    <PinSheet visible={visible} purpose="override" check={check} onApproved={jest.fn()} onClose={jest.fn()} />
+  );
+  const { rerender } = await render(ui(true));
+  await fill('123456', 'Ada', 'lost ticket');
+  await rerender(ui(false));
+  await rerender(ui(true));
+  expect(screen.getByLabelText('PIN').props.value).toBe('');
+  expect(screen.getByLabelText('Approver').props.value).toBe('');
+  expect(screen.getByLabelText('Reason').props.value).toBe('');
 });
