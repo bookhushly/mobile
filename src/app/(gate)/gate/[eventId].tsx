@@ -14,12 +14,13 @@ import { useScannableEvents } from '@/features/gate/hooks/useScannableEvents';
 import { useOfflineGate } from '@/features/gate/hooks/useOfflineGate';
 import { useScanSession } from '@/features/gate/hooks/useScanSession';
 import { useScanSummary } from '@/features/gate/hooks/useScanSummary';
-import type { Approval } from '@/features/gate/offline/outboxStore';
+import type { ActivityTab, Approval } from '@/features/gate/offline/outboxStore';
 import { ScannerScreen } from '@/features/gate/screens/ScannerScreen';
 import { useAppActive, useCameraAccess } from '@/features/gate/ui/ScannerCamera';
 import { clock } from '@/shared/api/instance';
 import { latestOnly } from '@/shared/lib/latest';
 import { onceGuard } from '@/shared/lib/once';
+import { shareCsv } from '@/shared/platform/shareCsv';
 
 const eventIdParam = z.uuid();
 
@@ -56,12 +57,17 @@ function Scanner({ eventId }: { eventId: string }) {
     });
   };
   const controller = offline.controller;
-  const loadAttention = useCallback(
-    () => controller?.attention() ?? Promise.resolve([]),
-    [controller],
-  );
   // Before the offline gate is ready the sheet reads as "no list" (search) or "couldn't admit".
   const notReady = useCallback(() => Promise.reject(new Error('offline gate not ready')), []);
+  const loadActivity = useCallback(
+    (tab: ActivityTab, beforeSeq: number | null) =>
+      controller?.activity(tab, beforeSeq) ?? notReady(),
+    [controller, notReady],
+  );
+  const exportActivity = useCallback(
+    () => controller?.exportRows() ?? notReady(),
+    [controller, notReady],
+  );
   const searchGuests = useCallback(
     (q: LookupQuery) => controller?.search(q) ?? Promise.resolve([]),
     [controller],
@@ -134,7 +140,9 @@ function Scanner({ eventId }: { eventId: string }) {
       onSyncNow={() => {
         controller?.syncNow();
       }}
-      loadAttention={loadAttention}
+      loadActivity={loadActivity}
+      exportActivity={exportActivity}
+      shareCsv={shareCsv}
       searchGuests={searchGuests}
       bookingTickets={bookingTickets}
       needsPinForLookup={needsPinForLookup}

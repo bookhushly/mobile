@@ -5,6 +5,7 @@ import { migrate } from '@/shared/db/sql';
 import { captureException } from '@/shared/monitoring';
 import type { KeyValue } from '@/shared/lib/kv';
 import { secureKv } from '@/shared/platform/secureStore';
+import { ACTIVITY_FILE, deleteSharedCsv } from '@/shared/platform/shareCsv';
 
 import { createDeviceStore, type DeviceStore } from './deviceStore';
 import { createOutboxStore, type OutboxStore } from './outboxStore';
@@ -90,4 +91,6 @@ export async function wipeGateDb(userId: string): Promise<void> {
   }
   await deleteDatabase(fileOf(userId)).catch(() => undefined);
   await secureKv.delete(keyName(userId));
+  // A previous activity export may still sit in the cache (it is not deleted right after sharing).
+  deleteSharedCsv(ACTIVITY_FILE);
 }

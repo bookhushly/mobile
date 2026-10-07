@@ -4,16 +4,17 @@ import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import type { ActivityRow } from '@/features/gate/domain/activityCsv';
 import type { LookupQuery } from '@/features/gate/domain/lookupQuery';
 import type { ScanOutcome } from '@/features/gate/domain/outcome';
 import type { OverlayView, ScanSession } from '@/features/gate/domain/scanSession';
 import type { PinCheck } from '@/features/gate/offline/offlineGate';
-import type { Approval, AttentionItem } from '@/features/gate/offline/outboxStore';
+import type { ActivityTab, Approval, AttentionItem } from '@/features/gate/offline/outboxStore';
 import type { GuestRow } from '@/features/gate/offline/rosterStore';
 import type { ScanSummary } from '@/features/gate/schemas/scan';
 import { useScanView } from '@/features/gate/state/scanView';
 import { useSyncView } from '@/features/gate/state/syncView';
-import { AttentionSheet } from '@/features/gate/ui/AttentionSheet';
+import { ActivityScreen } from '@/features/gate/ui/ActivityScreen';
 import { EnterCodeSheet } from '@/features/gate/ui/EnterCodeSheet';
 import { FindGuestSheet } from '@/features/gate/ui/FindGuestSheet';
 import { OutcomeOverlay } from '@/features/gate/ui/OutcomeOverlay';
@@ -41,7 +42,10 @@ type Props = {
   onLostAssignment: () => void;
   onRefreshList: () => void;
   onSyncNow: () => void;
-  loadAttention: () => Promise<AttentionItem[]>;
+  /** Activity (read-only): one page of a tab, the export rows, and the share sheet. */
+  loadActivity: (tab: ActivityTab, beforeSeq: number | null) => Promise<AttentionItem[]>;
+  exportActivity: () => Promise<ActivityRow[]>;
+  shareCsv: (fileName: string, text: string) => Promise<void>;
   /** Find guest (offline roster lookup); keep these stable, the search re-runs when they change. */
   searchGuests: (q: LookupQuery) => Promise<GuestRow[]>;
   bookingTickets: (bookingId: string) => Promise<GuestRow[]>;
@@ -206,7 +210,7 @@ export function ScannerScreen(p: Props) {
   const [torch, setTorch] = useState(false);
   const [entering, setEntering] = useState(false);
   const [showRecent, setShowRecent] = useState(false);
-  const [showAttention, setShowAttention] = useState(false);
+  const [activityTab, setActivityTab] = useState<ActivityTab | null>(null);
   const [finding, setFinding] = useState(false);
   // Stable so the memoised camera never re-renders for unrelated screen state (perf budget).
   const session = p.session;
@@ -261,15 +265,13 @@ export function ScannerScreen(p: Props) {
         now={p.serverNow}
         onRefreshList={p.onRefreshList}
         onSyncNow={p.onSyncNow}
-        onOpenAttention={() => {
-          setShowAttention(true);
-        }}
+        onOpenActivity={setActivityTab}
       />
 
       <View style={{ flex: 1 }}>
         {p.permission === 'granted' && p.focused ? (
           <>
-            <ScannerCamera torch={torch} paused={entering || showRecent || showAttention || finding} onCode={onCode} />
+            <ScannerCamera torch={torch} paused={entering || showRecent || activityTab !== null || finding} onCode={onCode} />
             <Viewfinder />
           </>
         ) : null}
@@ -373,11 +375,15 @@ export function ScannerScreen(p: Props) {
           setFinding(false);
         }}
       />
-      <AttentionSheet
-        visible={showAttention}
-        load={p.loadAttention}
+      <ActivityScreen
+        visible={activityTab !== null}
+        initialTab={activityTab ?? 'attention'}
+        load={p.loadActivity}
+        exportRows={p.exportActivity}
+        share={p.shareCsv}
+        onSyncNow={p.onSyncNow}
         onClose={() => {
-          setShowAttention(false);
+          setActivityTab(null);
         }}
       />
     </SafeAreaView>

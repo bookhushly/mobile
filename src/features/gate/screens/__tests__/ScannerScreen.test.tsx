@@ -74,7 +74,9 @@ const base = {
   onLostAssignment: jest.fn(),
   onRefreshList: jest.fn(),
   onSyncNow: jest.fn(),
-  loadAttention: () => Promise.resolve([]),
+  loadActivity: jest.fn(() => Promise.resolve([])),
+  exportActivity: jest.fn(() => Promise.resolve([])),
+  shareCsv: jest.fn(() => Promise.resolve()),
   searchGuests: jest.fn(() => Promise.resolve([GUEST])),
   bookingTickets: jest.fn(() => Promise.resolve([GUEST])),
   needsPinForLookup: jest.fn(() => Promise.resolve(false)),
@@ -214,6 +216,27 @@ it('pauses camera reads while Find guest is open', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'Find guest' }));
   await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
   expect(session.scan).not.toHaveBeenCalled();
+});
+
+it('"N need attention" opens Activity on that tab and pauses camera reads', async () => {
+  useSyncView.setState({
+    status: { ...useSyncView.getState().status, attention: 2 },
+  });
+  await render(<ScannerScreen {...base} />);
+  await fireEvent.press(screen.getByRole('button', { name: '2 need attention' }));
+  await waitFor(() => {
+    expect(base.loadActivity).toHaveBeenCalledWith('attention', null);
+  });
+  expect(
+    screen.getByRole('tab', { name: 'Needs attention' }).props.accessibilityState,
+  ).toMatchObject({
+    selected: true,
+  });
+  await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
+  expect(session.scan).not.toHaveBeenCalled();
+  await act(() => {
+    useSyncView.getState().reset();
+  });
 });
 
 it('a lookup admission shows through the session and closes Find guest', async () => {
