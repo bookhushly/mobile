@@ -17,7 +17,7 @@ describe('SyncBar', () => {
     const onOpenAttention = jest.fn();
     await render(
       <SyncBar
-        nowMs={NOW}
+        now={() => NOW}
         onRefreshList={jest.fn()}
         onSyncNow={onSyncNow}
         onOpenAttention={onOpenAttention}
@@ -28,5 +28,13 @@ describe('SyncBar', () => {
     expect(onSyncNow).toHaveBeenCalled();
     await fireEvent.press(screen.getByRole('button', { name: '1 needs attention' }));
     expect(onOpenAttention).toHaveBeenCalled();
+  });
+  it('measures "ago" on the server clock, not the phone clock', async () => {
+    const phone = jest.spyOn(Date, 'now').mockReturnValue(NOW + 3 * 60 * 60_000);
+    await render(
+      <SyncBar now={() => NOW} onRefreshList={jest.fn()} onSyncNow={jest.fn()} onOpenAttention={jest.fn()} />,
+    );
+    expect(screen.getByText('Online · offline list 3 · just now · 2 to sync')).toBeTruthy();
+    phone.mockRestore();
   });
 });

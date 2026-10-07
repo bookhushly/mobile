@@ -53,6 +53,7 @@ const base = {
   onRefreshList: jest.fn(),
   onSyncNow: jest.fn(),
   loadAttention: () => Promise.resolve([]),
+  serverNow: () => Date.parse('2026-10-07T18:00:30Z'),
 };
 
 const flat = (node: { props: { style?: unknown } }) =>
@@ -185,4 +186,18 @@ it('marks the counter not updated when the summary failed before any success', a
   await render(<ScannerScreen {...base} summary={null} summaryStale />);
   expect(screen.getByText('— / —')).toBeTruthy();
   expect(screen.getByText('not updated')).toBeTruthy();
+});
+
+it('the overlay words times against the server clock, not the phone clock', async () => {
+  const phone = jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-07T21:00:00Z'));
+  showing({
+    kind: 'used',
+    checkedInAt: '2026-10-07T18:00:00Z',
+    scannedBy: { kind: 'anotherScanner' },
+    ticketType: null,
+    replayed: false,
+  });
+  await render(<ScannerScreen {...base} />);
+  expect(screen.getByText(/just now/)).toBeTruthy();
+  phone.mockRestore();
 });

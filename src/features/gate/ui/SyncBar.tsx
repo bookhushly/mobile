@@ -11,7 +11,8 @@ type Props = {
   onRefreshList: () => void;
   onSyncNow: () => void;
   onOpenAttention: () => void;
-  nowMs?: number;
+  /** Server-corrected clock: list and contact times are server ms. */
+  now: () => number;
 };
 
 function Small({ label, onPress }: { label: string; onPress: () => void }) {
@@ -34,20 +35,19 @@ function Small({ label, onPress }: { label: string; onPress: () => void }) {
 }
 
 // Always visible on the scanner (FR-3.9). Re-renders on sync status only, never the camera.
-export function SyncBar({ onRefreshList, onSyncNow, onOpenAttention, nowMs }: Props) {
+export function SyncBar({ onRefreshList, onSyncNow, onOpenAttention, now }: Props) {
   const status = useSyncView((s) => s.status);
   // Re-evaluated every 30 s so "2 min ago" and the clock warning do not go stale.
-  const [tick, setTick] = useState(Date.now);
+  const [, setTick] = useState(0);
   useEffect(() => {
-    if (nowMs !== undefined) return;
     const id = setInterval(() => {
-      setTick(Date.now());
+      setTick((n) => n + 1);
     }, 30_000);
     return () => {
       clearInterval(id);
     };
-  }, [nowMs]);
-  const line = syncLine(status, nowMs ?? tick);
+  }, []);
+  const line = syncLine(status, now());
   const glyph = status.mode === 'offline' ? WifiOff : Wifi;
   const attention = status.attention;
   return (

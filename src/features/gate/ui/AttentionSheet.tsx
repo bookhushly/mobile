@@ -15,6 +15,7 @@ const label = (i: AttentionItem) =>
 // Read-only (FR-3.13: no undo). Duplicates and suspects are for the organiser to review.
 export function AttentionSheet({ visible, load, onClose }: Props) {
   const [items, setItems] = useState<AttentionItem[] | null>(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     if (!visible) return;
     let live = true;
@@ -23,12 +24,13 @@ export function AttentionSheet({ visible, load, onClose }: Props) {
         if (live) setItems(v);
       })
       .catch(() => {
-        if (live) setItems([]);
+        if (live) setFailed(true);
       });
     return () => {
       live = false;
       // Clear on close so a previous open's items never flash on the next one.
       setItems(null);
+      setFailed(false);
     };
   }, [visible, load]);
 
@@ -51,7 +53,11 @@ export function AttentionSheet({ visible, load, onClose }: Props) {
             data={items ?? []}
             ListEmptyComponent={
               <Text variant="bodySm" tone="textMuted">
-                {items === null ? 'Loading…' : 'Nothing needs attention.'}
+                {failed
+                  ? 'Couldn’t load the list — try again.'
+                  : items === null
+                    ? 'Loading…'
+                    : 'Nothing needs attention.'}
               </Text>
             }
             keyExtractor={(i) => String(i.seq)}

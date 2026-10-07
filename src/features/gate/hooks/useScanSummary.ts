@@ -26,6 +26,8 @@ export function useScanSummary(
       if (!r.ok) throw new SummaryError(r.error);
       return r.value;
     },
+    // Spec §2.2: this refetch is the probe that leaves degraded mode (a reply marks the server
+    // reachable). Do not remove the refetchInterval without adding another probe.
     refetchInterval: focused ? 15_000 : false,
     staleTime: 0,
   });

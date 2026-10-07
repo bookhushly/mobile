@@ -37,6 +37,8 @@ type Props = {
   onRefreshList: () => void;
   onSyncNow: () => void;
   loadAttention: () => Promise<AttentionItem[]>;
+  /** Server-corrected now (clock.serverNow). */
+  serverNow: () => number;
 };
 
 const CORNER = 32;
@@ -117,14 +119,15 @@ function Control({
   );
 }
 
-type OverlayProps = Pick<Props, 'session' | 'onSignIn' | 'onLostAssignment'>;
+type OverlayProps = Pick<Props, 'session' | 'onSignIn' | 'onLostAssignment' | 'serverNow'>;
 
 const lostAssignment = (v: OverlayView) =>
   v.outcome.kind === 'refused' && v.outcome.reason === 'notAssigned';
 
 // Keyed by overlay id so the time used for wording is fixed when each overlay appears.
 function OverlayFor(p: OverlayProps & { view: OverlayView }) {
-  const [nowMs] = useState(() => Date.now());
+  // Server-corrected: the outcome's times (checked in, list updated) are server times.
+  const [nowMs] = useState(() => p.serverNow());
   return (
     <OutcomeOverlay
       view={p.view}
@@ -243,6 +246,7 @@ export function ScannerScreen(p: Props) {
         </Pressable>
       </View>
       <SyncBar
+        now={p.serverNow}
         onRefreshList={p.onRefreshList}
         onSyncNow={p.onSyncNow}
         onOpenAttention={() => {
@@ -311,7 +315,12 @@ export function ScannerScreen(p: Props) {
         />
       </View>
 
-      <Overlay session={p.session} onSignIn={p.onSignIn} onLostAssignment={p.onLostAssignment} />
+      <Overlay
+        session={p.session}
+        onSignIn={p.onSignIn}
+        onLostAssignment={p.onLostAssignment}
+        serverNow={p.serverNow}
+      />
 
       <EnterCodeSheet
         visible={entering}

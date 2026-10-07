@@ -32,3 +32,11 @@ it('says so when nothing needs attention', async () => {
   await render(<AttentionSheet visible load={() => Promise.resolve([])} onClose={jest.fn()} />);
   expect(await screen.findByText('Nothing needs attention.')).toBeTruthy();
 });
+
+it('a failed load says so, never "nothing needs attention"', async () => {
+  await render(
+    <AttentionSheet visible load={() => Promise.reject(new Error('db'))} onClose={jest.fn()} />,
+  );
+  expect(await screen.findByText('Couldn’t load the list — try again.')).toBeTruthy();
+  expect(screen.queryByText('Nothing needs attention.')).toBeNull();
+});

@@ -15,6 +15,7 @@ import { useScanSession } from '@/features/gate/hooks/useScanSession';
 import { useScanSummary } from '@/features/gate/hooks/useScanSummary';
 import { ScannerScreen } from '@/features/gate/screens/ScannerScreen';
 import { useAppActive, useCameraAccess } from '@/features/gate/ui/ScannerCamera';
+import { clock } from '@/shared/api/instance';
 import { latestOnly } from '@/shared/lib/latest';
 import { onceGuard } from '@/shared/lib/once';
 
@@ -109,6 +110,7 @@ function Scanner({ eventId }: { eventId: string }) {
         controller?.syncNow();
       }}
       loadAttention={loadAttention}
+      serverNow={clock.serverNow}
     />
   );
 }
