@@ -46,6 +46,7 @@ Web paths below are relative to `/Users/mac/Developer/bookhushly/web/`. `../web-
 **Roster** `GET /api/events/{id}/scan/roster?cursor=<ticketUuid>&limit=1..5000(default 2000)&since=<ISO>`
 → `{ok: true, event:{id,title,event_date,require_dynamic_ticket,total,admitted}, tickets:[{id,ticket_type,ticket_index,booking_id,booking_status,checked_in_at,scanned_by,by_me,holder_name,phone_masked,seat}], next_after, server_time}`.
 - **First page only** also has `keys` (Ed25519 public key set), `keys_error`, and `override` (`null` or `{enabled, alg:"scrypt", N, r, p, dk_len, salt, hash, set_at}`; defaults N=8192 r=8 p=1 dk_len=32, base64url salt/hash, 6-digit PIN).
+  - The app reads the first page's `override`: `null` clears a stored verifier; absent keeps it.
 - Keyset pagination ordered by `id`; loop until `next_after` is null. `no-store, private`.
 - `since` returns only tickets created/checked-in after the time and does **not** reflect later cancellations/refunds → do a full refresh periodically.
 - Auth: event owner, or scanner active in **both** `event_scanners` and `vendor_scanners`. Errors: 403 `forbidden`, 404 `not_found`, 400 bad param, 503 `roster_failed`.
@@ -123,3 +124,4 @@ Signup route/trigger · hotel-booking JSON route · apartment booking JSON · my
 - **2026-10-05, verified with the QA customer account against production:** Bearer `GET https://bookhushly.com/api/customer/kyc` → 200 `{kyc:null}`; without Bearer → 401 `{status:null}`; via `www.` → 308 → header dropped → 401. RLS reads for mode resolution work (`users` own row, `hotel_staff` null, `event_scanners` 0 rows). **`/api/health` returns 404 on production** — production is deployed from a commit older than web `main` (health landed 2026-10-04); don't depend on routes newer than the live deploy without checking.
 
 - **Phase 2a (2026-10-07): offline scanning built — device verification pending (see plan Task 17 step 6).**
+- **Phase 2b (2026-10-07): lookup, override PIN, activity/export and shift summary built — device verification pending.**
