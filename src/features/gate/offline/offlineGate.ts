@@ -1,5 +1,5 @@
 import { decideOffline, scannedBy, ticketIdOf, type RosterTicket } from '@/features/gate/domain/offlineDecide';
-import { afterFailure, afterSuccess, lockState, type LockState } from '@/features/gate/domain/overrideLock';
+import { afterFailure, afterSuccess, lockState, type LockRecord, type LockState } from '@/features/gate/domain/overrideLock';
 import { parseVerifier, verifyPin, type PinVerifier } from '@/features/gate/domain/overridePin';
 import type { LookupQuery } from '@/features/gate/domain/lookupQuery';
 import type { ScanOutcome } from '@/features/gate/domain/outcome';
@@ -118,7 +118,29 @@ export function createOfflineGate(deps: OfflineGateDeps) {
     replayed: false,
   });
 
+  // A PIN check opens one admission for a short while; the gate itself enforces it, not the UI.
+  let grant: number | null = null;
+  let pinChain: Promise<unknown> = Promise.resolve();
+  const GRANT_MS = 60_000;
+
+  function consumeGrant(): void {
+    const at = grant;
+    grant = null;
+    if (at === null || deps.serverNow() - at > GRANT_MS) throw new Error('approval required');
+  }
+
+  const len = (v: string) => v.trim().length;
+  function validateApproval(approval: Approval, reasonRequired: boolean): void {
+    const by = len(approval.approvedBy);
+    const reason = approval.reason === null ? null : len(approval.reason);
+    const badReason = reasonRequired
+      ? reason === null || reason < 3 || reason > 200
+      : reason !== null && reason > 200;
+    if (by < 1 || by > 80 || badReason) throw new Error('invalid approval');
+  }
+
   async function admitFromLookup(ticketId: string, approval: Approval | null): Promise<ScanOutcome> {
+    if (approval !== null) validateApproval(approval, false);
     const meta = await deps.roster.meta(eventId);
     if (meta === null || !meta.ready) return { kind: 'couldntCheck', cause: 'noOfflineList' };
     // A UI bug must never be able to skip the PIN on a live-ticket event.
@@ -129,6 +151,7 @@ export function createOfflineGate(deps: OfflineGateDeps) {
     const nowMs = deps.serverNow();
     const scannedAt = new Date(nowMs).toISOString();
     if (ticket.checkedInAt !== null) return usedOutcome(ticket, scannedAt);
+    if (meta.requireDynamic) consumeGrant();
     const rec = await deps.outbox.recordAdmission({
       eventId,
       ticketId,
@@ -144,8 +167,16 @@ export function createOfflineGate(deps: OfflineGateDeps) {
   }
 
   async function override(code: TicketCode, approval: { approvedBy: string; reason: string }): Promise<ScanOutcome> {
+    validateApproval(approval, true);
     const ticketId = ticketIdOf(code);
     if (ticketId === null) return { kind: 'refused', reason: 'invalid', fixable: false };
+    // The override is always PIN-gated: it needs a usable verifier, an open lock and a fresh grant.
+    if ((await availability()).kind !== 'open') throw new Error('approval required');
+    const listed = await deps.roster.ticket(eventId, ticketId);
+    if (listed !== null && listed.bookingStatus !== 'confirmed') {
+      return { kind: 'refused', reason: 'notConfirmed', fixable: false };
+    }
+    consumeGrant();
     const scannedAt = new Date(deps.serverNow()).toISOString();
     const rec = await deps.outbox.recordOverride({
       eventId,
@@ -173,7 +204,11 @@ export function createOfflineGate(deps: OfflineGateDeps) {
   }
 
   async function availability(): Promise<OverrideAvailability> {
-    if ((await verifier()) === null) return { kind: 'none' };
+    try {
+      if ((await verifier()) === null) return { kind: 'none' };
+    } catch {
+      return { kind: 'none' };
+    }
     try {
       return lockState(await deps.device.lock(), deps.serverNow());
     } catch {
@@ -181,9 +216,11 @@ export function createOfflineGate(deps: OfflineGateDeps) {
     }
   }
 
-  async function checkPin(pin: string): Promise<PinCheck> {
+  // Count first: the failure is persisted before the PIN is checked, so a kill mid-check still counts.
+  async function checkPinNow(pin: string): Promise<PinCheck> {
+    grant = null;
     const now = deps.serverNow();
-    let rec;
+    let rec: LockRecord;
     try {
       rec = await deps.device.lock();
     } catch {
@@ -191,22 +228,27 @@ export function createOfflineGate(deps: OfflineGateDeps) {
     }
     const st = lockState(rec, now);
     if (st.kind === 'locked') return st;
-    const v = await verifier();
-    if (v === null) return { kind: 'unavailable' };
-    let ok: boolean;
     try {
-      ok = await verifyPin(pin, v);
+      const v = await verifier();
+      if (v === null) return { kind: 'unavailable' };
+      const counted = afterFailure(rec, now);
+      await deps.device.setLock(counted);
+      if (!(await verifyPin(pin, v))) {
+        const after = lockState(counted, now);
+        return after.kind === 'locked' ? after : { kind: 'wrong', triesLeft: after.triesLeft };
+      }
+      await deps.device.setLock(afterSuccess());
+      grant = deps.serverNow();
+      return { kind: 'ok' };
     } catch {
       return { kind: 'unavailable' };
     }
-    if (ok) {
-      await deps.device.setLock(afterSuccess());
-      return { kind: 'ok' };
-    }
-    const next = afterFailure(rec, now);
-    await deps.device.setLock(next);
-    const after = lockState(next, now);
-    return after.kind === 'locked' ? after : { kind: 'wrong', triesLeft: after.triesLeft };
+  }
+
+  function checkPin(pin: string): Promise<PinCheck> {
+    const run = pinChain.then(() => checkPinNow(pin));
+    pinChain = run.catch(() => undefined);
+    return run;
   }
 
   const needsPinForLookup = async (): Promise<boolean> => (await deps.roster.meta(eventId))?.requireDynamic === true;
