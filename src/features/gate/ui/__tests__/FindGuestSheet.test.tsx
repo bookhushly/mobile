@@ -214,3 +214,138 @@ it('a failed admit keeps the sheet open with an error and never reports admitted
   expect(d.onAdmitted).not.toHaveBeenCalled();
   expect(screen.queryByText('Admitted')).toBeNull();
 });
+
+const deferred = <T,>() => {
+  let resolve: (v: T) => void = () => undefined;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+};
+
+const openBooking = async () => {
+  await type('Ada');
+  await fireEvent.press(await screen.findByRole('button', { name: /Ada Obi/ }));
+};
+
+it('cannot be closed while an admission is in flight, and the outcome always reaches the scanner', async () => {
+  const pending = deferred<ScanOutcome>();
+  const d = deps({ admit: jest.fn((_id: string, _a: Approval | null) => pending.promise) });
+  await setup(d);
+  await openBooking();
+  await fireEvent.press(await screen.findByRole('button', { name: /^Admit/ }));
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(d.admit).toHaveBeenCalledTimes(1);
+  const close = screen.getByRole('button', { name: 'Close' });
+  expect(close).toBeDisabled();
+  await fireEvent.press(close);
+  await fireEvent(screen.getByTestId('find-guest-sheet'), 'requestClose');
+  expect(d.onClose).not.toHaveBeenCalled();
+  await act(async () => {
+    pending.resolve(admitted);
+    await Promise.resolve();
+  });
+  expect(d.onAdmitted).toHaveBeenCalledTimes(1);
+  expect(d.onAdmitted).toHaveBeenCalledWith(admitted);
+});
+
+it('delivers an admission outcome even if the sheet was hidden meanwhile', async () => {
+  const pending = deferred<ScanOutcome>();
+  const d = deps({ admit: jest.fn((_id: string, _a: Approval | null) => pending.promise) });
+  await setup(d);
+  await openBooking();
+  await fireEvent.press(await screen.findByRole('button', { name: /^Admit/ }));
+  await act(async () => {
+    await Promise.resolve();
+  });
+  await screen.rerender(<FindGuestSheet {...d} visible={false} />);
+  await act(async () => {
+    pending.resolve(admitted);
+    await Promise.resolve();
+  });
+  expect(d.onAdmitted).toHaveBeenCalledTimes(1);
+});
+
+it('a PIN-approved admission reaches the scanner even if the sheet was hidden meanwhile', async () => {
+  const pending = deferred<ScanOutcome>();
+  const d = deps({
+    needsPin: jest.fn(() => Promise.resolve(true)),
+    admit: jest.fn((_id: string, _a: Approval | null) => pending.promise),
+  });
+  await setup(d);
+  await openBooking();
+  await fireEvent.press(await screen.findByRole('button', { name: /^Admit/ }));
+  await fireEvent.changeText(await screen.findByLabelText('PIN'), '123456');
+  await fireEvent.changeText(screen.getByLabelText('Approver'), 'Bisi');
+  await fireEvent.press(screen.getByRole('button', { name: 'Confirm' }));
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(d.admit).toHaveBeenCalledTimes(1);
+  await screen.rerender(<FindGuestSheet {...d} visible={false} />);
+  await act(async () => {
+    pending.resolve(admitted);
+    await Promise.resolve();
+  });
+  expect(d.onAdmitted).toHaveBeenCalledTimes(1);
+});
+
+it('gives each Admit button a label naming the ticket', async () => {
+  await setup(deps({ bookingTickets: jest.fn((_b: string) => Promise.resolve([ADA])) }));
+  await openBooking();
+  expect(await screen.findByRole('button', { name: 'Admit Ada Obi, VIP · ticket 2' })).toBeTruthy();
+});
+
+it('a double tap on Admit admits once', async () => {
+  const d = deps();
+  await setup(d);
+  await openBooking();
+  const admit = await screen.findByRole('button', { name: /^Admit/ });
+  await fireEvent.press(admit);
+  await fireEvent.press(admit);
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(d.needsPin).toHaveBeenCalledTimes(1);
+  expect(d.admit).toHaveBeenCalledTimes(1);
+  expect(d.onAdmitted).toHaveBeenCalledTimes(1);
+});
+
+it('a double tap on a PIN event opens one PIN sheet; cancelling it re-enables Admit', async () => {
+  const d = deps({ needsPin: jest.fn(() => Promise.resolve(true)) });
+  await setup(d);
+  await openBooking();
+  const admit = await screen.findByRole('button', { name: /^Admit/ });
+  await fireEvent.press(admit);
+  await fireEvent.press(admit);
+  expect(await screen.findAllByText('Supervisor approval')).toHaveLength(1);
+  expect(d.needsPin).toHaveBeenCalledTimes(1);
+  await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.queryByText('Supervisor approval')).toBeNull();
+  const again = screen.getByRole('button', { name: /^Admit/ });
+  expect(again).toBeEnabled();
+  await fireEvent.press(again);
+  expect(await screen.findByText('Supervisor approval')).toBeTruthy();
+  expect(d.needsPin).toHaveBeenCalledTimes(2);
+  expect(d.admit).not.toHaveBeenCalled();
+});
+
+it('ignores an older search that resolves after a newer one', async () => {
+  const BOLA = row({ id: 't9', holderName: 'Bola' });
+  const first = deferred<GuestRow[]>();
+  const search = jest.fn((q: LookupQuery) =>
+    q.value === 'Ada' ? first.promise : Promise.resolve([BOLA]),
+  );
+  await setup(deps({ search }));
+  await type('Ada');
+  await type('Bola');
+  expect(await screen.findByText('Bola')).toBeTruthy();
+  await act(async () => {
+    first.resolve([ADA]);
+    await Promise.resolve();
+  });
+  expect(screen.queryByText('Ada Obi')).toBeNull();
+  expect(screen.getByText('Bola')).toBeTruthy();
+});

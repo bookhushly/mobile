@@ -15,3 +15,9 @@ it('does not fire while loading', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
   expect(onPress).not.toHaveBeenCalled();
 });
+
+it('uses accessibilityLabel for screen readers when given', async () => {
+  await render(<Button label="Admit" accessibilityLabel="Admit Ada, VIP" onPress={jest.fn()} />);
+  expect(screen.getByRole('button', { name: 'Admit Ada, VIP' })).toBeTruthy();
+  expect(screen.getByText('Admit')).toBeTruthy();
+});

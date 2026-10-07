@@ -84,8 +84,11 @@ export function FindGuestSheet({
   const [found, setFound] = useState<Found | null>(null);
   const [booking, setBooking] = useState<Booking | null>(null);
   const [admitting, setAdmitting] = useState<string | null>(null);
-  const [pinFor, setPinFor] = useState<string | null>(null);
+  // The generation is kept with the ticket so the PIN path settles like the direct one.
+  const [pinFor, setPinFor] = useState<{ ticketId: string; gen: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // One admission per opening: after an outcome the scanner takes over and closes the sheet.
+  const [done, setDone] = useState(false);
   const busy = useRef(false);
   const gen = useRef(0);
   const [wasVisible, setWasVisible] = useState(visible);
@@ -99,6 +102,7 @@ export function FindGuestSheet({
       setBooking(null);
       setAdmitting(null);
       setPinFor(null);
+      setDone(false);
       setError(null);
     }
   }
@@ -147,11 +151,12 @@ export function FindGuestSheet({
     };
   }, [visible, bookingId, bookingTickets]);
 
-  const settle = (mine: number) => {
-    if (mine !== gen.current) return false;
+  // Only this sheet's own state is generation-guarded (a closed sheet shows nothing).
+  const fail = (mine: number) => {
+    if (mine !== gen.current) return;
     busy.current = false;
     setAdmitting(null);
-    return true;
+    setError(ADMIT_FAILED);
   };
 
   async function run(ticketId: string, approval: Approval | null, mine: number) {
@@ -159,10 +164,16 @@ export function FindGuestSheet({
     try {
       outcome = await admit(ticketId, approval);
     } catch {
-      if (settle(mine)) setError(ADMIT_FAILED);
+      fail(mine);
       return;
     }
-    if (settle(mine)) onAdmitted(outcome);
+    if (mine === gen.current) {
+      // busy stays set: this opening has admitted; closing resets it.
+      setAdmitting(null);
+      setDone(true);
+    }
+    // The admission is recorded: its outcome must reach the scanner even if the sheet closed.
+    onAdmitted(outcome);
   }
 
   async function start(ticketId: string) {
@@ -175,12 +186,12 @@ export function FindGuestSheet({
     try {
       pin = await needsPin();
     } catch {
-      if (settle(mine)) setError(ADMIT_FAILED);
+      fail(mine);
       return;
     }
     if (mine !== gen.current) return;
     // A live-ticket event: the gate wants a fresh single-use PIN grant, so admit right after it.
-    if (pin) setPinFor(ticketId);
+    if (pin) setPinFor({ ticketId, gen: mine });
     else await run(ticketId, null, mine);
   }
 
@@ -262,8 +273,9 @@ export function FindGuestSheet({
             {canAdmit(item) ? (
               <Button
                 label="Admit"
+                accessibilityLabel={`Admit ${who(item)}, ${ticketLabel(item)}`}
                 loading={admitting === item.id}
-                disabled={admitting !== null}
+                disabled={admitting !== null || done}
                 onPress={() => void start(item.id)}
               />
             ) : null}
@@ -278,7 +290,11 @@ export function FindGuestSheet({
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={onClose}
+      testID="find-guest-sheet"
+      onRequestClose={() => {
+        // Back / swipe must not hide an admission that is still being recorded.
+        if (admitting === null) onClose();
+      }}
     >
       <SafeAreaView style={{ flex: 1, backgroundColor: color.surface }}>
         <View style={{ padding: space.s5, gap: space.s4, flex: 1 }}>
@@ -306,7 +322,7 @@ export function FindGuestSheet({
                 <Text
                   variant="bodyStrong"
                   accessibilityLiveRegion="polite"
-                  style={{ color: color.status.danger.solid }}
+                  style={{ color: color.status.danger.fg }}
                 >
                   {error}
                 </Text>
@@ -322,16 +338,21 @@ export function FindGuestSheet({
               />
             </>
           )}
-          <Button variant="secondary" label="Close" onPress={onClose} />
+          <Button
+            variant="secondary"
+            label="Close"
+            disabled={admitting !== null}
+            onPress={onClose}
+          />
         </View>
         <PinSheet
           visible={pinFor !== null}
           purpose="lookup"
           check={checkPin}
           onApproved={(approval) => {
-            const id = pinFor;
+            const p = pinFor;
             setPinFor(null);
-            if (id !== null) void run(id, approval, gen.current);
+            if (p !== null) void run(p.ticketId, approval, p.gen);
           }}
           onClose={() => {
             setPinFor(null);

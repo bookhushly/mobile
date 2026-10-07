@@ -6,6 +6,8 @@ import { Text } from './Text';
 
 type Props = {
   label: string;
+  /** Screen-reader label when several buttons share a visible label (defaults to label). */
+  accessibilityLabel?: string;
   onPress: () => void;
   variant?: 'primary' | 'secondary';
   disabled?: boolean;
@@ -13,14 +15,22 @@ type Props = {
   testID?: string;
 };
 
-export function Button({ label, onPress, variant = 'primary', disabled, loading, testID }: Props) {
+export function Button({
+  label,
+  accessibilityLabel,
+  onPress,
+  variant = 'primary',
+  disabled,
+  loading,
+  testID,
+}: Props) {
   const inactive = disabled === true || loading === true;
   const primary = variant === 'primary';
   return (
     <Pressable
       testID={testID}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled: inactive, busy: loading === true }}
       disabled={inactive}
       onPress={onPress}
