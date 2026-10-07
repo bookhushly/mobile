@@ -82,7 +82,8 @@
         {
           "useSQLCipher": true
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
