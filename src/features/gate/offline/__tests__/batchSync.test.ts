@@ -70,6 +70,22 @@ describe('syncOutbox', () => {
     expect(await store.status(EV)).toMatchObject({ pending: 0, attention: 1 });
   });
 
+  it('a post that throws returns the items to pending and reports', async () => {
+    const { store, deps } = await setup(1);
+    const d = deps(() => Promise.reject(new Error('boom')));
+    expect(await syncOutbox(d)).toBe('retryLater');
+    expect(d.report).toHaveBeenCalled();
+    expect(await store.status(EV)).toMatchObject({ pending: 1 });
+    expect((await store.due(EV, 1_000 + 2_000, 10))[0]).toMatchObject({ seq: 1, state: 'pending', attempts: 1 });
+  });
+
+  it('a device id failure leaves the items pending, never stuck sending', async () => {
+    const { store, deps } = await setup(1);
+    jest.spyOn(store, 'deviceId').mockRejectedValueOnce(new Error('db'));
+    await expect(syncOutbox(deps(echo()))).rejects.toThrow('db');
+    expect((await store.due(EV, 1_000, 10))[0]).toMatchObject({ seq: 1, state: 'pending' });
+  });
+
   it('an item missing from the response stays queued', async () => {
     const { store, deps } = await setup(2);
     const partial: PostBatch = () => Promise.resolve(ok({ results: [{ client_seq: 1, ok: true, code: 'ok' }] }));

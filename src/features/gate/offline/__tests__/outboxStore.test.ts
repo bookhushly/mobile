@@ -87,6 +87,16 @@ describe('outbox store', () => {
     expect((await outbox.due(EV, 5_000, 10)).map((i) => i.seq)).toEqual([1, 2]);
   });
 
+  it('retryNow makes backed-off pending items of one event due at once', async () => {
+    const { outbox } = await setup();
+    await outbox.recordAdmission(input(T1));
+    await outbox.markSending([1]);
+    await outbox.retryLater([1], 9_000);
+    expect(await outbox.due(EV, 1, 10)).toEqual([]);
+    await outbox.retryNow(EV);
+    expect((await outbox.due(EV, 1, 10)).map((i) => i.seq)).toEqual([1]);
+  });
+
   it('late retryLater or settle cannot resurrect a blocked item', async () => {
     const { outbox } = await setup();
     await outbox.recordAdmission(input(T1));

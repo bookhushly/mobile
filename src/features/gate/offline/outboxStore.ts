@@ -160,6 +160,11 @@ export function createOutboxStore(db: Sql, deps: { newDeviceId: () => string }) 
       );
     },
 
+    // "Sync now" before sign-out: the person is waiting, so don't honour the backoff.
+    retryNow: async (eventId: string): Promise<void> => {
+      await db.run("UPDATE outbox SET next_try_at = 0 WHERE event_id = ? AND state = 'pending'", [eventId]);
+    },
+
     // A crash mid-send leaves items "sending"; the batch endpoint is idempotent on client_seq.
     resetSending: async (): Promise<void> => {
       await db.run("UPDATE outbox SET state = 'pending' WHERE state = 'sending'");

@@ -97,6 +97,20 @@ describe('roster store', () => {
     });
   });
 
+  it('a rejected outbox row still means this phone admitted the ticket: it survives a full swap', async () => {
+    const { db, store } = await setup();
+    await fullSync(store, [row(1), row(2)]);
+    await db.run(
+      "INSERT INTO outbox (event_id, ticket_id, code, scanned_at, mode, app_version, state) VALUES (?, ?, ?, ?, 'offline', '1', 'rejected')",
+      [EV, row(2).id, row(2).id, '2026-10-07T18:01:00.000Z'],
+    );
+    await fullSync(store, [row(1), row(2)], MARK2);
+    expect(await store.ticket(EV, row(2).id)).toMatchObject({
+      checkedInAt: '2026-10-07T18:01:00.000Z',
+      byMe: true,
+    });
+  });
+
   it('a delta merges server admissions but never erases a local one', async () => {
     const { store } = await setup();
     await fullSync(store, [row(1), row(2)]);

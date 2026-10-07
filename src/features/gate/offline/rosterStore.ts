@@ -65,12 +65,13 @@ const DELTA_MERGE = `ON CONFLICT (event_id, id) DO UPDATE SET
   seat = excluded.seat`;
 
 // After a full swap, admissions this phone made (and may not have synced before the snapshot)
-// are put back so a second presentation is still "already used".
+// are put back so a second presentation is still "already used". Every outbox state counts —
+// even a rejected or blocked item means this phone physically let the person in (spec §4 rule 11).
 const REAPPLY_OUTBOX = `UPDATE roster_ticket
   SET checked_in_at = o.scanned_at, by_me = 1, scanned_by = NULL
   FROM (
     SELECT ticket_id, MIN(scanned_at) AS scanned_at FROM outbox
-    WHERE event_id = ? AND state IN ('pending', 'sending', 'synced')
+    WHERE event_id = ?
     GROUP BY ticket_id
   ) AS o
   WHERE roster_ticket.event_id = ? AND roster_ticket.id = o.ticket_id
