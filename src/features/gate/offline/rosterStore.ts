@@ -1,4 +1,5 @@
 import type { TicketKey } from '@/features/gate/domain/bh2';
+import type { LookupQuery } from '@/features/gate/domain/lookupQuery';
 import type { RosterTicket } from '@/features/gate/domain/offlineDecide';
 import type { Sql, SqlValue } from '@/shared/db/sql';
 import { parseIsoMs } from '@/shared/lib/isoTime';
@@ -30,7 +31,9 @@ export type RosterMeta = {
   syncedAt: number | null;
   fullAt: number | null;
   endsAt: number | null;
+  override: unknown;
 };
+export type GuestRow = RosterTicket & { holderName: string | null; phoneMasked: string | null };
 
 const COLS = [
   'event_id',
@@ -119,6 +122,7 @@ type MetaSqlRow = {
   synced_at: number | null;
   full_at: number | null;
   ends_at: number | null;
+  override: string | null;
 };
 
 const toTicket = (r: TicketSqlRow): RosterTicket => ({
@@ -151,6 +155,15 @@ function parseKeys(text: string): TicketKey[] {
   }
 }
 
+const parseJson = (text: string | null): unknown => {
+  if (text === null) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+};
+
 const toMeta = (r: MetaSqlRow): RosterMeta => ({
   eventId: r.event_id,
   title: r.title,
@@ -166,6 +179,7 @@ const toMeta = (r: MetaSqlRow): RosterMeta => ({
   syncedAt: r.synced_at,
   fullAt: r.full_at,
   endsAt: r.ends_at,
+  override: parseJson(r.override),
 });
 
 const values = (eventId: string, r: RosterRow): SqlValue[] => [
@@ -196,6 +210,18 @@ async function insertRows(t: Sql, head: string, tail: string, eventId: string, r
 const TICKET_SELECT =
   'SELECT id, ticket_type, ticket_index, booking_id, booking_status, checked_in_at, scanned_by, by_me FROM roster_ticket';
 
+type GuestSqlRow = TicketSqlRow & { holder_name: string | null; phone_masked: string | null };
+const toGuest = (r: GuestSqlRow): GuestRow => ({
+  ...toTicket(r),
+  holderName: r.holder_name,
+  phoneMasked: r.phone_masked,
+});
+const GUEST_SELECT =
+  'SELECT id, ticket_type, ticket_index, booking_id, booking_status, checked_in_at, scanned_by, by_me, holder_name, phone_masked FROM roster_ticket';
+const SEARCH_LIMIT = 50;
+// LIKE wildcards in what staff type must match literally.
+const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
+
 export async function readTicket(
   db: Sql,
   eventId: string,
@@ -221,6 +247,7 @@ export function createRosterStore(db: Sql) {
       mark: string,
       info: RosterEventInfo,
       keys: TicketKey[] | null,
+      override?: unknown,
     ): Promise<void> =>
       db.tx(async (t) => {
         await t.run(
@@ -243,6 +270,13 @@ export function createRosterStore(db: Sql) {
         if (keys !== null) {
           await t.run('UPDATE roster_meta SET keys = ? WHERE event_id = ?', [
             JSON.stringify(keys),
+            eventId,
+          ]);
+        }
+        // undefined: this page didn't say (keep); null: the organiser removed the PIN (clear).
+        if (override !== undefined) {
+          await t.run('UPDATE roster_meta SET override = ? WHERE event_id = ?', [
+            override === null ? null : JSON.stringify(override),
             eventId,
           ]);
         }
@@ -290,6 +324,32 @@ export function createRosterStore(db: Sql) {
       }),
 
     ticket: (eventId: string, id: string) => readTicket(db, eventId, id),
+
+    search: async (eventId: string, q: LookupQuery): Promise<GuestRow[]> => {
+      // NFC so a decomposed keyboard input matches precomposed roster names.
+      const v = likeEscape(q.kind === 'name' ? q.value.normalize('NFC') : q.value);
+      const [where, param] =
+        q.kind === 'name'
+          ? ["holder_name LIKE ? ESCAPE '\\' COLLATE NOCASE", `%${v}%`]
+          : q.kind === 'phoneTail'
+            ? ["phone_masked LIKE ? ESCAPE '\\'", `%${v}`]
+            : ["phone_masked LIKE ? ESCAPE '\\'", `${v}%`];
+      return (
+        await db.all<GuestSqlRow>(
+          `${GUEST_SELECT} WHERE event_id = ? AND ${where}
+           ORDER BY checked_in_at IS NOT NULL, holder_name, booking_id, ticket_index LIMIT ?`,
+          [eventId, param, SEARCH_LIMIT],
+        )
+      ).map(toGuest);
+    },
+
+    bookingTickets: async (eventId: string, bookingId: string): Promise<GuestRow[]> =>
+      (
+        await db.all<GuestSqlRow>(`${GUEST_SELECT} WHERE event_id = ? AND booking_id = ? ORDER BY ticket_index`, [
+          eventId,
+          bookingId,
+        ])
+      ).map(toGuest),
 
     hasBooking: async (eventId: string, bookingId: string): Promise<boolean> =>
       (await db.get<{ one: number }>(

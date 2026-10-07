@@ -53,4 +53,10 @@ export const MIGRATIONS: readonly string[] = [
   CREATE INDEX outbox_event_state ON outbox (event_id, state, client_seq);
   CREATE TABLE device (k TEXT PRIMARY KEY, v TEXT NOT NULL);
   `,
+  // 2b: the supervisor-override verifier (first roster page), and reason / approver on outbox items.
+  `
+  ALTER TABLE roster_meta ADD COLUMN override TEXT;
+  ALTER TABLE outbox ADD COLUMN reason TEXT;
+  ALTER TABLE outbox ADD COLUMN approved_by TEXT;
+  `,
 ];
