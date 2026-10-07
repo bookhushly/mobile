@@ -76,6 +76,23 @@ const REAPPLY_OUTBOX = `UPDATE roster_ticket
   WHERE roster_ticket.event_id = ? AND roster_ticket.id = o.ticket_id
     AND roster_ticket.checked_in_at IS NULL`;
 
+// A stale or out-of-order call must never write into, or swap, a sync of another kind.
+async function assertSyncKind(t: Sql, eventId: string, kind: SyncKind): Promise<void> {
+  const m = await t.get<{ sync_kind: string | null }>(
+    'SELECT sync_kind FROM roster_meta WHERE event_id = ?',
+    [eventId],
+  );
+  if (m?.sync_kind !== kind) throw new Error('roster sync kind mismatch');
+}
+
+// Admissions made on this phone while a full download was in flight (online scans are not in the
+// outbox) exist only in the live list; carry them into the staged copy before it replaces the list.
+const CARRY_ADMISSIONS = `UPDATE roster_staging
+  SET checked_in_at = l.checked_in_at, scanned_by = l.scanned_by, by_me = l.by_me
+  FROM roster_ticket AS l
+  WHERE roster_staging.event_id = ? AND l.event_id = ? AND l.id = roster_staging.id
+    AND roster_staging.checked_in_at IS NULL AND l.checked_in_at IS NOT NULL`;
+
 type TicketSqlRow = {
   id: string;
   ticket_type: string | null;
@@ -178,8 +195,15 @@ async function insertRows(t: Sql, head: string, tail: string, eventId: string, r
 const TICKET_SELECT =
   'SELECT id, ticket_type, ticket_index, booking_id, booking_status, checked_in_at, scanned_by, by_me FROM roster_ticket';
 
-export async function readTicket(db: Sql, eventId: string, id: string): Promise<RosterTicket | null> {
-  const r = await db.get<TicketSqlRow>(`${TICKET_SELECT} WHERE event_id = ? AND id = ?`, [eventId, id]);
+export async function readTicket(
+  db: Sql,
+  eventId: string,
+  id: string,
+): Promise<RosterTicket | null> {
+  const r = await db.get<TicketSqlRow>(`${TICKET_SELECT} WHERE event_id = ? AND id = ?`, [
+    eventId,
+    id,
+  ]);
   return r === null ? null : toTicket(r);
 }
 
@@ -198,36 +222,53 @@ export function createRosterStore(db: Sql) {
       keys: TicketKey[] | null,
     ): Promise<void> =>
       db.tx(async (t) => {
-        await t.run('INSERT INTO roster_meta (event_id) VALUES (?) ON CONFLICT (event_id) DO NOTHING', [
-          eventId,
-        ]);
+        await t.run(
+          'INSERT INTO roster_meta (event_id) VALUES (?) ON CONFLICT (event_id) DO NOTHING',
+          [eventId],
+        );
         await t.run(
           `UPDATE roster_meta SET sync_kind = ?, cursor = NULL, pending_mark = ?, title = ?,
              event_date = ?, require_dynamic = ?, total = ? WHERE event_id = ?`,
-          [kind, mark, info.title, info.eventDate, info.requireDynamic ? 1 : 0, info.total, eventId],
+          [
+            kind,
+            mark,
+            info.title,
+            info.eventDate,
+            info.requireDynamic ? 1 : 0,
+            info.total,
+            eventId,
+          ],
         );
         if (keys !== null) {
-          await t.run('UPDATE roster_meta SET keys = ? WHERE event_id = ?', [JSON.stringify(keys), eventId]);
+          await t.run('UPDATE roster_meta SET keys = ? WHERE event_id = ?', [
+            JSON.stringify(keys),
+            eventId,
+          ]);
         }
-        if (kind === 'full') await t.run('DELETE FROM roster_staging WHERE event_id = ?', [eventId]);
+        if (kind === 'full')
+          await t.run('DELETE FROM roster_staging WHERE event_id = ?', [eventId]);
       }),
 
     // The page and its cursor commit together, so a resumed sync never skips or repeats a page.
     writePage: (eventId: string, kind: SyncKind, rows: RosterRow[], nextCursor: string | null) =>
       db.tx(async (t) => {
-        if (kind === 'full') await insertRows(t, 'INSERT OR REPLACE INTO roster_staging', '', eventId, rows);
+        await assertSyncKind(t, eventId, kind);
+        if (kind === 'full')
+          await insertRows(t, 'INSERT OR REPLACE INTO roster_staging', '', eventId, rows);
         else await insertRows(t, 'INSERT INTO roster_ticket', DELTA_MERGE, eventId, rows);
         await t.run('UPDATE roster_meta SET cursor = ? WHERE event_id = ?', [nextCursor, eventId]);
       }),
 
     finishSync: (eventId: string, kind: SyncKind): Promise<void> =>
       db.tx(async (t) => {
+        await assertSyncKind(t, eventId, kind);
         const m = await t.get<{ pending_mark: string | null }>(
           'SELECT pending_mark FROM roster_meta WHERE event_id = ?',
           [eventId],
         );
         const at = parseIsoMs(m?.pending_mark);
         if (kind === 'full') {
+          await t.run(CARRY_ADMISSIONS, [eventId, eventId]);
           await t.run('DELETE FROM roster_ticket WHERE event_id = ?', [eventId]);
           await t.run(
             `INSERT INTO roster_ticket (${COL_LIST}) SELECT ${COL_LIST} FROM roster_staging WHERE event_id = ?`,
@@ -235,7 +276,10 @@ export function createRosterStore(db: Sql) {
           );
           await t.run('DELETE FROM roster_staging WHERE event_id = ?', [eventId]);
           await t.run(REAPPLY_OUTBOX, [eventId, eventId]);
-          await t.run('UPDATE roster_meta SET ready = 1, full_at = ? WHERE event_id = ?', [at, eventId]);
+          await t.run('UPDATE roster_meta SET ready = 1, full_at = ? WHERE event_id = ?', [
+            at,
+            eventId,
+          ]);
         }
         await t.run(
           `UPDATE roster_meta SET since_mark = pending_mark, synced_at = ?, sync_kind = NULL,
@@ -282,7 +326,10 @@ export function createRosterStore(db: Sql) {
     },
 
     setKeys: async (eventId: string, keys: TicketKey[]): Promise<void> => {
-      await db.run('UPDATE roster_meta SET keys = ? WHERE event_id = ?', [JSON.stringify(keys), eventId]);
+      await db.run('UPDATE roster_meta SET keys = ? WHERE event_id = ?', [
+        JSON.stringify(keys),
+        eventId,
+      ]);
     },
 
     setEndsAt: async (eventId: string, endsAt: number): Promise<void> => {

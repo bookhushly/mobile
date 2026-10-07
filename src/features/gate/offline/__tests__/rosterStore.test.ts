@@ -29,7 +29,11 @@ async function setup() {
   return { db, store: createRosterStore(db) };
 }
 
-async function fullSync(store: ReturnType<typeof createRosterStore>, rows: RosterRow[], mark = MARK1) {
+async function fullSync(
+  store: ReturnType<typeof createRosterStore>,
+  rows: RosterRow[],
+  mark = MARK1,
+) {
   await store.beginSync(EV, 'full', mark, INFO, KEYS);
   await store.writePage(EV, 'full', rows, null);
   await store.finishSync(EV, 'full');
@@ -41,7 +45,11 @@ describe('roster store', () => {
     await store.beginSync(EV, 'full', MARK1, INFO, KEYS);
     await store.writePage(EV, 'full', [row(1), row(2)], 'cursor-2');
     expect(await store.ticket(EV, row(1).id)).toBeNull();
-    expect(await store.meta(EV)).toMatchObject({ ready: false, syncKind: 'full', cursor: 'cursor-2' });
+    expect(await store.meta(EV)).toMatchObject({
+      ready: false,
+      syncKind: 'full',
+      cursor: 'cursor-2',
+    });
     await store.writePage(EV, 'full', [row(3)], null);
     await store.finishSync(EV, 'full');
     const m = await store.meta(EV);
@@ -97,11 +105,18 @@ describe('roster store', () => {
     await store.writePage(
       EV,
       'delta',
-      [row(1), row(2, { checkedInAt: '2026-10-07T18:02:00.000Z', scannedBy: 'Ada', byMe: false }), row(3)],
+      [
+        row(1),
+        row(2, { checkedInAt: '2026-10-07T18:02:00.000Z', scannedBy: 'Ada', byMe: false }),
+        row(3),
+      ],
       null,
     );
     await store.finishSync(EV, 'delta');
-    expect(await store.ticket(EV, row(1).id)).toMatchObject({ checkedInAt: '2026-10-07T18:01:00.000Z', byMe: true });
+    expect(await store.ticket(EV, row(1).id)).toMatchObject({
+      checkedInAt: '2026-10-07T18:01:00.000Z',
+      byMe: true,
+    });
     expect(await store.ticket(EV, row(2).id)).toMatchObject({ scannedBy: 'Ada', byMe: false });
     expect(await store.ticket(EV, row(3).id)).not.toBeNull();
     expect(await store.meta(EV)).toMatchObject({ sinceMark: MARK2, keys: KEYS });
@@ -112,7 +127,9 @@ describe('roster store', () => {
     await fullSync(store, [row(1)]);
     await store.markCheckedIn(EV, row(1).id, '2026-10-07T18:01:00.000Z', true, null);
     await store.markCheckedIn(EV, row(1).id, '2026-10-07T18:09:00.000Z', false, 'Ada');
-    expect(await store.ticket(EV, row(1).id)).toMatchObject({ checkedInAt: '2026-10-07T18:01:00.000Z' });
+    expect(await store.ticket(EV, row(1).id)).toMatchObject({
+      checkedInAt: '2026-10-07T18:01:00.000Z',
+    });
   });
 
   it('booking lookups and progress', async () => {
@@ -136,7 +153,39 @@ describe('roster store', () => {
 
   it('stores only the fields the endpoint returns (no email column exists)', async () => {
     const { db } = await setup();
-    const cols = await db.all<{ name: string }>("SELECT name FROM pragma_table_info('roster_ticket')");
+    const cols = await db.all<{ name: string }>(
+      "SELECT name FROM pragma_table_info('roster_ticket')",
+    );
     expect(cols.map((c) => c.name).filter((n) => /mail|phone/.test(n))).toEqual(['phone_masked']);
+  });
+
+  it('a full swap keeps an online admission made while the download was in flight', async () => {
+    const { store } = await setup();
+    await fullSync(store, [row(1)]);
+    await store.markCheckedIn(EV, row(1).id, '2026-10-07T18:01:00.000Z', true, null);
+    await fullSync(store, [row(1)], MARK2);
+    expect(await store.ticket(EV, row(1).id)).toMatchObject({
+      checkedInAt: '2026-10-07T18:01:00.000Z',
+      byMe: true,
+    });
+  });
+
+  it('finishing a different kind of sync than the one begun is refused and changes nothing', async () => {
+    const { store } = await setup();
+    await fullSync(store, [row(1)]);
+    await store.beginSync(EV, 'delta', MARK2, INFO, null);
+    await expect(store.finishSync(EV, 'full')).rejects.toThrow();
+    await expect(store.writePage(EV, 'full', [row(2)], null)).rejects.toThrow();
+    expect(await store.ticket(EV, row(1).id)).not.toBeNull();
+    expect(await store.counts(EV)).toEqual({ admitted: 0, total: 1 });
+  });
+
+  it('a full sync resumes after a restart without a new beginSync', async () => {
+    const { store } = await setup();
+    await store.beginSync(EV, 'full', MARK1, INFO, KEYS);
+    await store.writePage(EV, 'full', [row(1)], 'c1');
+    await store.writePage(EV, 'full', [row(2)], null);
+    await store.finishSync(EV, 'full');
+    expect(await store.counts(EV)).toEqual({ admitted: 0, total: 2 });
   });
 });
