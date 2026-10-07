@@ -44,10 +44,11 @@ export type AdmissionInput = {
   mode?: OutboxMode;
   approval?: Approval;
 };
+// No `code`: an override always syncs the ticket UUID (the server skips the liveness proof for
+// offline_override), so a scanned BH2 code can't expire on the server before the sync.
 export type OverrideInput = {
   eventId: string;
   ticketId: string;
-  code: string;
   scannedAt: string;
   appVersion: string;
   approval: { approvedBy: string; reason: string };
@@ -171,9 +172,24 @@ export function createOutboxStore(db: Sql, deps: { newDeviceId: () => string }) 
           );
           if (dup !== null) return { recorded: false, ticket: null };
         }
-        const seq = await insertItem(t, { ...input, kid: null, mode: 'offline_override', approval: input.approval });
+        const seq = await insertItem(t, {
+          ...input,
+          code: input.ticketId,
+          kid: null,
+          mode: 'offline_override',
+          approval: input.approval,
+        });
         return { recorded: true, seq };
       }),
+
+    // Whether this phone has recorded an admission of the ticket (any state: it let the person in).
+    hasTicket: async (eventId: string, ticketId: string): Promise<{ scannedAt: string } | null> => {
+      const r = await db.get<{ scanned_at: string }>(
+        'SELECT MIN(scanned_at) AS scanned_at FROM outbox WHERE event_id = ? AND ticket_id = ? HAVING COUNT(*) > 0',
+        [eventId, ticketId],
+      );
+      return r === null ? null : { scannedAt: r.scanned_at };
+    },
 
     deviceId: (): Promise<string> =>
       db.tx(async (t) => {

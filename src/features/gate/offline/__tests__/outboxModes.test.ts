@@ -32,19 +32,19 @@ describe('outbox modes', () => {
   });
   it('an override for an unlisted ticket writes only the outbox, once', async () => {
     const { outbox } = await setup();
-    expect(await outbox.recordOverride({ ...base, ticketId: OUT, code: OUT, approval })).toEqual({ recorded: true, seq: 1 });
-    expect(await outbox.recordOverride({ ...base, ticketId: OUT, code: `BH2.x`, approval })).toMatchObject({ recorded: false });
+    expect(await outbox.recordOverride({ ...base, ticketId: OUT, approval })).toEqual({ recorded: true, seq: 1 });
+    expect(await outbox.recordOverride({ ...base, ticketId: OUT, approval })).toMatchObject({ recorded: false });
     expect(await outbox.due(EV, 0, 10)).toEqual([expect.objectContaining({ mode: 'offline_override', reason: 'Bought at the door', approvedBy: 'Tunde' })]);
   });
   it('an override for a ticket the list now has behaves like an admission', async () => {
     const { roster, outbox } = await setup();
-    expect(await outbox.recordOverride({ ...base, ticketId: IN, code: IN, approval })).toMatchObject({ recorded: true });
+    expect(await outbox.recordOverride({ ...base, ticketId: IN, approval })).toMatchObject({ recorded: true });
     expect(await roster.ticket(EV, IN)).toMatchObject({ byMe: true });
-    expect(await outbox.recordOverride({ ...base, ticketId: IN, code: IN, approval })).toMatchObject({ recorded: false, ticket: { id: IN } });
+    expect(await outbox.recordOverride({ ...base, ticketId: IN, approval })).toMatchObject({ recorded: false, ticket: { id: IN } });
   });
   it('lists by tab, newest first, with paging, and exports rows', async () => {
     const { outbox } = await setup();
-    await outbox.recordOverride({ ...base, ticketId: OUT, code: OUT, approval });
+    await outbox.recordOverride({ ...base, ticketId: OUT, approval });
     await outbox.recordAdmission({ ...base, ticketId: IN, code: IN, kid: null });
     expect((await outbox.list(EV, 'toSync', null, 10)).map((i) => i.seq)).toEqual([2, 1]);
     expect((await outbox.list(EV, 'toSync', 2, 10)).map((i) => i.seq)).toEqual([1]);

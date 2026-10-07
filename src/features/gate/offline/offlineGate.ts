@@ -30,6 +30,8 @@ export type OfflineGateDeps = {
   appVersion: string;
   onKeysOutdated: () => void;
   onAdmitted: () => void;
+  /** Told about storage failures the gate handles itself (an unreadable lock), for diagnostics. */
+  report?: (e: unknown) => void;
 };
 
 export function createOfflineGate(deps: OfflineGateDeps) {
@@ -53,6 +55,12 @@ export function createOfflineGate(deps: OfflineGateDeps) {
       listUpdatedAt: meta.syncedAt ?? 0,
     });
     if (d.kind === 'outcome') {
+      // An override this phone already approved for an unlisted ticket: a second presentation is
+      // "already used", not "not in offline list" (a BH2 code reaches here only with a valid signature).
+      if (d.outcome.kind === 'refused' && d.outcome.reason === 'notInList' && id !== null) {
+        const mine = await deps.outbox.hasTicket(eventId, id);
+        if (mine !== null) return usedOutcome(null, mine.scannedAt);
+      }
       if (d.outcome.kind === 'couldntCheck' && d.outcome.cause === 'keysOutdated') {
         try {
           deps.onKeysOutdated();
@@ -123,10 +131,18 @@ export function createOfflineGate(deps: OfflineGateDeps) {
   let pinChain: Promise<unknown> = Promise.resolve();
   const GRANT_MS = 60_000;
 
-  function consumeGrant(): void {
+  // Taken (and cleared) at the start of every admission attempt, so a refusal or an error can never
+  // leave a grant behind for another ticket.
+  function takeGrant(): number | null {
     const at = grant;
     grant = null;
-    if (at === null || deps.serverNow() - at > GRANT_MS) throw new Error('approval required');
+    return at;
+  }
+
+  function requireFreshGrant(at: number | null): void {
+    // A negative age means the server clock moved back since the PIN: not trusted.
+    const age = at === null ? Number.NaN : deps.serverNow() - at;
+    if (!(age >= 0 && age <= GRANT_MS)) throw new Error('approval required');
   }
 
   const len = (v: string) => v.trim().length;
@@ -140,6 +156,7 @@ export function createOfflineGate(deps: OfflineGateDeps) {
   }
 
   async function admitFromLookup(ticketId: string, approval: Approval | null): Promise<ScanOutcome> {
+    const granted = takeGrant();
     if (approval !== null) validateApproval(approval, false);
     const meta = await deps.roster.meta(eventId);
     if (meta === null || !meta.ready) return { kind: 'couldntCheck', cause: 'noOfflineList' };
@@ -151,7 +168,7 @@ export function createOfflineGate(deps: OfflineGateDeps) {
     const nowMs = deps.serverNow();
     const scannedAt = new Date(nowMs).toISOString();
     if (ticket.checkedInAt !== null) return usedOutcome(ticket, scannedAt);
-    if (meta.requireDynamic) consumeGrant();
+    if (meta.requireDynamic) requireFreshGrant(granted);
     const rec = await deps.outbox.recordAdmission({
       eventId,
       ticketId,
@@ -167,6 +184,7 @@ export function createOfflineGate(deps: OfflineGateDeps) {
   }
 
   async function override(code: TicketCode, approval: { approvedBy: string; reason: string }): Promise<ScanOutcome> {
+    const granted = takeGrant();
     validateApproval(approval, true);
     const ticketId = ticketIdOf(code);
     if (ticketId === null) return { kind: 'refused', reason: 'invalid', fixable: false };
@@ -176,12 +194,13 @@ export function createOfflineGate(deps: OfflineGateDeps) {
     if (listed !== null && listed.bookingStatus !== 'confirmed') {
       return { kind: 'refused', reason: 'notConfirmed', fixable: false };
     }
-    consumeGrant();
+    requireFreshGrant(granted);
     const scannedAt = new Date(deps.serverNow()).toISOString();
+    // The store syncs the ticket UUID, not the scanned code: a BH2 code would expire on the server
+    // before a late sync, and its signature was already checked before "Not in offline list".
     const rec = await deps.outbox.recordOverride({
       eventId,
       ticketId,
-      code,
       scannedAt,
       appVersion: deps.appVersion,
       approval,
@@ -203,6 +222,14 @@ export function createOfflineGate(deps: OfflineGateDeps) {
     return meta === null ? null : parseVerifier(meta.override);
   }
 
+  const reportLock = (e: unknown): void => {
+    try {
+      deps.report?.(e);
+    } catch {
+      // Reporting must never change the answer.
+    }
+  };
+
   async function availability(): Promise<OverrideAvailability> {
     try {
       if ((await verifier()) === null) return { kind: 'none' };
@@ -211,7 +238,8 @@ export function createOfflineGate(deps: OfflineGateDeps) {
     }
     try {
       return lockState(await deps.device.lock(), deps.serverNow());
-    } catch {
+    } catch (e) {
+      reportLock(e);
       return UNREADABLE_LOCK;
     }
   }
@@ -223,7 +251,8 @@ export function createOfflineGate(deps: OfflineGateDeps) {
     let rec: LockRecord;
     try {
       rec = await deps.device.lock();
-    } catch {
+    } catch (e) {
+      reportLock(e);
       return UNREADABLE_LOCK;
     }
     const st = lockState(rec, now);

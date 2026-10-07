@@ -79,6 +79,7 @@ export function createOfflineController(deps: ControllerDeps) {
           serverNow: deps.serverNow,
           clockState: deps.clockState,
           appVersion: deps.appVersion,
+          report: deps.report,
           onKeysOutdated: () => {
             keysOutdated();
           },

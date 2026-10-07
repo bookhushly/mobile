@@ -49,7 +49,7 @@ describe('syncOutbox', () => {
   it('posts the override mode, reason and approver, and omits them for a plain item', async () => {
     const { store, sent, deps } = await setup(1);
     await store.recordOverride({
-      eventId: EV, ticketId: id(9), code: id(9), scannedAt: '2026-10-07T18:00:00.000Z', appVersion: '1',
+      eventId: EV, ticketId: id(9), scannedAt: '2026-10-07T18:00:00.000Z', appVersion: '1',
       approval: { approvedBy: 'Tunde', reason: 'Bought at the door' },
     });
     await syncOutbox(deps(echo()));
