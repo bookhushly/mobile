@@ -3,6 +3,8 @@ import { Platform } from 'react-native';
 
 import { env } from '@/shared/config/env';
 import { createClock } from '@/shared/lib/clock';
+import { createClockGuard } from '@/shared/lib/clockGuard';
+import { createConnectivity } from '@/shared/lib/connectivity';
 import { plainKv } from '@/shared/platform/storage';
 import { supabase } from '@/shared/supabase/client';
 
@@ -10,6 +12,15 @@ import { createApiClient } from './client';
 
 export const clock = createClock({ storage: plainKv, now: () => Date.now() });
 void clock.load();
+
+export const connectivity = createConnectivity();
+
+export const clockGuard = createClockGuard({
+  wallNow: () => Date.now(),
+  monoNow: () => performance.now(),
+  serverNow: () => clock.serverNow(),
+  lastContactMs: () => clock.lastContactMs(),
+});
 
 const version = Application.nativeApplicationVersion ?? '0.0.0';
 const build = Application.nativeBuildVersion ?? '0';
@@ -30,6 +41,10 @@ export const api = createApiClient({
   clock,
   appVersion: `${version} (${build})`,
   platform: Platform.OS,
+  onReach: (reached) => {
+    if (reached) connectivity.reached();
+    else connectivity.unreachable();
+  },
 });
 
 export const APP_VERSION = version;

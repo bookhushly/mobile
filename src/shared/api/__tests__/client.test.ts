@@ -240,3 +240,31 @@ it('a clock that throws never turns a response into a network error', async () =
   const r = await client.request('/api/x', { schema: z.object({ ok: z.boolean() }) });
   expect(r.ok).toBe(true);
 });
+
+describe('reach reporting', () => {
+  it.each([
+    [200, true],
+    [404, true],
+    [429, true],
+    [503, false],
+  ])('status %i reports reached=%s', async (status, reached) => {
+    const onReach = jest.fn();
+    const { client } = make([res(status, { ok: true })], { onReach, maxRetries: 0 });
+    await client.request('/x', { schema });
+    expect(onReach).toHaveBeenCalledWith(reached);
+  });
+  it('a network error reports unreached', async () => {
+    const onReach = jest.fn();
+    const { client } = make([new TypeError('Network request failed')], { onReach });
+    await client.request('/x', { method: 'POST', schema });
+    expect(onReach).toHaveBeenCalledWith(false);
+  });
+  it('a caller abort reports nothing', async () => {
+    const onReach = jest.fn();
+    const controller = new AbortController();
+    controller.abort();
+    const { client } = make([], { onReach });
+    await client.request('/x', { schema, signal: controller.signal });
+    expect(onReach).not.toHaveBeenCalled();
+  });
+});

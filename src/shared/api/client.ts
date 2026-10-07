@@ -29,6 +29,7 @@ type Deps = {
   maxRetries?: number;
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
+  onReach?: (reached: boolean) => void;
 };
 
 export function createApiClient(deps: Deps) {
@@ -43,6 +44,15 @@ export function createApiClient(deps: Deps) {
       deps.clock.recordServerDate(res.headers.get('date'));
     } catch {
       // Keep the previous offset.
+    }
+  }
+
+  // Never fatal: connectivity tracking must not change a request's result.
+  function reach(reached: boolean) {
+    try {
+      deps.onReach?.(reached);
+    } catch {
+      // Ignore.
     }
   }
 
@@ -74,9 +84,11 @@ export function createApiClient(deps: Deps) {
       if (body !== undefined) init.body = JSON.stringify(body);
       const res = await deps.fetchFn(`${deps.baseUrl}${path}`, init);
       recordDate(res);
+      reach(res.status < 500);
       return ok(res);
     } catch (e) {
       if (outerSignal?.aborted) return err({ kind: 'aborted' });
+      reach(false);
       const aborted = e instanceof Error && e.name === 'AbortError';
       return err(aborted ? { kind: 'timeout' } : { kind: 'network' });
     } finally {
