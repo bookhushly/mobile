@@ -1,12 +1,13 @@
 import { useKeepAwake } from 'expo-keep-awake';
 import { Flashlight, Keyboard, ListChecks, UserSearch, Volume2, VolumeX } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ActivityRow } from '@/features/gate/domain/activityCsv';
 import type { LookupQuery } from '@/features/gate/domain/lookupQuery';
 import type { ScanOutcome } from '@/features/gate/domain/outcome';
+import type { TicketCode } from '@/features/gate/domain/parseTicketCode';
 import type { OverlayView, ScanSession } from '@/features/gate/domain/scanSession';
 import type { PinCheck } from '@/features/gate/offline/offlineGate';
 import type { ActivityTab, Approval, AttentionItem } from '@/features/gate/offline/outboxStore';
@@ -18,6 +19,7 @@ import { ActivityScreen } from '@/features/gate/ui/ActivityScreen';
 import { EnterCodeSheet } from '@/features/gate/ui/EnterCodeSheet';
 import { FindGuestSheet } from '@/features/gate/ui/FindGuestSheet';
 import { OutcomeOverlay } from '@/features/gate/ui/OutcomeOverlay';
+import { PinSheet } from '@/features/gate/ui/PinSheet';
 import { RecentSheet } from '@/features/gate/ui/RecentSheet';
 import { ScannerCamera, type CameraPermission } from '@/features/gate/ui/ScannerCamera';
 import { SyncBar } from '@/features/gate/ui/SyncBar';
@@ -52,6 +54,8 @@ type Props = {
   needsPinForLookup: () => Promise<boolean>;
   checkPin: (pin: string) => Promise<PinCheck>;
   admitFromLookup: (ticketId: string, approval: Approval | null) => Promise<ScanOutcome>;
+  /** Supervisor override of a "Not in offline list" code; needs a fresh checkPin grant. */
+  override: (code: TicketCode, approval: { approvedBy: string; reason: string }) => Promise<ScanOutcome>;
   /** Server-corrected now (clock.serverNow). */
   serverNow: () => number;
 };
@@ -134,7 +138,13 @@ function Control({
   );
 }
 
-type OverlayProps = Pick<Props, 'session' | 'onSignIn' | 'onLostAssignment' | 'serverNow'>;
+// One override at a time, tied to the overlay it was started from.
+type OverrideFlow = { id: number; code: TicketCode; phase: 'pin' | 'busy' | 'failed' };
+
+type OverlayProps = Pick<Props, 'session' | 'onSignIn' | 'onLostAssignment' | 'serverNow'> & {
+  overrideFlow: OverrideFlow | null;
+  onOverride: (id: number, code: TicketCode) => void;
+};
 
 const lostAssignment = (v: OverlayView) =>
   v.outcome.kind === 'refused' && v.outcome.reason === 'notAssigned';
@@ -143,6 +153,9 @@ const lostAssignment = (v: OverlayView) =>
 function OverlayFor(p: OverlayProps & { view: OverlayView }) {
   // Server-corrected: the outcome's times (checked in, list updated) are server times.
   const [nowMs] = useState(() => p.serverNow());
+  const overrideState = useSyncView((s) => s.status.override);
+  const flow = p.overrideFlow?.id === p.view.id ? p.overrideFlow : null;
+  const code = p.view.code;
   return (
     <OutcomeOverlay
       view={p.view}
@@ -154,6 +167,15 @@ function OverlayFor(p: OverlayProps & { view: OverlayView }) {
       }}
       onTryAgain={p.session.tryAgain}
       onSignIn={p.onSignIn}
+      overrideState={overrideState}
+      overrideStatus={flow === null || flow.phase === 'pin' ? null : flow.phase}
+      onOverride={
+        code === null
+          ? undefined
+          : (id) => {
+              p.onOverride(id, code);
+            }
+      }
     />
   );
 }
@@ -212,6 +234,9 @@ export function ScannerScreen(p: Props) {
   const [showRecent, setShowRecent] = useState(false);
   const [activityTab, setActivityTab] = useState<ActivityTab | null>(null);
   const [finding, setFinding] = useState(false);
+  const [overrideFlow, setOverrideFlow] = useState<OverrideFlow | null>(null);
+  // Set from approval until the override settles: a second approval or tap is ignored.
+  const overriding = useRef(false);
   // Stable so the memoised camera never re-renders for unrelated screen state (perf budget).
   const session = p.session;
   const onCode = useCallback(
@@ -220,6 +245,36 @@ export function ScannerScreen(p: Props) {
     },
     [session],
   );
+
+  const startOverride = (id: number, code: TicketCode) => {
+    if (overriding.current) return;
+    setOverrideFlow({ id, code, phase: 'pin' });
+  };
+  const settle = (id: number, phase: 'failed' | null) => {
+    setOverrideFlow((f) => (f?.id !== id ? f : phase === null ? null : { ...f, phase }));
+  };
+  async function runOverride(flow: OverrideFlow, approval: Approval) {
+    if (overriding.current) return;
+    overriding.current = true;
+    setOverrideFlow({ ...flow, phase: 'busy' });
+    let outcome: ScanOutcome;
+    try {
+      // The PIN sheet requires a reason for an override; a missing one is refused by the gate.
+      outcome = await p.override(flow.code, {
+        approvedBy: approval.approvedBy,
+        reason: approval.reason ?? '',
+      });
+    } catch {
+      overriding.current = false;
+      settle(flow.id, 'failed');
+      return;
+    }
+    overriding.current = false;
+    settle(flow.id, null);
+    // The override is recorded: its outcome replaces the refusal whatever happened meanwhile.
+    session.dismiss(flow.id);
+    session.show(outcome);
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: color.textPrimary }}>
@@ -271,7 +326,13 @@ export function ScannerScreen(p: Props) {
       <View style={{ flex: 1 }}>
         {p.permission === 'granted' && p.focused ? (
           <>
-            <ScannerCamera torch={torch} paused={entering || showRecent || activityTab !== null || finding} onCode={onCode} />
+            <ScannerCamera torch={torch} paused={
+                entering ||
+                showRecent ||
+                activityTab !== null ||
+                finding ||
+                overrideFlow?.phase === 'pin'
+              } onCode={onCode} />
             <Viewfinder />
           </>
         ) : null}
@@ -341,6 +402,8 @@ export function ScannerScreen(p: Props) {
         onSignIn={p.onSignIn}
         onLostAssignment={p.onLostAssignment}
         serverNow={p.serverNow}
+        overrideFlow={overrideFlow}
+        onOverride={startOverride}
       />
 
       <EnterCodeSheet
@@ -373,6 +436,17 @@ export function ScannerScreen(p: Props) {
         }}
         onClose={() => {
           setFinding(false);
+        }}
+      />
+      <PinSheet
+        visible={overrideFlow?.phase === 'pin'}
+        purpose="override"
+        check={p.checkPin}
+        onApproved={(approval) => {
+          if (overrideFlow !== null) void runOverride(overrideFlow, approval);
+        }}
+        onClose={() => {
+          setOverrideFlow((f) => (f?.phase === 'pin' ? null : f));
         }}
       />
       <ActivityScreen

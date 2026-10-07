@@ -248,3 +248,132 @@ it('an offline admission shows the will-sync tag', async () => {
   );
   expect(screen.getByText('Offline · will sync')).toBeTruthy();
 });
+
+describe('supervisor override', () => {
+  const CODE = 'BH2.abc' as NonNullable<OverlayView['code']>;
+  const notInList = { kind: 'refused', reason: 'notInList', fixable: false } as const;
+  const coded = (outcome: OverlayView['outcome']): OverlayView => ({
+    id: 7,
+    code: CODE,
+    outcome,
+    extraAdmitted: 0,
+  });
+  const OPEN = { kind: 'open', triesLeft: 5 } as const;
+
+  it('offers the action next to Done for notInList with a code when open', async () => {
+    const onOverride = jest.fn();
+    await render(
+      <OutcomeOverlay
+        view={coded(notInList)}
+        nowMs={NOW}
+        {...handlers}
+        overrideState={OPEN}
+        onOverride={onOverride}
+      />,
+    );
+    const action = screen.getByRole('button', { name: 'Supervisor override' });
+    expect(
+      StyleSheet.flatten(action.props.style as StyleProp<ViewStyle>).minHeight,
+    ).toBeGreaterThanOrEqual(44);
+    expect(insideAccessibleAncestor(action)).toBe(false);
+    expect(screen.getByRole('button', { name: 'Done' })).toBeTruthy();
+    await fireEvent.press(action);
+    expect(onOverride).toHaveBeenCalledWith(7);
+  });
+
+  it('shows the lock line and no action when locked', async () => {
+    await render(
+      <OutcomeOverlay
+        view={coded(notInList)}
+        nowMs={NOW}
+        {...handlers}
+        overrideState={{ kind: 'locked', minutesLeft: 12 }}
+        onOverride={jest.fn()}
+      />,
+    );
+    expect(screen.getByText('Override locked — try again in 12 min')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Supervisor override' })).toBeNull();
+  });
+
+  it.each([
+    ['none', { kind: 'none' } as const],
+    ['absent', undefined],
+  ])('shows nothing when availability is %s', async (_, state) => {
+    await render(
+      <OutcomeOverlay
+        view={coded(notInList)}
+        nowMs={NOW}
+        {...handlers}
+        overrideState={state}
+        onOverride={jest.fn()}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Supervisor override' })).toBeNull();
+    expect(screen.queryByText(/Override locked/)).toBeNull();
+  });
+
+  it.each([
+    ['another refusal', coded({ kind: 'refused', reason: 'notFound', fixable: false })],
+    [
+      'a used ticket',
+      coded({
+        kind: 'used',
+        checkedInAt: null,
+        scannedBy: { kind: 'unknown' },
+        ticketType: null,
+        replayed: false,
+      }),
+    ],
+    ['notInList without a code', { ...coded(notInList), code: null }],
+  ])('never offers it for %s', async (_, v) => {
+    await render(
+      <OutcomeOverlay
+        view={v}
+        nowMs={NOW}
+        {...handlers}
+        overrideState={OPEN}
+        onOverride={jest.fn()}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Supervisor override' })).toBeNull();
+  });
+
+  it('while an override is recording, the action and Done are locked', async () => {
+    const onOverride = jest.fn();
+    const onDismiss = jest.fn();
+    await render(
+      <OutcomeOverlay
+        view={coded(notInList)}
+        nowMs={NOW}
+        {...handlers}
+        onDismiss={onDismiss}
+        overrideState={OPEN}
+        overrideStatus="busy"
+        onOverride={onOverride}
+      />,
+    );
+    const action = screen.getByRole('button', { name: 'Overriding…' });
+    expect(action).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+    await fireEvent.press(action);
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+    expect(onOverride).not.toHaveBeenCalled();
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it('says the override failed and keeps the refusal with the action', async () => {
+    await render(
+      <OutcomeOverlay
+        view={coded(notInList)}
+        nowMs={NOW}
+        {...handlers}
+        overrideState={OPEN}
+        overrideStatus="failed"
+        onOverride={jest.fn()}
+      />,
+    );
+    expect(screen.getByText('Couldn’t override — try again')).toBeTruthy();
+    expect(screen.getByText('Refused')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Supervisor override' })).toBeEnabled();
+  });
+});

@@ -57,6 +57,15 @@ const LOOKUP_ADMITTED = {
   checkedInAt: null,
   via: 'lookup' as const,
 };
+const OVERRIDE_ADMITTED = {
+  kind: 'admitted' as const,
+  ticketType: null,
+  ticketIndex: null,
+  totalTickets: null,
+  checkedInCount: null,
+  checkedInAt: null,
+  via: 'override' as const,
+};
 const base = {
   title: 'Afro Night',
   summary: { admitted: 41, total: 120, recent: [] },
@@ -82,6 +91,7 @@ const base = {
   needsPinForLookup: jest.fn(() => Promise.resolve(false)),
   checkPin: jest.fn(() => Promise.resolve({ kind: 'ok' as const })),
   admitFromLookup: jest.fn(() => Promise.resolve(LOOKUP_ADMITTED)),
+  override: jest.fn(() => Promise.resolve(OVERRIDE_ADMITTED)),
   serverNow: () => Date.parse('2026-10-07T18:00:30Z'),
 };
 
@@ -278,4 +288,106 @@ it('the overlay words times against the server clock, not the phone clock', asyn
   await render(<ScannerScreen {...base} />);
   expect(screen.getByText(/just now/)).toBeTruthy();
   phone.mockRestore();
+});
+
+describe('supervisor override', () => {
+  const CODE = 'BH2.override-code' as NonNullable<OverlayView['code']>;
+  const notInList = () => {
+    useScanView.setState({
+      view: {
+        current: {
+          id: 9,
+          code: CODE,
+          outcome: { kind: 'refused', reason: 'notInList', fixable: false },
+          extraAdmitted: 0,
+        },
+        waiting: 0,
+        pending: 0,
+      },
+    });
+    useSyncView.setState({
+      status: { ...useSyncView.getState().status, override: { kind: 'open', triesLeft: 5 } },
+    });
+  };
+  const approve = async () => {
+    await fireEvent.press(screen.getByRole('button', { name: 'Supervisor override' }));
+    await fireEvent.changeText(await screen.findByLabelText('PIN'), '123456');
+    await fireEvent.changeText(screen.getByLabelText('Approver'), 'Bisi');
+    await fireEvent.changeText(screen.getByLabelText('Reason'), 'lost ticket');
+    await fireEvent.press(screen.getByRole('button', { name: 'Confirm' }));
+  };
+  afterEach(async () => {
+    await act(() => {
+      useSyncView.getState().reset();
+    });
+  });
+
+  it('approving in the PIN sheet overrides the overlay code, then shows the admission', async () => {
+    notInList();
+    await render(<ScannerScreen {...base} />);
+    await approve();
+    await waitFor(() => {
+      expect(session.show).toHaveBeenCalledWith(OVERRIDE_ADMITTED);
+    });
+    expect(base.checkPin).toHaveBeenCalledWith('123456');
+    expect(base.override).toHaveBeenCalledTimes(1);
+    expect(base.override).toHaveBeenCalledWith(CODE, { approvedBy: 'Bisi', reason: 'lost ticket' });
+    expect(session.dismiss).toHaveBeenCalledWith(9);
+    expect(session.dismiss.mock.invocationCallOrder[0]).toBeLessThan(
+      session.show.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it('pauses camera reads while the PIN sheet is open', async () => {
+    notInList();
+    await render(<ScannerScreen {...base} />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Supervisor override' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
+    expect(session.scan).not.toHaveBeenCalled();
+  });
+
+  it('a failed override says so, never admits, and can be tried again', async () => {
+    notInList();
+    base.override.mockImplementationOnce(() => Promise.reject(new Error('approval required')));
+    await render(<ScannerScreen {...base} />);
+    await approve();
+    expect(await screen.findByText('Couldn’t override — try again')).toBeTruthy();
+    expect(session.show).not.toHaveBeenCalled();
+    expect(session.dismiss).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Supervisor override' })).toBeEnabled();
+  });
+
+  it('locks the overlay while the override records: no second override, no Done', async () => {
+    notInList();
+    let resolve: (o: typeof OVERRIDE_ADMITTED) => void = () => undefined;
+    base.override.mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+    );
+    await render(<ScannerScreen {...base} />);
+    await approve();
+    const busy = await screen.findByRole('button', { name: 'Overriding…' });
+    await fireEvent.press(busy);
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+    expect(session.dismiss).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('PIN')).toBeNull();
+    await act(() => {
+      resolve(OVERRIDE_ADMITTED);
+    });
+    await waitFor(() => {
+      expect(session.show).toHaveBeenCalledTimes(1);
+    });
+    expect(base.override).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancelling the PIN sheet leaves the refusal as it was', async () => {
+    notInList();
+    await render(<ScannerScreen {...base} />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Supervisor override' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Cancel' }));
+    expect(base.override).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Supervisor override' })).toBeEnabled();
+  });
 });

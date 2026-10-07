@@ -5,6 +5,7 @@ import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 
 import type { OverlayView } from '@/features/gate/domain/scanSession';
 import { present, type Tone } from '@/features/gate/domain/present';
+import type { OverrideAvailability } from '@/features/gate/offline/offlineGate';
 import { color, density, radius, space } from '@/shared/theme';
 import { Text } from '@/shared/ui';
 
@@ -24,13 +25,30 @@ type Props = {
   onDismiss: (id: number) => void;
   onTryAgain: (id: number) => void;
   onSignIn: () => void;
+  /** Supervisor override, offered only on "Not in offline list" for a scanned code. */
+  onOverride?: (id: number) => void;
+  overrideState?: OverrideAvailability;
+  /** busy: an approved override is recording (the overlay is locked); failed: it did not. */
+  overrideStatus?: 'busy' | 'failed' | null;
 };
 
-function Action({ label, fg, onPress }: { label: string; fg: string; onPress: () => void }) {
+function Action({
+  label,
+  fg,
+  onPress,
+  disabled = false,
+}: {
+  label: string;
+  fg: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={{
         minHeight: density.gate.controlHeight,
@@ -52,13 +70,35 @@ function Action({ label, fg, onPress }: { label: string; fg: string; onPress: ()
 // Solid D9 fills, no entrance animation (MOTION.md: no Lottie on gate outcomes).
 // The full-bleed Pressable is not an accessibility element (iOS would collapse the buttons
 // into it); the alert lives on the inner, non-pressable result block.
-export function OutcomeOverlay({ view, nowMs, onDismiss, onTryAgain, onSignIn }: Props) {
+export function OutcomeOverlay({
+  view,
+  nowMs,
+  onDismiss,
+  onTryAgain,
+  onSignIn,
+  onOverride,
+  overrideState,
+  overrideStatus = null,
+}: Props) {
   const p = present(view.outcome, nowMs);
+  const overridable =
+    view.outcome.kind === 'refused' &&
+    view.outcome.reason === 'notInList' &&
+    view.code !== null &&
+    onOverride !== undefined;
+  const offerOverride = overridable && overrideState?.kind === 'open';
+  const lockLine =
+    overridable && overrideState?.kind === 'locked'
+      ? `Override locked — try again in ${String(overrideState.minutesLeft)} min`
+      : null;
+  const failLine =
+    overridable && overrideStatus === 'failed' ? 'Couldn’t override — try again' : null;
+  const busy = overridable && overrideStatus === 'busy';
   const tone: Tone = p.tone;
   const { bg, fg } = color.outcome[tone];
   const Glyph = GLYPH[tone];
   const chip = view.extraAdmitted > 0 ? `+${String(view.extraAdmitted)} admitted` : null;
-  const announced = [p.title, p.detail, p.secondary, p.tag, chip]
+  const announced = [p.title, p.detail, p.secondary, p.tag, chip, lockLine, failLine]
     .filter((s): s is string => s !== null && s !== '')
     .join('. ');
   // Context, not the hook: the hook throws without a provider, which bare unit renders lack.
@@ -123,6 +163,16 @@ export function OutcomeOverlay({ view, nowMs, onDismiss, onTryAgain, onSignIn }:
                 {chip}
               </Text>
             ) : null}
+            {lockLine !== null ? (
+              <Text variant="headline" maxScale={SCALE} style={{ color: fg }}>
+                {lockLine}
+              </Text>
+            ) : null}
+            {failLine !== null ? (
+              <Text variant="headline" maxScale={SCALE} style={{ color: fg }}>
+                {failLine}
+              </Text>
+            ) : null}
           </View>
         </ScrollView>
         {p.action !== null ? (
@@ -148,7 +198,19 @@ export function OutcomeOverlay({ view, nowMs, onDismiss, onTryAgain, onSignIn }:
                 }}
               />
             ) : null}
-            {p.action === 'done' ? <Action label="Done" fg={fg} onPress={dismiss} /> : null}
+            {offerOverride ? (
+              <Action
+                label={busy ? 'Overriding…' : 'Supervisor override'}
+                fg={fg}
+                disabled={busy}
+                onPress={() => {
+                  onOverride(view.id);
+                }}
+              />
+            ) : null}
+            {p.action === 'done' ? (
+              <Action label="Done" fg={fg} disabled={busy} onPress={dismiss} />
+            ) : null}
             {p.action === 'tryAgain' || p.action === 'signIn' ? (
               <Action label="Dismiss" fg={fg} onPress={dismiss} />
             ) : null}

@@ -8,6 +8,7 @@ import { useAuth } from '@/features/auth/hooks/useAuth';
 import { gateKeys } from '@/features/gate/api/keys';
 import { eventLabel } from '@/features/gate/domain/eventList';
 import type { LookupQuery } from '@/features/gate/domain/lookupQuery';
+import type { TicketCode } from '@/features/gate/domain/parseTicketCode';
 import { shouldShowNotAssigned } from '@/features/gate/domain/lostAssignment';
 import { useLastEvent } from '@/features/gate/hooks/useLastEvent';
 import { useScannableEvents } from '@/features/gate/hooks/useScannableEvents';
@@ -89,6 +90,11 @@ function Scanner({ eventId }: { eventId: string }) {
       controller?.admitFromLookup(ticketId, approval) ?? notReady(),
     [controller, notReady],
   );
+  const override = useCallback(
+    (code: TicketCode, approval: { approvedBy: string; reason: string }) =>
+      controller?.override(code, approval) ?? notReady(),
+    [controller, notReady],
+  );
   const { session, muted, toggleMute } = useScanSession(eventId, offline.scan, offline.controller?.tally);
 
   // A summary 403 is codeless, so only a fresh events list can confirm the assignment is gone.
@@ -148,6 +154,7 @@ function Scanner({ eventId }: { eventId: string }) {
       needsPinForLookup={needsPinForLookup}
       checkPin={checkPin}
       admitFromLookup={admitFromLookup}
+      override={override}
       serverNow={clock.serverNow}
     />
   );
