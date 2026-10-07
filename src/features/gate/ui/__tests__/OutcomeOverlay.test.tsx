@@ -229,3 +229,22 @@ it('keeps the content clear of the notch and home indicator while the fill stays
   );
   expect(f).toMatchObject({ top: 0, bottom: 0, left: 0, right: 0 });
 });
+
+it('an offline admission shows the will-sync tag', async () => {
+  await render(
+    <OutcomeOverlay
+      view={view({
+        kind: 'admitted',
+        ticketType: 'Regular',
+        ticketIndex: 1,
+        totalTickets: 1,
+        checkedInCount: 1,
+        checkedInAt: null,
+        offline: true,
+      })}
+      nowMs={NOW}
+      {...handlers}
+    />,
+  );
+  expect(screen.getByText('Offline · will sync')).toBeTruthy();
+});

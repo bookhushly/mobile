@@ -58,7 +58,7 @@ export function OutcomeOverlay({ view, nowMs, onDismiss, onTryAgain, onSignIn }:
   const { bg, fg } = color.outcome[tone];
   const Glyph = GLYPH[tone];
   const chip = view.extraAdmitted > 0 ? `+${String(view.extraAdmitted)} admitted` : null;
-  const announced = [p.title, p.detail, p.secondary, chip]
+  const announced = [p.title, p.detail, p.secondary, p.tag, chip]
     .filter((s): s is string => s !== null && s !== '')
     .join('. ');
   // Context, not the hook: the hook throws without a provider, which bare unit renders lack.
@@ -111,6 +111,11 @@ export function OutcomeOverlay({ view, nowMs, onDismiss, onTryAgain, onSignIn }:
             {p.secondary !== null ? (
               <Text variant="headline" maxScale={SCALE} style={{ color: fg }}>
                 {p.secondary}
+              </Text>
+            ) : null}
+            {p.tag !== null ? (
+              <Text variant="label" maxScale={SCALE} style={{ color: fg }}>
+                {p.tag}
               </Text>
             ) : null}
             {chip !== null ? (

@@ -5,12 +5,16 @@ import { Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { OverlayView, ScanSession } from '@/features/gate/domain/scanSession';
+import type { AttentionItem } from '@/features/gate/offline/outboxStore';
 import type { ScanSummary } from '@/features/gate/schemas/scan';
 import { useScanView } from '@/features/gate/state/scanView';
+import { useSyncView } from '@/features/gate/state/syncView';
+import { AttentionSheet } from '@/features/gate/ui/AttentionSheet';
 import { EnterCodeSheet } from '@/features/gate/ui/EnterCodeSheet';
 import { OutcomeOverlay } from '@/features/gate/ui/OutcomeOverlay';
 import { RecentSheet } from '@/features/gate/ui/RecentSheet';
 import { ScannerCamera, type CameraPermission } from '@/features/gate/ui/ScannerCamera';
+import { SyncBar } from '@/features/gate/ui/SyncBar';
 import { color, density, radius, space } from '@/shared/theme';
 import { Button, Icon, Text } from '@/shared/ui';
 
@@ -30,6 +34,9 @@ type Props = {
   onChangeEvent: () => void;
   /** Staff pressed Done on "You aren't assigned to this event": leave the scanner. */
   onLostAssignment: () => void;
+  onRefreshList: () => void;
+  onSyncNow: () => void;
+  loadAttention: () => Promise<AttentionItem[]>;
 };
 
 const CORNER = 32;
@@ -161,16 +168,19 @@ function Checking() {
 
 // Its own component so summary updates re-render only the counter.
 function DoorCounter({ summary, stale }: { summary: ScanSummary | null; stale: boolean }) {
-  const counter =
-    summary === null ? '— / —' : `${String(summary.admitted)} / ${String(summary.total)}`;
+  const status = useSyncView((s) => s.status);
+  const local = status.mode === 'offline' ? status.localCounts : null;
+  const shown = local ?? summary;
+  const counter = shown === null ? '— / —' : `${String(shown.admitted)} / ${String(shown.total)}`;
+  const caption = local !== null ? 'offline' : stale ? 'not updated' : null;
   return (
-    <View accessible accessibilityLabel={`Admitted ${counter}${stale ? ', not updated' : ''}`}>
+    <View accessible accessibilityLabel={`Admitted ${counter}${caption !== null ? `, ${caption}` : ''}`}>
       <Text variant="num" tabular>
         {counter}
       </Text>
-      {stale ? (
+      {caption !== null ? (
         <Text variant="caption" tone="textMuted">
-          not updated
+          {caption}
         </Text>
       ) : null}
     </View>
@@ -182,6 +192,7 @@ export function ScannerScreen(p: Props) {
   const [torch, setTorch] = useState(false);
   const [entering, setEntering] = useState(false);
   const [showRecent, setShowRecent] = useState(false);
+  const [showAttention, setShowAttention] = useState(false);
   // Stable so the memoised camera never re-renders for unrelated screen state (perf budget).
   const session = p.session;
   const onCode = useCallback(
@@ -231,11 +242,18 @@ export function ScannerScreen(p: Props) {
           <Icon as={p.muted ? VolumeX : Volume2} color={color.textPrimary} />
         </Pressable>
       </View>
+      <SyncBar
+        onRefreshList={p.onRefreshList}
+        onSyncNow={p.onSyncNow}
+        onOpenAttention={() => {
+          setShowAttention(true);
+        }}
+      />
 
       <View style={{ flex: 1 }}>
         {p.permission === 'granted' && p.focused ? (
           <>
-            <ScannerCamera torch={torch} paused={entering || showRecent} onCode={onCode} />
+            <ScannerCamera torch={torch} paused={entering || showRecent || showAttention} onCode={onCode} />
             <Viewfinder />
           </>
         ) : null}
@@ -310,6 +328,13 @@ export function ScannerScreen(p: Props) {
         recent={p.summary?.recent ?? null}
         onClose={() => {
           setShowRecent(false);
+        }}
+      />
+      <AttentionSheet
+        visible={showAttention}
+        load={p.loadAttention}
+        onClose={() => {
+          setShowAttention(false);
         }}
       />
     </SafeAreaView>

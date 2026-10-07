@@ -50,6 +50,9 @@ const base = {
   onSignIn: jest.fn(),
   onChangeEvent: jest.fn(),
   onLostAssignment: jest.fn(),
+  onRefreshList: jest.fn(),
+  onSyncNow: jest.fn(),
+  loadAttention: () => Promise.resolve([]),
 };
 
 const flat = (node: { props: { style?: unknown } }) =>

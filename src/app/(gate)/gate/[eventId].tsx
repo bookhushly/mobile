@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Linking } from 'react-native';
 import { z } from 'zod';
 
@@ -52,6 +52,11 @@ function Scanner({ eventId }: { eventId: string }) {
       leave();
     });
   };
+  const controller = offline.controller;
+  const loadAttention = useCallback(
+    () => controller?.attention() ?? Promise.resolve([]),
+    [controller],
+  );
   const { session, muted, toggleMute } = useScanSession(eventId, offline.scan);
 
   // A summary 403 is codeless, so only a fresh events list can confirm the assignment is gone.
@@ -97,6 +102,13 @@ function Scanner({ eventId }: { eventId: string }) {
       }}
       onChangeEvent={leave}
       onLostAssignment={leaveLostAssignment}
+      onRefreshList={() => {
+        controller?.refreshList();
+      }}
+      onSyncNow={() => {
+        controller?.syncNow();
+      }}
+      loadAttention={loadAttention}
     />
   );
 }
