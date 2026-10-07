@@ -79,6 +79,7 @@ describe('outbox store', () => {
     await outbox.recordAdmission(input(T2));
     await outbox.markSending([1]);
     expect((await outbox.due(EV, 0, 10)).map((i) => i.seq)).toEqual([2]);
+    await outbox.markSending([2]);
     await outbox.retryLater([2], 5_000);
     expect(await outbox.due(EV, 4_999, 10)).toEqual([]);
     expect((await outbox.due(EV, 5_000, 10))[0]).toMatchObject({ seq: 2, attempts: 1 });
@@ -86,10 +87,22 @@ describe('outbox store', () => {
     expect((await outbox.due(EV, 5_000, 10)).map((i) => i.seq)).toEqual([1, 2]);
   });
 
+  it('late retryLater or settle cannot resurrect a blocked item', async () => {
+    const { outbox } = await setup();
+    await outbox.recordAdmission(input(T1));
+    await outbox.recordAdmission(input(T2));
+    await outbox.blockEvent(EV);
+    await outbox.retryLater([1, 2], 9_000);
+    await outbox.settle([{ seq: 1, state: 'synced', result: null }]);
+    expect((await outbox.attention(EV)).map((i) => i.state)).toEqual(['blocked', 'blocked']);
+    expect(await outbox.due(EV, 99_999, 10)).toEqual([]);
+  });
+
   it('settle, attention, status and totals', async () => {
     const { outbox } = await setup();
     await outbox.recordAdmission(input(T1));
     await outbox.recordAdmission(input(T2));
+    await outbox.markSending([1]);
     await outbox.settle([{ seq: 1, state: 'duplicate', result: { scanned_by: 'Ada' } }]);
     expect(await outbox.status(EV)).toEqual({ pending: 1, attention: 1, blocked: false, nextTryAt: 0 });
     expect(await outbox.attention(EV)).toEqual([

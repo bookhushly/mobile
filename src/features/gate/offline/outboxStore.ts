@@ -136,7 +136,7 @@ export function createOutboxStore(db: Sql, deps: { newDeviceId: () => string }) 
 
     markSending: async (seqs: number[]): Promise<void> => {
       if (seqs.length === 0) return;
-      await db.run(`UPDATE outbox SET state = 'sending' WHERE client_seq IN (${marks(seqs.length)})`, seqs);
+      await db.run(`UPDATE outbox SET state = 'sending' WHERE state = 'pending' AND client_seq IN (${marks(seqs.length)})`, seqs);
     },
 
     settle: (
@@ -144,7 +144,7 @@ export function createOutboxStore(db: Sql, deps: { newDeviceId: () => string }) 
     ): Promise<void> =>
       db.tx(async (t) => {
         for (const u of updates) {
-          await t.run('UPDATE outbox SET state = ?, result = ? WHERE client_seq = ?', [
+          await t.run("UPDATE outbox SET state = ?, result = ? WHERE client_seq = ? AND state = 'sending'", [
             u.state,
             u.result === null ? null : JSON.stringify(u.result),
             u.seq,
@@ -155,7 +155,7 @@ export function createOutboxStore(db: Sql, deps: { newDeviceId: () => string }) 
     retryLater: async (seqs: number[], nextTryAt: number): Promise<void> => {
       if (seqs.length === 0) return;
       await db.run(
-        `UPDATE outbox SET state = 'pending', attempts = attempts + 1, next_try_at = ? WHERE client_seq IN (${marks(seqs.length)})`,
+        `UPDATE outbox SET state = 'pending', attempts = attempts + 1, next_try_at = ? WHERE state = 'sending' AND client_seq IN (${marks(seqs.length)})`,
         [nextTryAt, ...seqs],
       );
     },
