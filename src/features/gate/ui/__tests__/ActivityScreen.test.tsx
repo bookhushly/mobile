@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import type { ActivityRow } from '@/features/gate/domain/activityCsv';
 import { EMPTY_SYNC } from '@/features/gate/domain/syncLine';
@@ -40,6 +40,16 @@ const ROW: ActivityRow = {
 
 type Load = (tab: ActivityTab, beforeSeq: number | null) => Promise<AttentionItem[]>;
 
+// Every test unmounts inside its own body (cleanup wraps the unmount in act). Jest yields to the
+// event loop between a test body and afterEach, and an overdue VirtualizedList batch timer firing
+// in that gap (a slow, cold first test) logs "not wrapped in act"; an afterEach comes too late.
+function screenIt(name: string, fn: () => Promise<void>) {
+  it(name, async () => {
+    await fn();
+    await cleanup();
+  });
+}
+
 function setup(over: { initialTab?: ActivityTab; load?: Load; share?: jest.Mock } = {}) {
   const load = jest.fn<ReturnType<Load>, Parameters<Load>>(
     over.load ?? (() => Promise.resolve([])),
@@ -68,7 +78,7 @@ function setup(over: { initialTab?: ActivityTab; load?: Load; share?: jest.Mock 
   };
 }
 
-it('opens on the initial tab', async () => {
+screenIt('opens on the initial tab', async () => {
   const s = setup({ initialTab: 'attention' });
   await render(s.ui);
   expect(screen.getByText('Activity')).toBeTruthy();
@@ -82,7 +92,7 @@ it('opens on the initial tab', async () => {
   });
 });
 
-it('switching tab loads that tab', async () => {
+screenIt('switching tab loads that tab', async () => {
   const s = setup();
   await render(s.ui);
   await fireEvent.press(screen.getByRole('tab', { name: 'Synced' }));
@@ -91,7 +101,7 @@ it('switching tab loads that tab', async () => {
   });
 });
 
-it('"Load more" passes the last seq when a page is full', async () => {
+screenIt('"Load more" passes the last seq when a page is full', async () => {
   const page = Array.from({ length: 50 }, (_, i) => item(200 - i));
   const s = setup({
     load: (_tab, before) => Promise.resolve(before === null ? page : [item(10)]),
@@ -103,14 +113,14 @@ it('"Load more" passes the last seq when a page is full', async () => {
   });
 });
 
-it('no "Load more" when a page is short', async () => {
+screenIt('no "Load more" when a page is short', async () => {
   const s = setup({ load: () => Promise.resolve([item(1)]) });
   await render(s.ui);
   expect(await screen.findByText('VIP · ticket 1')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
 });
 
-it('marks lookup and override rows and shows the state line', async () => {
+screenIt('marks lookup and override rows and shows the state line', async () => {
   const s = setup({
     load: () =>
       Promise.resolve([
@@ -127,7 +137,7 @@ it('marks lookup and override rows and shows the state line', async () => {
   expect(screen.getByText('Also admitted by Ada')).toBeTruthy();
 });
 
-it('Export shares the CSV under the activity file name', async () => {
+screenIt('Export shares the CSV under the activity file name', async () => {
   const s = setup();
   await render(s.ui);
   await fireEvent.press(screen.getByRole('button', { name: 'Export CSV' }));
@@ -144,14 +154,14 @@ it('Export shares the CSV under the activity file name', async () => {
   expect(text).toContain('3f2b8c4e');
 });
 
-it('a share failure shows the error copy', async () => {
+screenIt('a share failure shows the error copy', async () => {
   const s = setup({ share: jest.fn(() => Promise.reject(new Error('sharing unavailable'))) });
   await render(s.ui);
   await fireEvent.press(screen.getByRole('button', { name: 'Export CSV' }));
   expect(await screen.findByText('Couldn’t export — try again')).toBeTruthy();
 });
 
-it('"Sync now" and "Close" call through', async () => {
+screenIt('"Sync now" and "Close" call through', async () => {
   const s = setup();
   await render(s.ui);
   await fireEvent.press(screen.getByRole('button', { name: 'Sync now' }));
@@ -160,7 +170,7 @@ it('"Sync now" and "Close" call through', async () => {
   expect(s.onClose).toHaveBeenCalled();
 });
 
-it('is read-only: nothing to undo or delete', async () => {
+screenIt('is read-only: nothing to undo or delete', async () => {
   const s = setup({ load: () => Promise.resolve([item(1, { mode: 'offline_override' })]) });
   await render(s.ui);
   await screen.findByText('Override');
@@ -168,7 +178,7 @@ it('is read-only: nothing to undo or delete', async () => {
   expect(screen.queryByLabelText(/undo|delete|remove/i)).toBeNull();
 });
 
-it('a failed load says so', async () => {
+screenIt('a failed load says so', async () => {
   const s = setup({ load: () => Promise.reject(new Error('db')) });
   await render(s.ui);
   expect(await screen.findByText('Couldn’t load the list — try again.')).toBeTruthy();
@@ -200,7 +210,7 @@ describe('during a sync', () => {
     });
   });
 
-  it('a load-more that settles after a count-change reload is dropped (no duplicates)', async () => {
+  screenIt('a load-more that settles after a count-change reload is dropped (no duplicates)', async () => {
     const calls: { before: number | null; d: ReturnType<typeof deferred<AttentionItem[]>> }[] = [];
     const s = setup({
       load: (_tab, before) => {
@@ -233,7 +243,7 @@ describe('during a sync', () => {
     );
   });
 
-  it('"Load more" is hidden while a reload is pending', async () => {
+  screenIt('"Load more" is hidden while a reload is pending', async () => {
     const calls: ReturnType<typeof deferred<AttentionItem[]>>[] = [];
     const s = setup({
       load: () => {
@@ -257,7 +267,7 @@ describe('during a sync', () => {
     expect(await screen.findByRole('button', { name: 'Load more' })).toBeTruthy();
   });
 
-  it('a failed reload keeps the rows and shows the error above them', async () => {
+  screenIt('a failed reload keeps the rows and shows the error above them', async () => {
     let n = 0;
     const s = setup({
       load: () => {
@@ -273,7 +283,7 @@ describe('during a sync', () => {
   });
 });
 
-it('closing during an export never opens the share sheet', async () => {
+screenIt('closing during an export never opens the share sheet', async () => {
   const rows = deferred<ActivityRow[]>();
   const share = jest.fn(() => Promise.resolve());
   const props = {
@@ -294,7 +304,7 @@ it('closing during an export never opens the share sheet', async () => {
   expect(share).not.toHaveBeenCalled();
 });
 
-it('each row reads as one element with ticket, time, marker and state', async () => {
+screenIt('each row reads as one element with ticket, time, marker and state', async () => {
   const s = setup({
     load: () =>
       Promise.resolve([item(4, { mode: 'manual_lookup', scannedAt: '2026-10-07T18:05:00Z' })]),
