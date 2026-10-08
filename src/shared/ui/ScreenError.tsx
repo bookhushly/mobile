@@ -20,7 +20,7 @@ export function ScreenError({ error, retry }: Props) {
       <Stack gap="s3">
         <Text variant="titleLg">Something went wrong</Text>
         <Text variant="body" tone="textSecondary">
-          Your data is safe. Try again.
+          Something didn&apos;t load. Try again, or restart the app if it keeps happening.
         </Text>
       </Stack>
       <Button label="Try again" onPress={retry} />

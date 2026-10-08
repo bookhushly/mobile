@@ -3,20 +3,33 @@ import { Linking, Pressable } from 'react-native';
 
 import { signInCopy, type SignInError } from '@/features/auth/domain/signInErrors';
 import { signInSchema } from '@/features/auth/schemas/signIn';
-import { color, density } from '@/shared/theme';
-import { Box, Button, Input, Screen, Stack, Text } from '@/shared/ui';
+import { density, type StatusTone } from '@/shared/theme';
+import { Banner, Button, Input, Screen, Stack, Text } from '@/shared/ui';
 
 type Props = {
   onSubmit: (email: string, password: string) => Promise<SignInError | null>;
 };
 
 type FieldErrors = { email?: string; password?: string };
+type ShownError = { kind: SignInError; tone: StatusTone };
+
+// Transient failures (network, rate limit, our side) are never red: the user did nothing wrong.
+const TRANSIENT: ReadonlySet<SignInError> = new Set([
+  'network',
+  'rateLimited',
+  'unavailable',
+  'unknown',
+]);
+
+function shownError(kind: SignInError): ShownError {
+  return { kind, tone: TRANSIENT.has(kind) ? 'neutral' : 'danger' };
+}
 
 export function SignInScreen({ onSubmit }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ShownError | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function submit() {
@@ -35,9 +48,9 @@ export function SignInScreen({ onSubmit }: Props) {
     setSubmitting(true);
     try {
       const failure = await onSubmit(parsed.data.email, parsed.data.password);
-      setError(failure ? signInCopy[failure] : null);
+      setError(failure ? shownError(failure) : null);
     } catch {
-      setError(signInCopy.unknown);
+      setError(shownError('unknown'));
     } finally {
       setSubmitting(false);
     }
@@ -78,17 +91,7 @@ export function SignInScreen({ onSubmit }: Props) {
           autoComplete="password"
           textContentType="password"
         />
-        {error ? (
-          <Box p="s4" rounded="r3" style={{ backgroundColor: color.status.danger.bg }}>
-            <Text
-              variant="bodySm"
-              accessibilityLiveRegion="polite"
-              style={{ color: color.status.danger.fg }}
-            >
-              {error}
-            </Text>
-          </Box>
-        ) : null}
+        {error ? <Banner tone={error.tone} message={signInCopy[error.kind]} live="polite" /> : null}
         <Button
           label="Sign in"
           loading={submitting}
