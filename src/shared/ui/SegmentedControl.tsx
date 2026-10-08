@@ -2,6 +2,7 @@ import { Pressable, View } from 'react-native';
 
 import { borderWidth, color, radius, space } from '@/shared/theme';
 
+import { useDensity } from './DensityProvider';
 import { Text } from './Text';
 
 type Option<T extends string> = { value: T; label: string; count?: number };
@@ -16,6 +17,7 @@ const nameOf = <T extends string>(o: Option<T>) =>
   o.count === undefined ? o.label : `${o.label} (${String(o.count)})`;
 
 export function SegmentedControl<T extends string>({ value, options, onChange, testID }: Props<T>) {
+  const d = useDensity();
   return (
     <View
       testID={testID}
@@ -41,7 +43,7 @@ export function SegmentedControl<T extends string>({ value, options, onChange, t
             }}
             style={{
               flex: 1,
-              minHeight: 44,
+              minHeight: d.minTarget,
               alignItems: 'center',
               justifyContent: 'center',
               paddingHorizontal: space.s2,

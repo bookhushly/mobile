@@ -8,6 +8,7 @@ import type { GuestRow } from '@/features/gate/offline/rosterStore';
 import { useSyncView } from '@/features/gate/state/syncView';
 import { FindGuestSheet } from '@/features/gate/ui/FindGuestSheet';
 import { density } from '@/shared/theme';
+import { DensityProvider } from '@/shared/ui';
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 
 const BOOKING = 'b0000000-0000-4000-8000-000000000001';
@@ -66,8 +67,13 @@ const deps = (over: Partial<Deps> = {}): Deps => ({
   ...over,
 });
 
+// The sheet lives under the gate route group's DensityProvider (rows 72, targets 48).
 const setup = async (d: Deps) => {
-  await render(<FindGuestSheet visible {...d} />);
+  await render(
+    <DensityProvider density="gate">
+      <FindGuestSheet visible {...d} />
+    </DensityProvider>,
+  );
 };
 
 const type = async (text: string) => {
@@ -151,7 +157,7 @@ it('tapping a result shows every ticket on the booking with in / not in', async 
   await fireEvent.press(await screen.findByRole('button', { name: /Ada Obi/ }));
   expect(d.bookingTickets).toHaveBeenCalledWith(BOOKING);
   expect(await screen.findByText('Tolu')).toBeTruthy();
-  expect(screen.getByText('In')).toBeTruthy();
+  expect(screen.getByText(/^In · /)).toBeTruthy();
   expect(screen.getByText('Not in')).toBeTruthy();
   expect(screen.getByText('Booking pending')).toBeTruthy();
   // Only the confirmed, not-in ticket can be admitted.
@@ -160,11 +166,41 @@ it('tapping a result shows every ticket on the booking with in / not in', async 
   expect(flat(admits[0] as never).minHeight).toBeGreaterThanOrEqual(44);
 });
 
-it('result rows are at least the work row height', async () => {
+it('result rows are at least the gate row height', async () => {
   await setup(deps());
   await type('Ada');
   const r = await screen.findByRole('button', { name: /Ada Obi/ });
-  expect(flat(r as never).minHeight).toBeGreaterThanOrEqual(density.work.rowMin);
+  expect(flat(r as never).minHeight).toBeGreaterThanOrEqual(density.gate.rowMin);
+});
+
+it('splits results into Not in and In with counts', async () => {
+  await setup(
+    deps({
+      search: jest.fn((_q: LookupQuery) =>
+        Promise.resolve([
+          row({ id: 'a', checkedInAt: null }),
+          row({ id: 'b', holderName: 'Bisi', checkedInAt: '2026-10-08T17:40:00Z' }),
+        ]),
+      ),
+    }),
+  );
+  await type('ade');
+  expect(await screen.findByRole('tab', { name: 'Not in (1)' })).toBeSelected();
+  expect(screen.getByRole('tab', { name: 'In (1)' })).not.toBeSelected();
+  expect(screen.getByText('Ada Obi')).toBeTruthy();
+  expect(screen.queryByText('Bisi')).toBeNull();
+  await fireEvent.press(screen.getByRole('tab', { name: 'In (1)' }));
+  expect(screen.getByText('Bisi')).toBeTruthy();
+  expect(screen.queryByText('Ada Obi')).toBeNull();
+  expect(screen.getByText(/^In · /)).toBeTruthy();
+});
+
+it('counts zero when no one is in', async () => {
+  await setup(deps());
+  await type('Ada');
+  await screen.findByText('Ada Obi');
+  expect(screen.getByRole('tab', { name: 'Not in (1)' })).toBeSelected();
+  expect(screen.getByRole('tab', { name: 'In (0)' })).not.toBeSelected();
 });
 
 it('admits without a PIN on an ordinary event', async () => {
@@ -210,7 +246,7 @@ it('a failed admit keeps the sheet open with an error and never reports admitted
   await type('Ada');
   await fireEvent.press(await screen.findByRole('button', { name: /Ada Obi/ }));
   await fireEvent.press(await screen.findByRole('button', { name: /^Admit/ }));
-  expect(await screen.findByText('Couldn’t admit — try again')).toBeTruthy();
+  expect(await screen.findByText('Not recorded — try again')).toBeTruthy();
   expect(d.onAdmitted).not.toHaveBeenCalled();
   expect(screen.queryByText('Admitted')).toBeNull();
 });
@@ -260,7 +296,11 @@ it('delivers an admission outcome even if the sheet was hidden meanwhile', async
   await act(async () => {
     await Promise.resolve();
   });
-  await screen.rerender(<FindGuestSheet {...d} visible={false} />);
+  await screen.rerender(
+    <DensityProvider density="gate">
+      <FindGuestSheet {...d} visible={false} />
+    </DensityProvider>,
+  );
   await act(async () => {
     pending.resolve(admitted);
     await Promise.resolve();
@@ -284,7 +324,11 @@ it('a PIN-approved admission reaches the scanner even if the sheet was hidden me
     await Promise.resolve();
   });
   expect(d.admit).toHaveBeenCalledTimes(1);
-  await screen.rerender(<FindGuestSheet {...d} visible={false} />);
+  await screen.rerender(
+    <DensityProvider density="gate">
+      <FindGuestSheet {...d} visible={false} />
+    </DensityProvider>,
+  );
   await act(async () => {
     pending.resolve(admitted);
     await Promise.resolve();
