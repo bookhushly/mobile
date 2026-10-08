@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react-native';
-import { useContext, useEffect, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 
@@ -49,7 +49,11 @@ export function OutcomeScreen({
   // iOS has no live region: VoiceOver is told the result once, as it appears (Android reads the
   // assertive alert below). Pinned to the first wording so later lines never re-read it.
   const [firstAnnounced] = useState(announced);
+  // StrictMode (dev) runs mount effects twice; the ref survives that, so it is still read once.
+  const spoken = useRef(false);
   useEffect(() => {
+    if (spoken.current) return;
+    spoken.current = true;
     if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(firstAnnounced);
   }, [firstAnnounced]);
   return (

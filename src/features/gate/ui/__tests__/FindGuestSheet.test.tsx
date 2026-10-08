@@ -265,6 +265,19 @@ it('a ticket with no name and no phone gets a person glyph, not "NN" initials', 
   expect(lucide('user-round')).toHaveLength(1);
 });
 
+it('a blank name is treated as no name: phone shown, no empty avatar', async () => {
+  await setup(
+    deps({
+      search: jest.fn((_q: LookupQuery) =>
+        Promise.resolve([row({ id: 'b', holderName: '  ', phoneMasked: '0803••••210' })]),
+      ),
+    }),
+  );
+  await type('Ada');
+  expect(await screen.findByText('0803••••210')).toBeTruthy();
+  expect(lucide('phone')).toHaveLength(1);
+});
+
 it('counts zero when no one is in', async () => {
   await setup(deps());
   await type('Ada');

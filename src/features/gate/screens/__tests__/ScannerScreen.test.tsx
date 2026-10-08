@@ -6,7 +6,7 @@ import type { OverlayView } from '@/features/gate/domain/scanSession';
 import { ScannerScreen } from '@/features/gate/screens/ScannerScreen';
 import { useScanView } from '@/features/gate/state/scanView';
 import { useSyncView } from '@/features/gate/state/syncView';
-import { color, radius } from '@/shared/theme';
+import { color, radius, space } from '@/shared/theme';
 
 const TICKET = '3f2b8c4e-1a2b-4c3d-8e9f-0a1b2c3d4e5f';
 const mockCamera = { renders: 0, raw: TICKET };
@@ -211,6 +211,11 @@ it('three bottom controls, labels capped for large text', async () => {
 it('the counter row lets the status pill shrink so its text can wrap', async () => {
   await render(<ScannerScreen {...base} />);
   expect(flat(screen.getByTestId('gate-status'))).toMatchObject({ flexShrink: 1 });
+});
+
+it('a wrapped status pill never touches the door counter: the row keeps a gap', async () => {
+  await render(<ScannerScreen {...base} />);
+  expect(flat(screen.getByTestId('counter-row'))).toMatchObject({ gap: space.s5 });
 });
 
 it('the bottom controls add the home-indicator inset once: the safe area leaves the bottom edge off', async () => {

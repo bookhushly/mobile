@@ -306,10 +306,12 @@ export function ScannerScreen(p: Props) {
         />
       </View>
       <View
+        testID="counter-row"
         style={{
           flexDirection: 'row',
           alignItems: 'flex-end',
           justifyContent: 'space-between',
+          gap: space.s5,
           paddingHorizontal: space.s5,
         }}
       >

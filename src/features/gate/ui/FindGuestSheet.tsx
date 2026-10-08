@@ -43,7 +43,10 @@ const ADMIT_FAILED = 'Not recorded — try again';
 const ticketLabel = (g: GuestRow) =>
   `${g.ticketType ?? 'Ticket'}${g.ticketIndex === null ? '' : ` · ticket ${String(g.ticketIndex)}`}`;
 // Names and phones are shown on screen only; never logged.
-const who = (g: GuestRow) => g.holderName ?? g.phoneMasked ?? 'No name on ticket';
+// A blank name counts as none, so the row never shows an empty title or avatar.
+const nameOf = (g: GuestRow) =>
+  g.holderName !== null && g.holderName.trim() !== '' ? g.holderName : null;
+const who = (g: GuestRow) => nameOf(g) ?? g.phoneMasked ?? 'No name on ticket';
 const statusOf = (g: GuestRow) =>
   g.bookingStatus !== 'confirmed'
     ? `Booking ${g.bookingStatus}`
@@ -63,7 +66,7 @@ const matchesFilter = (g: GuestRow, filter: Filter) =>
 
 // Initials for a name, a phone glyph for a masked number, a person glyph when the ticket has neither.
 function Initials({ g }: { g: GuestRow }) {
-  const name = g.holderName;
+  const name = nameOf(g);
   const initials = (name ?? '')
     .split(/\s+/)
     .filter((w) => w !== '')

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { StrictMode } from 'react';
 import {
   AccessibilityInfo,
   Platform,
@@ -333,6 +334,15 @@ describe('VoiceOver', () => {
     expect(announce).toHaveBeenCalledTimes(1);
     expect(announce).toHaveBeenCalledWith(screen.getByRole('alert').props.accessibilityLabel);
     await screen.rerender(<OutcomeOverlay {...propsFor('refused')} overrideStatus="failed" />);
+    expect(announce).toHaveBeenCalledTimes(1);
+  });
+
+  it('StrictMode (dev) re-running the mount effect still reads it out once', async () => {
+    await render(
+      <StrictMode>
+        <OutcomeOverlay {...propsFor('admitted')} />
+      </StrictMode>,
+    );
     expect(announce).toHaveBeenCalledTimes(1);
   });
 
