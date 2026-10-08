@@ -2,14 +2,14 @@ export type ApiError =
   | { kind: 'network' }
   | { kind: 'timeout' }
   | { kind: 'auth' }
-  | { kind: 'forbidden'; code?: string }
+  | { kind: 'forbidden'; code?: string; body?: unknown }
   | { kind: 'notFound'; code?: string }
   | { kind: 'conflict'; code: string; body?: unknown }
   | { kind: 'rateLimited'; retryAfterSec?: number }
   | { kind: 'unavailable'; status: number; code?: string }
   | { kind: 'validation' }
   | { kind: 'aborted' }
-  | { kind: 'unknown'; status?: number; code?: string };
+  | { kind: 'unknown'; status?: number; code?: string; body?: unknown };
 
 type HeaderReader = { get(name: string): string | null };
 
@@ -24,7 +24,7 @@ function codeOf(body: unknown): string | undefined {
 export function errorFromResponse(status: number, body: unknown, headers: HeaderReader): ApiError {
   const code = codeOf(body);
   if (status === 401) return { kind: 'auth' };
-  if (status === 403) return code ? { kind: 'forbidden', code } : { kind: 'forbidden' };
+  if (status === 403) return code ? { kind: 'forbidden', code, body } : { kind: 'forbidden', body };
   if (status === 404) return code ? { kind: 'notFound', code } : { kind: 'notFound' };
   if (status === 409) return { kind: 'conflict', code: code ?? 'conflict', body };
   if (status === 429) {
@@ -37,7 +37,7 @@ export function errorFromResponse(status: number, body: unknown, headers: Header
   if (status >= 500) {
     return code ? { kind: 'unavailable', status, code } : { kind: 'unavailable', status };
   }
-  return code ? { kind: 'unknown', status, code } : { kind: 'unknown', status };
+  return code ? { kind: 'unknown', status, code, body } : { kind: 'unknown', status, body };
 }
 
 export function isRetryable(e: ApiError): boolean {

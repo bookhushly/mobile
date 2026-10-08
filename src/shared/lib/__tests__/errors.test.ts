@@ -8,7 +8,9 @@ describe('errorFromResponse', () => {
     expect(errorFromResponse(403, { code: 'forbidden' }, h())).toEqual({
       kind: 'forbidden',
       code: 'forbidden',
+      body: { code: 'forbidden' },
     });
+    expect(errorFromResponse(403, null, h())).toEqual({ kind: 'forbidden', body: null });
   });
   it('maps 404/409 with server code', () => {
     expect(errorFromResponse(404, { code: 'not_found' }, h())).toEqual({
@@ -35,18 +37,25 @@ describe('errorFromResponse', () => {
       status: 503,
       code: 'lookup_failed',
     });
-    expect(errorFromResponse(418, null, h())).toEqual({ kind: 'unknown', status: 418 });
+    expect(errorFromResponse(418, null, h())).toEqual({
+      kind: 'unknown',
+      status: 418,
+      body: null,
+    });
   });
-  it('keeps the code on a 400', () => {
+  it('keeps the code and body on a 400 so callers can read field errors', () => {
     const headers = { get: () => null };
-    expect(errorFromResponse(400, { code: 'invalid_code' }, headers)).toEqual({
+    const body = { code: 'invalid_code', fields: { email: 'invalid' } };
+    expect(errorFromResponse(400, body, headers)).toEqual({
       kind: 'unknown',
       status: 400,
       code: 'invalid_code',
+      body,
     });
     expect(errorFromResponse(400, { error: 'x' }, headers)).toEqual({
       kind: 'unknown',
       status: 400,
+      body: { error: 'x' },
     });
   });
 });
