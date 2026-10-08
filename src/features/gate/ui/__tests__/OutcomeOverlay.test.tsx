@@ -16,6 +16,59 @@ const view = (outcome: OverlayView['outcome'], extraAdmitted = 0): OverlayView =
 const handlers = { onDismiss: jest.fn(), onTryAgain: jest.fn(), onSignIn: jest.fn() };
 const fill = () => screen.getByTestId('outcome-overlay').props.style as { backgroundColor: string };
 
+const OUTCOME_FOR: Record<'admitted' | 'used' | 'refused' | 'retry', OverlayView['outcome']> = {
+  admitted: {
+    kind: 'admitted',
+    ticketType: 'Regular',
+    ticketIndex: 1,
+    totalTickets: 1,
+    checkedInCount: 1,
+    checkedInAt: null,
+  },
+  used: {
+    kind: 'used',
+    checkedInAt: null,
+    scannedBy: { kind: 'anotherScanner' },
+    ticketType: null,
+    replayed: false,
+  },
+  refused: { kind: 'refused', reason: 'wrongEvent', fixable: false },
+  retry: { kind: 'couldntCheck', cause: 'network' },
+};
+const propsForOutcome = (outcome: OverlayView['outcome']) => ({
+  view: view(outcome),
+  nowMs: NOW,
+  ...handlers,
+});
+const propsFor = (tone: keyof typeof OUTCOME_FOR) => propsForOutcome(OUTCOME_FOR[tone]);
+
+it.each([
+  ['admitted', color.outcome.admitted.bg],
+  ['used', color.outcome.used.bg],
+  ['refused', color.outcome.refused.bg],
+  ['retry', color.outcome.retry.bg],
+] as const)('%s fills the screen with its colour', async (tone, bg) => {
+  await render(<OutcomeOverlay {...propsFor(tone)} />);
+  expect(screen.getByTestId('outcome-overlay')).toHaveStyle({ backgroundColor: bg });
+});
+
+it('a fixable refusal is red, not amber', async () => {
+  await render(
+    <OutcomeOverlay
+      {...propsForOutcome({ kind: 'refused', reason: 'staticNotAllowed', fixable: true })}
+    />,
+  );
+  expect(screen.getByTestId('outcome-overlay')).toHaveStyle({
+    backgroundColor: color.outcome.refused.bg,
+  });
+  expect(screen.getByText('Printed QR not accepted — ask for the live ticket')).toBeTruthy();
+});
+
+it('the title uses the sans outcome type, not serif', async () => {
+  await render(<OutcomeOverlay {...propsFor('admitted')} />);
+  expect(screen.getByText('Admitted')).toHaveStyle({ fontSize: 36 });
+});
+
 it.each([
   [
     {
@@ -41,7 +94,7 @@ it.each([
     color.outcome.used.bg,
   ],
   [{ kind: 'refused', reason: 'wrongEvent', fixable: false }, 'Refused', color.outcome.refused.bg],
-  [{ kind: 'refused', reason: 'expired', fixable: true }, 'Refused', color.outcome.used.bg],
+  [{ kind: 'refused', reason: 'expired', fixable: true }, 'Refused', color.outcome.refused.bg],
   [{ kind: 'couldntCheck', cause: 'network' }, "Couldn't check", color.outcome.retry.bg],
 ] as const)('%o renders title, icon and fill', async (outcome, title, bg) => {
   await render(<OutcomeOverlay view={view(outcome)} nowMs={NOW} {...handlers} />);
@@ -187,7 +240,7 @@ it('a timed overlay still dismisses on tap; a held one does not', async () => {
   expect(onDismiss).not.toHaveBeenCalled();
 });
 
-it('pins the actions to the bottom and does not scale gate text past 1.0', async () => {
+it('keeps the result in the lower part of the screen, actions below it, and does not scale gate text past 1.0', async () => {
   await render(
     <OutcomeOverlay
       view={view({ kind: 'refused', reason: 'wrongEvent', fixable: false })}
@@ -195,10 +248,17 @@ it('pins the actions to the bottom and does not scale gate text past 1.0', async
       {...handlers}
     />,
   );
-  const actions = StyleSheet.flatten(
-    screen.getByTestId('outcome-actions').props.style as StyleProp<ViewStyle>,
+  const result = StyleSheet.flatten(
+    screen.getByTestId('outcome-result').props.style as StyleProp<ViewStyle>,
   );
-  expect(actions.marginTop).toBe('auto');
+  expect(result.marginTop).toBe('auto');
+  const content = screen.getByTestId('outcome-content');
+  const order = content.children.map((c) => {
+    if (typeof c === 'string') return c;
+    const id: unknown = c.props.testID;
+    return typeof id === 'string' ? id : '';
+  });
+  expect(order.indexOf('outcome-result')).toBeLessThan(order.indexOf('outcome-actions'));
   for (const t of ['Refused', 'This ticket is for a different event', 'Done']) {
     expect(screen.getByText(t).props.maxFontSizeMultiplier).toBe(1);
   }
@@ -222,7 +282,7 @@ it('keeps the content clear of the notch and home indicator while the fill stays
   const content = StyleSheet.flatten(
     screen.getByTestId('outcome-content').props.style as StyleProp<ViewStyle>,
   );
-  expect(content.paddingTop).toBe(47 + space.s7);
+  expect(content.paddingTop).toBe(47 + space.s9);
   expect(content.paddingBottom).toBe(34 + space.s7);
   const f = StyleSheet.flatten(
     screen.getByTestId('outcome-overlay').props.style as StyleProp<ViewStyle>,
@@ -259,6 +319,32 @@ describe('supervisor override', () => {
     extraAdmitted: 0,
   });
   const OPEN = { kind: 'open', triesLeft: 5 } as const;
+  const notInListProps = { view: coded(notInList), nowMs: NOW, ...handlers };
+
+  it('while an override records, the override action is busy and Done is disabled', async () => {
+    await render(
+      <OutcomeOverlay
+        {...notInListProps}
+        overrideState={OPEN}
+        overrideStatus="busy"
+        onOverride={jest.fn()}
+      />,
+    );
+    const overriding = screen.getByRole('button', { name: 'Overriding…' });
+    expect(overriding).toBeBusy();
+    expect(overriding).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+  });
+
+  it('lists Supervisor override above Done so the primary is nearest the thumb', async () => {
+    await render(
+      <OutcomeOverlay {...notInListProps} overrideState={OPEN} onOverride={jest.fn()} />,
+    );
+    const labels = screen
+      .getAllByRole('button')
+      .map((b) => b.props.accessibilityLabel as string);
+    expect(labels).toEqual(['Supervisor override', 'Done']);
+  });
 
   it('offers the action next to Done for notInList with a code when open', async () => {
     const onOverride = jest.fn();

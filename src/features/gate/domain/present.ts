@@ -113,8 +113,9 @@ export function present(o: ScanOutcome, nowMs: number): Presentation {
     }
     case 'refused':
       return {
-        tone: o.fixable ? 'used' : 'refused',
-        cue: o.fixable ? 'warning' : 'error',
+        // Amber means "Already used" only; a fixable refusal is a refusal with an instruction.
+        tone: 'refused',
+        cue: 'error',
         holdMs: null,
         title: 'Refused',
         detail: REASON[o.reason],

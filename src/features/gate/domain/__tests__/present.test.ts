@@ -52,7 +52,7 @@ describe('present', () => {
       present({ kind: 'used', ...base, scannedBy: { kind: 'me' }, replayed: true }, NOW).detail,
     ).toBe('Checked in just now on this phone');
   });
-  it('refused holds until Done; fixable refusals are amber', () => {
+  it('refused holds until Done; fixable refusals are red with an instruction', () => {
     expect(present({ kind: 'refused', reason: 'wrongEvent', fixable: false }, NOW)).toEqual({
       tone: 'refused',
       cue: 'error',
@@ -63,10 +63,12 @@ describe('present', () => {
       tag: null,
       action: 'done',
     });
-    expect(present({ kind: 'refused', reason: 'expired', fixable: true }, NOW)).toMatchObject({
-      tone: 'used',
-      cue: 'warning',
+    const fixableExpired: ScanOutcome = { kind: 'refused', reason: 'expired', fixable: true };
+    expect(present(fixableExpired, NOW)).toMatchObject({
+      tone: 'refused',
+      cue: 'error',
       holdMs: null,
+      title: 'Refused',
       detail: 'Code expired — ask them to refresh their ticket',
     });
   });

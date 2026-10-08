@@ -19,6 +19,8 @@ export { Money } from './Money';
 export { PinField } from './PinField';
 export { formatNaira } from './formatNaira';
 export { useMotionTier } from './motion';
+export { OutcomeAction, OutcomeScreen } from './OutcomeScreen';
+export type { OutcomeTone } from './OutcomeScreen';
 export { PressableScale } from './PressableScale';
 export { Screen } from './Screen';
 export { SearchField } from './SearchField';

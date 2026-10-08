@@ -45,6 +45,10 @@ describe('contrast', () => {
     expect(contrastRatio(color.borderStrong, color.surface)).toBeGreaterThanOrEqual(AA_UI);
   });
 
+  it('white button text on ink fill (dark outcome action on amber) reaches 7:1', () => {
+    expect(contrastRatio(color.onInverse, color.textPrimary)).toBeGreaterThanOrEqual(7);
+  });
+
   it('gate outcome fills reach 7:1 for sunlight legibility', () => {
     for (const o of [
       color.outcome.admitted,
