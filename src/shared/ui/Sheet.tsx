@@ -1,5 +1,5 @@
 import { useContext, type ReactNode } from 'react';
-import { Modal, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaInsetsContext, SafeAreaView } from 'react-native-safe-area-context';
 
 import { borderWidth, color, space } from '@/shared/theme';
@@ -73,33 +73,40 @@ export function Sheet({
           </Text>
           <View style={{ minWidth: 88, alignItems: 'flex-end' }}>{right}</View>
         </View>
-        {scroll ? (
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            automaticallyAdjustKeyboardInsets
-            keyboardDismissMode="interactive"
-            contentContainerStyle={body}
-          >
-            {children}
-          </ScrollView>
-        ) : (
-          <View style={[{ flex: 1 }, body]}>{children}</View>
-        )}
-        {footer !== undefined ? (
-          <View
-            style={{
-              paddingHorizontal: space.s5,
-              paddingTop: space.s3,
-              paddingBottom: Math.max(insets.bottom, space.s5),
-              gap: space.s3,
-              borderTopWidth: borderWidth.hairline,
-              borderTopColor: color.border,
-              backgroundColor: color.surface,
-            }}
-          >
-            {footer}
-          </View>
-        ) : null}
+        {/* The sticky footer must stay above the keyboard: iOS pads; Android resizes the page
+            sheet natively, so no behaviour there. */}
+        <KeyboardAvoidingView
+          testID="sheet-keyboard"
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+        >
+          {scroll ? (
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              contentContainerStyle={body}
+            >
+              {children}
+            </ScrollView>
+          ) : (
+            <View style={[{ flex: 1 }, body]}>{children}</View>
+          )}
+          {footer !== undefined ? (
+            <View
+              style={{
+                paddingHorizontal: space.s5,
+                paddingTop: space.s3,
+                paddingBottom: Math.max(insets.bottom, space.s5),
+                gap: space.s3,
+                borderTopWidth: borderWidth.hairline,
+                borderTopColor: color.border,
+                backgroundColor: color.surface,
+              }}
+            >
+              {footer}
+            </View>
+          ) : null}
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
   );

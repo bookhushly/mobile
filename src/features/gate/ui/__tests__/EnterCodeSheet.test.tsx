@@ -19,3 +19,12 @@ it('submits a pasted link', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'Check ticket' }));
   expect(onSubmit).toHaveBeenCalledWith(link);
 });
+
+it('closes from the header and has no separate Cancel button', async () => {
+  const onClose = jest.fn();
+  await render(<EnterCodeSheet visible onSubmit={jest.fn()} onClose={onClose} />);
+  expect(screen.getByRole('header', { name: 'Enter code' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
+  expect(onClose).toHaveBeenCalledTimes(1);
+});

@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Modal, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { isPinShape } from '@/features/gate/domain/overridePin';
 import type { PinCheck } from '@/features/gate/offline/offlineGate';
 import type { Approval } from '@/features/gate/offline/outboxStore';
-import { color, space } from '@/shared/theme';
-import { Button, Input, Text } from '@/shared/ui';
+import type { StatusTone } from '@/shared/theme';
+import { Banner, Button, Input, PinField, Sheet, Text } from '@/shared/ui';
 
 type Props = {
   visible: boolean;
@@ -32,6 +30,20 @@ const message = (r: PinCheck | 'failed' | null, purpose: Props['purpose']): stri
         : 'Supervisor approval isn’t set up for this event — ask the organiser to set an offline PIN';
     case 'ok':
       return null;
+  }
+};
+
+// Transient failures are neutral (not the user's doing); wrong/locked are danger; not set up is info.
+const toneOf = (r: PinCheck | 'failed'): StatusTone => {
+  if (r === 'failed') return 'neutral';
+  switch (r.kind) {
+    case 'wrong':
+    case 'locked':
+      return 'danger';
+    case 'unavailable':
+      return 'info';
+    case 'ok':
+      return 'neutral';
   }
 };
 
@@ -67,7 +79,8 @@ export function PinSheet({ visible, purpose, check, onApproved, onClose }: Props
 
   const who = approver.trim();
   const why = reason.trim();
-  const reasonOk = purpose === 'override' ? why.length >= 3 && why.length <= 200 : why.length <= 200;
+  const reasonOk =
+    purpose === 'override' ? why.length >= 3 && why.length <= 200 : why.length <= 200;
   const locked = result !== null && result !== 'failed' && result.kind === 'locked';
   const valid = isPinShape(pin) && who.length >= 1 && who.length <= 80 && reasonOk;
 
@@ -95,67 +108,44 @@ export function PinSheet({ visible, purpose, check, onApproved, onClose }: Props
   }
 
   const text = message(result, purpose);
+  const tone: StatusTone = result === null ? 'neutral' : toneOf(result);
   return (
-    <Modal
+    <Sheet
       visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
+      title={purpose === 'override' ? 'Supervisor override' : 'Supervisor approval'}
+      onClose={onClose}
+      scroll
+      testID="pin-sheet"
+      footer={
+        <Button
+          label={checking ? 'Checking…' : 'Confirm'}
+          loading={checking}
+          onPress={() => void confirm()}
+          disabled={!valid || locked}
+        />
+      }
     >
-      <SafeAreaView style={{ flex: 1, backgroundColor: color.surface }}>
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          automaticallyAdjustKeyboardInsets
-          keyboardDismissMode="interactive"
-          contentContainerStyle={{ padding: space.s5, gap: space.s4 }}
-        >
-          <Text variant="title" accessibilityRole="header">
-            {purpose === 'override' ? 'Supervisor override' : 'Supervisor approval'}
-          </Text>
-          <Text variant="bodySm" tone="textSecondary">
-            {purpose === 'override'
-              ? 'A supervisor enters the event PIN. Every override is logged.'
-              : 'A supervisor enters the event PIN. Every approval is logged.'}
-          </Text>
-          <Input
-            label="PIN"
-            value={pin}
-            onChangeText={setPin}
-            keyboardType="number-pad"
-            secureTextEntry
-            maxLength={6}
-            autoComplete="off"
-          />
-          <Input
-            label="Approver"
-            value={approver}
-            onChangeText={setApprover}
-            maxLength={80}
-            autoCapitalize="words"
-          />
-          <Input
-            label={purpose === 'override' ? 'Reason' : 'Reason (optional)'}
-            value={reason}
-            onChangeText={setReason}
-            maxLength={200}
-          />
-          {text !== null ? (
-            <Text
-              variant="bodyStrong"
-              accessibilityLiveRegion="polite"
-              style={{ color: color.status.danger.solid }}
-            >
-              {text}
-            </Text>
-          ) : null}
-          <Button
-            label={checking ? 'Checking…' : 'Confirm'}
-            onPress={() => void confirm()}
-            disabled={!valid || checking || locked}
-          />
-          <Button variant="secondary" label="Cancel" onPress={onClose} />
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
+      <Text variant="bodySm" tone="textSecondary">
+        {purpose === 'override'
+          ? 'A supervisor enters the event PIN. Every override is logged.'
+          : 'A supervisor enters the event PIN. Every approval is logged.'}
+      </Text>
+      <PinField label="PIN" value={pin} onChangeText={setPin} />
+      <Input
+        label="Approver"
+        value={approver}
+        onChangeText={setApprover}
+        maxLength={80}
+        autoCapitalize="words"
+      />
+      <Input
+        label={purpose === 'override' ? 'Reason' : 'Reason (optional)'}
+        value={reason}
+        onChangeText={setReason}
+        maxLength={200}
+        hint={purpose === 'override' ? '3 to 200 characters' : undefined}
+      />
+      {text !== null ? <Banner tone={tone} message={text} live="assertive" /> : null}
+    </Sheet>
   );
 }

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 
 import type { LookupQuery } from '@/features/gate/domain/lookupQuery';
 import type { ScanOutcome } from '@/features/gate/domain/outcome';
@@ -322,7 +322,9 @@ it('a double tap on a PIN event opens one PIN sheet; cancelling it re-enables Ad
   await fireEvent.press(admit);
   expect(await screen.findAllByText('Supervisor approval')).toHaveLength(1);
   expect(d.needsPin).toHaveBeenCalledTimes(1);
-  await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+  await fireEvent.press(
+    within(screen.getByTestId('pin-sheet')).getByRole('button', { name: 'Close' }),
+  );
   expect(screen.queryByText('Supervisor approval')).toBeNull();
   const again = screen.getByRole('button', { name: /^Admit/ });
   expect(again).toBeEnabled();

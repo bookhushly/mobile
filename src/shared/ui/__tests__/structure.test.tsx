@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import { Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -49,6 +49,18 @@ it('sheet renders without a SafeAreaProvider and shows its footer', async () => 
   expect(screen.getByText('Footer action')).toBeTruthy();
 });
 
+it('sheet keeps its body and sticky footer inside a keyboard-avoiding view', async () => {
+  await render(
+    <Sheet visible title="PIN" onClose={jest.fn()} scroll footer={<Text>Confirm</Text>}>
+      <Text>Body</Text>
+    </Sheet>,
+  );
+  // RNTL 14 exposes host elements only, so the KeyboardAvoidingView is found by its testID.
+  const avoiding = within(screen.getByTestId('sheet-keyboard'));
+  expect(avoiding.getByText('Body')).toBeTruthy();
+  expect(avoiding.getByText('Confirm')).toBeTruthy();
+});
+
 it('segmented control exposes tabs with counts and selection', async () => {
   const onChange = jest.fn();
   await render(
@@ -85,9 +97,7 @@ it('list row is a button only when pressable', async () => {
 });
 
 it('collapsible section header reports expanded', async () => {
-  await render(
-    <SectionHeader label="Earlier" count={2} expanded={false} onToggle={jest.fn()} />,
-  );
+  await render(<SectionHeader label="Earlier" count={2} expanded={false} onToggle={jest.fn()} />);
   expect(screen.getByRole('button', { name: 'Earlier (2)' })).not.toBeExpanded();
 });
 
