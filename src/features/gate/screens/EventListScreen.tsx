@@ -1,11 +1,28 @@
+import { Download, UserRound } from 'lucide-react-native';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { RefreshControl, View } from 'react-native';
 
-import { eventLabel, groupEvents, pickAutoOpen } from '@/features/gate/domain/eventList';
+import {
+  dateTile,
+  eventLabel,
+  eventStatus,
+  groupEvents,
+  pickAutoOpen,
+} from '@/features/gate/domain/eventList';
 import type { ScannableEvent } from '@/shared/api/scannableEvents';
-import { color, density, radius, space } from '@/shared/theme';
-import { Button, Text } from '@/shared/ui';
+import { borderWidth, color, radius, space } from '@/shared/theme';
+import {
+  EmptyState,
+  ErrorState,
+  Header,
+  IconButton,
+  ListRow,
+  Screen,
+  SectionHeader,
+  SkeletonRows,
+  StatusPill,
+  Text,
+} from '@/shared/ui';
 
 type State =
   { status: 'loading' } | { status: 'error' } | { status: 'ready'; events: ScannableEvent[] };
@@ -14,20 +31,22 @@ type Props = {
   state: State;
   nowMs: number;
   lastEventId: string | null;
-  identity: string;
+  /** Events with a finished offline list on this phone. */
+  offlineLists: ReadonlySet<string>;
   refreshing: boolean;
   onRefresh: () => void;
   onRetry: () => void;
   onOpen: (eventId: string) => void;
-  onSignOut: () => void;
-  header?: ReactNode;
+  onOpenAccount: () => void;
 };
+
+const TILE = 56;
 
 function when(iso: string | null): string {
   if (iso === null) return 'Date to be confirmed';
   const t = Date.parse(iso);
   if (!Number.isFinite(t)) return 'Date to be confirmed';
-  return new Date(t).toLocaleString(undefined, {
+  return new Date(t).toLocaleString('en-NG', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -36,33 +55,95 @@ function when(iso: string | null): string {
   });
 }
 
-function Row({ e, onOpen }: { e: ScannableEvent; onOpen: (id: string) => void }) {
-  const label = eventLabel(e);
+function timeOf(e: ScannableEvent): string {
+  const t = e.startsAt === null ? NaN : Date.parse(e.startsAt);
+  if (!Number.isFinite(t)) return 'Time to be confirmed';
+  return new Date(t).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' });
+}
+
+function DateTile({ e }: { e: ScannableEvent }) {
+  const tile = dateTile(e);
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${label}, ${when(e.startsAt)}`}
+    <View
+      style={{
+        width: TILE,
+        height: TILE,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: radius.r3,
+        borderWidth: borderWidth.hairline,
+        borderColor: color.border,
+        backgroundColor: color.surface,
+      }}
+    >
+      {tile === null ? (
+        <Text variant="labelSm" tone="textSecondary">
+          TBC
+        </Text>
+      ) : (
+        <>
+          <Text variant="labelSm" tone="linkText">
+            {tile.month}
+          </Text>
+          <Text variant="title" maxScale={1}>
+            {tile.day}
+          </Text>
+          <Text variant="caption" tone="textSecondary">
+            {tile.weekday}
+          </Text>
+        </>
+      )}
+    </View>
+  );
+}
+
+function statusPill(e: ScannableEvent, nowMs: number): ReactNode {
+  switch (eventStatus(e, nowMs)) {
+    case 'live':
+      return <StatusPill tone="success" label="Live now" size="sm" />;
+    case 'today':
+      return <StatusPill tone="info" label="Today" size="sm" />;
+    case 'upcoming':
+      return <StatusPill tone="neutral" label="Upcoming" size="sm" />;
+    case 'ended':
+    case null:
+      return null;
+  }
+}
+
+function EventRow({
+  e,
+  nowMs,
+  offline,
+  onOpen,
+}: {
+  e: ScannableEvent;
+  nowMs: number;
+  offline: boolean;
+  onOpen: (id: string) => void;
+}) {
+  const label = eventLabel(e);
+  const pill = statusPill(e, nowMs);
+  const note =
+    pill !== null || offline ? (
+      <View style={{ flexDirection: 'row', gap: space.s2, flexWrap: 'wrap', marginTop: space.s1 }}>
+        {pill}
+        {offline ? (
+          <StatusPill tone="neutral" icon={Download} label="Offline list ready" size="sm" />
+        ) : null}
+      </View>
+    ) : undefined;
+  return (
+    <ListRow
       onPress={() => {
         onOpen(e.id);
       }}
-      style={({ pressed }) => ({
-        minHeight: density.gate.rowMin,
-        padding: space.s5,
-        borderRadius: radius.r3,
-        borderWidth: 1,
-        borderColor: color.border,
-        backgroundColor: pressed ? color.wash : color.surface,
-        gap: space.s2,
-      })}
-    >
-      <Text variant="bodyStrong" numberOfLines={2}>
-        {label}
-      </Text>
-      <Text variant="bodySm" tone="textSecondary">
-        {when(e.startsAt)}
-        {e.location ? ` · ${e.location}` : ''}
-      </Text>
-    </Pressable>
+      leading={<DateTile e={e} />}
+      title={label}
+      subtitle={[timeOf(e), e.location].filter(Boolean).join(' · ')}
+      note={note}
+      accessibilityLabel={`${label}, ${when(e.startsAt)}`}
+    />
   );
 }
 
@@ -81,33 +162,50 @@ export function EventListScreen(p: Props) {
 
   let body: ReactNode;
   if (p.state.status === 'loading') {
-    body = <ActivityIndicator color={color.actionFill} accessibilityLabel="Loading events" />;
+    body = <SkeletonRows count={4} />;
   } else if (p.state.status === 'error') {
     body = (
-      <View style={{ gap: space.s4 }}>
-        <Text variant="body">We couldn&apos;t load your events. Check your connection.</Text>
-        <Button label="Try again" onPress={p.onRetry} />
-      </View>
+      <ErrorState
+        title="Couldn’t load your events"
+        message="Check your connection."
+        safeLine={p.offlineLists.size > 0 ? 'Offline lists on this phone still work' : undefined}
+        onRetry={p.onRetry}
+      />
     );
   } else if (p.state.events.length === 0) {
-    body = <Text variant="body">No events assigned — ask the organiser.</Text>;
+    body = (
+      <EmptyState
+        illustration="noEvents"
+        title="No events assigned"
+        message="Ask the organiser to add you as gate staff."
+        action={{ label: 'Refresh', onPress: p.onRefresh }}
+      />
+    );
   } else {
     const g = groupEvents(p.state.events, p.nowMs);
+    const row = (e: ScannableEvent) => (
+      <EventRow
+        key={e.id}
+        e={e}
+        nowMs={p.nowMs}
+        offline={p.offlineLists.has(e.id)}
+        onOpen={p.onOpen}
+      />
+    );
     body = (
-      <View style={{ gap: space.s4 }}>
-        {g.upcoming.map((e) => (
-          <Row key={e.id} e={e} onOpen={p.onOpen} />
-        ))}
+      <View>
+        {g.upcoming.map(row)}
         {g.earlier.length > 0 ? (
           <>
-            <Button
-              variant="secondary"
-              label={`Earlier (${String(g.earlier.length)})`}
-              onPress={() => {
+            <SectionHeader
+              label="Earlier"
+              count={g.earlier.length}
+              expanded={showEarlier}
+              onToggle={() => {
                 setShowEarlier((v) => !v);
               }}
             />
-            {showEarlier ? g.earlier.map((e) => <Row key={e.id} e={e} onOpen={p.onOpen} />) : null}
+            {showEarlier ? g.earlier.map(row) : null}
           </>
         ) : null}
       </View>
@@ -115,23 +213,18 @@ export function EventListScreen(p: Props) {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: color.canvas }}>
-      <ScrollView
-        contentContainerStyle={{ padding: space.s5, gap: space.s6 }}
-        refreshControl={<RefreshControl refreshing={p.refreshing} onRefresh={p.onRefresh} />}
-      >
-        <View style={{ gap: space.s2 }}>
-          <Text variant="titleLg" accessibilityRole="header">
-            Your events
-          </Text>
-          <Text variant="bodySm" tone="textMuted">
-            {p.identity}
-          </Text>
-        </View>
-        {p.header}
-        {body}
-        <Button variant="secondary" label="Sign out" onPress={p.onSignOut} />
-      </ScrollView>
-    </SafeAreaView>
+    <Screen
+      scroll
+      bg="canvas"
+      refreshControl={<RefreshControl refreshing={p.refreshing} onRefresh={p.onRefresh} />}
+      header={
+        <Header
+          title="Events"
+          right={<IconButton icon={UserRound} accessibilityLabel="Account" onPress={p.onOpenAccount} />}
+        />
+      }
+    >
+      {body}
+    </Screen>
   );
 }
