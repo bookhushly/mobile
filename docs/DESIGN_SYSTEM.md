@@ -175,7 +175,7 @@ Shadows tinted ink (`26,13,77`), never black; no violet glow.
 
 ```
 src/shared/theme/  tokens.ts (private) · theme.ts (roles, textTone, surfaceTone) · type.ts · density.ts · elevation.ts · motion.ts · sizes.ts · fonts.ts · contrast.ts · index.ts
-src/shared/ui/     Text · Box · Stack · Inline · Card · Icon · Money · formatNaira · Button · IconButton · ToggleButton · TextLink · Input · SearchField · PinField · Screen · Header · Sheet · ListRow · SectionHeader · SegmentedControl · Divider · StatusPill · Banner · EmptyState · ErrorState · Skeleton · SkeletonRows · Spinner · Illustration · SuccessMark · OutcomeScreen · OutcomeAction · ShellPlaceholder · DensityProvider · useMotionTier · PressableScale
+src/shared/ui/     Text · Box · Stack · Inline · Card · Icon · Money · formatNaira · Button · IconButton · ToggleButton · TextLink · Input · SearchField · PinField · Screen · Header · Sheet · ListRow · SectionHeader · SegmentedControl · Divider · StatusPill · Banner · EmptyState · ErrorState · Skeleton · SkeletonRows · Spinner · Illustration · SuccessMark · OutcomeScreen · OutcomeAction · ShellPlaceholder · DensityProvider · useDensity · useDensityName · useMotionTier · PressableScale
 ```
 
 - Screens import **semantic roles only** (`color.action`, `color.outcome.admitted`), never the palette.
@@ -214,17 +214,17 @@ Mobbin had nothing usable for scanner refused/already-used overlays, receptionis
 
 ## 11. Decisions (owner-answered 2026-10-04)
 
-| # | Decision | Outcome |
-|---|---|---|
-| D1 | 70/20/10 = web definition (20 % graphite/ink; violet tints are not a 20 % fill) | **Yes** |
-| D2 | `#F8F7FB` app canvas with white cards | **Yes** |
-| D3 | Heading weight 600 (brief) vs 500 (web) | **600**; web may be aligned later or the difference accepted |
-| D4 | Body 16 (web parity) vs 17 (iOS) | **16** |
-| D5 | Darker semantic stops than web; file web fix | **Yes** |
-| D6 | One cross-platform icon set vs SF Symbols on iOS | **One set (lucide)** |
-| D7 | Missing `ǹ`: system fallback vs Source Serif 4 | **Accept fallback** |
-| D8 | Source Serif limited to ≥32 px display | **Yes** |
-| D9 | Gate full-screen solid fills break 70/20/10 | **Yes** |
-| D10 | Tablet two-pane receptionist in v1 | **Yes — in v1** (read from the owner's "Yes" on this row; the earlier recommendation was to defer. Confirm if that was not the intent) |
+| #   | Decision                                                                        | Outcome                                                                                                                                |
+| --- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | 70/20/10 = web definition (20 % graphite/ink; violet tints are not a 20 % fill) | **Yes**                                                                                                                                |
+| D2  | `#F8F7FB` app canvas with white cards                                           | **Yes**                                                                                                                                |
+| D3  | Heading weight 600 (brief) vs 500 (web)                                         | **600**; web may be aligned later or the difference accepted                                                                           |
+| D4  | Body 16 (web parity) vs 17 (iOS)                                                | **16**                                                                                                                                 |
+| D5  | Darker semantic stops than web; file web fix                                    | **Yes**                                                                                                                                |
+| D6  | One cross-platform icon set vs SF Symbols on iOS                                | **One set (lucide)**                                                                                                                   |
+| D7  | Missing `ǹ`: system fallback vs Source Serif 4                                  | **Accept fallback**                                                                                                                    |
+| D8  | Source Serif limited to ≥32 px display                                          | **Yes**                                                                                                                                |
+| D9  | Gate full-screen solid fills break 70/20/10                                     | **Yes**                                                                                                                                |
+| D10 | Tablet two-pane receptionist in v1                                              | **Yes — in v1** (read from the owner's "Yes" on this row; the earlier recommendation was to defer. Confirm if that was not the intent) |
 
 Rows D1–D9 carry no annotation from the owner, so the recommended value is treated as accepted. Keep values behind tokens so any of these stays a one-line change.

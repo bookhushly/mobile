@@ -170,13 +170,16 @@ Offline, on the **live-ticket** event, use a ticket that's **not in the offline 
 - [ ] **Reduce motion** (Settings → Accessibility → Remove animations): sheets appear without sliding; buttons don't scale.
 - [ ] **Keyboard:** in the PIN sheet and Find guest, the keyboard never covers Confirm or the results.
 - [ ] **10 minutes of scanning** on the new layout: no slowdown, no stuck sheet, battery drop similar to before.
-- [ ] Buttons give a slight press feedback (they shrink a touch when pressed), and none with Remove animations on.
-- [ ] Tapping the PIN boxes brings up the number keyboard.
-- [ ] In the PIN sheet and Enter code (iPhone and Android), the Confirm / Check ticket button stays above the keyboard and nothing is padded twice.
-- [ ] Sheets look right on Android (top edge, Close button reachable, no content under the status bar).
-- [ ] After downloading a list in the scanner and going back, the event shows "Offline list ready" without restarting the app.
-- [ ] Sign out from the account sheet with an unsynced admission: the "hasn't synced" warning appears.
-- [ ] With TalkBack on, the status pill is read out when it changes (e.g. going offline), not every minute.
+- [ ] **Press feedback:** buttons shrink a touch when pressed, and not at all with Remove animations on.
+- [ ] **PIN keyboard:** tapping the PIN boxes brings up the number keyboard.
+- [ ] **Keyboard and buttons:** in the PIN sheet and Enter code (iPhone and Android), the Confirm / Check ticket button stays above the keyboard and there isn't an extra empty gap between the button and the keyboard.
+- [ ] **Android sheets:** sheets look right on Android (top edge, Close button reachable, no content under the status bar).
+- [ ] **Offline list pill:** after downloading a list in the scanner and going back, the event shows "Offline list ready" without restarting the app.
+- [ ] **Sign-out guard:** sign out from the account sheet with an unsynced admission: the "hasn't synced" warning appears.
+- [ ] **TalkBack status pill:** with TalkBack on, the status pill is read out when it changes (e.g. going offline), not every minute.
+- [ ] **Long status pill:** at the largest text size, the long states (e.g. "2 need attention · 3 to sync", "Time last checked 13 h ago · 1 to sync") still show the whole text including "to sync".
+- [ ] **VoiceOver outcomes:** on iPhone with VoiceOver on, an outcome (Admitted, Already used, Refused, Couldn't check) is read out when it appears.
+- [ ] **VoiceOver Admit:** with VoiceOver on, the Admit button in Find guest → Booking can be reached by swiping, separately from the guest's row.
 
 ---
 
