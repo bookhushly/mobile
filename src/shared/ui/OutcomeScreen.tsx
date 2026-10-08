@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react-native';
-import { useContext, type ReactNode } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { useContext, useEffect, useState, type ReactNode } from 'react';
+import { AccessibilityInfo, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 
 import { color, density, iconSize, space } from '@/shared/theme';
@@ -46,6 +46,12 @@ export function OutcomeScreen({
   const { bg, fg } = color.outcome[tone];
   // Context, not the hook: the hook throws without a provider, which bare unit renders lack.
   const insets = useContext(SafeAreaInsetsContext) ?? { top: 0, bottom: 0 };
+  // iOS has no live region: VoiceOver is told the result once, as it appears (Android reads the
+  // assertive alert below). Pinned to the first wording so later lines never re-read it.
+  const [firstAnnounced] = useState(announced);
+  useEffect(() => {
+    if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(firstAnnounced);
+  }, [firstAnnounced]);
   return (
     <Pressable
       testID={testID}
@@ -97,6 +103,7 @@ export function OutcomeScreen({
                     tone="neutral"
                     label={t}
                     onFill={fg}
+                    maxScale={SCALE}
                     testID={`outcome-tag-${t}`}
                   />
                 ))}

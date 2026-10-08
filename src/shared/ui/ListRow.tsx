@@ -18,6 +18,11 @@ type Props = {
   onPress?: () => void;
   accessibilityLabel?: string;
   numberOfLines?: number;
+  /**
+   * A static row reads as one element by default. Pass false when `trailing` is a control
+   * (a button) so iOS does not fold it into the row's label and off the swipe order.
+   */
+  groupAccessibility?: boolean;
   testID?: string;
 };
 
@@ -30,12 +35,13 @@ export function ListRow({
   onPress,
   accessibilityLabel,
   numberOfLines = 1,
+  groupAccessibility = true,
   testID,
 }: Props) {
   const d = useDensity();
   const name =
     accessibilityLabel ?? [title, subtitle].filter((s) => s !== undefined && s !== '').join(', ');
-  const content = (
+  const body = (
     <>
       {leading}
       <View style={{ flex: 1, gap: space.s1 }}>
@@ -49,24 +55,38 @@ export function ListRow({
         ) : null}
         {note}
       </View>
+    </>
+  );
+  const content = (
+    <>
+      {body}
       {trailing}
     </>
   );
+  const line = { flexDirection: 'row' as const, alignItems: 'center' as const, gap: space.s4 };
   const style = {
     minHeight: d.rowMin,
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: space.s4,
+    ...line,
     paddingVertical: space.s3,
     borderBottomWidth: borderWidth.hairline,
     borderBottomColor: color.border,
   };
-  if (onPress === undefined)
+  if (onPress === undefined) {
+    if (groupAccessibility)
+      return (
+        <View testID={testID} accessible accessibilityLabel={name} style={style}>
+          {content}
+        </View>
+      );
     return (
-      <View testID={testID} accessible accessibilityLabel={name} style={style}>
-        {content}
+      <View testID={testID} style={style}>
+        <View accessible accessibilityLabel={name} style={{ flex: 1, ...line }}>
+          {body}
+        </View>
+        {trailing}
       </View>
     );
+  }
   return (
     <Pressable
       testID={testID}
@@ -83,6 +103,7 @@ export function ListRow({
 type SectionProps = { label: string; count?: number; expanded?: boolean; onToggle?: () => void };
 
 export function SectionHeader({ label, count, expanded, onToggle }: SectionProps) {
+  const d = useDensity();
   const text = count === undefined ? label : `${label} (${String(count)})`;
   if (onToggle === undefined)
     return (
@@ -98,7 +119,7 @@ export function SectionHeader({ label, count, expanded, onToggle }: SectionProps
       accessibilityLabel={text}
       accessibilityState={{ expanded: expanded === true }}
       onPress={onToggle}
-      style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: space.s2 }}
+      style={{ minHeight: d.minTarget, flexDirection: 'row', alignItems: 'center', gap: space.s2 }}
     >
       <Text variant="label" tone="textSecondary" style={{ flex: 1 }}>
         {text}

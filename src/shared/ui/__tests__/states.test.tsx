@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { WifiOff } from 'lucide-react-native';
 import { AccessibilityInfo } from 'react-native';
 
 import { color } from '@/shared/theme';
@@ -9,6 +10,14 @@ import { Illustration } from '@/shared/ui/Illustration';
 import { Skeleton, SkeletonRows } from '@/shared/ui/Skeleton';
 import { StatusPill } from '@/shared/ui/StatusPill';
 import { SuccessMark } from '@/shared/ui/SuccessMark';
+
+// Lucide marks its Svg aria-hidden, so it is found by its class token, not a testID.
+const lucide = (name: string) =>
+  screen.container.queryAll(
+    (i) =>
+      typeof i.props.className === 'string' &&
+      i.props.className.split(' ').includes(`lucide-${name}`),
+  );
 
 beforeEach(() => {
   jest.useFakeTimers();
@@ -40,6 +49,34 @@ it('a pill on a coloured fill is an outline in the given colour', async () => {
     borderColor: color.onInverse,
   });
   expect(screen.getByText('Admitted')).toHaveStyle({ color: color.onInverse });
+});
+
+it('a status pill can wrap to two lines and cap its text scale', async () => {
+  await render(
+    <StatusPill
+      tone="success"
+      label="Online · list 2 min ago · 3 to sync"
+      numberOfLines={2}
+      maxScale={1}
+    />,
+  );
+  const text = screen.getByText('Online · list 2 min ago · 3 to sync');
+  expect(text.props.numberOfLines).toBe(2);
+  expect(text.props.maxFontSizeMultiplier).toBe(1);
+  expect(text).toHaveStyle({ flexShrink: 1 });
+});
+
+it('a status pill is one line by default', async () => {
+  await render(<StatusPill tone="neutral" label="Not in" />);
+  expect(screen.getByText('Not in').props.numberOfLines).toBe(1);
+});
+
+it('neutral banner uses an info glyph unless the caller passes one', async () => {
+  await render(<Banner tone="neutral" message="Couldn’t load" />);
+  expect(lucide('info')).toHaveLength(1);
+  expect(lucide('wifi-off')).toHaveLength(0);
+  await screen.rerender(<Banner tone="neutral" message="Offline" icon={WifiOff} />);
+  expect(lucide('wifi-off')).toHaveLength(1);
 });
 
 it('neutral banner for a transient failure is not red', async () => {

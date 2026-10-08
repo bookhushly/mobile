@@ -1,4 +1,10 @@
-import { CircleAlert, CircleCheck, Info, TriangleAlert, WifiOff } from 'lucide-react-native';
+import {
+  CircleAlert,
+  CircleCheck,
+  Info,
+  TriangleAlert,
+  type LucideIcon,
+} from 'lucide-react-native';
 import { View } from 'react-native';
 
 import { color, radius, space, type ColorRole, type StatusTone } from '@/shared/theme';
@@ -8,7 +14,7 @@ import { Icon } from './Icon';
 import { Text } from './Text';
 
 const GLYPH = {
-  neutral: WifiOff,
+  neutral: Info,
   info: Info,
   success: CircleCheck,
   warning: TriangleAlert,
@@ -26,6 +32,8 @@ type Props = {
   tone: StatusTone;
   title?: string;
   message: string;
+  /** Replaces the tone's glyph (a network-related caller may pass WifiOff). */
+  icon?: LucideIcon;
   action?: { label: string; onPress: () => void };
   live?: 'polite' | 'assertive';
   testID?: string;
@@ -36,6 +44,7 @@ export function Banner({
   tone,
   title,
   message,
+  icon,
   action,
   live = 'polite',
   testID = 'banner',
@@ -51,7 +60,7 @@ export function Banner({
         backgroundColor: color.status[tone].bg,
       }}
     >
-      <Icon as={GLYPH[tone]} size="sm" tone={FG[tone]} />
+      <Icon as={icon ?? GLYPH[tone]} size="sm" tone={FG[tone]} />
       <View style={{ flex: 1, gap: space.s2 }}>
         {title !== undefined ? (
           <Text variant="bodyStrong" tone={FG[tone]}>

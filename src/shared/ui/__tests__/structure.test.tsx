@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react-native
 import { Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { Button } from '@/shared/ui/Button';
 import { Divider } from '@/shared/ui/Divider';
 import { Header } from '@/shared/ui/Header';
 import { ListRow, SectionHeader } from '@/shared/ui/ListRow';
@@ -94,6 +95,37 @@ it('list row is a button only when pressable', async () => {
   expect(onPress).toHaveBeenCalledTimes(1);
   expect(screen.queryByRole('button', { name: /Regular/ })).toBeNull();
   expect(screen.getByLabelText('Regular')).toBeTruthy();
+});
+
+const accessibleAncestor = (el: { parent: unknown }) => {
+  let node = el.parent as { props: { accessible?: boolean }; parent: unknown } | null;
+  while (node !== null) {
+    if (node.props.accessible === true) return true;
+    node = node.parent as typeof node;
+  }
+  return false;
+};
+
+it('an ungrouped static row keeps its label and leaves a trailing control reachable', async () => {
+  const onPress = jest.fn();
+  await render(
+    <ListRow
+      title="Ada Obi"
+      subtitle="VIP · ticket 2"
+      groupAccessibility={false}
+      trailing={<Button label="Admit" onPress={onPress} />}
+    />,
+  );
+  expect(screen.getByLabelText('Ada Obi, VIP · ticket 2')).toBeTruthy();
+  const admit = screen.getByRole('button', { name: 'Admit' });
+  expect(accessibleAncestor(admit)).toBe(false);
+  await fireEvent.press(admit);
+  expect(onPress).toHaveBeenCalledTimes(1);
+});
+
+it('a grouped static row puts its trailing content inside the group', async () => {
+  await render(<ListRow title="Regular" trailing={<Text>In</Text>} />);
+  expect(accessibleAncestor(screen.getByText('In'))).toBe(true);
 });
 
 it('collapsible section header reports expanded', async () => {

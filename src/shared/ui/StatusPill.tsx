@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 
 import { borderWidth, color, radius, space, type ColorRole, type StatusTone } from '@/shared/theme';
 
+import { useDensity } from './DensityProvider';
 import { Icon } from './Icon';
 import { Text } from './Text';
 
@@ -15,6 +16,10 @@ type Props = {
   /** On a gate outcome fill: outline and text in the fill's foreground colour, no tint. */
   onFill?: string;
   size?: 'sm' | 'md';
+  /** Lines the label may take before truncating (the gate status pill allows 2). */
+  numberOfLines?: number;
+  /** Overrides the label's Dynamic Type cap (outcome tags use 1). */
+  maxScale?: number;
   testID?: string;
 };
 
@@ -35,8 +40,11 @@ export function StatusPill({
   accessibilityLabel,
   onFill,
   size = 'md',
+  numberOfLines = 1,
+  maxScale,
   testID = 'status-pill',
 }: Props) {
+  const d = useDensity();
   const s = color.status[tone];
   const outlined = onFill !== undefined;
   const face = (
@@ -59,8 +67,9 @@ export function StatusPill({
       <Text
         variant="labelSm"
         tone={FG[tone]}
-        style={outlined ? { color: onFill } : undefined}
-        numberOfLines={1}
+        style={[{ flexShrink: 1 }, outlined ? { color: onFill } : null]}
+        numberOfLines={numberOfLines}
+        maxScale={maxScale}
       >
         {label}
       </Text>
@@ -73,7 +82,7 @@ export function StatusPill({
       accessibilityLabel={accessibilityLabel ?? label}
       onPress={onPress}
       hitSlop={size === 'sm' ? 12 : 8}
-      style={{ minHeight: size === 'sm' ? 32 : 44, justifyContent: 'center' }}
+      style={{ minHeight: size === 'sm' ? 32 : d.minTarget, justifyContent: 'center' }}
     >
       {face}
     </Pressable>
