@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 import { EMPTY_SYNC, type SyncStatus } from '@/features/gate/domain/syncLine';
 
-// Only the sync bar and the door counter subscribe.
+// Only the gate status pill (GateStatus), the door counter and Find guest subscribe.
 export const useSyncView = create<{
   status: SyncStatus;
   set: (p: Partial<SyncStatus>) => void;

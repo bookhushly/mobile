@@ -5,14 +5,7 @@ import type { Sql } from '@/shared/db/sql';
 import { readTicket } from './rosterStore';
 
 export type OutboxState =
-  | 'pending'
-  | 'sending'
-  | 'synced'
-  | 'duplicate'
-  | 'suspect'
-  | 'rejected'
-  | 'blocked'
-  | 'error';
+  'pending' | 'sending' | 'synced' | 'duplicate' | 'suspect' | 'rejected' | 'blocked' | 'error';
 
 export type OutboxMode = 'offline' | 'manual_lookup' | 'offline_override';
 export type Approval = { approvedBy: string; reason: string | null };
@@ -55,8 +48,7 @@ export type OverrideInput = {
 };
 export type ActivityTab = 'toSync' | 'attention' | 'synced';
 export type RecordResult =
-  | { recorded: true; seq: number }
-  | { recorded: false; ticket: RosterTicket | null };
+  { recorded: true; seq: number } | { recorded: false; ticket: RosterTicket | null };
 
 const STATES: readonly OutboxState[] = [
   'pending',
@@ -99,7 +91,9 @@ function parseResult(text: string | null): Record<string, unknown> | null {
   if (text === null) return null;
   try {
     const v: unknown = JSON.parse(text);
-    return typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+    return typeof v === 'object' && v !== null && !Array.isArray(v)
+      ? (v as Record<string, unknown>)
+      : null;
   } catch {
     return null;
   }
@@ -124,12 +118,31 @@ const toItem = (r: ItemSqlRow): OutboxItem => ({
 
 async function insertItem(
   t: Sql,
-  i: { eventId: string; ticketId: string; code: string; scannedAt: string; kid: string | null; appVersion: string; mode: OutboxMode; approval: Approval | null },
+  i: {
+    eventId: string;
+    ticketId: string;
+    code: string;
+    scannedAt: string;
+    kid: string | null;
+    appVersion: string;
+    mode: OutboxMode;
+    approval: Approval | null;
+  },
 ): Promise<number> {
   const r = await t.get<{ seq: number }>(
     `INSERT INTO outbox (event_id, ticket_id, code, scanned_at, mode, kid, app_version, state, reason, approved_by)
      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?) RETURNING client_seq AS seq`,
-    [i.eventId, i.ticketId, i.code, i.scannedAt, i.mode, i.kid, i.appVersion, i.approval?.reason ?? null, i.approval?.approvedBy ?? null],
+    [
+      i.eventId,
+      i.ticketId,
+      i.code,
+      i.scannedAt,
+      i.mode,
+      i.kid,
+      i.appVersion,
+      i.approval?.reason ?? null,
+      i.approval?.approvedBy ?? null,
+    ],
   );
   if (r === null) throw new Error('outbox insert returned no row');
   return r.seq;
@@ -150,7 +163,11 @@ export function createOutboxStore(db: Sql, deps: { newDeviceId: () => string }) 
         if (u.changes === 0) {
           return { recorded: false, ticket: await readTicket(t, input.eventId, input.ticketId) };
         }
-        const seq = await insertItem(t, { ...input, mode: input.mode ?? 'offline', approval: input.approval ?? null });
+        const seq = await insertItem(t, {
+          ...input,
+          mode: input.mode ?? 'offline',
+          approval: input.approval ?? null,
+        });
         return { recorded: true, seq };
       }),
 
@@ -164,7 +181,8 @@ export function createOutboxStore(db: Sql, deps: { newDeviceId: () => string }) 
             'UPDATE roster_ticket SET checked_in_at = ?, by_me = 1, scanned_by = NULL WHERE event_id = ? AND id = ? AND checked_in_at IS NULL',
             [input.scannedAt, input.eventId, input.ticketId],
           );
-          if (u.changes === 0) return { recorded: false, ticket: await readTicket(t, input.eventId, input.ticketId) };
+          if (u.changes === 0)
+            return { recorded: false, ticket: await readTicket(t, input.eventId, input.ticketId) };
         } else {
           const dup = await t.get<{ one: number }>(
             'SELECT 1 AS one FROM outbox WHERE event_id = ? AND ticket_id = ? LIMIT 1',
@@ -210,7 +228,10 @@ export function createOutboxStore(db: Sql, deps: { newDeviceId: () => string }) 
 
     markSending: async (seqs: number[]): Promise<void> => {
       if (seqs.length === 0) return;
-      await db.run(`UPDATE outbox SET state = 'sending' WHERE state = 'pending' AND client_seq IN (${marks(seqs.length)})`, seqs);
+      await db.run(
+        `UPDATE outbox SET state = 'sending' WHERE state = 'pending' AND client_seq IN (${marks(seqs.length)})`,
+        seqs,
+      );
     },
 
     settle: (
@@ -218,11 +239,10 @@ export function createOutboxStore(db: Sql, deps: { newDeviceId: () => string }) 
     ): Promise<void> =>
       db.tx(async (t) => {
         for (const u of updates) {
-          await t.run("UPDATE outbox SET state = ?, result = ? WHERE client_seq = ? AND state = 'sending'", [
-            u.state,
-            u.result === null ? null : JSON.stringify(u.result),
-            u.seq,
-          ]);
+          await t.run(
+            "UPDATE outbox SET state = ?, result = ? WHERE client_seq = ? AND state = 'sending'",
+            [u.state, u.result === null ? null : JSON.stringify(u.result), u.seq],
+          );
         }
       }),
 
@@ -236,7 +256,9 @@ export function createOutboxStore(db: Sql, deps: { newDeviceId: () => string }) 
 
     // "Sync now" before sign-out: the person is waiting, so don't honour the backoff.
     retryNow: async (eventId: string): Promise<void> => {
-      await db.run("UPDATE outbox SET next_try_at = 0 WHERE event_id = ? AND state = 'pending'", [eventId]);
+      await db.run("UPDATE outbox SET next_try_at = 0 WHERE event_id = ? AND state = 'pending'", [
+        eventId,
+      ]);
     },
 
     // A crash mid-send leaves items "sending"; the batch endpoint is idempotent on client_seq.
@@ -245,11 +267,19 @@ export function createOutboxStore(db: Sql, deps: { newDeviceId: () => string }) 
     },
 
     blockEvent: async (eventId: string): Promise<void> => {
-      await db.run(`UPDATE outbox SET state = 'blocked' WHERE event_id = ? AND state IN ${UNSYNCED}`, [eventId]);
+      await db.run(
+        `UPDATE outbox SET state = 'blocked' WHERE event_id = ? AND state IN ${UNSYNCED}`,
+        [eventId],
+      );
     },
 
     status: async (eventId: string) => {
-      const r = await db.get<{ pending: number | null; attention: number | null; blocked: number | null; next: number | null }>(
+      const r = await db.get<{
+        pending: number | null;
+        attention: number | null;
+        blocked: number | null;
+        next: number | null;
+      }>(
         `SELECT sum(state IN ${UNSYNCED}) AS pending, sum(state IN ${ATTENTION}) AS attention,
                 sum(state = 'blocked') AS blocked,
                 min(CASE WHEN state = 'pending' THEN next_try_at END) AS next
@@ -274,7 +304,12 @@ export function createOutboxStore(db: Sql, deps: { newDeviceId: () => string }) 
         )
       ).map((r) => ({ ...toItem(r), ticketType: r.ticket_type, ticketIndex: r.ticket_index })),
 
-    list: async (eventId: string, tab: ActivityTab, beforeSeq: number | null, limit: number): Promise<AttentionItem[]> =>
+    list: async (
+      eventId: string,
+      tab: ActivityTab,
+      beforeSeq: number | null,
+      limit: number,
+    ): Promise<AttentionItem[]> =>
       (
         await db.all<ItemSqlRow & { ticket_type: string | null; ticket_index: number | null }>(
           `SELECT o.*, r.ticket_type, r.ticket_index FROM outbox o
@@ -296,8 +331,15 @@ export function createOutboxStore(db: Sql, deps: { newDeviceId: () => string }) 
       ).map((r) => {
         const i = toItem(r);
         return {
-          ticketId: i.ticketId, ticketType: r.ticket_type, ticketIndex: r.ticket_index, scannedAt: i.scannedAt,
-          mode: i.mode, state: i.state, result: i.result, reason: i.reason, approvedBy: i.approvedBy,
+          ticketId: i.ticketId,
+          ticketType: r.ticket_type,
+          ticketIndex: r.ticket_index,
+          scannedAt: i.scannedAt,
+          mode: i.mode,
+          state: i.state,
+          result: i.result,
+          reason: i.reason,
+          approvedBy: i.approvedBy,
         };
       }),
 
@@ -309,9 +351,11 @@ export function createOutboxStore(db: Sql, deps: { newDeviceId: () => string }) 
     },
 
     eventsWithUnsynced: async (): Promise<string[]> =>
-      (await db.all<{ event_id: string }>(`SELECT DISTINCT event_id FROM outbox WHERE state IN ${UNSYNCED}`)).map(
-        (r) => r.event_id,
-      ),
+      (
+        await db.all<{ event_id: string }>(
+          `SELECT DISTINCT event_id FROM outbox WHERE state IN ${UNSYNCED}`,
+        )
+      ).map((r) => r.event_id),
 
     hasUnsynced: async (eventId: string): Promise<boolean> =>
       (await db.get<{ one: number }>(

@@ -1,4 +1,9 @@
-import { LOCK_MS, MAX_FAILURES, NO_LOCK, type LockRecord } from '@/features/gate/domain/overrideLock';
+import {
+  LOCK_MS,
+  MAX_FAILURES,
+  NO_LOCK,
+  type LockRecord,
+} from '@/features/gate/domain/overrideLock';
 import type { Sql } from '@/shared/db/sql';
 import type { KeyValue } from '@/shared/lib/kv';
 
@@ -7,14 +12,22 @@ export const EMPTY_TALLY: ShiftTally = { admitted: 0, used: 0, refused: 0, could
 
 const LOCK_KEY = 'override_lock';
 const TALLY_KEY = 'shift_tally';
-const UPSERT = 'INSERT INTO device (k, v) VALUES (?, ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v';
+const UPSERT =
+  'INSERT INTO device (k, v) VALUES (?, ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v';
 
 const isLock = (v: unknown): v is LockRecord =>
-  typeof v === 'object' && v !== null && 'failures' in v && typeof v.failures === 'number' &&
-  'lockedUntil' in v && (v.lockedUntil === null || typeof v.lockedUntil === 'number');
+  typeof v === 'object' &&
+  v !== null &&
+  'failures' in v &&
+  typeof v.failures === 'number' &&
+  'lockedUntil' in v &&
+  (v.lockedUntil === null || typeof v.lockedUntil === 'number');
 const isTally = (v: unknown): v is ShiftTally =>
-  typeof v === 'object' && v !== null &&
-  (['admitted', 'used', 'refused', 'couldntCheck'] as const).every((k) => k in v && typeof (v as Record<string, unknown>)[k] === 'number');
+  typeof v === 'object' &&
+  v !== null &&
+  (['admitted', 'used', 'refused', 'couldntCheck'] as const).every(
+    (k) => k in v && typeof (v as Record<string, unknown>)[k] === 'number',
+  );
 
 // The tally lives in the encrypted DB's key/value table (wiped with the account's data at sign-out).
 // The override lockout lives in `lockKv` (SecureStore), which must survive sign-out, otherwise signing

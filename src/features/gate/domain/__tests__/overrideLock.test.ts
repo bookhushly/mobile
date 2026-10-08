@@ -1,4 +1,10 @@
-import { afterFailure, afterSuccess, LOCK_MS, lockState, NO_LOCK } from '@/features/gate/domain/overrideLock';
+import {
+  afterFailure,
+  afterSuccess,
+  LOCK_MS,
+  lockState,
+  NO_LOCK,
+} from '@/features/gate/domain/overrideLock';
 
 const T = Date.parse('2026-10-07T18:00:00Z');
 

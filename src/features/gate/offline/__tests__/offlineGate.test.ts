@@ -18,8 +18,17 @@ const code = (raw: string): TicketCode => {
   return p.value;
 };
 const row = (id: string, index: number): RosterRow => ({
-  id, ticketType: 'Regular', ticketIndex: index, bookingId: BOOKING, bookingStatus: 'confirmed',
-  checkedInAt: null, scannedBy: null, byMe: null, holderName: null, phoneMasked: null, seat: null,
+  id,
+  ticketType: 'Regular',
+  ticketIndex: index,
+  bookingId: BOOKING,
+  bookingStatus: 'confirmed',
+  checkedInAt: null,
+  scannedBy: null,
+  byMe: null,
+  holderName: null,
+  phoneMasked: null,
+  seat: null,
 });
 
 async function setup(opts: { ready?: boolean } = {}) {
@@ -27,14 +36,27 @@ async function setup(opts: { ready?: boolean } = {}) {
   await migrate(db, MIGRATIONS);
   const roster = createRosterStore(db);
   const outbox = createOutboxStore(db, { newDeviceId: () => 'device-abcdef12' });
-  await roster.beginSync(EV, 'full', '2026-10-07T17:00:00Z', { title: null, eventDate: null, requireDynamic: false, total: 2 }, BH2_KEYS);
+  await roster.beginSync(
+    EV,
+    'full',
+    '2026-10-07T17:00:00Z',
+    { title: null, eventDate: null, requireDynamic: false, total: 2 },
+    BH2_KEYS,
+  );
   await roster.writePage(EV, 'full', [row(BH2_ID, 1), row(OTHER, 2)], null);
   if (opts.ready !== false) await roster.finishSync(EV, 'full');
   const onKeysOutdated = jest.fn();
   const onAdmitted = jest.fn();
   const gate = createOfflineGate({
-    eventId: EV, roster, outbox, device: createDeviceStore(db, { lockKv: memoryKv() }), serverNow: () => BH2_AT, clockState: () => ({ suspect: false, checkedAgoMs: 0 }),
-    appVersion: '1.0.0 (7)', onKeysOutdated, onAdmitted,
+    eventId: EV,
+    roster,
+    outbox,
+    device: createDeviceStore(db, { lockKv: memoryKv() }),
+    serverNow: () => BH2_AT,
+    clockState: () => ({ suspect: false, checkedAgoMs: 0 }),
+    appVersion: '1.0.0 (7)',
+    onKeysOutdated,
+    onAdmitted,
   });
   return { roster, outbox, gate, onKeysOutdated, onAdmitted };
 }
@@ -44,11 +66,21 @@ describe('offline gate', () => {
     const { outbox, gate, onAdmitted } = await setup();
     const o = await gate.decide(code(BH2_TOKEN));
     expect(o).toEqual({
-      kind: 'admitted', offline: true, ticketType: 'Regular', ticketIndex: 1, totalTickets: 2, checkedInCount: 1,
+      kind: 'admitted',
+      offline: true,
+      ticketType: 'Regular',
+      ticketIndex: 1,
+      totalTickets: 2,
+      checkedInCount: 1,
       checkedInAt: new Date(BH2_AT).toISOString(),
     });
     expect(await outbox.due(EV, 0, 10)).toEqual([
-      expect.objectContaining({ ticketId: BH2_ID, code: BH2_TOKEN, kid: 't', scannedAt: new Date(BH2_AT).toISOString() }),
+      expect.objectContaining({
+        ticketId: BH2_ID,
+        code: BH2_TOKEN,
+        kid: 't',
+        scannedAt: new Date(BH2_AT).toISOString(),
+      }),
     ]);
     expect(onAdmitted).toHaveBeenCalledTimes(1);
   });
@@ -64,13 +96,19 @@ describe('offline gate', () => {
     expect((await gate.decide(code(BH2_TOKEN))).kind).toBe('admitted');
     expect(await outbox.due(EV, 0, 10)).toHaveLength(1);
     await roster.setKeys(EV, []);
-    expect(await gate.decide(code(BH2_TOKEN))).toEqual({ kind: 'couldntCheck', cause: 'keysOutdated' });
+    expect(await gate.decide(code(BH2_TOKEN))).toEqual({
+      kind: 'couldntCheck',
+      cause: 'keysOutdated',
+    });
   });
 
   it('the same ticket as a printed code right after is already used by you', async () => {
     const { gate } = await setup();
     await gate.decide(code(BH2_TOKEN));
-    expect(await gate.decide(code(BH2_ID))).toMatchObject({ kind: 'used', scannedBy: { kind: 'me' } });
+    expect(await gate.decide(code(BH2_ID))).toMatchObject({
+      kind: 'used',
+      scannedBy: { kind: 'me' },
+    });
   });
 
   it('two presentations of one ticket at once admit exactly once', async () => {
@@ -82,36 +120,61 @@ describe('offline gate', () => {
 
   it('no finished list yet → couldnt check, nothing written', async () => {
     const { outbox, gate } = await setup({ ready: false });
-    expect(await gate.decide(code(BH2_ID))).toEqual({ kind: 'couldntCheck', cause: 'noOfflineList' });
+    expect(await gate.decide(code(BH2_ID))).toEqual({
+      kind: 'couldntCheck',
+      cause: 'noOfflineList',
+    });
     expect(await outbox.due(EV, 0, 10)).toEqual([]);
   });
 
   it('a full refresh in progress does not hide the current list', async () => {
     const { roster, gate } = await setup();
-    await roster.beginSync(EV, 'full', '2026-10-07T18:00:00Z', { title: null, eventDate: null, requireDynamic: false, total: 0 }, null);
+    await roster.beginSync(
+      EV,
+      'full',
+      '2026-10-07T18:00:00Z',
+      { title: null, eventDate: null, requireDynamic: false, total: 0 },
+      null,
+    );
     expect((await gate.decide(code(OTHER))).kind).toBe('admitted');
   });
 
   it('a booking code and an unknown ticket are refused differently', async () => {
     const { gate } = await setup();
-    expect(await gate.decide(code(BOOKING))).toMatchObject({ kind: 'refused', reason: 'oldFormat' });
+    expect(await gate.decide(code(BOOKING))).toMatchObject({
+      kind: 'refused',
+      reason: 'oldFormat',
+    });
     expect(await gate.decide(code('00000000-0000-4000-8000-0000000000ff'))).toMatchObject({
-      kind: 'refused', reason: 'notInList', listUpdatedAt: Date.parse('2026-10-07T17:00:00Z'),
+      kind: 'refused',
+      reason: 'notInList',
+      listUpdatedAt: Date.parse('2026-10-07T17:00:00Z'),
     });
   });
 
   it('an unknown key asks for a key refresh', async () => {
     const { roster, gate, onKeysOutdated } = await setup();
     await roster.setKeys(EV, []);
-    expect(await gate.decide(code(BH2_TOKEN))).toEqual({ kind: 'couldntCheck', cause: 'keysOutdated' });
+    expect(await gate.decide(code(BH2_TOKEN))).toEqual({
+      kind: 'couldntCheck',
+      cause: 'keysOutdated',
+    });
     expect(onKeysOutdated).toHaveBeenCalled();
   });
 
   it('live answers teach the list', async () => {
     const { roster, gate } = await setup();
     await gate.noteLive(code(OTHER), {
-      kind: 'used', checkedInAt: '2026-10-07T18:00:00Z', scannedBy: { kind: 'named', name: 'Ada' }, ticketType: null, replayed: false,
+      kind: 'used',
+      checkedInAt: '2026-10-07T18:00:00Z',
+      scannedBy: { kind: 'named', name: 'Ada' },
+      ticketType: null,
+      replayed: false,
     });
-    expect(await roster.ticket(EV, OTHER)).toMatchObject({ checkedInAt: '2026-10-07T18:00:00Z', scannedBy: 'Ada', byMe: false });
+    expect(await roster.ticket(EV, OTHER)).toMatchObject({
+      checkedInAt: '2026-10-07T18:00:00Z',
+      scannedBy: 'Ada',
+      byMe: false,
+    });
   });
 });

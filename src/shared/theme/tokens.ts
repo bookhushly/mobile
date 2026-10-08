@@ -27,6 +27,8 @@ export const palette = {
   gateRefused: '#991B1B',
   gateUsedBg: '#FBBF24',
   gateRetry: '#4A4670',
+  // Neutral status ("couldn't reach", lookup/override markers): ink-soft text on wash.
+  neutral: '#4A4670',
 } as const;
 
 export const space = {

@@ -58,6 +58,12 @@ it('re-reads the permission when the app returns to the foreground', async () =>
   expect(remove).toHaveBeenCalled();
 });
 
+it('reports loading until the permission has been read, so no prompt flashes', async () => {
+  mockState.perm = null;
+  const { result } = await renderHook(() => useCameraAccess());
+  expect(result.current.permission).toBe('loading');
+});
+
 it('treats an undetermined permission as unknown, not denied', async () => {
   mockState.perm = { granted: false, canAskAgain: true, status: 'undetermined' };
   const { result } = await renderHook(() => useCameraAccess());

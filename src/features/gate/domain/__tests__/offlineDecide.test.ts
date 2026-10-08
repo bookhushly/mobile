@@ -44,9 +44,9 @@ const outcomeOf = (c: TicketCode, f: OfflineFacts) => {
 describe('ticketIdOf', () => {
   it('reads the ticket id from BH2, BH1 and static codes', () => {
     expect(ticketIdOf(code(BH2_TOKEN))).toBe(BH2_ID);
-    expect(ticketIdOf(code('BH1.3f2504e04f8911d39a0c0305e82c3301.abc.0123456789abcdefghijkl'))).toBe(
-      BH2_ID,
-    );
+    expect(
+      ticketIdOf(code('BH1.3f2504e04f8911d39a0c0305e82c3301.abc.0123456789abcdefghijkl')),
+    ).toBe(BH2_ID);
     expect(ticketIdOf(STATIC)).toBe(BH2_ID);
     expect(ticketIdOf(code('BH2.garbage'))).toBeNull();
   });
@@ -118,7 +118,10 @@ describe('decideOffline (spec §4)', () => {
   it('11: already admitted shows when and by whom', () => {
     const at = '2026-10-07T18:00:00.000Z';
     expect(
-      outcomeOf(STATIC, facts({ ticket: ticket({ checkedInAt: at, scannedBy: 'Ada', byMe: false }) })),
+      outcomeOf(
+        STATIC,
+        facts({ ticket: ticket({ checkedInAt: at, scannedBy: 'Ada', byMe: false }) }),
+      ),
     ).toEqual({
       kind: 'used',
       checkedInAt: at,

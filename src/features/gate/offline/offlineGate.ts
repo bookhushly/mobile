@@ -1,5 +1,16 @@
-import { decideOffline, scannedBy, ticketIdOf, type RosterTicket } from '@/features/gate/domain/offlineDecide';
-import { afterFailure, afterSuccess, lockState, type LockRecord, type LockState } from '@/features/gate/domain/overrideLock';
+import {
+  decideOffline,
+  scannedBy,
+  ticketIdOf,
+  type RosterTicket,
+} from '@/features/gate/domain/offlineDecide';
+import {
+  afterFailure,
+  afterSuccess,
+  lockState,
+  type LockRecord,
+  type LockState,
+} from '@/features/gate/domain/overrideLock';
 import { parseVerifier, verifyPin, type PinVerifier } from '@/features/gate/domain/overridePin';
 import type { LookupQuery } from '@/features/gate/domain/lookupQuery';
 import type { ScanOutcome } from '@/features/gate/domain/outcome';
@@ -43,7 +54,10 @@ export function createOfflineGate(deps: OfflineGateDeps) {
     const id = ticketIdOf(code);
     const ticket = id === null ? null : await deps.roster.ticket(eventId, id);
     const isBookingId =
-      id !== null && ticket === null && !code.startsWith('BH') && (await deps.roster.hasBooking(eventId, id));
+      id !== null &&
+      ticket === null &&
+      !code.startsWith('BH') &&
+      (await deps.roster.hasBooking(eventId, id));
     const nowMs = deps.serverNow();
     const d = decideOffline(code, {
       ticket,
@@ -155,7 +169,10 @@ export function createOfflineGate(deps: OfflineGateDeps) {
     if (by < 1 || by > 80 || badReason) throw new Error('invalid approval');
   }
 
-  async function admitFromLookup(ticketId: string, approval: Approval | null): Promise<ScanOutcome> {
+  async function admitFromLookup(
+    ticketId: string,
+    approval: Approval | null,
+  ): Promise<ScanOutcome> {
     const granted = takeGrant();
     if (approval !== null) validateApproval(approval, false);
     const meta = await deps.roster.meta(eventId);
@@ -164,7 +181,8 @@ export function createOfflineGate(deps: OfflineGateDeps) {
     if (meta.requireDynamic && approval === null) throw new Error('approval required');
     const ticket = await deps.roster.ticket(eventId, ticketId);
     if (ticket === null) return { kind: 'refused', reason: 'notInList', fixable: false };
-    if (ticket.bookingStatus !== 'confirmed') return { kind: 'refused', reason: 'notConfirmed', fixable: false };
+    if (ticket.bookingStatus !== 'confirmed')
+      return { kind: 'refused', reason: 'notConfirmed', fixable: false };
     const nowMs = deps.serverNow();
     const scannedAt = new Date(nowMs).toISOString();
     if (ticket.checkedInAt !== null) return usedOutcome(ticket, scannedAt);
@@ -183,7 +201,10 @@ export function createOfflineGate(deps: OfflineGateDeps) {
     return admittedOutcome(ticket, scannedAt, 'lookup');
   }
 
-  async function override(code: TicketCode, approval: { approvedBy: string; reason: string }): Promise<ScanOutcome> {
+  async function override(
+    code: TicketCode,
+    approval: { approvedBy: string; reason: string },
+  ): Promise<ScanOutcome> {
     const granted = takeGrant();
     validateApproval(approval, true);
     const ticketId = ticketIdOf(code);
@@ -280,9 +301,11 @@ export function createOfflineGate(deps: OfflineGateDeps) {
     return run;
   }
 
-  const needsPinForLookup = async (): Promise<boolean> => (await deps.roster.meta(eventId))?.requireDynamic === true;
+  const needsPinForLookup = async (): Promise<boolean> =>
+    (await deps.roster.meta(eventId))?.requireDynamic === true;
   const search = (q: LookupQuery): Promise<GuestRow[]> => deps.roster.search(eventId, q);
-  const bookingTickets = (bookingId: string): Promise<GuestRow[]> => deps.roster.bookingTickets(eventId, bookingId);
+  const bookingTickets = (bookingId: string): Promise<GuestRow[]> =>
+    deps.roster.bookingTickets(eventId, bookingId);
 
   // Spec decision 7: what the server says online keeps the offline list true.
   async function noteLive(code: TicketCode, outcome: ScanOutcome): Promise<void> {

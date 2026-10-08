@@ -2,13 +2,20 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 
 import type { PinCheck } from '@/features/gate/offline/offlineGate';
 import { PinSheet } from '@/features/gate/ui/PinSheet';
+import { color } from '@/shared/theme';
 
 type Purpose = 'override' | 'lookup';
 
 async function setup(purpose: Purpose, check: (pin: string) => Promise<PinCheck>) {
   const onApproved = jest.fn();
   await render(
-    <PinSheet visible purpose={purpose} check={check} onApproved={onApproved} onClose={jest.fn()} />,
+    <PinSheet
+      visible
+      purpose={purpose}
+      check={check}
+      onApproved={onApproved}
+      onClose={jest.fn()}
+    />,
   );
   return onApproved;
 }
@@ -38,13 +45,17 @@ it('does not need a reason for a lookup', async () => {
   await fill('123456', 'Ada');
   expect(confirm()).toBeEnabled();
   expect(screen.getByText('Supervisor approval')).toBeTruthy();
-  expect(screen.getByText('A supervisor enters the event PIN. Every approval is logged.')).toBeTruthy();
+  expect(
+    screen.getByText('A supervisor enters the event PIN. Every approval is logged.'),
+  ).toBeTruthy();
   expect(screen.queryByText(/override/i)).toBeNull();
 });
 
 it('keeps the override wording for an override', async () => {
   await setup('override', () => Promise.resolve({ kind: 'locked', minutesLeft: 12 }));
-  expect(screen.getByText('A supervisor enters the event PIN. Every override is logged.')).toBeTruthy();
+  expect(
+    screen.getByText('A supervisor enters the event PIN. Every override is logged.'),
+  ).toBeTruthy();
   await fill('123456', 'Ada', 'lost ticket');
   await fireEvent.press(confirm());
   expect(await screen.findByText('Override locked — try again in 12 min')).toBeTruthy();
@@ -72,7 +83,9 @@ it('never runs two checks at once', async () => {
   expect(check).toHaveBeenCalledTimes(1);
   expect(screen.getByText('Checking…')).toBeTruthy();
   resolve({ kind: 'ok' });
-  await waitFor(() => { expect(onApproved).toHaveBeenCalledTimes(1); });
+  await waitFor(() => {
+    expect(onApproved).toHaveBeenCalledTimes(1);
+  });
 });
 
 it('shows the tries left and clears the PIN on a wrong PIN', async () => {
@@ -115,7 +128,9 @@ it('approves with trimmed values and a null reason when a lookup reason is empty
   const onApproved = await setup('lookup', () => Promise.resolve({ kind: 'ok' }));
   await fill('123456', '  Ada  ', '   ');
   await fireEvent.press(confirm());
-  await waitFor(() => { expect(onApproved).toHaveBeenCalledWith({ approvedBy: 'Ada', reason: null }); });
+  await waitFor(() => {
+    expect(onApproved).toHaveBeenCalledWith({ approvedBy: 'Ada', reason: null });
+  });
   expect(onApproved).toHaveBeenCalledTimes(1);
 });
 
@@ -123,8 +138,9 @@ it('passes a trimmed reason for an override', async () => {
   const onApproved = await setup('override', () => Promise.resolve({ kind: 'ok' }));
   await fill('123456', 'Ada', '  lost ticket ');
   await fireEvent.press(confirm());
-  await waitFor(() => { expect(onApproved).toHaveBeenCalledWith({ approvedBy: 'Ada', reason: 'lost ticket' }); },
-  );
+  await waitFor(() => {
+    expect(onApproved).toHaveBeenCalledWith({ approvedBy: 'Ada', reason: 'lost ticket' });
+  });
 });
 
 it('ignores a stale check after close and reopen', async () => {
@@ -137,7 +153,13 @@ it('ignores a stale check after close and reopen', async () => {
   );
   const onApproved = jest.fn();
   const ui = (visible: boolean) => (
-    <PinSheet visible={visible} purpose="lookup" check={check} onApproved={onApproved} onClose={jest.fn()} />
+    <PinSheet
+      visible={visible}
+      purpose="lookup"
+      check={check}
+      onApproved={onApproved}
+      onClose={jest.fn()}
+    />
   );
   const { rerender } = await render(ui(true));
   await fill('123456', 'Ada');
@@ -155,7 +177,13 @@ it('ignores a stale check after close and reopen', async () => {
 it('clears the fields when closed', async () => {
   const check = () => Promise.resolve<PinCheck>({ kind: 'ok' });
   const ui = (visible: boolean) => (
-    <PinSheet visible={visible} purpose="override" check={check} onApproved={jest.fn()} onClose={jest.fn()} />
+    <PinSheet
+      visible={visible}
+      purpose="override"
+      check={check}
+      onApproved={jest.fn()}
+      onClose={jest.fn()}
+    />
   );
   const { rerender } = await render(ui(true));
   await fill('123456', 'Ada', 'lost ticket');
@@ -164,4 +192,47 @@ it('clears the fields when closed', async () => {
   expect(screen.getByLabelText('PIN').props.value).toBe('');
   expect(screen.getByLabelText('Approver').props.value).toBe('');
   expect(screen.getByLabelText('Reason').props.value).toBe('');
+});
+
+it('a transient check failure is neutral, a wrong PIN is danger', async () => {
+  const check = jest
+    .fn()
+    .mockRejectedValueOnce(new Error('x'))
+    .mockResolvedValueOnce({ kind: 'wrong', triesLeft: 4 });
+  await render(
+    <PinSheet
+      visible
+      purpose="override"
+      check={check}
+      onApproved={jest.fn()}
+      onClose={jest.fn()}
+    />,
+  );
+  await fireEvent.changeText(screen.getByLabelText('PIN'), '123456');
+  await fireEvent.changeText(screen.getByLabelText('Approver'), 'Ada');
+  await fireEvent.changeText(screen.getByLabelText('Reason'), 'Phone died');
+  await fireEvent.press(screen.getByRole('button', { name: 'Confirm' }));
+  expect(await screen.findByText('Override isn’t available right now — try again')).toBeTruthy();
+  expect(screen.getByTestId('banner')).toHaveStyle({ backgroundColor: color.status.neutral.bg });
+  await fireEvent.changeText(screen.getByLabelText('PIN'), '123456');
+  await fireEvent.press(screen.getByRole('button', { name: 'Confirm' }));
+  expect(await screen.findByText('Wrong PIN — 4 tries left')).toBeTruthy();
+  expect(screen.getByTestId('banner')).toHaveStyle({ backgroundColor: color.status.danger.bg });
+});
+
+it('closes from the header and has no separate Cancel button', async () => {
+  const onClose = jest.fn();
+  await render(
+    <PinSheet
+      visible
+      purpose="override"
+      check={() => Promise.resolve<PinCheck>({ kind: 'ok' })}
+      onApproved={jest.fn()}
+      onClose={onClose}
+    />,
+  );
+  expect(screen.getByRole('header', { name: 'Supervisor override' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
+  expect(onClose).toHaveBeenCalledTimes(1);
 });

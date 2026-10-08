@@ -241,6 +241,15 @@ export function createRosterStore(db: Sql) {
       return r === null ? null : toMeta(r);
     },
 
+    // Events whose offline list finished downloading (a staged full sync is not ready yet).
+    readyEventIds: async (): Promise<string[]> => {
+      const rows = await db.all<{ event_id: string }>(
+        'SELECT event_id FROM roster_meta WHERE ready = 1 ORDER BY event_id',
+        [],
+      );
+      return rows.map((r) => r.event_id);
+    },
+
     beginSync: (
       eventId: string,
       kind: SyncKind,
@@ -347,10 +356,10 @@ export function createRosterStore(db: Sql) {
 
     bookingTickets: async (eventId: string, bookingId: string): Promise<GuestRow[]> =>
       (
-        await db.all<GuestSqlRow>(`${GUEST_SELECT} WHERE event_id = ? AND booking_id = ? ORDER BY ticket_index`, [
-          eventId,
-          bookingId,
-        ])
+        await db.all<GuestSqlRow>(
+          `${GUEST_SELECT} WHERE event_id = ? AND booking_id = ? ORDER BY ticket_index`,
+          [eventId, bookingId],
+        )
       ).map(toGuest),
 
     hasBooking: async (eventId: string, bookingId: string): Promise<boolean> =>

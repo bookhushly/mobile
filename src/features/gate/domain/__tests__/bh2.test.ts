@@ -35,9 +35,10 @@ describe('BH2', () => {
   });
   it('an unpublished kid, or a broken published key, is unknown_key', () => {
     expect(verifyBh2(BH2_TOKEN, [])).toEqual({ ok: false, reason: 'unknown_key' });
-    expect(verifyBh2(BH2_TOKEN, [{ kid: 'u', publicKey: BH2_KEYS[0]?.publicKey ?? '' }])).toEqual(
-      { ok: false, reason: 'unknown_key' },
-    );
+    expect(verifyBh2(BH2_TOKEN, [{ kid: 'u', publicKey: BH2_KEYS[0]?.publicKey ?? '' }])).toEqual({
+      ok: false,
+      reason: 'unknown_key',
+    });
     expect(verifyBh2(BH2_TOKEN, [{ kid: 't', publicKey: 'nope' }])).toEqual({
       ok: false,
       reason: 'unknown_key',

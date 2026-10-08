@@ -30,7 +30,10 @@ it('keeps the lockout and the shift tally', async () => {
 it('the lockout survives the database being wiped', async () => {
   const lockKv = memoryKv();
   await createDeviceStore(await freshDb(), { lockKv }).setLock({ failures: 5, lockedUntil: 999 });
-  expect(await createDeviceStore(await freshDb(), { lockKv }).lock()).toEqual({ failures: 5, lockedUntil: 999 });
+  expect(await createDeviceStore(await freshDb(), { lockKv }).lock()).toEqual({
+    failures: 5,
+    lockedUntil: 999,
+  });
 });
 
 it('an unreadable lock record fails closed, is saved, and so expires', async () => {

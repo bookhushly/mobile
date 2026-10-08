@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 
@@ -6,7 +6,7 @@ import type { OverlayView } from '@/features/gate/domain/scanSession';
 import { ScannerScreen } from '@/features/gate/screens/ScannerScreen';
 import { useScanView } from '@/features/gate/state/scanView';
 import { useSyncView } from '@/features/gate/state/syncView';
-import { color, density, radius } from '@/shared/theme';
+import { color, radius, space } from '@/shared/theme';
 
 const TICKET = '3f2b8c4e-1a2b-4c3d-8e9f-0a1b2c3d4e5f';
 const mockCamera = { renders: 0, raw: TICKET };
@@ -113,14 +113,17 @@ beforeEach(() => {
 
 it('shows the door counter and passes camera reads to the session', async () => {
   await render(<ScannerScreen {...base} />);
-  expect(screen.getByText('41 / 120')).toBeTruthy();
+  expect(screen.getByRole('button', { name: /41 admitted of 120/ })).toBeTruthy();
+  expect(screen.getByText('41')).toBeTruthy();
+  expect(screen.getByText('of 120')).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
   expect(session.scan).toHaveBeenCalledWith(TICKET, 'camera');
 });
 
 it('shows a dash before the first summary', async () => {
   await render(<ScannerScreen {...base} summary={null} />);
-  expect(screen.getByText('— / —')).toBeTruthy();
+  expect(screen.getByText('—')).toBeTruthy();
+  expect(screen.getByRole('button', { name: /— admitted\. Open recent admissions/ })).toBeTruthy();
 });
 
 it('permission denied: explains, offers settings, and manual entry still works', async () => {
@@ -134,9 +137,103 @@ it('permission denied: explains, offers settings, and manual entry still works',
     />,
   );
   expect(screen.queryByRole('button', { name: 'fake-camera' })).toBeNull();
+  expect(screen.getByText('Camera is off for Bookhushly')).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Open settings' }));
   expect(onOpenSettings).toHaveBeenCalled();
   expect(screen.getByRole('button', { name: 'Enter code' })).toBeTruthy();
+});
+
+it('permission unknown: explains first, asks only on Allow, and offers manual entry', async () => {
+  const onRequestPermission = jest.fn();
+  await render(
+    <ScannerScreen {...base} permission="unknown" onRequestPermission={onRequestPermission} />,
+  );
+  expect(screen.getByText('Allow camera to scan tickets')).toBeTruthy();
+  expect(onRequestPermission).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole('button', { name: 'Allow camera' }));
+  expect(onRequestPermission).toHaveBeenCalledTimes(1);
+  await fireEvent.press(screen.getByRole('button', { name: 'Enter codes by hand' }));
+  expect(screen.getByRole('header', { name: 'Enter code' })).toBeTruthy();
+});
+
+it('while the permission is still being read, neither the camera nor the prompt shows', async () => {
+  await render(<ScannerScreen {...base} permission="loading" />);
+  expect(screen.queryByRole('button', { name: 'fake-camera' })).toBeNull();
+  expect(screen.queryByText('Allow camera to scan tickets')).toBeNull();
+  expect(screen.queryByText('Camera is off for Bookhushly')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Enter code' })).toBeTruthy();
+});
+
+it('denied without a re-ask offers settings', async () => {
+  const onOpenSettings = jest.fn();
+  await render(
+    <ScannerScreen
+      {...base}
+      permission="denied"
+      canAskPermission={false}
+      onOpenSettings={onOpenSettings}
+    />,
+  );
+  expect(screen.getByText('Camera is off for Bookhushly')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Open settings' }));
+  expect(onOpenSettings).toHaveBeenCalledTimes(1);
+});
+
+it('denied but askable offers Allow camera', async () => {
+  const onRequestPermission = jest.fn();
+  await render(
+    <ScannerScreen
+      {...base}
+      permission="denied"
+      canAskPermission
+      onRequestPermission={onRequestPermission}
+    />,
+  );
+  await fireEvent.press(screen.getByRole('button', { name: 'Allow camera' }));
+  expect(onRequestPermission).toHaveBeenCalledTimes(1);
+});
+
+it('the door counter opens recent admissions', async () => {
+  await render(<ScannerScreen {...base} />);
+  await fireEvent.press(screen.getByRole('button', { name: /admitted.*Open recent admissions/ }));
+  expect(screen.getByRole('header', { name: 'Recent admissions' })).toBeTruthy();
+});
+
+it('three bottom controls, labels capped for large text', async () => {
+  await render(<ScannerScreen {...base} />);
+  for (const name of ['Find guest', 'Enter code'])
+    expect(screen.getByRole('button', { name })).toBeTruthy();
+  expect(screen.getByRole('switch', { name: 'Torch' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Recent' })).toBeNull();
+  expect(screen.getByText('Find guest').props.maxFontSizeMultiplier).toBeLessThanOrEqual(1.3);
+});
+
+it('the counter row lets the status pill shrink so its text can wrap', async () => {
+  await render(<ScannerScreen {...base} />);
+  expect(flat(screen.getByTestId('gate-status'))).toMatchObject({ flexShrink: 1 });
+});
+
+it('a wrapped status pill never touches the door counter: the row keeps a gap', async () => {
+  await render(<ScannerScreen {...base} />);
+  expect(flat(screen.getByTestId('counter-row'))).toMatchObject({ gap: space.s5 });
+});
+
+it('the bottom controls add the home-indicator inset once: the safe area leaves the bottom edge off', async () => {
+  await render(<ScannerScreen {...base} />);
+  expect(screen.getByTestId('scanner-screen').props.edges).toMatchObject({ bottom: 'off' });
+});
+
+it('the status pill opens Activity on the Needs attention tab', async () => {
+  useSyncView.setState({
+    status: { ...useSyncView.getState().status, attention: 3 },
+  });
+  await render(<ScannerScreen {...base} />);
+  await fireEvent.press(screen.getByRole('button', { name: '3 need attention' }));
+  expect(screen.getByRole('header', { name: 'Activity' })).toBeTruthy();
+  expect(screen.getByRole('tab', { name: /Needs attention/ })).toBeSelected();
+  await act(() => {
+    useSyncView.getState().reset();
+  });
 });
 
 it('unmounts the camera when the screen is not focused', async () => {
@@ -156,15 +253,15 @@ it('has no undo control anywhere', async () => {
   expect(screen.queryByText(/undo|un-admit/i)).toBeNull();
 });
 
-it('keeps Change event and the sound toggle at least 48 pt, controls spaced by the gate gap', async () => {
-  await render(<ScannerScreen {...base} />);
-  expect(flat(screen.getByRole('link', { name: 'Change event' })).minHeight).toBeGreaterThanOrEqual(
-    48,
-  );
-  const sound = flat(screen.getByRole('button', { name: 'Sound on' }));
-  expect(sound.minHeight).toBeGreaterThanOrEqual(48);
-  expect(sound.minWidth).toBeGreaterThanOrEqual(48);
-  expect(flat(screen.getByTestId('scanner-controls')).gap).toBe(density.gate.targetGap);
+it('has a Change event button and a Sound switch that reflects muted', async () => {
+  const { rerender } = await render(<ScannerScreen {...base} />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Change event' }));
+  expect(base.onChangeEvent).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('switch', { name: 'Sound' })).toBeChecked();
+  await fireEvent.press(screen.getByRole('switch', { name: 'Sound' }));
+  expect(base.onToggleMute).toHaveBeenCalledTimes(1);
+  await rerender(<ScannerScreen {...base} muted />);
+  expect(screen.getByRole('switch', { name: 'Sound' })).not.toBeChecked();
 });
 
 it('Done on a not-assigned refusal leaves; the overlay alone does not', async () => {
@@ -184,12 +281,12 @@ it('Done on any other refusal stays on the scanner', async () => {
   expect(base.onLostAssignment).not.toHaveBeenCalled();
 });
 
-it('shows "Checking N…" on an ink pill', async () => {
+it('shows "Checking N…" on a surface pill readable over the camera', async () => {
   useScanView.setState({ view: { current: null, waiting: 0, pending: 2 } });
   await render(<ScannerScreen {...base} />);
   expect(screen.getByText('Checking 2…')).toBeTruthy();
   const pill = flat(screen.getByTestId('checking-pill'));
-  expect(pill.backgroundColor).toBe(color.textPrimary);
+  expect(pill.backgroundColor).toBe(color.surface);
   expect(pill.borderRadius).toBe(radius.r2);
 });
 
@@ -199,7 +296,7 @@ it('a summary change does not re-render the camera', async () => {
   await rerender(
     <ScannerScreen {...base} summary={{ admitted: 42, total: 120, recent: [] }} summaryStale />,
   );
-  expect(screen.getByText('42 / 120')).toBeTruthy();
+  expect(screen.getByRole('button', { name: /42 admitted of 120, not updated/ })).toBeTruthy();
   expect(mockCamera.renders).toBe(before);
 });
 
@@ -221,32 +318,23 @@ it('pauses camera reads while Enter code or Recent is open', async () => {
   expect(session.scan).not.toHaveBeenCalled();
 });
 
-it('pauses camera reads while Find guest is open', async () => {
+it('pauses camera reads while Activity is open', async () => {
+  useSyncView.setState({ status: { ...useSyncView.getState().status, attention: 1 } });
   await render(<ScannerScreen {...base} />);
-  await fireEvent.press(screen.getByRole('button', { name: 'Find guest' }));
-  await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
-  expect(session.scan).not.toHaveBeenCalled();
-});
-
-it('"N need attention" opens Activity on that tab and pauses camera reads', async () => {
-  useSyncView.setState({
-    status: { ...useSyncView.getState().status, attention: 2 },
-  });
-  await render(<ScannerScreen {...base} />);
-  await fireEvent.press(screen.getByRole('button', { name: '2 need attention' }));
-  await waitFor(() => {
-    expect(base.loadActivity).toHaveBeenCalledWith('attention', null);
-  });
-  expect(
-    screen.getByRole('tab', { name: 'Needs attention' }).props.accessibilityState,
-  ).toMatchObject({
-    selected: true,
-  });
+  await fireEvent.press(screen.getByRole('button', { name: '1 needs attention' }));
+  expect(screen.getByRole('header', { name: 'Activity' })).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
   expect(session.scan).not.toHaveBeenCalled();
   await act(() => {
     useSyncView.getState().reset();
   });
+});
+
+it('pauses camera reads while Find guest is open', async () => {
+  await render(<ScannerScreen {...base} />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Find guest' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
+  expect(session.scan).not.toHaveBeenCalled();
 });
 
 it('a lookup admission shows through the session and closes Find guest', async () => {
@@ -272,7 +360,7 @@ it('a lookup admission shows through the session and closes Find guest', async (
 
 it('marks the counter not updated when the summary failed before any success', async () => {
   await render(<ScannerScreen {...base} summary={null} summaryStale />);
-  expect(screen.getByText('— / —')).toBeTruthy();
+  expect(screen.getByText('—')).toBeTruthy();
   expect(screen.getByText('not updated')).toBeTruthy();
 });
 
@@ -408,7 +496,9 @@ describe('supervisor override', () => {
     notInList();
     await render(<ScannerScreen {...base} />);
     await fireEvent.press(screen.getByRole('button', { name: 'Supervisor override' }));
-    await fireEvent.press(await screen.findByRole('button', { name: 'Cancel' }));
+    await fireEvent.press(
+      within(await screen.findByTestId('pin-sheet')).getByRole('button', { name: 'Close' }),
+    );
     expect(base.override).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Supervisor override' })).toBeEnabled();
   });

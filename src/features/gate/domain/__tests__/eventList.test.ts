@@ -1,4 +1,10 @@
-import { eventLabel, groupEvents, pickAutoOpen } from '@/features/gate/domain/eventList';
+import {
+  dateTile,
+  eventLabel,
+  eventStatus,
+  groupEvents,
+  pickAutoOpen,
+} from '@/features/gate/domain/eventList';
 import type { ScannableEvent } from '@/shared/api/scannableEvents';
 
 const NOW = Date.parse('2026-10-05T12:00:00.000Z');
@@ -50,5 +56,41 @@ describe('eventLabel', () => {
       'Event · 11111111',
     );
     expect(eventLabel(ev('x', null, 'Afro Night'))).toBe('Afro Night');
+  });
+});
+
+describe('eventStatus', () => {
+  const at = (startsAt: string | null) => ev('e1', startsAt, 'Gala');
+  const NOW_LOCAL = new Date(2026, 9, 8, 18, 0).getTime(); // local 18:00, 8 Oct 2026
+
+  it('live from start for 12 hours', () => {
+    expect(eventStatus(at(new Date(2026, 9, 8, 17, 0).toISOString()), NOW_LOCAL)).toBe('live');
+  });
+  it('later today', () => {
+    expect(eventStatus(at(new Date(2026, 9, 8, 21, 0).toISOString()), NOW_LOCAL)).toBe('today');
+  });
+  it('another day', () => {
+    expect(eventStatus(at(new Date(2026, 9, 10, 18, 0).toISOString()), NOW_LOCAL)).toBe('upcoming');
+  });
+  it('ended after 12 hours', () => {
+    expect(eventStatus(at(new Date(2026, 9, 7, 18, 0).toISOString()), NOW_LOCAL)).toBe('ended');
+  });
+  it('no or bad date has no status', () => {
+    expect(eventStatus(at(null), NOW_LOCAL)).toBeNull();
+    expect(eventStatus(at('not a date'), NOW_LOCAL)).toBeNull();
+  });
+});
+
+describe('dateTile', () => {
+  it('month, day and weekday', () => {
+    expect(dateTile(ev('e1', new Date(2026, 9, 10, 18, 0).toISOString(), 'Gala'))).toEqual({
+      month: 'Oct',
+      day: '10',
+      weekday: 'Sat',
+    });
+  });
+  it('null without a usable date', () => {
+    expect(dateTile(ev('e1', null, 'Gala'))).toBeNull();
+    expect(dateTile(ev('e1', 'nope', 'Gala'))).toBeNull();
   });
 });

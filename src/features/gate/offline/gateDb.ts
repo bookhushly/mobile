@@ -12,7 +12,12 @@ import { createOutboxStore, type OutboxStore } from './outboxStore';
 import { createRosterStore, type RosterStore } from './rosterStore';
 import { MIGRATIONS } from './schema';
 
-export type GateDb = { roster: RosterStore; outbox: OutboxStore; device: DeviceStore; close: () => Promise<void> };
+export type GateDb = {
+  roster: RosterStore;
+  outbox: OutboxStore;
+  device: DeviceStore;
+  close: () => Promise<void>;
+};
 
 // One encrypted database per account: a different account on this phone never sees, or syncs,
 // another's admissions; "Sign in again" after a session expiry finds its outbox intact.
@@ -38,7 +43,11 @@ async function keyFor(userId: string): Promise<string> {
   return key;
 }
 
-export async function sweepExpired(roster: RosterStore, outbox: OutboxStore, nowMs: number): Promise<void> {
+export async function sweepExpired(
+  roster: RosterStore,
+  outbox: OutboxStore,
+  nowMs: number,
+): Promise<void> {
   for (const eventId of await roster.expired(nowMs)) {
     if (!(await outbox.hasUnsynced(eventId))) await roster.drop(eventId);
   }

@@ -52,7 +52,7 @@ describe('present', () => {
       present({ kind: 'used', ...base, scannedBy: { kind: 'me' }, replayed: true }, NOW).detail,
     ).toBe('Checked in just now on this phone');
   });
-  it('refused holds until Done; fixable refusals are amber', () => {
+  it('refused holds until Done; fixable refusals are red with an instruction', () => {
     expect(present({ kind: 'refused', reason: 'wrongEvent', fixable: false }, NOW)).toEqual({
       tone: 'refused',
       cue: 'error',
@@ -63,10 +63,12 @@ describe('present', () => {
       tag: null,
       action: 'done',
     });
-    expect(present({ kind: 'refused', reason: 'expired', fixable: true }, NOW)).toMatchObject({
-      tone: 'used',
-      cue: 'warning',
+    const fixableExpired: ScanOutcome = { kind: 'refused', reason: 'expired', fixable: true };
+    expect(present(fixableExpired, NOW)).toMatchObject({
+      tone: 'refused',
+      cue: 'error',
       holdMs: null,
+      title: 'Refused',
       detail: 'Code expired — ask them to refresh their ticket',
     });
   });
@@ -113,10 +115,19 @@ describe('present', () => {
     });
   });
   it.each<[CouldntCheckCause, string]>([
-    ['keysOutdated', "This phone's ticket keys are out of date — connect to the internet, then scan again"],
+    [
+      'keysOutdated',
+      "This phone's ticket keys are out of date — connect to the internet, then scan again",
+    ],
     ['clockChanged', "This phone's time changed — connect to the internet once, then scan again"],
-    ['offlineUnverifiable', "Can't check this code offline — ask them to reopen their ticket when online"],
-    ['noOfflineList', "We couldn't reach the server and there's no offline list on this phone — scan again"],
+    [
+      'offlineUnverifiable',
+      "Can't check this code offline — ask them to reopen their ticket when online",
+    ],
+    [
+      'noOfflineList',
+      "We couldn't reach the server and there's no offline list on this phone — scan again",
+    ],
   ])('couldnt check %s: neutral, never red', (cause, detail) => {
     const p = present({ kind: 'couldntCheck', cause }, NOW);
     expect(p).toMatchObject({ tone: 'retry', title: "Couldn't check", detail, action: 'tryAgain' });
@@ -135,7 +146,14 @@ describe('present', () => {
     expect(p.detail).toMatch(/^Checked in at \d\d:\d\d by you$/);
   });
   it('lookup and override admissions say how they were made', () => {
-    const a = { kind: 'admitted', ticketType: 'VIP', ticketIndex: 1, totalTickets: 1, checkedInCount: 1, checkedInAt: null } as const;
+    const a = {
+      kind: 'admitted',
+      ticketType: 'VIP',
+      ticketIndex: 1,
+      totalTickets: 1,
+      checkedInCount: 1,
+      checkedInAt: null,
+    } as const;
     expect(present({ ...a, offline: true, via: 'lookup' }, NOW).tag).toBe('Lookup · will sync');
     expect(present({ ...a, offline: true, via: 'override' }, NOW).tag).toBe('Override · will sync');
   });

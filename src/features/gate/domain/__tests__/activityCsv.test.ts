@@ -16,7 +16,15 @@ const row = (over: Partial<ActivityRow> = {}): ActivityRow => ({
 describe('activityCsv', () => {
   it('has exactly the agreed columns', () => {
     expect(ACTIVITY_HEADER).toEqual([
-      'ticket_ref', 'ticket_type', 'ticket_number', 'scanned_at', 'mode', 'state', 'server_note', 'reason', 'approved_by',
+      'ticket_ref',
+      'ticket_type',
+      'ticket_number',
+      'scanned_at',
+      'mode',
+      'state',
+      'server_note',
+      'reason',
+      'approved_by',
     ]);
   });
   it('writes one row per item with a short ticket reference', () => {
@@ -38,7 +46,9 @@ describe('activityCsv', () => {
     expect(activityCsv([row()])).not.toContain('3f2504e0-4f89');
   });
   it('a synced item has an empty server note', () => {
-    const line = activityCsv([row({ state: 'synced', result: null, reason: null, approvedBy: null, mode: 'offline' })]).split('\r\n')[1];
+    const line = activityCsv([
+      row({ state: 'synced', result: null, reason: null, approvedBy: null, mode: 'offline' }),
+    ]).split('\r\n')[1];
     expect(line).toBe('3f2504e0,VIP,2,2026-10-07T18:00:00.000Z,offline,synced,,,');
   });
 });

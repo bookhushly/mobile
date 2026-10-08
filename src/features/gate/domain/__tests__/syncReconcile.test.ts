@@ -8,25 +8,49 @@ describe('reconcile', () => {
     });
   });
   it('already used by this account is a harmless retry', () => {
-    expect(reconcile({ client_seq: 1, ok: false, code: 'already_checked_in', by_me: true }).state).toBe('synced');
+    expect(
+      reconcile({ client_seq: 1, ok: false, code: 'already_checked_in', by_me: true }).state,
+    ).toBe('synced');
   });
   it('already used by someone else is a duplicate with their name and time', () => {
     expect(
-      reconcile({ client_seq: 1, ok: false, code: 'already_checked_in', by_me: false, scanned_by: 'Ada', checked_in_at: 't' }),
-    ).toEqual({ state: 'duplicate', result: { code: 'already_checked_in', scanned_by: 'Ada', checked_in_at: 't' } });
+      reconcile({
+        client_seq: 1,
+        ok: false,
+        code: 'already_checked_in',
+        by_me: false,
+        scanned_by: 'Ada',
+        checked_in_at: 't',
+      }),
+    ).toEqual({
+      state: 'duplicate',
+      result: { code: 'already_checked_in', scanned_by: 'Ada', checked_in_at: 't' },
+    });
   });
   it('an unknown by_me is surfaced as a duplicate, not guessed away', () => {
-    expect(reconcile({ client_seq: 1, ok: false, code: 'already_checked_in', by_me: null }).state).toBe('duplicate');
+    expect(
+      reconcile({ client_seq: 1, ok: false, code: 'already_checked_in', by_me: null }).state,
+    ).toBe('duplicate');
   });
   it.each(['invalid_code', 'expired_code'])('%s on re-verify is suspect', (code) => {
     expect(reconcile({ client_seq: 1, ok: false, code }).state).toBe('suspect');
   });
-  it.each(['not_found', 'wrong_event', 'not_confirmed', 'static_not_allowed', 'bad_timestamp', 'booking_qr', 'bad_item', 'forbidden', 'something_new'])(
-    '%s is rejected with its code',
-    (code) => {
-      expect(reconcile({ client_seq: 1, ok: false, code })).toEqual({ state: 'rejected', result: { code } });
-    },
-  );
+  it.each([
+    'not_found',
+    'wrong_event',
+    'not_confirmed',
+    'static_not_allowed',
+    'bad_timestamp',
+    'booking_qr',
+    'bad_item',
+    'forbidden',
+    'something_new',
+  ])('%s is rejected with its code', (code) => {
+    expect(reconcile({ client_seq: 1, ok: false, code })).toEqual({
+      state: 'rejected',
+      result: { code },
+    });
+  });
 });
 
 describe('backoffMs', () => {

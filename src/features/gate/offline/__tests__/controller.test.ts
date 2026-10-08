@@ -197,9 +197,9 @@ describe('offline controller', () => {
     ctl.start();
     await flush();
     await flush();
-    await expect(ctl.override(T as never, { approvedBy: 'Ada', reason: 'phone died' })).rejects.toThrow(
-      'approval required',
-    );
+    await expect(
+      ctl.override(T as never, { approvedBy: 'Ada', reason: 'phone died' }),
+    ).rejects.toThrow('approval required');
     ctl.stop();
   });
 
@@ -208,7 +208,9 @@ describe('offline controller', () => {
     ctl.start();
     await flush();
     await flush();
-    expect(status).toContainEqual(expect.objectContaining({ override: { kind: 'open', triesLeft: 5 } }));
+    expect(status).toContainEqual(
+      expect.objectContaining({ override: { kind: 'open', triesLeft: 5 } }),
+    );
     ctl.stop();
   });
 

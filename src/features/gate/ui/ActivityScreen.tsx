@@ -1,15 +1,27 @@
+import { CircleCheck, Clock, TriangleAlert, type LucideIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { FlatList, Modal, Pressable, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { FlatList, View } from 'react-native';
 
 import { ACTIVITY_PAGE, activityCsv, type ActivityRow } from '@/features/gate/domain/activityCsv';
-import { attentionLine } from '@/features/gate/domain/syncLine';
-import type { ActivityTab, AttentionItem } from '@/features/gate/offline/outboxStore';
+import { ago } from '@/features/gate/domain/ago';
+import { attentionLine, groupDigits } from '@/features/gate/domain/syncLine';
+import type { ActivityTab, AttentionItem, OutboxState } from '@/features/gate/offline/outboxStore';
 import { useSyncView } from '@/features/gate/state/syncView';
 import { parseIsoMs } from '@/shared/lib/isoTime';
 import { ACTIVITY_FILE } from '@/shared/platform/shareCsv';
-import { color, density, radius, space } from '@/shared/theme';
-import { Button, Text } from '@/shared/ui';
+import { space, type ColorRole, type StatusTone } from '@/shared/theme';
+import {
+  Banner,
+  Button,
+  Card,
+  Icon,
+  ListRow,
+  SectionHeader,
+  SegmentedControl,
+  Sheet,
+  StatusPill,
+  Text,
+} from '@/shared/ui';
 
 type Props = {
   visible: boolean;
@@ -18,11 +30,15 @@ type Props = {
   exportRows: () => Promise<ActivityRow[]>;
   share: (fileName: string, text: string) => Promise<void>;
   onSyncNow: () => void;
+  onRefreshList: () => void;
+  /** Server-corrected now, for the offline list's "updated … ago". */
+  now: () => number;
   onClose: () => void;
 };
 
 const EXPORT_FAILED = 'Couldn’t export — try again';
 const LOAD_FAILED = 'Couldn’t load the list — try again.';
+const LOAD_MORE_FAILED = 'Couldn’t load more — try again';
 
 const TABS: readonly { tab: ActivityTab; label: string; empty: string }[] = [
   { tab: 'toSync', label: 'To sync', empty: 'Nothing waiting to sync.' },
@@ -39,12 +55,91 @@ const localTime = (iso: string) => {
   const d = new Date(t);
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
+const localHour = (iso: string) => {
+  const t = parseIsoMs(iso);
+  if (t === null) return null;
+  return `${pad(new Date(t).getHours())}:00`;
+};
 const marker = (i: AttentionItem) =>
   i.mode === 'manual_lookup' ? 'Lookup' : i.mode === 'offline_override' ? 'Override' : null;
 const stateLine = (i: AttentionItem) => {
   const line = attentionLine(i);
   if (line !== '') return line;
-  return i.state === 'synced' ? 'Synced' : 'Waiting to sync';
+  // Matches the state pill's word so speech and sight agree.
+  return i.state === 'synced' ? 'Synced' : 'To sync';
+};
+
+const toneOf = (state: OutboxState): StatusTone => {
+  switch (state) {
+    case 'pending':
+    case 'sending':
+      return 'neutral';
+    case 'synced':
+      return 'success';
+    case 'duplicate':
+    case 'suspect':
+      return 'warning';
+    case 'rejected':
+    case 'blocked':
+    case 'error':
+      return 'danger';
+  }
+};
+const stateWord = (state: OutboxState): string => {
+  switch (state) {
+    case 'pending':
+    case 'sending':
+      return 'To sync';
+    case 'synced':
+      return 'Synced';
+    case 'duplicate':
+      return 'Duplicate';
+    case 'suspect':
+      return 'Check';
+    case 'rejected':
+      return 'Rejected';
+    case 'blocked':
+    case 'error':
+      return 'Not sent';
+  }
+};
+const FG: Record<StatusTone, ColorRole> = {
+  neutral: 'neutralFg',
+  info: 'infoFg',
+  success: 'successFg',
+  warning: 'warningFg',
+  danger: 'dangerFg',
+};
+const glyphOf = (state: OutboxState): LucideIcon => {
+  switch (toneOf(state)) {
+    case 'neutral':
+    case 'info':
+      return Clock;
+    case 'success':
+      return CircleCheck;
+    case 'warning':
+    case 'danger':
+      return TriangleAlert;
+  }
+};
+function StateIcon({ state }: { state: OutboxState }) {
+  return <Icon as={glyphOf(state)} size="sm" tone={FG[toneOf(state)]} />;
+}
+
+// Rows grouped under their local hour (computed in render from the page's rows).
+type Entry = { kind: 'header'; key: string; label: string } | { kind: 'row'; item: AttentionItem };
+const groupByHour = (rows: AttentionItem[]): Entry[] => {
+  const out: Entry[] = [];
+  let last: string | null = null;
+  for (const item of rows) {
+    const hour = localHour(item.scannedAt);
+    if (hour !== null && hour !== last) {
+      out.push({ kind: 'header', key: `h${String(item.seq)}`, label: hour });
+      last = hour;
+    }
+    out.push({ kind: 'row', item });
+  }
+  return out;
 };
 
 // The last successful first page (plus pages appended to it). `key` names the request that
@@ -68,45 +163,24 @@ function Row({ item }: { item: AttentionItem }) {
   const label = [ticketLabel(item), time, m, stateLine(item)]
     .filter((x): x is string => x !== null && x !== '')
     .join(', ');
+  const note = attentionLine(item);
+  // The Lookup/Override marker is plain text in the subtitle: violet is for actions, not state.
+  const subtitle = [time, m].filter((x): x is string => x !== null && x !== '').join(' · ');
   return (
-    <View
-      accessible
+    <ListRow
+      leading={<StateIcon state={item.state} />}
+      title={ticketLabel(item)}
+      subtitle={subtitle === '' ? undefined : subtitle}
+      trailing={<StatusPill tone={toneOf(item.state)} label={stateWord(item.state)} />}
+      note={
+        note !== '' ? (
+          <Text variant="bodySm" tone="textSecondary">
+            {note}
+          </Text>
+        ) : undefined
+      }
       accessibilityLabel={label}
-      style={{
-        minHeight: density.work.rowMin,
-        justifyContent: 'center',
-        gap: space.s1,
-        paddingVertical: space.s2,
-        borderBottomWidth: 1,
-        borderBottomColor: color.border,
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
-        <Text variant="bodyStrong" numberOfLines={1} style={{ flexShrink: 1 }}>
-          {ticketLabel(item)}
-        </Text>
-        {m !== null ? (
-          <View
-            style={{
-              backgroundColor: color.selectedWash,
-              borderRadius: radius.r2,
-              paddingHorizontal: space.s2,
-            }}
-          >
-            <Text variant="labelSm" tone="linkText">
-              {m}
-            </Text>
-          </View>
-        ) : null}
-        <View style={{ flex: 1 }} />
-        <Text variant="labelSm" tone="textSecondary" tabular>
-          {time}
-        </Text>
-      </View>
-      <Text variant="bodySm" tone="textSecondary">
-        {stateLine(item)}
-      </Text>
-    </View>
+    />
   );
 }
 
@@ -118,6 +192,8 @@ export function ActivityScreen({
   exportRows,
   share,
   onSyncNow,
+  onRefreshList,
+  now,
   onClose,
 }: Props) {
   const [tab, setTab] = useState<ActivityTab>(initialTab);
@@ -135,6 +211,7 @@ export function ActivityScreen({
   // A sync moves rows between tabs: the first page reloads when the counts change.
   const pending = useSyncView((s) => s.status.pending);
   const attention = useSyncView((s) => s.status.attention);
+  const list = useSyncView((s) => s.status.list);
 
   // Open on the requested tab; clear on close (adjusting state during render, not in an effect).
   if (visible !== wasVisible) {
@@ -232,127 +309,82 @@ export function ActivityScreen({
 
   const empty = TABS.find((t) => t.tab === tab)?.empty ?? '';
   const rows = shown === null ? [] : shown.rows;
+  const entries = groupByHour(rows);
+  const tabs = TABS.map((t) => ({
+    value: t.tab,
+    label: t.label,
+    count: t.tab === 'toSync' ? pending : t.tab === 'attention' ? attention : undefined,
+  }));
 
   return (
-    <Modal
+    <Sheet
       visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
+      title="Activity"
+      onClose={onClose}
       testID="activity-screen"
-      onRequestClose={onClose}
+      right={
+        <Button
+          variant="ghost"
+          label="Export"
+          accessibilityLabel="Export CSV"
+          loading={exporting}
+          onPress={() => void runExport()}
+        />
+      }
+      footer={pending > 0 ? <Button label="Sync now" onPress={onSyncNow} /> : undefined}
     >
-      <SafeAreaView style={{ flex: 1, backgroundColor: color.surface }}>
-        <View style={{ padding: space.s5, gap: space.s4, flex: 1 }}>
-          <Text variant="title" accessibilityRole="header">
-            Activity
-          </Text>
-          <View
-            accessibilityRole="tablist"
-            style={{
-              flexDirection: 'row',
-              backgroundColor: color.wash,
-              borderRadius: radius.r3,
-              padding: space.s1,
-              gap: space.s1,
-            }}
-          >
-            {TABS.map((t) => {
-              const selected = t.tab === tab;
-              return (
-                <Pressable
-                  key={t.tab}
-                  accessibilityRole="tab"
-                  accessibilityLabel={t.label}
-                  accessibilityState={{ selected }}
-                  onPress={() => {
-                    setTab(t.tab);
-                  }}
-                  style={{
-                    flex: 1,
-                    minHeight: density.gate.minTarget,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    paddingHorizontal: space.s1,
-                    borderRadius: radius.r2,
-                    backgroundColor: selected ? color.surface : color.wash,
-                    borderWidth: 1,
-                    borderColor: selected ? color.border : color.wash,
-                  }}
-                >
-                  <Text
-                    variant="labelSm"
-                    tone={selected ? 'textPrimary' : 'textSecondary'}
-                    numberOfLines={2}
-                    style={{ textAlign: 'center' }}
-                  >
-                    {t.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+      <Card>
+        <View style={{ gap: space.s3 }}>
+          <View style={{ gap: space.s1 }}>
+            <Text variant="bodyStrong">Offline list</Text>
+            <Text variant="bodySm" tone="textSecondary">
+              {list === null
+                ? 'Not downloaded yet'
+                : `${groupDigits(list.count)} tickets · updated ${ago(list.syncedAt, now())}`}
+            </Text>
           </View>
-          {loadFailed && shown !== null ? (
-            <Text
-              variant="bodySm"
-              accessibilityLiveRegion="polite"
-              style={{ color: color.status.danger.fg }}
-            >
-              {LOAD_FAILED}
+          <Button variant="secondary" label="Refresh list" onPress={onRefreshList} />
+        </View>
+      </Card>
+      <SegmentedControl value={tab} options={tabs} onChange={setTab} />
+      {loadFailed ? <Banner tone="neutral" message={LOAD_FAILED} /> : null}
+      {exportError !== null ? (
+        <Banner tone="neutral" message={exportError} live="assertive" />
+      ) : null}
+      <FlatList
+        data={entries}
+        style={{ flex: 1 }}
+        keyExtractor={(e) => (e.kind === 'header' ? e.key : `r${String(e.item.seq)}`)}
+        renderItem={({ item: e }) =>
+          e.kind === 'header' ? <SectionHeader label={e.label} /> : <Row item={e.item} />
+        }
+        ListEmptyComponent={
+          shown !== null ? (
+            <Text tone="textMuted" accessibilityLiveRegion="polite">
+              {empty}
             </Text>
-          ) : null}
-          <FlatList
-            data={rows}
-            style={{ flex: 1 }}
-            keyExtractor={(i) => String(i.seq)}
-            renderItem={({ item }) => <Row item={item} />}
-            ListEmptyComponent={
-              <Text variant="bodySm" tone="textMuted" accessibilityLiveRegion="polite">
-                {shown !== null ? empty : loadFailed ? LOAD_FAILED : 'Loading…'}
-              </Text>
-            }
-            ListFooterComponent={
-              shown !== null && shown.more && !reloading ? (
-                <View style={{ paddingTop: space.s3, gap: space.s2 }}>
-                  {shown.moreState === 'failed' ? (
-                    <Text variant="bodySm" style={{ color: color.status.danger.fg }}>
-                      Couldn’t load more — try again
-                    </Text>
-                  ) : null}
-                  <Button
-                    variant="secondary"
-                    label="Load more"
-                    loading={shown.moreState === 'loading'}
-                    onPress={loadMore}
-                  />
-                </View>
-              ) : null
-            }
-          />
-          {exportError !== null ? (
-            <Text
-              variant="bodyStrong"
-              accessibilityLiveRegion="polite"
-              style={{ color: color.status.danger.fg }}
-            >
-              {exportError}
+          ) : loadFailed ? null : (
+            <Text tone="textMuted" accessibilityLiveRegion="polite">
+              Loading…
             </Text>
-          ) : null}
-          <View style={{ flexDirection: 'row', gap: space.s3 }}>
-            <View style={{ flex: 1 }}>
-              <Button variant="secondary" label="Sync now" onPress={onSyncNow} />
-            </View>
-            <View style={{ flex: 1 }}>
+          )
+        }
+        ListFooterComponent={
+          shown !== null && shown.more && !reloading ? (
+            <View style={{ paddingTop: space.s3, gap: space.s2 }}>
+              {shown.moreState === 'failed' ? (
+                <Banner tone="neutral" message={LOAD_MORE_FAILED} />
+              ) : null}
               <Button
                 variant="secondary"
-                label="Export CSV"
-                loading={exporting}
-                onPress={() => void runExport()}
+                label="Load more"
+                loading={shown.moreState === 'loading'}
+                onPress={loadMore}
               />
             </View>
-          </View>
-          <Button label="Close" onPress={onClose} />
-        </View>
-      </SafeAreaView>
-    </Modal>
+          ) : null
+        }
+      />
+    </Sheet>
   );
 }

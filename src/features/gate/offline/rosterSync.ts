@@ -50,7 +50,14 @@ export async function syncRoster(deps: Deps, requested: SyncKind): Promise<Roste
     if (!r.ok) return { ok: false, error: r.error };
     const page = r.value;
     if (cursor === null) {
-      await store.beginSync(eventId, kind, page.server_time, infoOf(page), keysOf(page), page.override);
+      await store.beginSync(
+        eventId,
+        kind,
+        page.server_time,
+        infoOf(page),
+        keysOf(page),
+        page.override,
+      );
     }
     const { rows } = toRosterRows(page.tickets);
     await store.writePage(eventId, kind, rows, page.next_after);

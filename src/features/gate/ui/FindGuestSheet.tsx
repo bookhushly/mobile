@@ -1,7 +1,8 @@
+import { Phone, UserRound } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Modal, Pressable, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { FlatList, View } from 'react-native';
 
+import { ago } from '@/features/gate/domain/ago';
 import { parseLookup, type LookupQuery } from '@/features/gate/domain/lookupQuery';
 import type { ScanOutcome } from '@/features/gate/domain/outcome';
 import type { PinCheck } from '@/features/gate/offline/offlineGate';
@@ -9,8 +10,20 @@ import type { Approval } from '@/features/gate/offline/outboxStore';
 import type { GuestRow } from '@/features/gate/offline/rosterStore';
 import { useSyncView } from '@/features/gate/state/syncView';
 import { PinSheet } from '@/features/gate/ui/PinSheet';
-import { color, density, space } from '@/shared/theme';
-import { Button, Input, Text } from '@/shared/ui';
+import { parseIsoMs } from '@/shared/lib/isoTime';
+import { color, radius } from '@/shared/theme';
+import {
+  Banner,
+  Button,
+  EmptyState,
+  Icon,
+  ListRow,
+  SearchField,
+  SegmentedControl,
+  Sheet,
+  StatusPill,
+  Text,
+} from '@/shared/ui';
 
 type Props = {
   visible: boolean;
@@ -25,12 +38,15 @@ type Props = {
 };
 
 const DEBOUNCE_MS = 250;
-const ADMIT_FAILED = 'Couldn’t admit — try again';
+const ADMIT_FAILED = 'Not recorded — try again';
 
 const ticketLabel = (g: GuestRow) =>
   `${g.ticketType ?? 'Ticket'}${g.ticketIndex === null ? '' : ` · ticket ${String(g.ticketIndex)}`}`;
 // Names and phones are shown on screen only; never logged.
-const who = (g: GuestRow) => g.holderName ?? g.phoneMasked ?? 'No name on ticket';
+// A blank name counts as none, so the row never shows an empty title or avatar.
+const nameOf = (g: GuestRow) =>
+  g.holderName !== null && g.holderName.trim() !== '' ? g.holderName : null;
+const who = (g: GuestRow) => nameOf(g) ?? g.phoneMasked ?? 'No name on ticket';
 const statusOf = (g: GuestRow) =>
   g.bookingStatus !== 'confirmed'
     ? `Booking ${g.bookingStatus}`
@@ -39,28 +55,61 @@ const statusOf = (g: GuestRow) =>
       : 'Not in';
 const canAdmit = (g: GuestRow) => g.bookingStatus === 'confirmed' && g.checkedInAt === null;
 
-function Status({ g }: { g: GuestRow }) {
-  const s = statusOf(g);
+const AVATAR = 40;
+const FILTERS = [
+  { value: 'out', label: 'Not in' },
+  { value: 'in', label: 'In' },
+] as const;
+type Filter = (typeof FILTERS)[number]['value'];
+const matchesFilter = (g: GuestRow, filter: Filter) =>
+  filter === 'in' ? g.checkedInAt !== null : g.checkedInAt === null;
+
+// Initials for a name, a phone glyph for a masked number, a person glyph when the ticket has neither.
+function Initials({ g }: { g: GuestRow }) {
+  const name = nameOf(g);
+  const initials = (name ?? '')
+    .split(/\s+/)
+    .filter((w) => w !== '')
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('');
   return (
-    <Text
-      variant="labelSm"
+    <View
       style={{
-        color:
-          s === 'In'
-            ? color.status.success.fg
-            : s === 'Not in'
-              ? color.textSecondary
-              : color.status.warning.fg,
+        width: AVATAR,
+        height: AVATAR,
+        borderRadius: radius.rFull,
+        backgroundColor: color.wash,
+        alignItems: 'center',
+        justifyContent: 'center',
       }}
     >
-      {s}
-    </Text>
+      {name !== null ? (
+        <Text variant="label" tone="textSecondary" maxScale={1}>
+          {initials}
+        </Text>
+      ) : g.phoneMasked !== null ? (
+        <Icon as={Phone} size="sm" tone="textSecondary" />
+      ) : (
+        <Icon as={UserRound} size="sm" tone="textSecondary" />
+      )}
+    </View>
   );
+}
+
+function GuestStatus({ g, nowMs }: { g: GuestRow; nowMs: number }) {
+  if (g.bookingStatus !== 'confirmed')
+    return <StatusPill tone="warning" label={`Booking ${g.bookingStatus}`} />;
+  if (g.checkedInAt !== null)
+    return (
+      <StatusPill tone="success" label={`In · ${ago(parseIsoMs(g.checkedInAt) ?? nowMs, nowMs)}`} />
+    );
+  return <StatusPill tone="neutral" label="Not in" />;
 }
 
 function Message({ children }: { children: string }) {
   return (
-    <Text variant="body" tone="textSecondary" accessibilityLiveRegion="polite">
+    <Text variant="body" tone="textMuted" accessibilityLiveRegion="polite">
       {children}
     </Text>
   );
@@ -81,8 +130,11 @@ export function FindGuestSheet({
 }: Props) {
   const noList = useSyncView((s) => s.status.list === null);
   const [text, setText] = useState('');
+  const [filter, setFilter] = useState<Filter>('out');
   const [found, setFound] = useState<Found | null>(null);
   const [booking, setBooking] = useState<Booking | null>(null);
+  // "In · 5 min ago" is relative to when the rows arrived (render must not read the clock).
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [admitting, setAdmitting] = useState<string | null>(null);
   // The generation is kept with the ticket so the PIN path settles like the direct one.
   const [pinFor, setPinFor] = useState<{ ticketId: string; gen: number } | null>(null);
@@ -98,6 +150,7 @@ export function FindGuestSheet({
     setWasVisible(visible);
     if (!visible) {
       setText('');
+      setFilter('out');
       setFound(null);
       setBooking(null);
       setAdmitting(null);
@@ -123,7 +176,10 @@ export function FindGuestSheet({
     const t = setTimeout(() => {
       search(query).then(
         (rows) => {
-          if (live) setFound({ query, rows });
+          if (live) {
+            setNowMs(Date.now());
+            setFound({ query, rows });
+          }
         },
         () => {
           if (live) setFound({ query, rows: 'failed' });
@@ -142,7 +198,10 @@ export function FindGuestSheet({
     let live = true;
     bookingTickets(bookingId).then(
       (rows) => {
-        if (live) setBooking({ bookingId, rows });
+        if (live) {
+          setNowMs(Date.now());
+          setBooking({ bookingId, rows });
+        }
       },
       () => {
         if (live) setBooking({ bookingId, rows: 'failed' });
@@ -199,46 +258,42 @@ export function FindGuestSheet({
 
   const results = found !== null && found.query === query ? found.rows : null;
 
+  const rows = Array.isArray(results) ? results : null;
+  const tabs = FILTERS.map((f) => ({
+    ...f,
+    count: rows === null ? undefined : rows.filter((g) => matchesFilter(g, f.value)).length,
+  }));
+
   const body = () => {
-    if (noList) return <Message>No offline list on this phone yet</Message>;
+    if (noList)
+      return <EmptyState illustration="search" title="No offline list on this phone yet" />;
     if (query === null) return <Message>Type a name or 2–4 phone digits</Message>;
     if (results === null) return <Message>Searching…</Message>;
-    if (results === 'failed') return <Message>Couldn’t search the list</Message>;
+    if (results === 'failed') return <Banner tone="neutral" message="Couldn’t search the list" />;
     if (results.length === 0) return <Message>No one matches</Message>;
+    const inCount = results.filter((g) => matchesFilter(g, 'in')).length;
     return (
       <FlatList
-        data={results}
+        data={results.filter((g) => matchesFilter(g, filter))}
         keyExtractor={(g) => g.id}
         keyboardShouldPersistTaps="handled"
+        ListEmptyComponent={
+          <Message>
+            {filter === 'in' ? 'No one in yet' : `No one here — ${String(inCount)} already in`}
+          </Message>
+        }
         renderItem={({ item }) => (
-          <Pressable
-            accessibilityRole="button"
+          <ListRow
+            leading={<Initials g={item} />}
+            title={who(item)}
+            subtitle={ticketLabel(item)}
+            trailing={<GuestStatus g={item} nowMs={nowMs} />}
             accessibilityLabel={`${who(item)}, ${ticketLabel(item)}, ${statusOf(item)}`}
             onPress={() => {
               setError(null);
               setBooking({ bookingId: item.bookingId, rows: null });
             }}
-            style={({ pressed }) => ({
-              minHeight: density.work.rowMin,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: space.s3,
-              borderBottomWidth: 1,
-              borderBottomColor: color.border,
-              backgroundColor: pressed ? color.wash : color.surface,
-            })}
-          >
-            <View style={{ flex: 1, gap: space.s1 }}>
-              <Text variant="bodyStrong" numberOfLines={1}>
-                {who(item)}
-              </Text>
-              <Text variant="bodySm" tone="textSecondary">
-                {ticketLabel(item)}
-              </Text>
-            </View>
-            <Status g={item} />
-          </Pressable>
+          />
         )}
       />
     );
@@ -246,123 +301,94 @@ export function FindGuestSheet({
 
   const bookingBody = (b: Booking) => {
     if (b.rows === null) return <Message>Loading…</Message>;
-    if (b.rows === 'failed') return <Message>Couldn’t load this booking</Message>;
+    if (b.rows === 'failed') return <Banner tone="neutral" message="Couldn’t load this booking" />;
     return (
       <FlatList
         data={b.rows}
         keyExtractor={(g) => g.id}
         renderItem={({ item }) => (
-          <View
-            style={{
-              minHeight: density.work.rowMin,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: space.s3,
-              paddingVertical: space.s2,
-              borderBottomWidth: 1,
-              borderBottomColor: color.border,
-            }}
-          >
-            <View style={{ flex: 1, gap: space.s1 }}>
-              <Text variant="bodyStrong" numberOfLines={1}>
-                {who(item)}
-              </Text>
-              <Text variant="bodySm" tone="textSecondary">
-                {ticketLabel(item)}
-              </Text>
-              <Status g={item} />
-            </View>
-            {canAdmit(item) ? (
-              <Button
-                label="Admit"
-                accessibilityLabel={`Admit ${who(item)}, ${ticketLabel(item)}`}
-                loading={admitting === item.id}
-                disabled={admitting !== null || done}
-                onPress={() => void start(item.id)}
-              />
-            ) : null}
-          </View>
+          <ListRow
+            leading={<Initials g={item} />}
+            title={who(item)}
+            subtitle={ticketLabel(item)}
+            note={<GuestStatus g={item} nowMs={nowMs} />}
+            // Admit must stay its own element: a grouped row would hide it from VoiceOver.
+            groupAccessibility={false}
+            trailing={
+              canAdmit(item) ? (
+                <Button
+                  label="Admit"
+                  accessibilityLabel={`Admit ${who(item)}, ${ticketLabel(item)}`}
+                  loading={admitting === item.id}
+                  disabled={admitting !== null || done}
+                  onPress={() => void start(item.id)}
+                />
+              ) : undefined
+            }
+          />
         )}
       />
     );
   };
 
   return (
-    <Modal
+    <Sheet
       visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
+      title={booking === null ? 'Find guest' : 'Booking'}
+      onClose={onClose}
+      closeDisabled={admitting !== null}
       testID="find-guest-sheet"
       onRequestClose={() => {
         // Back / swipe must not hide an admission that is still being recorded.
         if (admitting === null) onClose();
       }}
-    >
-      <SafeAreaView style={{ flex: 1, backgroundColor: color.surface }}>
-        <View style={{ padding: space.s5, gap: space.s4, flex: 1 }}>
-          <Text variant="title" accessibilityRole="header">
-            {booking === null ? 'Find guest' : 'Booking'}
-          </Text>
-          {booking === null ? (
-            <>
-              <Input
-                label="Search guests"
-                value={text}
-                onChangeText={setText}
-                placeholder="Name or last phone digits"
-                autoCorrect={false}
-                autoComplete="off"
-                autoCapitalize="words"
-                returnKeyType="search"
-              />
-              {body()}
-            </>
-          ) : (
-            <>
-              {bookingBody(booking)}
-              {error !== null ? (
-                <Text
-                  variant="bodyStrong"
-                  accessibilityLiveRegion="polite"
-                  style={{ color: color.status.danger.fg }}
-                >
-                  {error}
-                </Text>
-              ) : null}
-              <Button
-                variant="secondary"
-                label="Back to results"
-                disabled={admitting !== null}
-                onPress={() => {
-                  setBooking(null);
-                  setError(null);
-                }}
-              />
-            </>
-          )}
+      footer={
+        booking === null ? undefined : (
           <Button
             variant="secondary"
-            label="Close"
+            label="Back to results"
             disabled={admitting !== null}
-            onPress={onClose}
+            onPress={() => {
+              setBooking(null);
+              setError(null);
+            }}
           />
-        </View>
-        <PinSheet
-          visible={pinFor !== null}
-          purpose="lookup"
-          check={checkPin}
-          onApproved={(approval) => {
-            const p = pinFor;
-            setPinFor(null);
-            if (p !== null) void run(p.ticketId, approval, p.gen);
-          }}
-          onClose={() => {
-            setPinFor(null);
-            busy.current = false;
-            setAdmitting(null);
-          }}
-        />
-      </SafeAreaView>
-    </Modal>
+        )
+      }
+    >
+      {booking === null ? (
+        <>
+          <SearchField
+            label="Search guests"
+            value={text}
+            onChangeText={setText}
+            placeholder="Name or last phone digits"
+            autoCapitalize="words"
+          />
+          <SegmentedControl value={filter} options={tabs} onChange={setFilter} />
+          {body()}
+        </>
+      ) : (
+        <>
+          {bookingBody(booking)}
+          {error !== null ? <Banner tone="neutral" message={error} live="assertive" /> : null}
+        </>
+      )}
+      <PinSheet
+        visible={pinFor !== null}
+        purpose="lookup"
+        check={checkPin}
+        onApproved={(approval) => {
+          const p = pinFor;
+          setPinFor(null);
+          if (p !== null) void run(p.ticketId, approval, p.gen);
+        }}
+        onClose={() => {
+          setPinFor(null);
+          busy.current = false;
+          setAdmitting(null);
+        }}
+      />
+    </Sheet>
   );
 }

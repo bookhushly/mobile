@@ -56,7 +56,8 @@ export function scannedBy(t: RosterTicket): ScannedBy {
 // verify (BH1, unknown key, untrusted clock) is "couldn't check", never a refusal.
 export function decideOffline(code: TicketCode, f: OfflineFacts): OfflineDecision {
   let kid: string | null = null;
-  if (code.startsWith('BH1.')) return outcome({ kind: 'couldntCheck', cause: 'offlineUnverifiable' });
+  if (code.startsWith('BH1.'))
+    return outcome({ kind: 'couldntCheck', cause: 'offlineUnverifiable' });
   if (code.startsWith('BH2.')) {
     const v = verifyBh2(code, f.keys);
     if (!v.ok) {

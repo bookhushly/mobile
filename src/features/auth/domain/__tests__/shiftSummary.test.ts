@@ -12,7 +12,9 @@ describe('summaryLine', () => {
     expect(summaryLine({ ...zero, admitted: 1 })).toBe('This shift: 1 admitted');
   });
   it('words couldn’t check with a typographic apostrophe', () => {
-    expect(summaryLine({ ...zero, admitted: 2, couldntCheck: 4 })).toBe('This shift: 2 admitted · 4 couldn’t check');
+    expect(summaryLine({ ...zero, admitted: 2, couldntCheck: 4 })).toBe(
+      'This shift: 2 admitted · 4 couldn’t check',
+    );
   });
 });
 

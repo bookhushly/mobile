@@ -219,4 +219,14 @@ describe('roster store', () => {
     await store.finishSync(EV, 'full');
     expect(await store.counts(EV)).toEqual({ admitted: 0, total: 2 });
   });
+
+  it('lists only events whose offline list finished downloading', async () => {
+    const { store } = await setup();
+    const EV2 = 'e0000000-0000-4000-8000-000000000002';
+    await store.beginSync(EV, 'full', MARK1, INFO, KEYS);
+    await store.writePage(EV, 'full', [row(1)], null);
+    await store.finishSync(EV, 'full');
+    await store.beginSync(EV2, 'full', MARK1, INFO, KEYS);
+    expect(await store.readyEventIds()).toEqual([EV]);
+  });
 });

@@ -77,6 +77,27 @@ export const typeVariants = {
     letterSpacing: -1,
     maxScale: 1.15,
   },
+  displayLg: {
+    font: 'serif',
+    weight: 500,
+    size: 48,
+    lineHeight: 56,
+    letterSpacing: -1.44,
+    maxScale: 1.15,
+  },
+  // Onboarding only.
+  hero: { font: 'serif', weight: 500, size: 64, lineHeight: 68, letterSpacing: -2.24, maxScale: 1 },
+  // Gate result titles: sans, fixed size (DESIGN_SYSTEM §3: serif never on scan results).
+  outcome: {
+    font: 'sans',
+    weight: 600,
+    size: 36,
+    lineHeight: 44,
+    letterSpacing: -0.5,
+    maxScale: 1,
+  },
+  // Door counter.
+  numLg: { font: 'sans', weight: 600, size: 48, lineHeight: 52, letterSpacing: -1, maxScale: 1 },
   num: { font: 'sans', weight: 600, size: 20, lineHeight: 28, letterSpacing: 0, maxScale: 1.3 },
   numXl: { font: 'sans', weight: 600, size: 64, lineHeight: 72, letterSpacing: -1, maxScale: 1 },
 } as const satisfies Record<string, VariantSpec>;
