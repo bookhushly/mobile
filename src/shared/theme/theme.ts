@@ -14,7 +14,11 @@ export const color = {
   onAction: palette.white,
   linkText: palette.violet700,
   selectedWash: palette.violet100,
+  // The scanner's dark surface (camera letterbox, top/bottom bars over the camera).
+  inverse: palette.ink,
+  onInverse: palette.white,
   status: {
+    neutral: { bg: palette.wash, fg: palette.neutral, solid: palette.neutral },
     success: { bg: palette.successWash, fg: palette.successInk, solid: palette.success },
     warning: { bg: palette.warningWash, fg: palette.warningInk, solid: palette.warning },
     danger: { bg: palette.dangerWash, fg: palette.dangerInk, solid: palette.danger },
@@ -28,5 +32,35 @@ export const color = {
   },
 } as const;
 
-export type ColorRole = 'textPrimary' | 'textSecondary' | 'textMuted' | 'onAction' | 'linkText';
-export type SurfaceRole = 'surface' | 'canvas' | 'wash' | 'actionFill' | 'selectedWash';
+export type StatusTone = keyof typeof color.status;
+
+export const textTone = {
+  textPrimary: color.textPrimary,
+  textSecondary: color.textSecondary,
+  textMuted: color.textMuted,
+  onAction: color.onAction,
+  linkText: color.linkText,
+  onInverse: color.onInverse,
+  successFg: color.status.success.fg,
+  warningFg: color.status.warning.fg,
+  dangerFg: color.status.danger.fg,
+  infoFg: color.status.info.fg,
+  neutralFg: color.status.neutral.fg,
+  dangerSolid: color.status.danger.solid,
+} as const;
+export type ColorRole = keyof typeof textTone;
+
+export const surfaceTone = {
+  surface: color.surface,
+  canvas: color.canvas,
+  wash: color.wash,
+  actionFill: color.actionFill,
+  selectedWash: color.selectedWash,
+  inverse: color.inverse,
+  successBg: color.status.success.bg,
+  warningBg: color.status.warning.bg,
+  dangerBg: color.status.danger.bg,
+  infoBg: color.status.info.bg,
+  neutralBg: color.status.neutral.bg,
+} as const;
+export type SurfaceRole = keyof typeof surfaceTone;

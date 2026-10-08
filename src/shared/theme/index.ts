@@ -1,9 +1,15 @@
-export { palette, space, radius } from './tokens';
+export { space, radius } from './tokens';
 export type { SpaceKey, RadiusKey } from './tokens';
-export { color } from './theme';
-export type { ColorRole, SurfaceRole } from './theme';
+export { color, textTone, surfaceTone } from './theme';
+export type { ColorRole, SurfaceRole, StatusTone } from './theme';
 export { typeVariants } from './type';
 export type { Variant, FontKind } from './type';
 export { density } from './density';
 export type { DensityName } from './density';
 export { contrastRatio } from './contrast';
+export { elevation } from './elevation';
+export type { ElevationKey } from './elevation';
+export { motion } from './motion';
+export type { MotionTier } from './motion';
+export { iconSize, borderWidth, layout } from './sizes';
+export type { IconSizeKey } from './sizes';

@@ -27,6 +27,15 @@ describe('contrast', () => {
     [color.status.danger.fg, color.status.danger.bg],
     [color.status.warning.fg, color.status.warning.bg],
     [color.status.info.fg, color.status.info.bg],
+    [color.status.success.fg, color.surface],
+    [color.status.warning.fg, color.surface],
+    [color.status.danger.fg, color.surface],
+    [color.status.info.fg, color.surface],
+    [color.status.neutral.fg, color.status.neutral.bg],
+    [color.status.danger.solid, color.surface],
+    [color.linkText, color.selectedWash],
+    [color.linkText, color.canvas],
+    [color.onInverse, color.inverse],
   ];
   it.each(textPairs)('text %s on %s meets AA', (fg, bg) => {
     expect(contrastRatio(fg, bg)).toBeGreaterThanOrEqual(AA_TEXT);

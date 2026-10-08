@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Text as RNText, type StyleProp, type TextStyle } from 'react-native';
 
-import { color, typeVariants, type ColorRole, type Variant } from '@/shared/theme';
+import { textTone, typeVariants, type ColorRole, type Variant } from '@/shared/theme';
 import { fontFamily } from '@/shared/theme/fonts';
 
 type Props = {
@@ -46,7 +46,7 @@ export function Text({
           fontSize: v.size,
           lineHeight: v.lineHeight,
           letterSpacing: v.letterSpacing,
-          color: color[tone],
+          color: textTone[tone],
           textAlign: align,
         },
         tabular ? { fontVariant: ['tabular-nums'] } : null,
