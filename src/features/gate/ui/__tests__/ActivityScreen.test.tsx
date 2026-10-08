@@ -5,6 +5,9 @@ import { EMPTY_SYNC } from '@/features/gate/domain/syncLine';
 import type { ActivityTab, AttentionItem } from '@/features/gate/offline/outboxStore';
 import { useSyncView } from '@/features/gate/state/syncView';
 import { ActivityScreen } from '@/features/gate/ui/ActivityScreen';
+import { color } from '@/shared/theme';
+
+const NOW = Date.parse('2026-10-07T18:00:30Z');
 
 const item = (seq: number, over: Partial<AttentionItem> = {}): AttentionItem => ({
   seq,
@@ -50,19 +53,33 @@ function screenIt(name: string, fn: () => Promise<void>) {
   });
 }
 
-function setup(over: { initialTab?: ActivityTab; load?: Load; share?: jest.Mock } = {}) {
+afterEach(() => {
+  useSyncView.getState().reset();
+});
+
+function setup(
+  over: {
+    initialTab?: ActivityTab;
+    load?: Load;
+    share?: jest.Mock;
+    onRefreshList?: jest.Mock;
+    now?: () => number;
+  } = {},
+) {
   const load = jest.fn<ReturnType<Load>, Parameters<Load>>(
     over.load ?? (() => Promise.resolve([])),
   );
   const exportRows = jest.fn(() => Promise.resolve([ROW]));
   const share = over.share ?? jest.fn(() => Promise.resolve());
   const onSyncNow = jest.fn();
+  const onRefreshList = over.onRefreshList ?? jest.fn();
   const onClose = jest.fn();
   return {
     load,
     exportRows,
     share,
     onSyncNow,
+    onRefreshList,
     onClose,
     ui: (
       <ActivityScreen
@@ -72,11 +89,19 @@ function setup(over: { initialTab?: ActivityTab; load?: Load; share?: jest.Mock 
         exportRows={exportRows}
         share={share}
         onSyncNow={onSyncNow}
+        onRefreshList={onRefreshList}
+        now={over.now ?? (() => NOW)}
         onClose={onClose}
       />
     ),
   };
 }
+
+const renderActivity = async (over: Parameters<typeof setup>[0] = {}) => {
+  const s = setup(over);
+  await render(s.ui);
+  return s;
+};
 
 screenIt('opens on the initial tab', async () => {
   const s = setup({ initialTab: 'attention' });
@@ -86,7 +111,7 @@ screenIt('opens on the initial tab', async () => {
     expect(s.load).toHaveBeenCalledWith('attention', null);
   });
   expect(
-    screen.getByRole('tab', { name: 'Needs attention' }).props.accessibilityState,
+    screen.getByRole('tab', { name: /^Needs attention/ }).props.accessibilityState,
   ).toMatchObject({
     selected: true,
   });
@@ -95,7 +120,7 @@ screenIt('opens on the initial tab', async () => {
 screenIt('switching tab loads that tab', async () => {
   const s = setup();
   await render(s.ui);
-  await fireEvent.press(screen.getByRole('tab', { name: 'Synced' }));
+  await fireEvent.press(screen.getByRole('tab', { name: /^Synced/ }));
   await waitFor(() => {
     expect(s.load).toHaveBeenLastCalledWith('synced', null);
   });
@@ -120,7 +145,7 @@ screenIt('no "Load more" when a page is short', async () => {
   expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
 });
 
-screenIt('marks lookup and override rows and shows the state line', async () => {
+screenIt('marks lookup and override rows and shows the state pill and note', async () => {
   const s = setup({
     load: () =>
       Promise.resolve([
@@ -130,10 +155,11 @@ screenIt('marks lookup and override rows and shows the state line', async () => 
       ]),
   });
   await render(s.ui);
-  expect(await screen.findByText('Lookup')).toBeTruthy();
-  expect(screen.getByText('Override')).toBeTruthy();
+  expect(await screen.findByText(/Lookup/)).toBeTruthy();
+  expect(screen.getByText(/Override/)).toBeTruthy();
   expect(screen.getByText('Ticket')).toBeTruthy();
-  expect(screen.getAllByText('Waiting to sync')).toHaveLength(2);
+  expect(screen.getAllByText('To sync')).toHaveLength(2);
+  expect(screen.getByText('Duplicate')).toBeTruthy();
   expect(screen.getByText('Also admitted by Ada')).toBeTruthy();
 });
 
@@ -162,6 +188,7 @@ screenIt('a share failure shows the error copy', async () => {
 });
 
 screenIt('"Sync now" and "Close" call through', async () => {
+  useSyncView.getState().set({ pending: 2 });
   const s = setup();
   await render(s.ui);
   await fireEvent.press(screen.getByRole('button', { name: 'Sync now' }));
@@ -173,7 +200,7 @@ screenIt('"Sync now" and "Close" call through', async () => {
 screenIt('is read-only: nothing to undo or delete', async () => {
   const s = setup({ load: () => Promise.resolve([item(1, { mode: 'offline_override' })]) });
   await render(s.ui);
-  await screen.findByText('Override');
+  await screen.findByText(/Override/);
   expect(screen.queryByRole('button', { name: /undo|delete|remove/i })).toBeNull();
   expect(screen.queryByLabelText(/undo|delete|remove/i)).toBeNull();
 });
@@ -182,6 +209,50 @@ screenIt('a failed load says so', async () => {
   const s = setup({ load: () => Promise.reject(new Error('db')) });
   await render(s.ui);
   expect(await screen.findByText('Couldn’t load the list — try again.')).toBeTruthy();
+});
+
+screenIt('"Sync now" is only offered while something waits to sync', async () => {
+  const s = setup();
+  await render(s.ui);
+  expect(screen.queryByRole('button', { name: 'Sync now' })).toBeNull();
+});
+
+screenIt('shows the offline list card and refreshes it', async () => {
+  useSyncView.getState().set({ list: { count: 1240, syncedAt: NOW - 120_000 } });
+  const onRefreshList = jest.fn();
+  await renderActivity({ onRefreshList, now: () => NOW });
+  expect(screen.getByText('1,240 tickets · updated 2 min ago')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Refresh list' }));
+  expect(onRefreshList).toHaveBeenCalledTimes(1);
+});
+
+screenIt('says when the offline list is not downloaded yet', async () => {
+  await renderActivity();
+  expect(screen.getByText('Not downloaded yet')).toBeTruthy();
+});
+
+screenIt('lookup and override markers are not violet', async () => {
+  await renderActivity({ load: jest.fn().mockResolvedValue([item(1, { mode: 'manual_lookup' })]) });
+  const marker = await screen.findByText(/Lookup/);
+  expect(marker).not.toHaveStyle({ color: color.linkText });
+});
+
+screenIt('groups rows under their local hour', async () => {
+  await renderActivity({
+    load: () =>
+      Promise.resolve([
+        item(3, { scannedAt: '2026-10-07T18:40:00Z' }),
+        item(2, { scannedAt: '2026-10-07T18:05:00Z' }),
+        item(1, { scannedAt: '2026-10-07T17:50:00Z' }),
+      ]),
+  });
+  await screen.findByText('VIP · ticket 3');
+  const hh = (iso: string) => `${String(new Date(Date.parse(iso)).getHours()).padStart(2, '0')}:00`;
+  const headers = screen.getAllByRole('header').map((n) => String(n.props.children));
+  expect(headers.filter((h) => /^\d\d:00$/.test(h))).toEqual([
+    hh('2026-10-07T18:40:00Z'),
+    hh('2026-10-07T17:50:00Z'),
+  ]);
 });
 
 // Deferred promises so tests decide which request settles first.
@@ -292,6 +363,8 @@ screenIt('closing during an export never opens the share sheet', async () => {
     exportRows: () => rows.promise,
     share,
     onSyncNow: jest.fn(),
+    onRefreshList: jest.fn(),
+    now: () => NOW,
     onClose: jest.fn(),
   };
   await render(<ActivityScreen visible {...props} />);
@@ -310,7 +383,7 @@ screenIt('each row reads as one element with ticket, time, marker and state', as
       Promise.resolve([item(4, { mode: 'manual_lookup', scannedAt: '2026-10-07T18:05:00Z' })]),
   });
   await render(s.ui);
-  await screen.findByText('Lookup');
+  await screen.findByText(/Lookup/);
   const d = new Date(Date.parse('2026-10-07T18:05:00Z'));
   const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   expect(screen.getByLabelText(`VIP · ticket 4, ${hhmm}, Lookup, Waiting to sync`)).toBeTruthy();

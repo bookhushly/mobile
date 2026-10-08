@@ -470,6 +470,8 @@ export function ScannerScreen(p: Props) {
         exportRows={p.exportActivity}
         share={p.shareCsv}
         onSyncNow={p.onSyncNow}
+        onRefreshList={p.onRefreshList}
+        now={p.serverNow}
         onClose={() => {
           setActivityTab(null);
         }}
