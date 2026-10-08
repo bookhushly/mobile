@@ -124,6 +124,9 @@ it('marks events with an offline list and a live pill', async () => {
   );
   expect(screen.getByText('Offline list ready')).toBeTruthy();
   expect(screen.getByText('Live now')).toBeTruthy();
+  expect(
+    screen.getByRole('button', { name: /^Gala, .*Lagos, Live now, Offline list ready$/ }),
+  ).toBeTruthy();
 });
 
 it('shows a date tile and an upcoming pill for a later event', async () => {
@@ -137,6 +140,7 @@ it('shows a date tile and an upcoming pill for a later event', async () => {
   expect(screen.getByText('10')).toBeTruthy();
   expect(screen.getByText('Upcoming')).toBeTruthy();
   expect(screen.queryByText('Offline list ready')).toBeNull();
+  expect(screen.getByRole('button', { name: /^Afro Night, .*Lagos, Upcoming$/ })).toBeTruthy();
 });
 
 it('error state offers retry and never says there are no events', async () => {

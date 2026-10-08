@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useIsFocused } from 'expo-router';
 import { useCallback, useState } from 'react';
 
 import { useAuth } from '@/features/auth/hooks/useAuth';
@@ -18,15 +18,18 @@ export default function GateEventsRoute() {
   const { modes, choose } = useModeSwitcher(userId);
   const events = useScannableEvents(userId);
   const last = useLastEvent(userId);
-  const offlineLists = useOfflineLists(userId);
+  // The list stays mounted under the scanner; re-read marks when staff come back from a download.
+  const offline = useOfflineLists(userId, useIsFocused());
   const { remember } = last;
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [account, setAccount] = useState(false);
   const { refresh } = events;
+  const { reload: reloadOffline } = offline;
   const reload = useCallback(() => {
     setNowMs(Date.now());
+    reloadOffline();
     void refresh();
-  }, [refresh]);
+  }, [refresh, reloadOffline]);
 
   const open = useCallback(
     (eventId: string) => {
@@ -42,7 +45,7 @@ export default function GateEventsRoute() {
         state={last.loaded ? events.state : { status: 'loading' }}
         nowMs={nowMs}
         lastEventId={last.lastEventId}
-        offlineLists={offlineLists}
+        offlineLists={offline.lists}
         refreshing={events.refreshing}
         onRefresh={reload}
         onRetry={reload}
@@ -55,10 +58,9 @@ export default function GateEventsRoute() {
         visible={account}
         email={state.status === 'signedIn' ? state.email : ''}
         modeSwitcher={<ModeSwitcher modes={modes} current="gate" onChoose={choose} />}
-        onSignOut={() => {
-          setAccount(false);
-          signOut();
-        }}
+        // Keep the sheet open: closing the Modal while the sign-out guard presents its Alert
+        // can swallow the alert on iOS. A completed sign-out unmounts this route anyway.
+        onSignOut={signOut}
         onClose={() => {
           setAccount(false);
         }}

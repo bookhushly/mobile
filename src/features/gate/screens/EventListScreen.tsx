@@ -8,6 +8,7 @@ import {
   eventStatus,
   groupEvents,
   pickAutoOpen,
+  type EventStatus,
 } from '@/features/gate/domain/eventList';
 import type { ScannableEvent } from '@/shared/api/scannableEvents';
 import { borderWidth, color, radius, space } from '@/shared/theme';
@@ -97,8 +98,15 @@ function DateTile({ e }: { e: ScannableEvent }) {
   );
 }
 
-function statusPill(e: ScannableEvent, nowMs: number): ReactNode {
-  switch (eventStatus(e, nowMs)) {
+const STATUS_TEXT: Record<EventStatus, string | null> = {
+  live: 'Live now',
+  today: 'Today',
+  upcoming: 'Upcoming',
+  ended: null,
+};
+
+function statusPill(status: EventStatus | null): ReactNode {
+  switch (status) {
     case 'live':
       return <StatusPill tone="success" label="Live now" size="sm" />;
     case 'today':
@@ -123,7 +131,18 @@ function EventRow({
   onOpen: (id: string) => void;
 }) {
   const label = eventLabel(e);
-  const pill = statusPill(e, nowMs);
+  const status = eventStatus(e, nowMs);
+  const pill = statusPill(status);
+  // Screen readers hear everything the row shows: when, where, status and the offline mark.
+  const spoken = [
+    label,
+    when(e.startsAt),
+    e.location,
+    status === null ? null : STATUS_TEXT[status],
+    offline ? 'Offline list ready' : null,
+  ]
+    .filter((s): s is string => s !== null && s !== '')
+    .join(', ');
   const note =
     pill !== null || offline ? (
       <View style={{ flexDirection: 'row', gap: space.s2, flexWrap: 'wrap', marginTop: space.s1 }}>
@@ -142,7 +161,7 @@ function EventRow({
       title={label}
       subtitle={[timeOf(e), e.location].filter(Boolean).join(' · ')}
       note={note}
-      accessibilityLabel={`${label}, ${when(e.startsAt)}`}
+      accessibilityLabel={spoken}
     />
   );
 }
