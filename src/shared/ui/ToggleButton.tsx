@@ -66,36 +66,40 @@ export function ToggleButton({
         onChange(!checked);
       }}
       hitSlop={Math.max(0, Math.ceil((MIN_EFFECTIVE_TARGET - px) / 2))}
-      style={{ alignItems: 'center', gap: space.s2 }}
     >
-      <View
-        style={{
-          width: px,
-          height: px,
-          borderRadius: px / 2,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: face,
-          borderWidth: borderWidth.hairline,
-          borderColor: inverse ? color.onInverse : color.border,
-        }}
-      >
-        <Icon
-          as={checked && iconOn !== undefined ? iconOn : icon}
-          size={size === 'lg' ? 'lg' : 'md'}
-          tone={fg}
-        />
-      </View>
-      {hideLabel === true ? null : (
-        <Text
-          variant="label"
-          tone={inverse ? 'onInverse' : 'textPrimary'}
-          maxScale={1.3}
-          numberOfLines={1}
+      {/* PressableScale wraps children in one Animated.View, so centring and gap live here. */}
+      <View style={{ alignItems: 'center', gap: space.s2 }}>
+        <View
+          testID="toggle-button-face"
+          style={{
+            width: px,
+            height: px,
+            borderRadius: px / 2,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: face,
+            borderWidth: borderWidth.hairline,
+            borderColor: inverse ? color.onInverse : color.border,
+          }}
         >
-          {label}
-        </Text>
-      )}
+          <Icon
+            as={checked && iconOn !== undefined ? iconOn : icon}
+            size={size === 'lg' ? 'lg' : 'md'}
+            tone={fg}
+          />
+        </View>
+        {hideLabel === true ? null : (
+          <Text
+            variant="label"
+            tone={inverse ? 'onInverse' : 'textPrimary'}
+            maxScale={1.3}
+            numberOfLines={1}
+            align="center"
+          >
+            {label}
+          </Text>
+        )}
+      </View>
     </PressableScale>
   );
 }

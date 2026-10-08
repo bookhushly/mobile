@@ -48,33 +48,36 @@ export function IconButton({
       disabled={disabled}
       onPress={onPress}
       hitSlop={slop}
-      style={{ alignItems: 'center', gap: space.s2 }}
     >
-      <View
-        testID="icon-button-face"
-        style={{
-          width: px,
-          height: px,
-          borderRadius: px / 2,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: FACE[variant],
-          borderWidth: variant === 'plain' ? borderWidth.hairline : 0,
-          borderColor: color.border,
-        }}
-      >
-        <Icon as={icon} size={size === 'lg' ? 'lg' : 'md'} tone={FG[variant]} />
-      </View>
-      {label !== undefined ? (
-        <Text
-          variant="label"
-          tone={variant === 'inverse' ? 'onInverse' : 'textPrimary'}
-          maxScale={1.3}
-          numberOfLines={1}
+      {/* PressableScale wraps children in one Animated.View, so centring and gap live here. */}
+      <View style={{ alignItems: 'center', gap: space.s2 }}>
+        <View
+          testID="icon-button-face"
+          style={{
+            width: px,
+            height: px,
+            borderRadius: px / 2,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: FACE[variant],
+            borderWidth: variant === 'plain' ? borderWidth.hairline : 0,
+            borderColor: color.border,
+          }}
         >
-          {label}
-        </Text>
-      ) : null}
+          <Icon as={icon} size={size === 'lg' ? 'lg' : 'md'} tone={FG[variant]} />
+        </View>
+        {label !== undefined ? (
+          <Text
+            variant="label"
+            tone={variant === 'inverse' ? 'onInverse' : 'textPrimary'}
+            maxScale={1.3}
+            numberOfLines={1}
+            align="center"
+          >
+            {label}
+          </Text>
+        ) : null}
+      </View>
     </PressableScale>
   );
 }

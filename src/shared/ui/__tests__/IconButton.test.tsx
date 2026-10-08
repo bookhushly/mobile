@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Flashlight, Search } from 'lucide-react-native';
 
+import { space } from '@/shared/theme';
 import { DensityProvider } from '@/shared/ui/DensityProvider';
 import { IconButton } from '@/shared/ui/IconButton';
 import { TextLink } from '@/shared/ui/TextLink';
@@ -88,4 +89,31 @@ it('text link fires onPress', async () => {
   await render(<TextLink label="Change event" onPress={onPress} />);
   await fireEvent.press(screen.getByRole('link', { name: 'Change event' }));
   expect(onPress).toHaveBeenCalledTimes(1);
+});
+
+// PressableScale wraps its children in one Animated.View, so the face and label must share
+// an inner View that centres them and spaces them with the s2 gap.
+it('icon button centres face and label in one inner view with the s2 gap', async () => {
+  await render(
+    <IconButton
+      icon={Search}
+      accessibilityLabel="Find guest"
+      label="Find guest"
+      onPress={jest.fn()}
+    />,
+  );
+  const column = screen.getByTestId('icon-button-face').parent;
+  expect(column).toHaveStyle({ alignItems: 'center', gap: space.s2 });
+  expect(column).toContainElement(screen.getByText('Find guest'));
+  expect(screen.getByText('Find guest')).toHaveStyle({ textAlign: 'center' });
+});
+
+it('toggle centres face and label in one inner view with the s2 gap', async () => {
+  await render(
+    <ToggleButton icon={Flashlight} label="Torch" checked={false} onChange={jest.fn()} />,
+  );
+  const column = screen.getByTestId('toggle-button-face').parent;
+  expect(column).toHaveStyle({ alignItems: 'center', gap: space.s2 });
+  expect(column).toContainElement(screen.getByText('Torch'));
+  expect(screen.getByText('Torch')).toHaveStyle({ textAlign: 'center' });
 });
