@@ -27,6 +27,16 @@ const gateGuard: SignOutGuard = {
       });
     }
   },
+  async summary(userId) {
+    if (!(await hasGateDb(userId))) return null;
+    const { device, outbox } = await gateDb(userId);
+    const [tally, totals] = await Promise.all([device.tally(), outbox.totals()]);
+    return { ...tally, toSync: totals.unsynced };
+  },
+  async resetSummary(userId) {
+    if (!(await hasGateDb(userId))) return;
+    await (await gateDb(userId)).device.resetTally();
+  },
   wipe: wipeGateDb,
 };
 

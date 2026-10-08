@@ -36,6 +36,8 @@ export const rosterPage = z.object({
     .array(z.object({ kid: z.string(), publicKey: z.string(), signing: z.boolean().catch(false) }))
     .optional(),
   keys_error: z.boolean().optional(),
+  // First page only; null = no PIN. Parsed and bounds-checked later by parseVerifier.
+  override: z.unknown().optional(),
 });
 export type RosterPage = z.infer<typeof rosterPage>;
 

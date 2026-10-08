@@ -25,6 +25,8 @@ const toBatchItem = (i: OutboxItem): BatchItem => ({
   ticket_id: i.code,
   scanned_at: i.scannedAt,
   mode: i.mode,
+  ...(i.reason !== null ? { reason: i.reason } : {}),
+  ...(i.approvedBy !== null ? { approved_by: i.approvedBy } : {}),
 });
 
 // auth: the client already refreshed once; validation: a 200 we couldn't read may have committed,

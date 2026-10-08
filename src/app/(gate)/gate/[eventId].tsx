@@ -7,17 +7,21 @@ import { z } from 'zod';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { gateKeys } from '@/features/gate/api/keys';
 import { eventLabel } from '@/features/gate/domain/eventList';
+import type { LookupQuery } from '@/features/gate/domain/lookupQuery';
+import type { TicketCode } from '@/features/gate/domain/parseTicketCode';
 import { shouldShowNotAssigned } from '@/features/gate/domain/lostAssignment';
 import { useLastEvent } from '@/features/gate/hooks/useLastEvent';
 import { useScannableEvents } from '@/features/gate/hooks/useScannableEvents';
 import { useOfflineGate } from '@/features/gate/hooks/useOfflineGate';
 import { useScanSession } from '@/features/gate/hooks/useScanSession';
 import { useScanSummary } from '@/features/gate/hooks/useScanSummary';
+import type { ActivityTab, Approval } from '@/features/gate/offline/outboxStore';
 import { ScannerScreen } from '@/features/gate/screens/ScannerScreen';
 import { useAppActive, useCameraAccess } from '@/features/gate/ui/ScannerCamera';
 import { clock } from '@/shared/api/instance';
 import { latestOnly } from '@/shared/lib/latest';
 import { onceGuard } from '@/shared/lib/once';
+import { shareCsv } from '@/shared/platform/shareCsv';
 
 const eventIdParam = z.uuid();
 
@@ -54,11 +58,44 @@ function Scanner({ eventId }: { eventId: string }) {
     });
   };
   const controller = offline.controller;
-  const loadAttention = useCallback(
-    () => controller?.attention() ?? Promise.resolve([]),
+  // Before the offline gate is ready the sheet reads as "no list" (search) or "couldn't admit".
+  const notReady = useCallback(() => Promise.reject(new Error('offline gate not ready')), []);
+  const loadActivity = useCallback(
+    (tab: ActivityTab, beforeSeq: number | null) =>
+      controller?.activity(tab, beforeSeq) ?? notReady(),
+    [controller, notReady],
+  );
+  const exportActivity = useCallback(
+    () => controller?.exportRows() ?? notReady(),
+    [controller, notReady],
+  );
+  const searchGuests = useCallback(
+    (q: LookupQuery) => controller?.search(q) ?? Promise.resolve([]),
     [controller],
   );
-  const { session, muted, toggleMute } = useScanSession(eventId, offline.scan);
+  const bookingTickets = useCallback(
+    (bookingId: string) => controller?.bookingTickets(bookingId) ?? notReady(),
+    [controller, notReady],
+  );
+  const needsPinForLookup = useCallback(
+    () => controller?.needsPinForLookup() ?? notReady(),
+    [controller, notReady],
+  );
+  const checkPin = useCallback(
+    (pin: string) => controller?.checkPin(pin) ?? notReady(),
+    [controller, notReady],
+  );
+  const admitFromLookup = useCallback(
+    (ticketId: string, approval: Approval | null) =>
+      controller?.admitFromLookup(ticketId, approval) ?? notReady(),
+    [controller, notReady],
+  );
+  const override = useCallback(
+    (code: TicketCode, approval: { approvedBy: string; reason: string }) =>
+      controller?.override(code, approval) ?? notReady(),
+    [controller, notReady],
+  );
+  const { session, muted, toggleMute } = useScanSession(eventId, offline.scan, offline.controller?.tally);
 
   // A summary 403 is codeless, so only a fresh events list can confirm the assignment is gone.
   const { refresh: refreshEvents } = events;
@@ -109,7 +146,15 @@ function Scanner({ eventId }: { eventId: string }) {
       onSyncNow={() => {
         controller?.syncNow();
       }}
-      loadAttention={loadAttention}
+      loadActivity={loadActivity}
+      exportActivity={exportActivity}
+      shareCsv={shareCsv}
+      searchGuests={searchGuests}
+      bookingTickets={bookingTickets}
+      needsPinForLookup={needsPinForLookup}
+      checkPin={checkPin}
+      admitFromLookup={admitFromLookup}
+      override={override}
       serverNow={clock.serverNow}
     />
   );

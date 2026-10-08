@@ -1,9 +1,17 @@
+import type { OutboxMode } from '@/features/gate/offline/outboxStore';
 import { batchBody, type BatchBody } from '@/features/gate/schemas/batch';
 import type { ApiClient } from '@/shared/api/client';
 import type { ApiError } from '@/shared/lib/errors';
 import type { Result } from '@/shared/lib/result';
 
-export type BatchItem = { client_seq: number; ticket_id: string; scanned_at: string; mode: 'offline' };
+export type BatchItem = {
+  client_seq: number;
+  ticket_id: string;
+  scanned_at: string;
+  mode: OutboxMode;
+  reason?: string;
+  approved_by?: string;
+};
 
 // Idempotent on the server (device_id + client_seq), so the client may retry it.
 export function postBatch(

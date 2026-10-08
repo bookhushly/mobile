@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { syncLine } from '@/features/gate/domain/syncLine';
+import type { ActivityTab } from '@/features/gate/offline/outboxStore';
 import { useSyncView } from '@/features/gate/state/syncView';
 import { color, density, space } from '@/shared/theme';
 import { Icon, Text } from '@/shared/ui';
@@ -10,7 +11,8 @@ import { Icon, Text } from '@/shared/ui';
 type Props = {
   onRefreshList: () => void;
   onSyncNow: () => void;
-  onOpenAttention: () => void;
+  /** "N need attention" opens the attention tab; "Activity" opens what is waiting, else synced. */
+  onOpenActivity: (tab: ActivityTab) => void;
   /** Server-corrected clock: list and contact times are server ms. */
   now: () => number;
 };
@@ -35,7 +37,7 @@ function Small({ label, onPress }: { label: string; onPress: () => void }) {
 }
 
 // Always visible on the scanner (FR-3.9). Re-renders on sync status only, never the camera.
-export function SyncBar({ onRefreshList, onSyncNow, onOpenAttention, now }: Props) {
+export function SyncBar({ onRefreshList, onSyncNow, onOpenActivity, now }: Props) {
   const status = useSyncView((s) => s.status);
   // Re-evaluated every 30 s so "2 min ago" and the clock warning do not go stale.
   const [, setTick] = useState(0);
@@ -75,6 +77,12 @@ export function SyncBar({ onRefreshList, onSyncNow, onOpenAttention, now }: Prop
         ) : (
           <Small label="Refresh list" onPress={onRefreshList} />
         )}
+        <Small
+          label="Activity"
+          onPress={() => {
+            onOpenActivity(status.pending > 0 ? 'toSync' : 'synced');
+          }}
+        />
       </View>
       {line.warning !== null ? (
         <View
@@ -94,7 +102,9 @@ export function SyncBar({ onRefreshList, onSyncNow, onOpenAttention, now }: Prop
       {attention > 0 ? (
         <Small
           label={`${String(attention)} ${attention === 1 ? 'needs' : 'need'} attention`}
-          onPress={onOpenAttention}
+          onPress={() => {
+            onOpenActivity('attention');
+          }}
         />
       ) : null}
     </View>

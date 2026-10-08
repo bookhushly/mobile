@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { gateKeys } from '@/features/gate/api/keys';
 import { submitScan } from '@/features/gate/api/scan';
+import type { ScanOutcome } from '@/features/gate/domain/outcome';
 import { createScanSession, type ScanSession } from '@/features/gate/domain/scanSession';
 import type { OfflineScanHooks } from '@/features/gate/hooks/useOfflineGate';
 import { useScanView } from '@/features/gate/state/scanView';
@@ -19,6 +20,8 @@ const SUMMARY_MAX_WAIT_MS = 5_000;
 export function useScanSession(
   eventId: string,
   offline: OfflineScanHooks = {},
+  // Read once when the session is created: pass a stable function (the controller's tally).
+  onOutcome?: (o: ScanOutcome) => void,
 ): {
   session: ScanSession;
   muted: boolean;
@@ -52,6 +55,7 @@ export function useScanSession(
       onAdmitted: () => {
         refreshSummary.call();
       },
+      ...(onOutcome === undefined ? {} : { onOutcome }),
     }),
   );
 

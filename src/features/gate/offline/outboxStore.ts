@@ -1,3 +1,4 @@
+import type { ActivityRow } from '@/features/gate/domain/activityCsv';
 import type { RosterTicket } from '@/features/gate/domain/offlineDecide';
 import type { Sql } from '@/shared/db/sql';
 
@@ -13,13 +14,18 @@ export type OutboxState =
   | 'blocked'
   | 'error';
 
+export type OutboxMode = 'offline' | 'manual_lookup' | 'offline_override';
+export type Approval = { approvedBy: string; reason: string | null };
+
 export type OutboxItem = {
   seq: number;
   eventId: string;
   ticketId: string;
   code: string;
   scannedAt: string;
-  mode: 'offline';
+  mode: OutboxMode;
+  reason: string | null;
+  approvedBy: string | null;
   kid: string | null;
   appVersion: string;
   state: OutboxState;
@@ -35,7 +41,19 @@ export type AdmissionInput = {
   scannedAt: string;
   kid: string | null;
   appVersion: string;
+  mode?: OutboxMode;
+  approval?: Approval;
 };
+// No `code`: an override always syncs the ticket UUID (the server skips the liveness proof for
+// offline_override), so a scanned BH2 code can't expire on the server before the sync.
+export type OverrideInput = {
+  eventId: string;
+  ticketId: string;
+  scannedAt: string;
+  appVersion: string;
+  approval: { approvedBy: string; reason: string };
+};
+export type ActivityTab = 'toSync' | 'attention' | 'synced';
 export type RecordResult =
   | { recorded: true; seq: number }
   | { recorded: false; ticket: RosterTicket | null };
@@ -53,6 +71,12 @@ const STATES: readonly OutboxState[] = [
 const ATTENTION = "('duplicate', 'suspect', 'rejected', 'blocked', 'error')";
 const UNSYNCED = "('pending', 'sending')";
 const UNSYNCABLE = "('blocked', 'error')";
+const MODES: readonly OutboxMode[] = ['offline', 'manual_lookup', 'offline_override'];
+const TAB_STATES: Record<ActivityTab, string> = {
+  toSync: UNSYNCED,
+  attention: ATTENTION,
+  synced: "('synced')",
+};
 
 type ItemSqlRow = {
   client_seq: number;
@@ -60,6 +84,9 @@ type ItemSqlRow = {
   ticket_id: string;
   code: string;
   scanned_at: string;
+  mode: string;
+  reason: string | null;
+  approved_by: string | null;
   kid: string | null;
   app_version: string;
   state: string;
@@ -84,7 +111,9 @@ const toItem = (r: ItemSqlRow): OutboxItem => ({
   ticketId: r.ticket_id,
   code: r.code,
   scannedAt: r.scanned_at,
-  mode: 'offline',
+  mode: MODES.find((m) => m === r.mode) ?? 'offline',
+  reason: r.reason,
+  approvedBy: r.approved_by,
   kid: r.kid,
   appVersion: r.app_version,
   state: STATES.find((s) => s === r.state) ?? 'error',
@@ -92,6 +121,19 @@ const toItem = (r: ItemSqlRow): OutboxItem => ({
   nextTryAt: r.next_try_at,
   result: parseResult(r.result),
 });
+
+async function insertItem(
+  t: Sql,
+  i: { eventId: string; ticketId: string; code: string; scannedAt: string; kid: string | null; appVersion: string; mode: OutboxMode; approval: Approval | null },
+): Promise<number> {
+  const r = await t.get<{ seq: number }>(
+    `INSERT INTO outbox (event_id, ticket_id, code, scanned_at, mode, kid, app_version, state, reason, approved_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?) RETURNING client_seq AS seq`,
+    [i.eventId, i.ticketId, i.code, i.scannedAt, i.mode, i.kid, i.appVersion, i.approval?.reason ?? null, i.approval?.approvedBy ?? null],
+  );
+  if (r === null) throw new Error('outbox insert returned no row');
+  return r.seq;
+}
 
 const marks = (n: number) => Array.from({ length: n }, () => '?').join(', ');
 
@@ -108,14 +150,46 @@ export function createOutboxStore(db: Sql, deps: { newDeviceId: () => string }) 
         if (u.changes === 0) {
           return { recorded: false, ticket: await readTicket(t, input.eventId, input.ticketId) };
         }
-        const r = await t.get<{ seq: number }>(
-          `INSERT INTO outbox (event_id, ticket_id, code, scanned_at, mode, kid, app_version, state)
-           VALUES (?, ?, ?, ?, 'offline', ?, ?, 'pending') RETURNING client_seq AS seq`,
-          [input.eventId, input.ticketId, input.code, input.scannedAt, input.kid, input.appVersion],
-        );
-        if (r === null) throw new Error('outbox insert returned no row');
-        return { recorded: true, seq: r.seq };
+        const seq = await insertItem(t, { ...input, mode: input.mode ?? 'offline', approval: input.approval ?? null });
+        return { recorded: true, seq };
       }),
+
+    // FR-3.15: an unlisted ticket. If the list has since caught up, it is an ordinary admission
+    // (Review Focus 1); otherwise only the outbox records it, once per ticket.
+    recordOverride: (input: OverrideInput): Promise<RecordResult> =>
+      db.tx(async (t): Promise<RecordResult> => {
+        const listed = await readTicket(t, input.eventId, input.ticketId);
+        if (listed !== null) {
+          const u = await t.run(
+            'UPDATE roster_ticket SET checked_in_at = ?, by_me = 1, scanned_by = NULL WHERE event_id = ? AND id = ? AND checked_in_at IS NULL',
+            [input.scannedAt, input.eventId, input.ticketId],
+          );
+          if (u.changes === 0) return { recorded: false, ticket: await readTicket(t, input.eventId, input.ticketId) };
+        } else {
+          const dup = await t.get<{ one: number }>(
+            'SELECT 1 AS one FROM outbox WHERE event_id = ? AND ticket_id = ? LIMIT 1',
+            [input.eventId, input.ticketId],
+          );
+          if (dup !== null) return { recorded: false, ticket: null };
+        }
+        const seq = await insertItem(t, {
+          ...input,
+          code: input.ticketId,
+          kid: null,
+          mode: 'offline_override',
+          approval: input.approval,
+        });
+        return { recorded: true, seq };
+      }),
+
+    // Whether this phone has recorded an admission of the ticket (any state: it let the person in).
+    hasTicket: async (eventId: string, ticketId: string): Promise<{ scannedAt: string } | null> => {
+      const r = await db.get<{ scanned_at: string }>(
+        'SELECT MIN(scanned_at) AS scanned_at FROM outbox WHERE event_id = ? AND ticket_id = ? HAVING COUNT(*) > 0',
+        [eventId, ticketId],
+      );
+      return r === null ? null : { scannedAt: r.scanned_at };
+    },
 
     deviceId: (): Promise<string> =>
       db.tx(async (t) => {
@@ -199,6 +273,33 @@ export function createOutboxStore(db: Sql, deps: { newDeviceId: () => string }) 
           [eventId],
         )
       ).map((r) => ({ ...toItem(r), ticketType: r.ticket_type, ticketIndex: r.ticket_index })),
+
+    list: async (eventId: string, tab: ActivityTab, beforeSeq: number | null, limit: number): Promise<AttentionItem[]> =>
+      (
+        await db.all<ItemSqlRow & { ticket_type: string | null; ticket_index: number | null }>(
+          `SELECT o.*, r.ticket_type, r.ticket_index FROM outbox o
+           LEFT JOIN roster_ticket r ON r.event_id = o.event_id AND r.id = o.ticket_id
+           WHERE o.event_id = ? AND o.state IN ${TAB_STATES[tab]} AND o.client_seq < ?
+           ORDER BY o.client_seq DESC LIMIT ?`,
+          [eventId, beforeSeq ?? Number.MAX_SAFE_INTEGER, limit],
+        )
+      ).map((r) => ({ ...toItem(r), ticketType: r.ticket_type, ticketIndex: r.ticket_index })),
+
+    exportRows: async (eventId: string): Promise<ActivityRow[]> =>
+      (
+        await db.all<ItemSqlRow & { ticket_type: string | null; ticket_index: number | null }>(
+          `SELECT o.*, r.ticket_type, r.ticket_index FROM outbox o
+           LEFT JOIN roster_ticket r ON r.event_id = o.event_id AND r.id = o.ticket_id
+           WHERE o.event_id = ? ORDER BY o.client_seq`,
+          [eventId],
+        )
+      ).map((r) => {
+        const i = toItem(r);
+        return {
+          ticketId: i.ticketId, ticketType: r.ticket_type, ticketIndex: r.ticket_index, scannedAt: i.scannedAt,
+          mode: i.mode, state: i.state, result: i.result, reason: i.reason, approvedBy: i.approvedBy,
+        };
+      }),
 
     totals: async () => {
       const r = await db.get<{ unsynced: number | null; unsyncable: number | null }>(

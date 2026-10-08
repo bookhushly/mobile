@@ -14,25 +14,36 @@ describe('SyncBar', () => {
   });
   it('shows the status and the actions', async () => {
     const onSyncNow = jest.fn();
-    const onOpenAttention = jest.fn();
+    const onOpenActivity = jest.fn();
     await render(
       <SyncBar
         now={() => NOW}
         onRefreshList={jest.fn()}
         onSyncNow={onSyncNow}
-        onOpenAttention={onOpenAttention}
+        onOpenActivity={onOpenActivity}
       />,
     );
     expect(screen.getByText('Online · offline list 3 · just now · 2 to sync')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Sync now' }));
     expect(onSyncNow).toHaveBeenCalled();
     await fireEvent.press(screen.getByRole('button', { name: '1 needs attention' }));
-    expect(onOpenAttention).toHaveBeenCalled();
+    expect(onOpenActivity).toHaveBeenLastCalledWith('attention');
+    await fireEvent.press(screen.getByRole('button', { name: 'Activity' }));
+    expect(onOpenActivity).toHaveBeenLastCalledWith('toSync');
+  });
+  it('opens Activity on the synced tab when nothing is waiting', async () => {
+    useSyncView.setState({ status: { ...EMPTY_SYNC, list: { count: 3, syncedAt: NOW } } });
+    const onOpenActivity = jest.fn();
+    await render(
+      <SyncBar now={() => NOW} onRefreshList={jest.fn()} onSyncNow={jest.fn()} onOpenActivity={onOpenActivity} />,
+    );
+    await fireEvent.press(screen.getByRole('button', { name: 'Activity' }));
+    expect(onOpenActivity).toHaveBeenCalledWith('synced');
   });
   it('measures "ago" on the server clock, not the phone clock', async () => {
     const phone = jest.spyOn(Date, 'now').mockReturnValue(NOW + 3 * 60 * 60_000);
     await render(
-      <SyncBar now={() => NOW} onRefreshList={jest.fn()} onSyncNow={jest.fn()} onOpenAttention={jest.fn()} />,
+      <SyncBar now={() => NOW} onRefreshList={jest.fn()} onSyncNow={jest.fn()} onOpenActivity={jest.fn()} />,
     );
     expect(screen.getByText('Online · offline list 3 · just now · 2 to sync')).toBeTruthy();
     phone.mockRestore();

@@ -3,18 +3,30 @@ import * as Crypto from 'expo-crypto';
 import { deleteDatabase, isWrongKey, openEncrypted } from '@/shared/db/expoSql';
 import { migrate } from '@/shared/db/sql';
 import { captureException } from '@/shared/monitoring';
+import type { KeyValue } from '@/shared/lib/kv';
 import { secureKv } from '@/shared/platform/secureStore';
+import { ACTIVITY_FILE, deleteSharedCsv } from '@/shared/platform/shareCsv';
 
+import { createDeviceStore, type DeviceStore } from './deviceStore';
 import { createOutboxStore, type OutboxStore } from './outboxStore';
 import { createRosterStore, type RosterStore } from './rosterStore';
 import { MIGRATIONS } from './schema';
 
-export type GateDb = { roster: RosterStore; outbox: OutboxStore; close: () => Promise<void> };
+export type GateDb = { roster: RosterStore; outbox: OutboxStore; device: DeviceStore; close: () => Promise<void> };
 
 // One encrypted database per account: a different account on this phone never sees, or syncs,
 // another's admissions; "Sign in again" after a session expiry finds its outbox intact.
 const fileOf = (userId: string) => `gate-${userId}.db`;
 const keyName = (userId: string) => `bh.gate.dbkey.${userId}`;
+// Not removed by wipeGateDb: the lockout must survive sign-out.
+const lockKvFor = (userId: string): KeyValue => {
+  const k = (name: string) => `bh.gate.overridelock.${userId}.${name}`;
+  return {
+    get: (name) => secureKv.get(k(name)),
+    set: (name, v) => secureKv.set(k(name), v),
+    delete: (name) => secureKv.delete(k(name)),
+  };
+};
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
 
 async function keyFor(userId: string): Promise<string> {
@@ -47,9 +59,10 @@ async function open(userId: string): Promise<GateDb> {
   await migrate(conn.sql, MIGRATIONS);
   const roster = createRosterStore(conn.sql);
   const outbox = createOutboxStore(conn.sql, { newDeviceId: () => Crypto.randomUUID() });
+  const device = createDeviceStore(conn.sql, { lockKv: lockKvFor(userId) });
   await outbox.resetSending();
   await sweepExpired(roster, outbox, Date.now());
-  return { roster, outbox, close: conn.close };
+  return { roster, outbox, device, close: conn.close };
 }
 
 const opened = new Map<string, Promise<GateDb>>();
@@ -70,6 +83,9 @@ export async function hasGateDb(userId: string): Promise<boolean> {
 }
 
 export async function wipeGateDb(userId: string): Promise<void> {
+  // First, so a failure below cannot skip it: a previous activity export may still sit in the
+  // cache (it is not deleted right after sharing). Best effort, never throws.
+  deleteSharedCsv(ACTIVITY_FILE);
   const p = opened.get(userId);
   opened.delete(userId);
   if (p !== undefined) {

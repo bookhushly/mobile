@@ -46,6 +46,19 @@ describe('syncOutbox', () => {
     expect(await store.status(EV)).toMatchObject({ pending: 0, attention: 0 });
   });
 
+  it('posts the override mode, reason and approver, and omits them for a plain item', async () => {
+    const { store, sent, deps } = await setup(1);
+    await store.recordOverride({
+      eventId: EV, ticketId: id(9), scannedAt: '2026-10-07T18:00:00.000Z', appVersion: '1',
+      approval: { approvedBy: 'Tunde', reason: 'Bought at the door' },
+    });
+    await syncOutbox(deps(echo()));
+    const items = sent.flat();
+    expect(items[1]).toMatchObject({ mode: 'offline_override', reason: 'Bought at the door', approved_by: 'Tunde' });
+    expect(Object.keys(items[0] ?? {})).not.toContain('reason');
+    expect(Object.keys(items[0] ?? {})).not.toContain('approved_by');
+  });
+
   it.each<[ApiError]>([[{ kind: 'network' }], [{ kind: 'timeout' }], [{ kind: 'unavailable', status: 503 }], [{ kind: 'rateLimited' }], [{ kind: 'auth' }], [{ kind: 'validation' }]])(
     'a transient %j keeps the items and backs off',
     async (e) => {

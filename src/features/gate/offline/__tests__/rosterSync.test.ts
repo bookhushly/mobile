@@ -89,6 +89,18 @@ describe('syncRoster', () => {
     expect(await store.meta(EV)).toMatchObject({ keys: [{ kid: 't', publicKey: 'k' }], sinceMark: '2026-10-07T18:03:00Z' });
   });
 
+  it('stores the override verifier from the first page and keeps it when a resumed page omits it', async () => {
+    const { store } = await setup();
+    const v = { enabled: true, alg: 'scrypt' };
+    const first: FetchRosterPage = (p) =>
+      Promise.resolve(p.cursor === null ? ok(page([t(1)], t(1).id, { override: v })) : err({ kind: 'timeout' }));
+    await syncRoster({ store, fetchPage: first, eventId: EV }, 'full');
+    expect((await store.meta(EV))?.override).toEqual(v);
+    const resumed: FetchRosterPage = () => Promise.resolve(ok(page([t(2)], null)));
+    await syncRoster({ store, fetchPage: resumed, eventId: EV }, 'full');
+    expect((await store.meta(EV))?.override).toEqual(v);
+  });
+
   it('refreshKeys fetches one row and stores the key set', async () => {
     const { store } = await setup();
     const first: FetchRosterPage = () => Promise.resolve(ok(page([t(1)], null, { keys: [] })));

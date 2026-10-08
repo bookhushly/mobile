@@ -1,10 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 
 import type { OverlayView } from '@/features/gate/domain/scanSession';
 import { ScannerScreen } from '@/features/gate/screens/ScannerScreen';
 import { useScanView } from '@/features/gate/state/scanView';
+import { useSyncView } from '@/features/gate/state/syncView';
 import { color, density, radius } from '@/shared/theme';
 
 const TICKET = '3f2b8c4e-1a2b-4c3d-8e9f-0a1b2c3d4e5f';
@@ -34,7 +35,37 @@ jest.mock('expo-camera', () => {
 });
 jest.mock('expo-keep-awake', () => ({ useKeepAwake: jest.fn() }));
 
-const session = { scan: jest.fn(), tryAgain: jest.fn(), dismiss: jest.fn() };
+const session = { scan: jest.fn(), tryAgain: jest.fn(), dismiss: jest.fn(), show: jest.fn() };
+const GUEST = {
+  id: 't1',
+  ticketType: 'VIP',
+  ticketIndex: 2,
+  bookingId: 'b1',
+  bookingStatus: 'confirmed',
+  checkedInAt: null,
+  scannedBy: null,
+  byMe: null,
+  holderName: 'Ada Obi',
+  phoneMasked: null,
+};
+const LOOKUP_ADMITTED = {
+  kind: 'admitted' as const,
+  ticketType: 'VIP',
+  ticketIndex: 2,
+  totalTickets: null,
+  checkedInCount: null,
+  checkedInAt: null,
+  via: 'lookup' as const,
+};
+const OVERRIDE_ADMITTED = {
+  kind: 'admitted' as const,
+  ticketType: null,
+  ticketIndex: null,
+  totalTickets: null,
+  checkedInCount: null,
+  checkedInAt: null,
+  via: 'override' as const,
+};
 const base = {
   title: 'Afro Night',
   summary: { admitted: 41, total: 120, recent: [] },
@@ -52,7 +83,15 @@ const base = {
   onLostAssignment: jest.fn(),
   onRefreshList: jest.fn(),
   onSyncNow: jest.fn(),
-  loadAttention: () => Promise.resolve([]),
+  loadActivity: jest.fn(() => Promise.resolve([])),
+  exportActivity: jest.fn(() => Promise.resolve([])),
+  shareCsv: jest.fn(() => Promise.resolve()),
+  searchGuests: jest.fn(() => Promise.resolve([GUEST])),
+  bookingTickets: jest.fn(() => Promise.resolve([GUEST])),
+  needsPinForLookup: jest.fn(() => Promise.resolve(false)),
+  checkPin: jest.fn(() => Promise.resolve({ kind: 'ok' as const })),
+  admitFromLookup: jest.fn(() => Promise.resolve(LOOKUP_ADMITTED)),
+  override: jest.fn(() => Promise.resolve(OVERRIDE_ADMITTED)),
   serverNow: () => Date.parse('2026-10-07T18:00:30Z'),
 };
 
@@ -182,6 +221,55 @@ it('pauses camera reads while Enter code or Recent is open', async () => {
   expect(session.scan).not.toHaveBeenCalled();
 });
 
+it('pauses camera reads while Find guest is open', async () => {
+  await render(<ScannerScreen {...base} />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Find guest' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
+  expect(session.scan).not.toHaveBeenCalled();
+});
+
+it('"N need attention" opens Activity on that tab and pauses camera reads', async () => {
+  useSyncView.setState({
+    status: { ...useSyncView.getState().status, attention: 2 },
+  });
+  await render(<ScannerScreen {...base} />);
+  await fireEvent.press(screen.getByRole('button', { name: '2 need attention' }));
+  await waitFor(() => {
+    expect(base.loadActivity).toHaveBeenCalledWith('attention', null);
+  });
+  expect(
+    screen.getByRole('tab', { name: 'Needs attention' }).props.accessibilityState,
+  ).toMatchObject({
+    selected: true,
+  });
+  await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
+  expect(session.scan).not.toHaveBeenCalled();
+  await act(() => {
+    useSyncView.getState().reset();
+  });
+});
+
+it('a lookup admission shows through the session and closes Find guest', async () => {
+  useSyncView.setState({
+    status: { ...useSyncView.getState().status, list: { count: 1, syncedAt: 1 } },
+  });
+  await render(<ScannerScreen {...base} />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Find guest' }));
+  await fireEvent.changeText(screen.getByLabelText('Search guests'), 'Ada');
+  await fireEvent.press(await screen.findByRole('button', { name: /Ada Obi/ }));
+  await fireEvent.press(await screen.findByRole('button', { name: /^Admit/ }));
+  await waitFor(() => {
+    expect(session.show).toHaveBeenCalledWith(LOOKUP_ADMITTED);
+  });
+  expect(base.admitFromLookup).toHaveBeenCalledWith('t1', null);
+  await waitFor(() => {
+    expect(screen.queryByPlaceholderText('Name or last phone digits')).toBeNull();
+  });
+  await act(() => {
+    useSyncView.getState().reset();
+  });
+});
+
 it('marks the counter not updated when the summary failed before any success', async () => {
   await render(<ScannerScreen {...base} summary={null} summaryStale />);
   expect(screen.getByText('— / —')).toBeTruthy();
@@ -200,4 +288,128 @@ it('the overlay words times against the server clock, not the phone clock', asyn
   await render(<ScannerScreen {...base} />);
   expect(screen.getByText(/just now/)).toBeTruthy();
   phone.mockRestore();
+});
+
+describe('supervisor override', () => {
+  const CODE = 'BH2.override-code' as NonNullable<OverlayView['code']>;
+  const notInList = () => {
+    useScanView.setState({
+      view: {
+        current: {
+          id: 9,
+          code: CODE,
+          outcome: { kind: 'refused', reason: 'notInList', fixable: false },
+          extraAdmitted: 0,
+        },
+        waiting: 0,
+        pending: 0,
+      },
+    });
+    useSyncView.setState({
+      status: { ...useSyncView.getState().status, override: { kind: 'open', triesLeft: 5 } },
+    });
+  };
+  const approve = async () => {
+    await fireEvent.press(screen.getByRole('button', { name: 'Supervisor override' }));
+    await fireEvent.changeText(await screen.findByLabelText('PIN'), '123456');
+    await fireEvent.changeText(screen.getByLabelText('Approver'), 'Bisi');
+    await fireEvent.changeText(screen.getByLabelText('Reason'), 'lost ticket');
+    await fireEvent.press(screen.getByRole('button', { name: 'Confirm' }));
+  };
+  afterEach(async () => {
+    await act(() => {
+      useSyncView.getState().reset();
+    });
+  });
+
+  it('approving in the PIN sheet overrides the overlay code, then shows the admission', async () => {
+    notInList();
+    await render(<ScannerScreen {...base} />);
+    await approve();
+    await waitFor(() => {
+      expect(session.show).toHaveBeenCalledWith(OVERRIDE_ADMITTED);
+    });
+    expect(base.checkPin).toHaveBeenCalledWith('123456');
+    expect(base.override).toHaveBeenCalledTimes(1);
+    expect(base.override).toHaveBeenCalledWith(CODE, { approvedBy: 'Bisi', reason: 'lost ticket' });
+    expect(session.dismiss).toHaveBeenCalledWith(9);
+    expect(session.dismiss.mock.invocationCallOrder[0]).toBeLessThan(
+      session.show.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it('pauses camera reads while the PIN sheet is open', async () => {
+    notInList();
+    await render(<ScannerScreen {...base} />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Supervisor override' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
+    expect(session.scan).not.toHaveBeenCalled();
+  });
+
+  it('a failed override says so, never admits, and can be tried again', async () => {
+    notInList();
+    base.override.mockImplementationOnce(() => Promise.reject(new Error('approval required')));
+    await render(<ScannerScreen {...base} />);
+    await approve();
+    expect(await screen.findByText('Couldn’t override — try again')).toBeTruthy();
+    expect(session.show).not.toHaveBeenCalled();
+    expect(session.dismiss).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Supervisor override' })).toBeEnabled();
+  });
+
+  it('locks the overlay while the override records: no second override, no Done', async () => {
+    notInList();
+    let resolve: (o: typeof OVERRIDE_ADMITTED) => void = () => undefined;
+    base.override.mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+    );
+    await render(<ScannerScreen {...base} />);
+    await approve();
+    const busy = await screen.findByRole('button', { name: 'Overriding…' });
+    await fireEvent.press(busy);
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+    expect(session.dismiss).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('PIN')).toBeNull();
+    await act(() => {
+      resolve(OVERRIDE_ADMITTED);
+    });
+    await waitFor(() => {
+      expect(session.show).toHaveBeenCalledTimes(1);
+    });
+    expect(base.override).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps camera reads paused while the override records', async () => {
+    notInList();
+    let resolve: (o: typeof OVERRIDE_ADMITTED) => void = () => undefined;
+    base.override.mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+    );
+    await render(<ScannerScreen {...base} />);
+    await approve();
+    await screen.findByRole('button', { name: 'Overriding…' });
+    await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
+    expect(session.scan).not.toHaveBeenCalled();
+    await act(() => {
+      resolve(OVERRIDE_ADMITTED);
+    });
+    await waitFor(() => {
+      expect(session.show).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('cancelling the PIN sheet leaves the refusal as it was', async () => {
+    notInList();
+    await render(<ScannerScreen {...base} />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Supervisor override' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Cancel' }));
+    expect(base.override).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Supervisor override' })).toBeEnabled();
+  });
 });

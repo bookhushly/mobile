@@ -1,16 +1,19 @@
 import { listExpiry } from '@/features/gate/domain/listExpiry';
 import type { ScanOutcome } from '@/features/gate/domain/outcome';
 import type { TicketCode } from '@/features/gate/domain/parseTicketCode';
+import { ACTIVITY_PAGE, type ActivityRow } from '@/features/gate/domain/activityCsv';
+import type { LookupQuery } from '@/features/gate/domain/lookupQuery';
 import type { SyncStatus } from '@/features/gate/domain/syncLine';
 import type { ClockState } from '@/shared/lib/clockGuard';
 import type { Connectivity } from '@/shared/lib/connectivity';
 
 import { syncOutbox, type PostBatch } from './batchSync';
 import type { GateDb } from './gateDb';
-import { createOfflineGate, type OfflineGate } from './offlineGate';
-import type { AttentionItem } from './outboxStore';
+import type { ShiftTally } from './deviceStore';
+import { createOfflineGate, type OfflineGate, type OverrideAvailability, type PinCheck } from './offlineGate';
+import type { ActivityTab, Approval, AttentionItem } from './outboxStore';
 import { refreshKeys, syncRoster, type FetchRosterPage } from './rosterSync';
-import type { SyncKind } from './rosterStore';
+import type { GuestRow, SyncKind } from './rosterStore';
 
 export type ControllerDeps = {
   eventId: string;
@@ -33,6 +36,13 @@ export const FULL_EVERY_MS = 30 * 60_000;
 const TICK_MS = 30_000;
 const STATUS_MS = 15_000;
 const KEYS_GAP_MS = 60_000;
+
+const TALLY_KEY: Record<ScanOutcome['kind'], keyof ShiftTally> = {
+  admitted: 'admitted',
+  used: 'used',
+  refused: 'refused',
+  couldntCheck: 'couldntCheck',
+};
 
 // Foreground only (spec decision 4): started while the scanner is focused, stopped otherwise.
 export function createOfflineController(deps: ControllerDeps) {
@@ -65,9 +75,11 @@ export function createOfflineController(deps: ControllerDeps) {
           eventId,
           roster: d.roster,
           outbox: d.outbox,
+          device: d.device,
           serverNow: deps.serverNow,
           clockState: deps.clockState,
           appVersion: deps.appVersion,
+          report: deps.report,
           onKeysOutdated: () => {
             keysOutdated();
           },
@@ -89,6 +101,7 @@ export function createOfflineController(deps: ControllerDeps) {
       const meta = await d.roster.meta(eventId);
       const counts = await d.roster.counts(eventId);
       const s = await d.outbox.status(eventId);
+      const override = await overrideAvailability();
       publish({
         mode: deps.connectivity.isDegraded() ? 'offline' : 'online',
         list: meta?.ready === true ? { count: counts.total, syncedAt: meta.syncedAt ?? 0 } : null,
@@ -97,10 +110,27 @@ export function createOfflineController(deps: ControllerDeps) {
         attention: s.attention,
         blocked: s.blocked,
         clock: deps.clockState(),
+        override,
       });
     } catch (e) {
       fail(e);
     }
+  }
+
+  // The gate already reports a missing verifier as 'none'; a failed open is 'none' too.
+  async function overrideAvailability(): Promise<OverrideAvailability> {
+    try {
+      return await (await gate()).availability();
+    } catch {
+      return { kind: 'none' };
+    }
+  }
+
+  // A recorded non-scan admission goes out at once; errors from the gate reach the caller.
+  async function afterAdmission(o: ScanOutcome): Promise<ScanOutcome> {
+    if (o.kind === 'admitted') void syncPending();
+    else await refreshStatus();
+    return o;
   }
 
   async function syncList(kind: SyncKind): Promise<void> {
@@ -217,6 +247,33 @@ export function createOfflineController(deps: ControllerDeps) {
         .catch(fail);
     },
     keysOutdated,
+    availability: async (): Promise<OverrideAvailability> => (await gate()).availability(),
+    checkPin: async (pin: string): Promise<PinCheck> => {
+      const r = await (await gate()).checkPin(pin);
+      void refreshStatus();
+      return r;
+    },
+    needsPinForLookup: async (): Promise<boolean> => (await gate()).needsPinForLookup(),
+    search: async (q: LookupQuery): Promise<GuestRow[]> => (await gate()).search(q),
+    bookingTickets: async (bookingId: string): Promise<GuestRow[]> => (await gate()).bookingTickets(bookingId),
+    admitFromLookup: async (ticketId: string, approval: Approval | null): Promise<ScanOutcome> =>
+      afterAdmission(await (await gate()).admitFromLookup(ticketId, approval)),
+    override: async (code: TicketCode, approval: { approvedBy: string; reason: string }): Promise<ScanOutcome> =>
+      afterAdmission(await (await gate()).override(code, approval)),
+    // Best effort: a lost count must never block or hide an outcome.
+    tally: (o: ScanOutcome): void => {
+      try {
+        void deps
+          .db()
+          .then((d) => d.device.addToTally(TALLY_KEY[o.kind]))
+          .catch(fail);
+      } catch (e) {
+        fail(e);
+      }
+    },
+    activity: async (tab: ActivityTab, beforeSeq: number | null): Promise<AttentionItem[]> =>
+      (await deps.db()).outbox.list(eventId, tab, beforeSeq, ACTIVITY_PAGE),
+    exportRows: async (): Promise<ActivityRow[]> => (await deps.db()).outbox.exportRows(eventId),
     refreshList: (): void => {
       void syncList('full');
     },
