@@ -281,38 +281,42 @@ describe('during a sync', () => {
     });
   });
 
-  screenIt('a load-more that settles after a count-change reload is dropped (no duplicates)', async () => {
-    const calls: { before: number | null; d: ReturnType<typeof deferred<AttentionItem[]>> }[] = [];
-    const s = setup({
-      load: (_tab, before) => {
-        const d = deferred<AttentionItem[]>();
-        calls.push({ before, d });
-        return d.promise;
-      },
-    });
-    await render(s.ui);
-    await act(async () => {
-      calls[0]?.d.resolve(seqs(200, 50));
-      await Promise.resolve();
-    });
-    await fireEvent.press(await screen.findByRole('button', { name: 'Load more' }));
-    expect(calls[1]?.before).toBe(151);
-    await bumpPending(3);
-    expect(calls[2]?.before).toBeNull();
-    // The reload settles first (a short page, so the list renders it all), then the stale
-    // load-more, which belongs to the old page and must not be appended.
-    await act(async () => {
-      calls[2]?.d.resolve(seqs(199, 5));
-      await Promise.resolve();
-    });
-    await act(async () => {
-      calls[1]?.d.resolve(seqs(150, 50));
-      await Promise.resolve();
-    });
-    expect(shownTickets()).toEqual(
-      [199, 198, 197, 196, 195].map((n) => `VIP · ticket ${String(n)}`),
-    );
-  });
+  screenIt(
+    'a load-more that settles after a count-change reload is dropped (no duplicates)',
+    async () => {
+      const calls: { before: number | null; d: ReturnType<typeof deferred<AttentionItem[]>> }[] =
+        [];
+      const s = setup({
+        load: (_tab, before) => {
+          const d = deferred<AttentionItem[]>();
+          calls.push({ before, d });
+          return d.promise;
+        },
+      });
+      await render(s.ui);
+      await act(async () => {
+        calls[0]?.d.resolve(seqs(200, 50));
+        await Promise.resolve();
+      });
+      await fireEvent.press(await screen.findByRole('button', { name: 'Load more' }));
+      expect(calls[1]?.before).toBe(151);
+      await bumpPending(3);
+      expect(calls[2]?.before).toBeNull();
+      // The reload settles first (a short page, so the list renders it all), then the stale
+      // load-more, which belongs to the old page and must not be appended.
+      await act(async () => {
+        calls[2]?.d.resolve(seqs(199, 5));
+        await Promise.resolve();
+      });
+      await act(async () => {
+        calls[1]?.d.resolve(seqs(150, 50));
+        await Promise.resolve();
+      });
+      expect(shownTickets()).toEqual(
+        [199, 198, 197, 196, 195].map((n) => `VIP · ticket ${String(n)}`),
+      );
+    },
+  );
 
   screenIt('"Load more" is hidden while a reload is pending', async () => {
     const calls: ReturnType<typeof deferred<AttentionItem[]>>[] = [];

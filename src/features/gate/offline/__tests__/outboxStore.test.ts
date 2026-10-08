@@ -34,7 +34,13 @@ async function setup() {
   const db = nodeSql();
   await migrate(db, MIGRATIONS);
   const roster = createRosterStore(db);
-  await roster.beginSync(EV, 'full', '2026-10-07T17:00:00Z', { title: null, eventDate: null, requireDynamic: false, total: 2 }, []);
+  await roster.beginSync(
+    EV,
+    'full',
+    '2026-10-07T17:00:00Z',
+    { title: null, eventDate: null, requireDynamic: false, total: 2 },
+    [],
+  );
   await roster.writePage(EV, 'full', [row(T1), row(T2)], null);
   await roster.finishSync(EV, 'full');
   let n = 0;
@@ -47,7 +53,10 @@ describe('outbox store', () => {
     const { roster, outbox } = await setup();
     expect(await outbox.recordAdmission(input(T1))).toEqual({ recorded: true, seq: 1 });
     expect(await outbox.recordAdmission(input(T2))).toEqual({ recorded: true, seq: 2 });
-    expect(await roster.ticket(EV, T1)).toMatchObject({ checkedInAt: '2026-10-07T18:00:00.000Z', byMe: true });
+    expect(await roster.ticket(EV, T1)).toMatchObject({
+      checkedInAt: '2026-10-07T18:00:00.000Z',
+      byMe: true,
+    });
     expect((await outbox.due(EV, 0, 10)).map((i) => i.seq)).toEqual([1, 2]);
   });
 
@@ -114,9 +123,19 @@ describe('outbox store', () => {
     await outbox.recordAdmission(input(T2));
     await outbox.markSending([1]);
     await outbox.settle([{ seq: 1, state: 'duplicate', result: { scanned_by: 'Ada' } }]);
-    expect(await outbox.status(EV)).toEqual({ pending: 1, attention: 1, blocked: false, nextTryAt: 0 });
+    expect(await outbox.status(EV)).toEqual({
+      pending: 1,
+      attention: 1,
+      blocked: false,
+      nextTryAt: 0,
+    });
     expect(await outbox.attention(EV)).toEqual([
-      expect.objectContaining({ seq: 1, state: 'duplicate', result: { scanned_by: 'Ada' }, ticketType: 'Regular' }),
+      expect.objectContaining({
+        seq: 1,
+        state: 'duplicate',
+        result: { scanned_by: 'Ada' },
+        ticketType: 'Regular',
+      }),
     ]);
     await outbox.markSending([2]);
     expect(await outbox.totals()).toEqual({ unsynced: 1, unsyncable: 0 });

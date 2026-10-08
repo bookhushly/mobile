@@ -30,9 +30,7 @@ export function Screen({ children, scroll, header, footer, bg = 'canvas', refres
       edges={footer !== undefined ? ['top'] : ['top', 'bottom']}
       style={{ flex: 1, backgroundColor: color[bg] }}
     >
-      {header !== undefined ? (
-        <View style={{ paddingHorizontal: space.s5 }}>{header}</View>
-      ) : null}
+      {header !== undefined ? <View style={{ paddingHorizontal: space.s5 }}>{header}</View> : null}
       {scroll ? (
         <ScrollView
           contentContainerStyle={body}

@@ -239,7 +239,9 @@ export function EventListScreen(p: Props) {
       header={
         <Header
           title="Events"
-          right={<IconButton icon={UserRound} accessibilityLabel="Account" onPress={p.onOpenAccount} />}
+          right={
+            <IconButton icon={UserRound} accessibilityLabel="Account" onPress={p.onOpenAccount} />
+          }
         />
       }
     >

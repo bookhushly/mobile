@@ -5,7 +5,8 @@ import { serialSql, type Sql, type SqlValue } from './sql';
 const HEX_KEY = /^[0-9a-f]{64}$/;
 
 // Deliberately unlike "not a database": isWrongKey must not match it, or the file would be deleted.
-export const SQLCIPHER_MISSING = 'SQLCipher is not in this build; refusing to store data unencrypted';
+export const SQLCIPHER_MISSING =
+  'SQLCipher is not in this build; refusing to store data unencrypted';
 
 function wrap(db: SQLite.SQLiteDatabase): Sql {
   return serialSql({

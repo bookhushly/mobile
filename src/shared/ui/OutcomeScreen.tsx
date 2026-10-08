@@ -62,7 +62,10 @@ export function OutcomeScreen({
           paddingBottom: insets.bottom + space.s7,
         }}
       >
-        <ScrollView testID="outcome-result" style={{ flexGrow: 0, flexShrink: 1, marginTop: 'auto' }}>
+        <ScrollView
+          testID="outcome-result"
+          style={{ flexGrow: 0, flexShrink: 1, marginTop: 'auto' }}
+        >
           <View
             accessible
             accessibilityRole="alert"
@@ -89,14 +92,23 @@ export function OutcomeScreen({
             {tags.length > 0 ? (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s3 }}>
                 {tags.map((t) => (
-                  <StatusPill key={t} tone="neutral" label={t} onFill={fg} testID={`outcome-tag-${t}`} />
+                  <StatusPill
+                    key={t}
+                    tone="neutral"
+                    label={t}
+                    onFill={fg}
+                    testID={`outcome-tag-${t}`}
+                  />
                 ))}
               </View>
             ) : null}
           </View>
         </ScrollView>
         {actions !== undefined ? (
-          <View testID="outcome-actions" style={{ paddingTop: space.s7, gap: density.gate.targetGap }}>
+          <View
+            testID="outcome-actions"
+            style={{ paddingTop: space.s7, gap: density.gate.targetGap }}
+          >
             {actions}
           </View>
         ) : null}
@@ -115,7 +127,14 @@ type ActionProps = {
 };
 
 // `dark` on the amber "Already used" fill: white text there fails contrast, so ink is used.
-export function OutcomeAction({ label, onPress, primary = false, disabled, busy, dark = false }: ActionProps) {
+export function OutcomeAction({
+  label,
+  onPress,
+  primary = false,
+  disabled,
+  busy,
+  dark = false,
+}: ActionProps) {
   return (
     <Button
       label={label}

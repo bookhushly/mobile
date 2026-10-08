@@ -39,9 +39,11 @@ const COULDNT_CHECK: Record<CouldntCheckCause, string> = {
   server: 'The server had a problem — scan again',
   unreadable: 'Unexpected reply from the server — scan again',
   auth: 'Your session expired — sign in again, then scan again',
-  keysOutdated: "This phone's ticket keys are out of date — connect to the internet, then scan again",
+  keysOutdated:
+    "This phone's ticket keys are out of date — connect to the internet, then scan again",
   clockChanged: "This phone's time changed — connect to the internet once, then scan again",
-  offlineUnverifiable: "Can't check this code offline — ask them to reopen their ticket when online",
+  offlineUnverifiable:
+    "Can't check this code offline — ask them to reopen their ticket when online",
   noOfflineList:
     "We couldn't reach the server and there's no offline list on this phone — scan again",
 };

@@ -10,7 +10,9 @@ describe('planSignOut', () => {
     });
   });
   it('unsyncable admissions need an explicit confirmation', () => {
-    expect(planSignOut({ unsynced: 0, unsyncable: 2 }, {})).toEqual({ blocked: { unsynced: 0, unsyncable: 2 } });
+    expect(planSignOut({ unsynced: 0, unsyncable: 2 }, {})).toEqual({
+      blocked: { unsynced: 0, unsyncable: 2 },
+    });
     expect(planSignOut({ unsynced: 0, unsyncable: 2 }, { discardUnsyncable: true })).toBe('wipe');
   });
   it('a session-expiry sign-out keeps the data for the same account', () => {

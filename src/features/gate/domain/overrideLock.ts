@@ -6,9 +6,11 @@ export const LOCK_MS = 15 * 60_000;
 
 export type LockRecord = { failures: number; lockedUntil: number | null };
 export const NO_LOCK: LockRecord = { failures: 0, lockedUntil: null };
-export type LockState = { kind: 'open'; triesLeft: number } | { kind: 'locked'; minutesLeft: number };
+export type LockState =
+  { kind: 'open'; triesLeft: number } | { kind: 'locked'; minutesLeft: number };
 
-const isLocked = (rec: LockRecord, nowMs: number) => rec.lockedUntil !== null && nowMs < rec.lockedUntil;
+const isLocked = (rec: LockRecord, nowMs: number) =>
+  rec.lockedUntil !== null && nowMs < rec.lockedUntil;
 
 export function lockState(rec: LockRecord, nowMs: number): LockState {
   if (rec.lockedUntil !== null) {

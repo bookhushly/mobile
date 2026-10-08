@@ -10,7 +10,12 @@ import type { Connectivity } from '@/shared/lib/connectivity';
 import { syncOutbox, type PostBatch } from './batchSync';
 import type { GateDb } from './gateDb';
 import type { ShiftTally } from './deviceStore';
-import { createOfflineGate, type OfflineGate, type OverrideAvailability, type PinCheck } from './offlineGate';
+import {
+  createOfflineGate,
+  type OfflineGate,
+  type OverrideAvailability,
+  type PinCheck,
+} from './offlineGate';
 import type { ActivityTab, Approval, AttentionItem } from './outboxStore';
 import { refreshKeys, syncRoster, type FetchRosterPage } from './rosterSync';
 import type { GuestRow, SyncKind } from './rosterStore';
@@ -255,11 +260,14 @@ export function createOfflineController(deps: ControllerDeps) {
     },
     needsPinForLookup: async (): Promise<boolean> => (await gate()).needsPinForLookup(),
     search: async (q: LookupQuery): Promise<GuestRow[]> => (await gate()).search(q),
-    bookingTickets: async (bookingId: string): Promise<GuestRow[]> => (await gate()).bookingTickets(bookingId),
+    bookingTickets: async (bookingId: string): Promise<GuestRow[]> =>
+      (await gate()).bookingTickets(bookingId),
     admitFromLookup: async (ticketId: string, approval: Approval | null): Promise<ScanOutcome> =>
       afterAdmission(await (await gate()).admitFromLookup(ticketId, approval)),
-    override: async (code: TicketCode, approval: { approvedBy: string; reason: string }): Promise<ScanOutcome> =>
-      afterAdmission(await (await gate()).override(code, approval)),
+    override: async (
+      code: TicketCode,
+      approval: { approvedBy: string; reason: string },
+    ): Promise<ScanOutcome> => afterAdmission(await (await gate()).override(code, approval)),
     // Best effort: a lost count must never block or hide an outcome.
     tally: (o: ScanOutcome): void => {
       try {

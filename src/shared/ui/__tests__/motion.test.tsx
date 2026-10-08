@@ -10,7 +10,9 @@ beforeEach(() => {
   jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
   jest.spyOn(AccessibilityInfo, 'addEventListener').mockImplementation((_e, cb) => {
     emit = cb as unknown as (on: boolean) => void;
-    return { remove: jest.fn() } as unknown as ReturnType<typeof AccessibilityInfo.addEventListener>;
+    return { remove: jest.fn() } as unknown as ReturnType<
+      typeof AccessibilityInfo.addEventListener
+    >;
   });
 });
 

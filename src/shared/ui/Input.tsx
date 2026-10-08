@@ -22,7 +22,11 @@ export function Input({ label, error, hint, left, right, onFocus, onBlur, style,
   const v = typeVariants.body;
   const d = useDensity();
   const [focused, setFocused] = useState(false);
-  const border = error ? color.status.danger.solid : focused ? color.actionFill : color.borderStrong;
+  const border = error
+    ? color.status.danger.solid
+    : focused
+      ? color.actionFill
+      : color.borderStrong;
   return (
     <Stack gap="s2">
       <Text variant="label">{label}</Text>

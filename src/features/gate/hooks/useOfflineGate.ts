@@ -5,7 +5,10 @@ import { postBatch } from '@/features/gate/api/batch';
 import { fetchRosterPage } from '@/features/gate/api/roster';
 import { listExpiry } from '@/features/gate/domain/listExpiry';
 import type { ScanQueueDeps } from '@/features/gate/domain/scanQueue';
-import { createOfflineController, type OfflineController } from '@/features/gate/offline/controller';
+import {
+  createOfflineController,
+  type OfflineController,
+} from '@/features/gate/offline/controller';
 import { gateDb } from '@/features/gate/offline/gateDb';
 import { useSyncView } from '@/features/gate/state/syncView';
 import { api, APP_VERSION, clock, clockGuard, connectivity } from '@/shared/api/instance';
@@ -76,7 +79,11 @@ export function useOfflineGate(p: {
     () =>
       controller === null
         ? {}
-        : { fallback: controller.decide, skipOnline: connectivity.isDegraded, onLive: controller.noteLive },
+        : {
+            fallback: controller.decide,
+            skipOnline: connectivity.isDegraded,
+            onLive: controller.noteLive,
+          },
     [controller],
   );
   return { scan, controller };

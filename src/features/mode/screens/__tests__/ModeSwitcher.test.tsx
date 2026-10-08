@@ -13,7 +13,11 @@ it('is a radio group with the current mode checked', async () => {
 
 it('describes each mode in one line', async () => {
   await render(
-    <ModeSwitcher modes={['customer', 'gate', 'receptionist']} current="gate" onChoose={jest.fn()} />,
+    <ModeSwitcher
+      modes={['customer', 'gate', 'receptionist']}
+      current="gate"
+      onChoose={jest.fn()}
+    />,
   );
   expect(screen.getByText('Book and see your tickets')).toBeTruthy();
   expect(screen.getByText('Scan tickets at the door')).toBeTruthy();

@@ -115,10 +115,19 @@ describe('present', () => {
     });
   });
   it.each<[CouldntCheckCause, string]>([
-    ['keysOutdated', "This phone's ticket keys are out of date — connect to the internet, then scan again"],
+    [
+      'keysOutdated',
+      "This phone's ticket keys are out of date — connect to the internet, then scan again",
+    ],
     ['clockChanged', "This phone's time changed — connect to the internet once, then scan again"],
-    ['offlineUnverifiable', "Can't check this code offline — ask them to reopen their ticket when online"],
-    ['noOfflineList', "We couldn't reach the server and there's no offline list on this phone — scan again"],
+    [
+      'offlineUnverifiable',
+      "Can't check this code offline — ask them to reopen their ticket when online",
+    ],
+    [
+      'noOfflineList',
+      "We couldn't reach the server and there's no offline list on this phone — scan again",
+    ],
   ])('couldnt check %s: neutral, never red', (cause, detail) => {
     const p = present({ kind: 'couldntCheck', cause }, NOW);
     expect(p).toMatchObject({ tone: 'retry', title: "Couldn't check", detail, action: 'tryAgain' });
@@ -137,7 +146,14 @@ describe('present', () => {
     expect(p.detail).toMatch(/^Checked in at \d\d:\d\d by you$/);
   });
   it('lookup and override admissions say how they were made', () => {
-    const a = { kind: 'admitted', ticketType: 'VIP', ticketIndex: 1, totalTickets: 1, checkedInCount: 1, checkedInAt: null } as const;
+    const a = {
+      kind: 'admitted',
+      ticketType: 'VIP',
+      ticketIndex: 1,
+      totalTickets: 1,
+      checkedInCount: 1,
+      checkedInAt: null,
+    } as const;
     expect(present({ ...a, offline: true, via: 'lookup' }, NOW).tag).toBe('Lookup · will sync');
     expect(present({ ...a, offline: true, via: 'override' }, NOW).tag).toBe('Override · will sync');
   });

@@ -70,9 +70,7 @@ describe('eventStatus', () => {
     expect(eventStatus(at(new Date(2026, 9, 8, 21, 0).toISOString()), NOW_LOCAL)).toBe('today');
   });
   it('another day', () => {
-    expect(eventStatus(at(new Date(2026, 9, 10, 18, 0).toISOString()), NOW_LOCAL)).toBe(
-      'upcoming',
-    );
+    expect(eventStatus(at(new Date(2026, 9, 10, 18, 0).toISOString()), NOW_LOCAL)).toBe('upcoming');
   });
   it('ended after 12 hours', () => {
     expect(eventStatus(at(new Date(2026, 9, 7, 18, 0).toISOString()), NOW_LOCAL)).toBe('ended');

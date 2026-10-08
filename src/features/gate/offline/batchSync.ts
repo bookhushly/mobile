@@ -6,7 +6,10 @@ import type { Result } from '@/shared/lib/result';
 
 import type { OutboxItem, OutboxState, OutboxStore } from './outboxStore';
 
-export type PostBatch = (deviceId: string, items: BatchItem[]) => Promise<Result<BatchBody, ApiError>>;
+export type PostBatch = (
+  deviceId: string,
+  items: BatchItem[],
+) => Promise<Result<BatchBody, ApiError>>;
 export type BatchSyncOutcome = 'idle' | 'retryLater' | 'blocked' | 'error';
 
 type Deps = {
@@ -40,7 +43,8 @@ export async function syncOutbox(deps: Deps): Promise<BatchSyncOutcome> {
     const items = await deps.store.due(deps.eventId, deps.now(), size);
     if (items.length === 0) return 'idle';
     const seqs = items.map((i) => i.seq);
-    const later = () => deps.now() + backoffMs(Math.max(...items.map((i) => i.attempts)), deps.random);
+    const later = () =>
+      deps.now() + backoffMs(Math.max(...items.map((i) => i.attempts)), deps.random);
     // Fetch the device id first: a failure here must not strand the items in 'sending'.
     const deviceId = await deps.store.deviceId();
     await deps.store.markSending(seqs);

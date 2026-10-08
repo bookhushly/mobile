@@ -356,10 +356,10 @@ export function createRosterStore(db: Sql) {
 
     bookingTickets: async (eventId: string, bookingId: string): Promise<GuestRow[]> =>
       (
-        await db.all<GuestSqlRow>(`${GUEST_SELECT} WHERE event_id = ? AND booking_id = ? ORDER BY ticket_index`, [
-          eventId,
-          bookingId,
-        ])
+        await db.all<GuestSqlRow>(
+          `${GUEST_SELECT} WHERE event_id = ? AND booking_id = ? ORDER BY ticket_index`,
+          [eventId, bookingId],
+        )
       ).map(toGuest),
 
     hasBooking: async (eventId: string, bookingId: string): Promise<boolean> =>

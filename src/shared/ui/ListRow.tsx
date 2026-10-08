@@ -34,8 +34,7 @@ export function ListRow({
 }: Props) {
   const d = useDensity();
   const name =
-    accessibilityLabel ??
-    [title, subtitle].filter((s) => s !== undefined && s !== '').join(', ');
+    accessibilityLabel ?? [title, subtitle].filter((s) => s !== undefined && s !== '').join(', ');
   const content = (
     <>
       {leading}

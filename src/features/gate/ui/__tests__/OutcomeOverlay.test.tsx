@@ -340,9 +340,7 @@ describe('supervisor override', () => {
     await render(
       <OutcomeOverlay {...notInListProps} overrideState={OPEN} onOverride={jest.fn()} />,
     );
-    const labels = screen
-      .getAllByRole('button')
-      .map((b) => b.props.accessibilityLabel as string);
+    const labels = screen.getAllByRole('button').map((b) => b.props.accessibilityLabel as string);
     expect(labels).toEqual(['Supervisor override', 'Done']);
   });
 
