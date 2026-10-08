@@ -272,7 +272,12 @@ export function ScannerScreen(p: Props) {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: color.inverse }}>
+    <SafeAreaView
+      testID="scanner-screen"
+      // The controls add the bottom inset themselves (once).
+      edges={['top', 'left', 'right']}
+      style={{ flex: 1, backgroundColor: color.inverse }}
+    >
       <View
         style={{
           flexDirection: 'row',
@@ -356,7 +361,7 @@ export function ScannerScreen(p: Props) {
             </Text>
           </View>
         ) : null}
-        {p.permission !== 'granted' ? (
+        {p.permission === 'unknown' || p.permission === 'denied' ? (
           <CameraPrompt
             state={p.permission === 'unknown' ? 'ask' : 'denied'}
             canAsk={p.canAskPermission}

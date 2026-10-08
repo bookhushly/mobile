@@ -156,6 +156,14 @@ it('permission unknown: explains first, asks only on Allow, and offers manual en
   expect(screen.getByRole('header', { name: 'Enter code' })).toBeTruthy();
 });
 
+it('while the permission is still being read, neither the camera nor the prompt shows', async () => {
+  await render(<ScannerScreen {...base} permission="loading" />);
+  expect(screen.queryByRole('button', { name: 'fake-camera' })).toBeNull();
+  expect(screen.queryByText('Allow camera to scan tickets')).toBeNull();
+  expect(screen.queryByText('Camera is off for Bookhushly')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Enter code' })).toBeTruthy();
+});
+
 it('denied without a re-ask offers settings', async () => {
   const onOpenSettings = jest.fn();
   await render(
@@ -198,6 +206,16 @@ it('three bottom controls, labels capped for large text', async () => {
   expect(screen.getByRole('switch', { name: 'Torch' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Recent' })).toBeNull();
   expect(screen.getByText('Find guest').props.maxFontSizeMultiplier).toBeLessThanOrEqual(1.3);
+});
+
+it('the counter row lets the status pill shrink so its text can wrap', async () => {
+  await render(<ScannerScreen {...base} />);
+  expect(flat(screen.getByTestId('gate-status'))).toMatchObject({ flexShrink: 1 });
+});
+
+it('the bottom controls add the home-indicator inset once: the safe area leaves the bottom edge off', async () => {
+  await render(<ScannerScreen {...base} />);
+  expect(screen.getByTestId('scanner-screen').props.edges).toMatchObject({ bottom: 'off' });
 });
 
 it('the status pill opens Activity on the Needs attention tab', async () => {
@@ -293,6 +311,18 @@ it('pauses camera reads while Enter code or Recent is open', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'Enter code' }));
   await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
   expect(session.scan).not.toHaveBeenCalled();
+});
+
+it('pauses camera reads while Activity is open', async () => {
+  useSyncView.setState({ status: { ...useSyncView.getState().status, attention: 1 } });
+  await render(<ScannerScreen {...base} />);
+  await fireEvent.press(screen.getByRole('button', { name: '1 needs attention' }));
+  expect(screen.getByRole('header', { name: 'Activity' })).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
+  expect(session.scan).not.toHaveBeenCalled();
+  await act(() => {
+    useSyncView.getState().reset();
+  });
 });
 
 it('pauses camera reads while Find guest is open', async () => {

@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { iconSize, space } from '@/shared/theme';
 import { Button, Illustration, Text } from '@/shared/ui';
@@ -14,8 +14,18 @@ type Props = {
 // Shown before the OS prompt (spec §4.2), and again when access is off.
 export function CameraPrompt({ state, canAsk, onAllow, onOpenSettings, onEnterByHand }: Props) {
   const ask = state === 'ask' || canAsk;
+  // Scrolls at the largest text sizes so both buttons stay reachable.
   return (
-    <View style={{ flex: 1, justifyContent: 'center', padding: space.s6, gap: space.s5 }}>
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{
+        flexGrow: 1,
+        justifyContent: 'center',
+        padding: space.s6,
+        gap: space.s5,
+      }}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={{ alignItems: 'center' }}>
         <Illustration name="camera" size={iconSize.xxl} />
       </View>
@@ -36,6 +46,6 @@ export function CameraPrompt({ state, canAsk, onAllow, onOpenSettings, onEnterBy
         label="Enter codes by hand"
         onPress={onEnterByHand}
       />
-    </View>
+    </ScrollView>
   );
 }

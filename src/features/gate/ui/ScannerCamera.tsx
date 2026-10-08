@@ -7,7 +7,8 @@ import {
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
-export type CameraPermission = 'unknown' | 'granted' | 'denied';
+// loading: the OS has not answered yet (first render); nothing is shown so no prompt flashes.
+export type CameraPermission = 'loading' | 'unknown' | 'granted' | 'denied';
 
 export function useCameraAccess() {
   const [perm, request, get] = useCameraPermissions();
@@ -24,11 +25,13 @@ export function useCameraAccess() {
     void request();
   }, [request]);
   const permission: CameraPermission =
-    perm === null || (!perm.granted && perm.status === PermissionStatus.UNDETERMINED)
-      ? 'unknown'
-      : perm.granted
-        ? 'granted'
-        : 'denied';
+    perm === null
+      ? 'loading'
+      : !perm.granted && perm.status === PermissionStatus.UNDETERMINED
+        ? 'unknown'
+        : perm.granted
+          ? 'granted'
+          : 'denied';
   return {
     permission,
     canAsk: perm?.canAskAgain ?? true,

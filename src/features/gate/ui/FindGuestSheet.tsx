@@ -1,4 +1,4 @@
-import { Phone } from 'lucide-react-native';
+import { Phone, UserRound } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, View } from 'react-native';
 
@@ -61,9 +61,10 @@ type Filter = (typeof FILTERS)[number]['value'];
 const matchesFilter = (g: GuestRow, filter: Filter) =>
   filter === 'in' ? g.checkedInAt !== null : g.checkedInAt === null;
 
-function Initials({ name }: { name: string }) {
-  const masked = /^\d/.test(name);
-  const initials = name
+// Initials for a name, a phone glyph for a masked number, a person glyph when the ticket has neither.
+function Initials({ g }: { g: GuestRow }) {
+  const name = g.holderName;
+  const initials = (name ?? '')
     .split(/\s+/)
     .filter((w) => w !== '')
     .slice(0, 2)
@@ -80,12 +81,14 @@ function Initials({ name }: { name: string }) {
         justifyContent: 'center',
       }}
     >
-      {masked ? (
-        <Icon as={Phone} size="sm" tone="textSecondary" />
-      ) : (
+      {name !== null ? (
         <Text variant="label" tone="textSecondary" maxScale={1}>
           {initials}
         </Text>
+      ) : g.phoneMasked !== null ? (
+        <Icon as={Phone} size="sm" tone="textSecondary" />
+      ) : (
+        <Icon as={UserRound} size="sm" tone="textSecondary" />
       )}
     </View>
   );
@@ -265,14 +268,20 @@ export function FindGuestSheet({
     if (results === null) return <Message>Searching…</Message>;
     if (results === 'failed') return <Banner tone="neutral" message="Couldn’t search the list" />;
     if (results.length === 0) return <Message>No one matches</Message>;
+    const inCount = results.filter((g) => matchesFilter(g, 'in')).length;
     return (
       <FlatList
         data={results.filter((g) => matchesFilter(g, filter))}
         keyExtractor={(g) => g.id}
         keyboardShouldPersistTaps="handled"
+        ListEmptyComponent={
+          <Message>
+            {filter === 'in' ? 'No one in yet' : `No one here — ${String(inCount)} already in`}
+          </Message>
+        }
         renderItem={({ item }) => (
           <ListRow
-            leading={<Initials name={who(item)} />}
+            leading={<Initials g={item} />}
             title={who(item)}
             subtitle={ticketLabel(item)}
             trailing={<GuestStatus g={item} nowMs={nowMs} />}
@@ -296,10 +305,12 @@ export function FindGuestSheet({
         keyExtractor={(g) => g.id}
         renderItem={({ item }) => (
           <ListRow
-            leading={<Initials name={who(item)} />}
+            leading={<Initials g={item} />}
             title={who(item)}
             subtitle={ticketLabel(item)}
             note={<GuestStatus g={item} nowMs={nowMs} />}
+            // Admit must stay its own element: a grouped row would hide it from VoiceOver.
+            groupAccessibility={false}
             trailing={
               canAdmit(item) ? (
                 <Button

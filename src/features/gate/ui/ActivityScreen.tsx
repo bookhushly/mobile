@@ -65,7 +65,8 @@ const marker = (i: AttentionItem) =>
 const stateLine = (i: AttentionItem) => {
   const line = attentionLine(i);
   if (line !== '') return line;
-  return i.state === 'synced' ? 'Synced' : 'Waiting to sync';
+  // Matches the state pill's word so speech and sight agree.
+  return i.state === 'synced' ? 'Synced' : 'To sync';
 };
 
 const toneOf = (state: OutboxState): StatusTone => {

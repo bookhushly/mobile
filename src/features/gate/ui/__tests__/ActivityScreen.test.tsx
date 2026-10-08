@@ -390,5 +390,5 @@ screenIt('each row reads as one element with ticket, time, marker and state', as
   await screen.findByText(/Lookup/);
   const d = new Date(Date.parse('2026-10-07T18:05:00Z'));
   const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  expect(screen.getByLabelText(`VIP · ticket 4, ${hhmm}, Lookup, Waiting to sync`)).toBeTruthy();
+  expect(screen.getByLabelText(`VIP · ticket 4, ${hhmm}, Lookup, To sync`)).toBeTruthy();
 });

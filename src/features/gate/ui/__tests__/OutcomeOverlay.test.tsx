@@ -1,5 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  AccessibilityInfo,
+  Platform,
+  StyleSheet,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { OverlayView } from '@/features/gate/domain/scanSession';
@@ -288,6 +294,54 @@ it('keeps the content clear of the notch and home indicator while the fill stays
     screen.getByTestId('outcome-overlay').props.style as StyleProp<ViewStyle>,
   );
   expect(f).toMatchObject({ top: 0, bottom: 0, left: 0, right: 0 });
+});
+
+it('tag pills never grow with Dynamic Type', async () => {
+  await render(
+    <OutcomeOverlay
+      view={view({
+        kind: 'admitted',
+        ticketType: 'Regular',
+        ticketIndex: 1,
+        totalTickets: 1,
+        checkedInCount: 1,
+        checkedInAt: null,
+        offline: true,
+      })}
+      nowMs={NOW}
+      {...handlers}
+    />,
+  );
+  expect(screen.getByText('Offline · will sync').props.maxFontSizeMultiplier).toBe(1);
+});
+
+describe('VoiceOver', () => {
+  let announce: jest.SpyInstance;
+  beforeEach(() => {
+    // RN's Jest setup already mocks AccessibilityInfo, so calls would otherwise accumulate.
+    jest.clearAllMocks();
+    announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {
+      /* captured */
+    });
+  });
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('on iOS, an outcome is read out once when it appears', async () => {
+    await render(<OutcomeOverlay {...propsFor('refused')} />);
+    expect(announce).toHaveBeenCalledTimes(1);
+    expect(announce).toHaveBeenCalledWith(screen.getByRole('alert').props.accessibilityLabel);
+    await screen.rerender(<OutcomeOverlay {...propsFor('refused')} overrideStatus="failed" />);
+    expect(announce).toHaveBeenCalledTimes(1);
+  });
+
+  it('on Android the assertive live region does the reading', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    await render(<OutcomeOverlay {...propsFor('refused')} />);
+    expect(announce).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').props.accessibilityLiveRegion).toBe('assertive');
+  });
 });
 
 it('an offline admission shows the will-sync tag', async () => {

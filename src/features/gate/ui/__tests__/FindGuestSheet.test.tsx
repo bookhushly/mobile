@@ -84,8 +84,20 @@ const type = async (text: string) => {
   });
 };
 
+const openBooking = async () => {
+  await type('Ada');
+  await fireEvent.press(await screen.findByRole('button', { name: /Ada Obi/ }));
+};
+
 const flat = (node: { props: { style?: unknown } }) =>
   StyleSheet.flatten(node.props.style as StyleProp<ViewStyle>);
+// Lucide marks its Svg aria-hidden, so it is found by its class token, not a testID.
+const lucide = (name: string) =>
+  screen.container.queryAll(
+    (i) =>
+      typeof i.props.className === 'string' &&
+      i.props.className.split(' ').includes(`lucide-${name}`),
+  );
 
 beforeEach(() => {
   jest.useFakeTimers();
@@ -166,6 +178,23 @@ it('tapping a result shows every ticket on the booking with in / not in', async 
   expect(flat(admits[0] as never).minHeight).toBeGreaterThanOrEqual(44);
 });
 
+const accessibleAncestor = (el: { parent: unknown }) => {
+  let node = el.parent as { props: { accessible?: boolean }; parent: unknown } | null;
+  while (node !== null) {
+    if (node.props.accessible === true) return true;
+    node = node.parent as typeof node;
+  }
+  return false;
+};
+
+it('Admit is its own element in the booking row, not folded into the row for VoiceOver', async () => {
+  await setup(deps({ bookingTickets: jest.fn((_b: string) => Promise.resolve([ADA])) }));
+  await openBooking();
+  const admit = await screen.findByRole('button', { name: 'Admit Ada Obi, VIP · ticket 2' });
+  expect(accessibleAncestor(admit)).toBe(false);
+  expect(screen.getByLabelText('Ada Obi, VIP · ticket 2')).toBeTruthy();
+});
+
 it('result rows are at least the gate row height', async () => {
   await setup(deps());
   await type('Ada');
@@ -193,6 +222,47 @@ it('splits results into Not in and In with counts', async () => {
   expect(screen.getByText('Bisi')).toBeTruthy();
   expect(screen.queryByText('Ada Obi')).toBeNull();
   expect(screen.getByText(/^In · /)).toBeTruthy();
+});
+
+it('says who is already in when the Not in tab is empty', async () => {
+  await setup(
+    deps({
+      search: jest.fn((_q: LookupQuery) =>
+        Promise.resolve([
+          row({ id: 'b', holderName: 'Bisi', checkedInAt: '2026-10-08T17:40:00Z' }),
+          row({ id: 'c', holderName: 'Bola', checkedInAt: '2026-10-08T17:41:00Z' }),
+        ]),
+      ),
+    }),
+  );
+  await type('Bi');
+  expect(await screen.findByText('No one here — 2 already in')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('tab', { name: 'In (2)' }));
+  expect(screen.queryByText('No one here — 2 already in')).toBeNull();
+  expect(screen.getByText('Bisi')).toBeTruthy();
+});
+
+it('says no one is in yet when the In tab is empty', async () => {
+  await setup(deps());
+  await type('Ada');
+  await screen.findByText('Ada Obi');
+  await fireEvent.press(screen.getByRole('tab', { name: 'In (0)' }));
+  expect(screen.getByText('No one in yet')).toBeTruthy();
+  expect(screen.queryByText('Ada Obi')).toBeNull();
+});
+
+it('a ticket with no name and no phone gets a person glyph, not "NN" initials', async () => {
+  await setup(
+    deps({
+      search: jest.fn((_q: LookupQuery) =>
+        Promise.resolve([row({ id: 'n', holderName: null, phoneMasked: null })]),
+      ),
+    }),
+  );
+  await type('Ada');
+  expect(await screen.findByText('No name on ticket')).toBeTruthy();
+  expect(screen.queryByText('NN')).toBeNull();
+  expect(lucide('user-round')).toHaveLength(1);
 });
 
 it('counts zero when no one is in', async () => {
@@ -257,11 +327,6 @@ const deferred = <T,>() => {
     resolve = r;
   });
   return { promise, resolve };
-};
-
-const openBooking = async () => {
-  await type('Ada');
-  await fireEvent.press(await screen.findByRole('button', { name: /Ada Obi/ }));
 };
 
 it('cannot be closed while an admission is in flight, and the outcome always reaches the scanner', async () => {
