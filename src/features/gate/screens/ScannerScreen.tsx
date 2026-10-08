@@ -29,7 +29,6 @@ import { OutcomeOverlay } from '@/features/gate/ui/OutcomeOverlay';
 import { PinSheet } from '@/features/gate/ui/PinSheet';
 import { RecentSheet } from '@/features/gate/ui/RecentSheet';
 import { ScannerCamera, type CameraPermission } from '@/features/gate/ui/ScannerCamera';
-import { SyncBar } from '@/features/gate/ui/SyncBar';
 import { color, density, radius, space } from '@/shared/theme';
 import { Button, Icon, Text } from '@/shared/ui';
 
@@ -329,13 +328,6 @@ export function ScannerScreen(p: Props) {
           <Icon as={p.muted ? VolumeX : Volume2} color={color.textPrimary} />
         </Pressable>
       </View>
-      <SyncBar
-        now={p.serverNow}
-        onRefreshList={p.onRefreshList}
-        onSyncNow={p.onSyncNow}
-        onOpenActivity={setActivityTab}
-      />
-
       <View style={{ flex: 1 }}>
         {p.permission === 'granted' && p.focused ? (
           <>

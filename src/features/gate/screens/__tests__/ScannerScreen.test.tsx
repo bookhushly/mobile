@@ -228,27 +228,6 @@ it('pauses camera reads while Find guest is open', async () => {
   expect(session.scan).not.toHaveBeenCalled();
 });
 
-it('"N need attention" opens Activity on that tab and pauses camera reads', async () => {
-  useSyncView.setState({
-    status: { ...useSyncView.getState().status, attention: 2 },
-  });
-  await render(<ScannerScreen {...base} />);
-  await fireEvent.press(screen.getByRole('button', { name: '2 need attention' }));
-  await waitFor(() => {
-    expect(base.loadActivity).toHaveBeenCalledWith('attention', null);
-  });
-  expect(
-    screen.getByRole('tab', { name: 'Needs attention' }).props.accessibilityState,
-  ).toMatchObject({
-    selected: true,
-  });
-  await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
-  expect(session.scan).not.toHaveBeenCalled();
-  await act(() => {
-    useSyncView.getState().reset();
-  });
-});
-
 it('a lookup admission shows through the session and closes Find guest', async () => {
   useSyncView.setState({
     status: { ...useSyncView.getState().status, list: { count: 1, syncedAt: 1 } },
