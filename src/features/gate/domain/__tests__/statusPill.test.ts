@@ -11,7 +11,38 @@ describe('statusPill priority', () => {
       kind: 'blocked',
       tone: 'danger',
       text: 'Removed from this event — admissions can’t be sent',
+      tab: 'synced',
     });
+    expect(statusPill(s({ blocked: true, pending: 3 }), NOW)).toMatchObject({
+      text: 'Removed from this event — admissions can’t be sent',
+      tab: 'toSync',
+    });
+  });
+  it('attention and clock never hide admissions waiting to sync', () => {
+    expect(statusPill(s({ attention: 1, pending: 3 }), NOW)).toMatchObject({
+      kind: 'attention',
+      tone: 'warning',
+      text: '1 needs attention · 3 to sync',
+      tab: 'attention',
+      announceKey: 'attention:1',
+    });
+    expect(
+      statusPill(s({ clock: { suspect: true, checkedAgoMs: 0 }, pending: 2 }), NOW),
+    ).toMatchObject({
+      kind: 'clock',
+      tone: 'warning',
+      text: 'Phone time changed — connect to re-check · 2 to sync',
+      tab: 'toSync',
+      announceKey: 'clock',
+    });
+    expect(
+      statusPill(s({ clock: { suspect: false, checkedAgoMs: 14 * 3_600_000 }, pending: 1 }), NOW)
+        .text,
+    ).toBe('Time last checked 14 h ago · 1 to sync');
+    expect(statusPill(s({ attention: 2 }), NOW).text).toBe('2 need attention');
+    expect(statusPill(s({ clock: { suspect: true, checkedAgoMs: 0 } }), NOW).text).toBe(
+      'Phone time changed — connect to re-check',
+    );
   });
   it('needs attention beats the clock and offline', () => {
     expect(
@@ -33,7 +64,7 @@ describe('statusPill priority', () => {
     ).toMatchObject({
       kind: 'clock',
       tone: 'warning',
-      text: 'Phone time changed — connect to re-check',
+      text: 'Phone time changed — connect to re-check · 2 to sync',
       tab: 'toSync',
     });
   });

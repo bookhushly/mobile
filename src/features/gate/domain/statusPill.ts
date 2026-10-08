@@ -38,17 +38,19 @@ export function statusPill(s: SyncStatus, nowMs: number): StatusPillView {
       ? `${kind}:${String(kind === 'attention' ? s.attention : s.pending)}`
       : kind,
   });
+  // FR-3.9: a higher-priority state never hides admissions still waiting to sync.
+  const toSync = s.pending > 0 ? ` · ${String(s.pending)} to sync` : '';
   if (s.blocked)
     return view('blocked', 'danger', 'Removed from this event — admissions can’t be sent');
   if (s.attention > 0)
     return view(
       'attention',
       'warning',
-      `${String(s.attention)} ${s.attention === 1 ? 'needs' : 'need'} attention`,
+      `${String(s.attention)} ${s.attention === 1 ? 'needs' : 'need'} attention${toSync}`,
       true,
     );
   const clock = clockText(s);
-  if (clock !== null) return view('clock', 'warning', clock);
+  if (clock !== null) return view('clock', 'warning', `${clock}${toSync}`);
   if (s.syncing && s.pending > 0)
     return view('syncing', 'info', `Syncing ${String(s.pending)}…`, true);
   if (s.mode === 'offline') {
@@ -67,6 +69,5 @@ export function statusPill(s: SyncStatus, nowMs: number): StatusPillView {
       `Downloading list ${groupDigits(s.download.done)} of ${groupDigits(s.download.total)}`,
     );
   if (s.list === null) return view('online', 'success', 'Online · no offline list yet');
-  const toSync = s.pending > 0 ? ` · ${String(s.pending)} to sync` : '';
   return view('online', 'success', `Online · list ${ago(s.list.syncedAt, nowMs)}${toSync}`);
 }
