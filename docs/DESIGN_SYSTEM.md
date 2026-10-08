@@ -174,15 +174,15 @@ Shadows tinted ink (`26,13,77`), never black; no violet glow.
 ## 8. Tokens in code
 
 ```
-src/theme/  tokens.ts (private primitives) · theme.ts (semantic roles — all screens see) · density.ts · fonts.ts · index.ts (useTheme; light constant)
-src/ui/     Text · Box · Stack · Inline · Button · Input · Card · Icon · Money · OutcomeScreen
+src/shared/theme/  tokens.ts (private) · theme.ts (roles, textTone, surfaceTone) · type.ts · density.ts · elevation.ts · motion.ts · sizes.ts · fonts.ts · contrast.ts · index.ts
+src/shared/ui/     Text · Box · Stack · Inline · Card · Icon · Money · formatNaira · Button · IconButton · ToggleButton · TextLink · Input · SearchField · PinField · Screen · Header · Sheet · ListRow · SectionHeader · SegmentedControl · Divider · StatusPill · Banner · EmptyState · ErrorState · Skeleton · SkeletonRows · Spinner · Illustration · SuccessMark · OutcomeScreen · OutcomeAction · ShellPlaceholder · DensityProvider · useMotionTier · PressableScale
 ```
 
 - Screens import **semantic roles only** (`color.action`, `color.outcome.admitted`), never the palette.
 - `Text` is the only text renderer: variant → family/size/line-height/tracking; weight → family name; sets `maxFontSizeMultiplier`.
 - `Box`/`Stack` props are token-key unions (`p="s5"`), so `p={13}` fails to compile.
-- Lint/hook backstops: no hex / numeric spacing / `fontWeight` outside `src/theme/` and `src/ui/`; a test asserting every semantic text/background pair meets its contrast target.
-- Set `userInterfaceStyle: "light"` in `app.json` (currently still `automatic`) and remove template dark-mode scaffolding.
+- Lint/hook backstops: no hex / numeric spacing / `fontWeight` outside `src/shared/theme/` and `src/shared/ui/`; a test asserting every semantic text/background pair meets its contrast target.
+- `userInterfaceStyle: "light"` is set in `app.json`.
 
 ## 9. Reference patterns (Mobbin, iOS; links returned by the tool)
 

@@ -157,6 +157,29 @@ Offline, on the **live-ticket** event, use a ticket that's **not in the offline 
 
 ---
 
+## 8. Redesign (UI-A)
+
+- [ ] **First scanner open** shows "Allow camera to scan tickets" before Android asks. "Enter codes by hand" opens Enter code without the camera.
+- [ ] Deny the camera → "Camera is off for Bookhushly" with **Open settings**; allow it in Settings and return → the camera starts.
+- [ ] **Event list:** date tiles, "Live now" / "Today" / "Upcoming" pills, "Offline list ready" on events you have opened before. Pull to refresh works. The account button shows your email, the mode switch (if you have two modes) and Sign out.
+- [ ] **Scanner:** dark camera, door counter big enough to read at arm's length, one status pill under it. Tapping the counter opens Recent; tapping the pill opens Activity.
+- [ ] **Outcomes:** green Admitted, amber Already used, red Refused (including "ask for the live ticket"), grey-violet Couldn't check. Titles are not in the serif font.
+- [ ] **Sunlight:** outdoors, outcomes, the counter and the status pill are readable.
+- [ ] **200 % text** (Settings → Display → Font size and Display size at max): the three bottom controls keep readable labels; outcome actions stay on screen; sheets scroll.
+- [ ] **One hand:** Torch, Find guest and Enter code are reachable with the thumb holding the phone.
+- [ ] **Reduce motion** (Settings → Accessibility → Remove animations): sheets appear without sliding; buttons don't scale.
+- [ ] **Keyboard:** in the PIN sheet and Find guest, the keyboard never covers Confirm or the results.
+- [ ] **10 minutes of scanning** on the new layout: no slowdown, no stuck sheet, battery drop similar to before.
+- [ ] Buttons give a slight press feedback (they shrink a touch when pressed), and none with Remove animations on.
+- [ ] Tapping the PIN boxes brings up the number keyboard.
+- [ ] In the PIN sheet and Enter code (iPhone and Android), the Confirm / Check ticket button stays above the keyboard and nothing is padded twice.
+- [ ] Sheets look right on Android (top edge, Close button reachable, no content under the status bar).
+- [ ] After downloading a list in the scanner and going back, the event shows "Offline list ready" without restarting the app.
+- [ ] Sign out from the account sheet with an unsynced admission: the "hasn't synced" warning appears.
+- [ ] With TalkBack on, the status pill is read out when it changes (e.g. going offline), not every minute.
+
+---
+
 ## Tell me
 
 - Any box you couldn't tick: what happened instead.
