@@ -115,11 +115,7 @@ function Scanner({ eventId }: { eventId: string }) {
     };
   }, [forbidden, userId, refreshEvents, eventId, session, latest]);
 
-  const { permission, request } = camera;
-  useEffect(() => {
-    if (permission === 'unknown') request();
-  }, [permission, request]);
-
+  // The camera is requested from the in-app prompt (spec §4.2), never on mount.
   return (
     <ScannerScreen
       title={event ? eventLabel(event) : 'Scanning'}

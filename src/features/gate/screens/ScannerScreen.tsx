@@ -1,17 +1,11 @@
 import { useKeepAwake } from 'expo-keep-awake';
-import {
-  Flashlight,
-  Keyboard,
-  ListChecks,
-  UserSearch,
-  Volume2,
-  VolumeX,
-} from 'lucide-react-native';
-import { useCallback, useRef, useState } from 'react';
+import { ArrowLeft, Flashlight, Keyboard, UserSearch, Volume2, VolumeX } from 'lucide-react-native';
+import { useCallback, useContext, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaInsetsContext, SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ActivityRow } from '@/features/gate/domain/activityCsv';
+import { groupDigits } from '@/features/gate/domain/syncLine';
 import type { LookupQuery } from '@/features/gate/domain/lookupQuery';
 import type { ScanOutcome } from '@/features/gate/domain/outcome';
 import type { TicketCode } from '@/features/gate/domain/parseTicketCode';
@@ -23,14 +17,16 @@ import type { ScanSummary } from '@/features/gate/schemas/scan';
 import { useScanView } from '@/features/gate/state/scanView';
 import { useSyncView } from '@/features/gate/state/syncView';
 import { ActivityScreen } from '@/features/gate/ui/ActivityScreen';
+import { CameraPrompt } from '@/features/gate/ui/CameraPrompt';
 import { EnterCodeSheet } from '@/features/gate/ui/EnterCodeSheet';
 import { FindGuestSheet } from '@/features/gate/ui/FindGuestSheet';
+import { GateStatus } from '@/features/gate/ui/GateStatus';
 import { OutcomeOverlay } from '@/features/gate/ui/OutcomeOverlay';
 import { PinSheet } from '@/features/gate/ui/PinSheet';
 import { RecentSheet } from '@/features/gate/ui/RecentSheet';
 import { ScannerCamera, type CameraPermission } from '@/features/gate/ui/ScannerCamera';
-import { color, density, radius, space } from '@/shared/theme';
-import { Button, Icon, Text } from '@/shared/ui';
+import { borderWidth, color, radius, space } from '@/shared/theme';
+import { IconButton, Text, ToggleButton } from '@/shared/ui';
 
 type Props = {
   title: string;
@@ -69,8 +65,8 @@ type Props = {
   serverNow: () => number;
 };
 
-const CORNER = 32;
-const EDGE = 4;
+const CORNER = space.s8;
+const EDGE = borderWidth.thick * 2;
 const corners = [
   { top: 0, left: 0, borderTopWidth: EDGE, borderLeftWidth: EDGE },
   { top: 0, right: 0, borderTopWidth: EDGE, borderRightWidth: EDGE },
@@ -102,48 +98,13 @@ function Viewfinder() {
               position: 'absolute',
               width: CORNER,
               height: CORNER,
-              borderColor: color.onAction,
+              borderColor: color.onInverse,
               ...c,
             }}
           />
         ))}
       </View>
     </View>
-  );
-}
-
-function Control({
-  label,
-  glyph,
-  onPress,
-  selected,
-}: {
-  label: string;
-  glyph: Parameters<typeof Icon>[0]['as'];
-  onPress: () => void;
-  selected?: boolean;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ selected: selected === true }}
-      onPress={onPress}
-      style={({ pressed }) => ({
-        flex: 1,
-        minHeight: density.gate.controlHeight,
-        borderRadius: radius.r3,
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: space.s2,
-        backgroundColor: pressed || selected === true ? color.wash : color.surface,
-        borderWidth: 1,
-        borderColor: color.border,
-      })}
-    >
-      <Icon as={glyph} color={color.textPrimary} />
-      <Text variant="label">{label}</Text>
-    </Pressable>
   );
 }
 
@@ -202,13 +163,13 @@ function Checking() {
     <View
       testID="checking-pill"
       style={{
-        backgroundColor: color.textPrimary,
+        backgroundColor: color.surface,
         borderRadius: radius.r2,
         paddingVertical: space.s3,
         paddingHorizontal: space.s4,
       }}
     >
-      <Text variant="label" tone="onAction" accessibilityLiveRegion="polite">
+      <Text variant="label" tone="textPrimary" accessibilityLiveRegion="polite">
         {`Checking ${String(pending)}…`}
       </Text>
     </View>
@@ -216,31 +177,53 @@ function Checking() {
 }
 
 // Its own component so summary updates re-render only the counter.
-function DoorCounter({ summary, stale }: { summary: ScanSummary | null; stale: boolean }) {
+function DoorCounter({
+  summary,
+  stale,
+  onPress,
+}: {
+  summary: ScanSummary | null;
+  stale: boolean;
+  onPress: () => void;
+}) {
   const status = useSyncView((s) => s.status);
   const local = status.mode === 'offline' ? status.localCounts : null;
   const shown = local ?? summary;
-  const counter = shown === null ? '— / —' : `${String(shown.admitted)} / ${String(shown.total)}`;
+  const admitted = shown === null ? '—' : groupDigits(shown.admitted);
+  const total = shown !== null && shown.total > 0 ? groupDigits(shown.total) : null;
   const caption = local !== null ? 'offline' : stale ? 'not updated' : null;
   return (
-    <View
-      accessible
-      accessibilityLabel={`Admitted ${counter}${caption !== null ? `, ${caption}` : ''}`}
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${admitted} admitted${total !== null ? ` of ${total}` : ''}${
+        caption !== null ? `, ${caption}` : ''
+      }. Open recent admissions`}
+      onPress={onPress}
+      hitSlop={8}
     >
-      <Text variant="num" tabular>
-        {counter}
+      <Text variant="numLg" tone="onInverse" tabular>
+        {admitted}
       </Text>
+      <Text variant="label" tone="onInverse">
+        admitted
+      </Text>
+      {total !== null ? (
+        <Text variant="caption" tone="onInverse">
+          {`of ${total}`}
+        </Text>
+      ) : null}
       {caption !== null ? (
-        <Text variant="caption" tone="textMuted">
+        <Text variant="caption" tone="onInverse">
           {caption}
         </Text>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 
 export function ScannerScreen(p: Props) {
   useKeepAwake();
+  const insets = useContext(SafeAreaInsetsContext) ?? { bottom: 0 };
   const [torch, setTorch] = useState(false);
   const [entering, setEntering] = useState(false);
   const [showRecent, setShowRecent] = useState(false);
@@ -289,44 +272,50 @@ export function ScannerScreen(p: Props) {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: color.textPrimary }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: color.inverse }}>
       <View
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          gap: space.s4,
-          padding: space.s4,
-          backgroundColor: color.surface,
+          gap: space.s3,
+          paddingHorizontal: space.s4,
         }}
       >
-        <View style={{ flex: 1, gap: space.s1 }}>
-          <Text variant="bodyStrong" numberOfLines={1}>
-            {p.title}
-          </Text>
-          <Pressable
-            accessibilityRole="link"
-            onPress={p.onChangeEvent}
-            style={{ minHeight: density.gate.minTarget, justifyContent: 'center' }}
-          >
-            <Text variant="labelSm" tone="linkText">
-              Change event
-            </Text>
-          </Pressable>
-        </View>
-        <DoorCounter summary={p.summary} stale={p.summaryStale} />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={p.muted ? 'Sound off' : 'Sound on'}
-          onPress={p.onToggleMute}
-          style={{
-            minWidth: density.gate.minTarget,
-            minHeight: density.gate.minTarget,
-            alignItems: 'center',
-            justifyContent: 'center',
+        <IconButton
+          icon={ArrowLeft}
+          variant="inverse"
+          accessibilityLabel="Change event"
+          onPress={p.onChangeEvent}
+        />
+        <Text variant="bodyStrong" tone="onInverse" numberOfLines={1} style={{ flex: 1 }}>
+          {p.title}
+        </Text>
+        <ToggleButton
+          icon={VolumeX}
+          iconOn={Volume2}
+          label="Sound"
+          hideLabel
+          variant="inverse"
+          checked={!p.muted}
+          onChange={p.onToggleMute}
+        />
+      </View>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'flex-end',
+          justifyContent: 'space-between',
+          paddingHorizontal: space.s5,
+        }}
+      >
+        <DoorCounter
+          summary={p.summary}
+          stale={p.summaryStale}
+          onPress={() => {
+            setShowRecent(true);
           }}
-        >
-          <Icon as={p.muted ? VolumeX : Volume2} color={color.textPrimary} />
-        </Pressable>
+        />
+        <GateStatus now={p.serverNow} onOpen={setActivityTab} />
       </View>
       <View style={{ flex: 1 }}>
         {p.permission === 'granted' && p.focused ? (
@@ -344,23 +333,39 @@ export function ScannerScreen(p: Props) {
               onCode={onCode}
             />
             <Viewfinder />
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                bottom: space.s5,
+                left: 0,
+                right: 0,
+                alignItems: 'center',
+              }}
+            >
+              <Text variant="body" tone="onInverse">
+                Point at the ticket QR code
+              </Text>
+            </View>
           </>
         ) : null}
-        {p.permission === 'denied' ? (
-          <View style={{ flex: 1, padding: space.s6, justifyContent: 'center', gap: space.s5 }}>
-            <Text variant="title" tone="onAction">
-              Camera access is off
+        {p.permission === 'granted' && !p.focused ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <Text variant="body" tone="onInverse">
+              Camera paused
             </Text>
-            <Text variant="body" tone="onAction">
-              Turn on camera access for Bookhushly to scan tickets. You can still enter codes by
-              hand.
-            </Text>
-            {p.canAskPermission ? (
-              <Button label="Allow camera" onPress={p.onRequestPermission} />
-            ) : (
-              <Button label="Open settings" onPress={p.onOpenSettings} />
-            )}
           </View>
+        ) : null}
+        {p.permission !== 'granted' ? (
+          <CameraPrompt
+            state={p.permission === 'unknown' ? 'ask' : 'denied'}
+            canAsk={p.canAskPermission}
+            onAllow={p.onRequestPermission}
+            onOpenSettings={p.onOpenSettings}
+            onEnterByHand={() => {
+              setEntering(true);
+            }}
+          />
         ) : null}
         <View style={{ position: 'absolute', top: space.s4, left: space.s4 }}>
           <Checking />
@@ -371,38 +376,37 @@ export function ScannerScreen(p: Props) {
         testID="scanner-controls"
         style={{
           flexDirection: 'row',
-          gap: density.gate.targetGap,
-          padding: space.s4,
-          backgroundColor: color.surface,
+          justifyContent: 'space-around',
+          paddingTop: space.s4,
+          paddingBottom: Math.max(insets.bottom, space.s5),
         }}
       >
-        <Control
+        <ToggleButton
+          icon={Flashlight}
           label="Torch"
-          glyph={Flashlight}
-          selected={torch}
-          onPress={() => {
-            setTorch((t) => !t);
-          }}
+          variant="inverse"
+          size="lg"
+          checked={torch}
+          onChange={setTorch}
         />
-        <Control
-          label="Enter code"
-          glyph={Keyboard}
-          onPress={() => {
-            setEntering(true);
-          }}
-        />
-        <Control
-          label="Recent"
-          glyph={ListChecks}
-          onPress={() => {
-            setShowRecent(true);
-          }}
-        />
-        <Control
+        <IconButton
+          icon={UserSearch}
           label="Find guest"
-          glyph={UserSearch}
+          accessibilityLabel="Find guest"
+          variant="filled"
+          size="lg"
           onPress={() => {
             setFinding(true);
+          }}
+        />
+        <IconButton
+          icon={Keyboard}
+          label="Enter code"
+          accessibilityLabel="Enter code"
+          variant="inverse"
+          size="lg"
+          onPress={() => {
+            setEntering(true);
           }}
         />
       </View>
