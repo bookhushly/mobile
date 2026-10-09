@@ -93,7 +93,7 @@ describe('signUp', () => {
       error: { kind: 'transient', retryAfterSec: 12 },
     });
     const r503 = client(503, { error: 'x' }, { 'retry-after': '30' });
-    expect((await signUp(r503.c, input)).ok).toBe(false);
+    expect(await signUp(r503.c, input)).toEqual({ ok: false, error: { kind: 'transient' } });
     expect(await signUp(client(503, { error: 'x' }).c, input)).toEqual({
       ok: false,
       error: { kind: 'transient' },
@@ -107,9 +107,39 @@ describe('signUp', () => {
       error: { kind: 'failed' },
     });
   });
+  it('502 and 504 from the gateway are transient; other 5xx are failed', async () => {
+    expect(await signUp(client(502, null).c, input)).toEqual({
+      ok: false,
+      error: { kind: 'transient' },
+    });
+    expect(await signUp(client(504, { error: 'x' }).c, input)).toEqual({
+      ok: false,
+      error: { kind: 'transient' },
+    });
+    expect(await signUp(client(501, { error: 'x' }).c, input)).toEqual({
+      ok: false,
+      error: { kind: 'failed' },
+    });
+  });
   it('network and timeout are transient', async () => {
     const network = make(() => Promise.reject(new TypeError('Network request failed')), []).c;
     expect(await signUp(network, input)).toEqual({ ok: false, error: { kind: 'transient' } });
+
+    jest.useFakeTimers();
+    try {
+      const hanging = ((_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => {
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+          });
+        })) as unknown as typeof fetch;
+      const p = signUp(make(hanging, []).c, input);
+      // accountApi asks for 20 s per request.
+      await jest.advanceTimersByTimeAsync(20_000);
+      await expect(p).resolves.toEqual({ ok: false, error: { kind: 'transient' } });
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 

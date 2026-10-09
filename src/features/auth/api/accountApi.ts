@@ -1,6 +1,10 @@
 import type { z } from 'zod';
 
-import { fieldMessages, type FieldErrors } from '@/features/auth/domain/signUpErrors';
+import {
+  fieldMessages,
+  WEAK_PASSWORD_MESSAGE,
+  type FieldErrors,
+} from '@/features/auth/domain/signUpErrors';
 import {
   acceptedOk,
   blockersBody,
@@ -25,7 +29,6 @@ export type AccountFailure =
 type Client = Pick<ApiClient, 'request'>;
 
 const NOT_CUSTOMER_MESSAGE = 'This account is closed through support.';
-const WEAK_PASSWORD_MESSAGE = 'Choose a stronger password';
 
 // These routes do real work (Supabase admin calls, email sends): give them longer than the default.
 const TIMEOUT_MS = 20_000;
@@ -46,8 +49,11 @@ export function toFailure(e: ApiError): AccountFailure {
         ? { kind: 'transient' }
         : { kind: 'transient', retryAfterSec: e.retryAfterSec };
     case 'unavailable':
-      // 503 without a code (proxy, Redis down) and signup's 503 `unavailable` are both temporary.
-      return e.status === 503 ? { kind: 'transient' } : { kind: 'failed' };
+      // Gateway 502/504, the proxy's codeless 503 (Redis down) and signup's 503 `unavailable`
+      // are all temporary. A 500 is the route itself failing (signup_failed, delete_failed…).
+      return e.status === 502 || e.status === 503 || e.status === 504
+        ? { kind: 'transient' }
+        : { kind: 'failed' };
     case 'auth':
       return { kind: 'unauthorized' };
     case 'forbidden': {
@@ -68,10 +74,7 @@ export function toFailure(e: ApiError): AccountFailure {
       return reasons.length > 0 ? { kind: 'blocked', reasons } : { kind: 'failed' };
     }
     case 'unknown':
-      if (
-        e.status === 400 &&
-        (e.code === 'invalid_input' || e.code === 'confirmation_required')
-      ) {
+      if (e.status === 400 && (e.code === 'invalid_input' || e.code === 'confirmation_required')) {
         return { kind: 'invalid', fields: fieldMessages(fieldsOf(e.body)) };
       }
       if (e.status === 422 && e.code === 'weak_password') {
