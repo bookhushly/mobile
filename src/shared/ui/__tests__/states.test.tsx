@@ -88,29 +88,27 @@ it('neutral banner for a transient failure is not red', async () => {
   );
 });
 
-it('banner announces a changed message on iOS, not the one it mounted with', async () => {
+it('banner announces on iOS the message it mounts with and every change, polite or not', async () => {
   jest.replaceProperty(Platform, 'OS', 'ios');
   // The preset's AccessibilityInfo is already a jest.fn: clear calls left by earlier tests.
   const spy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockClear();
   await render(<Banner tone="neutral" message="Offline" />);
-  expect(spy).not.toHaveBeenCalled();
+  expect(spy.mock.calls.map((c) => c[0])).toEqual(['Offline']);
   await screen.rerender(<Banner tone="neutral" message="Back online" />);
-  expect(spy).toHaveBeenCalledTimes(1);
-  expect(spy).toHaveBeenCalledWith('Back online');
+  expect(spy.mock.calls.map((c) => c[0])).toEqual(['Offline', 'Back online']);
   await screen.rerender(<Banner tone="neutral" message="Back online" />);
-  expect(spy).toHaveBeenCalledTimes(1);
+  expect(spy).toHaveBeenCalledTimes(2);
+  await screen.rerender(<Banner tone="warning" message="Sync failed" live="assertive" />);
+  expect(spy).toHaveBeenLastCalledWith('Sync failed');
 });
 
-it('an assertive banner also announces the message it mounts with, on iOS only', async () => {
-  jest.replaceProperty(Platform, 'OS', 'ios');
-  const spy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockClear();
-  await render(<Banner tone="warning" message="Sync failed" live="assertive" />);
-  expect(spy).toHaveBeenCalledWith('Sync failed');
-  spy.mockClear();
+it('on Android a banner relies on its live region and never calls announceForAccessibility', async () => {
   jest.replaceProperty(Platform, 'OS', 'android');
+  const spy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockClear();
   await render(<Banner tone="warning" message="Roster is stale" live="assertive" />);
   await screen.rerender(<Banner tone="warning" message="Roster is fresh" live="assertive" />);
   expect(spy).not.toHaveBeenCalled();
+  expect(screen.getByText('Roster is fresh').props.accessibilityLiveRegion).toBe('assertive');
 });
 
 it('banner shows a title and one action', async () => {
