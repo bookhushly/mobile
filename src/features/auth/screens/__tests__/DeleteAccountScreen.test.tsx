@@ -108,7 +108,10 @@ it('shows the server message for a staff account', async () => {
     ...base(),
     onDelete: jest.fn().mockResolvedValue({
       ok: false,
-      error: { kind: 'notCustomer', message: 'Business and staff accounts are closed through support.' },
+      error: {
+        kind: 'notCustomer',
+        message: 'Business and staff accounts are closed through support.',
+      },
     }),
   };
   await render(<DeleteAccountScreen {...p} />);
@@ -165,6 +168,88 @@ it('a failed delete is safe to retry', async () => {
     expect(p.onDeleted).toHaveBeenCalled();
   });
   expect(p.onDelete).toHaveBeenCalledTimes(2);
+});
+
+it('a lost 200 then a retry: the banned session counts as deleted, never "wrong password"', async () => {
+  // After the delete went through the login is renamed, so the retry's password check fails.
+  const p = {
+    ...base(),
+    onCheckPassword: jest.fn().mockResolvedValueOnce('ok').mockResolvedValue('wrong'),
+    onDelete: jest.fn().mockResolvedValueOnce({ ok: false, error: { kind: 'transient' } }),
+    onConfirmDeletedAfterUncertain: jest.fn().mockResolvedValue(true),
+  };
+  await render(<DeleteAccountScreen {...p} />);
+  await confirm();
+  await fireEvent.press(button());
+  expect(await screen.findByText(/try again in a minute/)).toBeTruthy();
+  expect(p.onConfirmDeletedAfterUncertain).not.toHaveBeenCalled();
+  await fireEvent.press(button());
+  await waitFor(() => {
+    expect(p.onDeleted).toHaveBeenCalledTimes(1);
+  });
+  expect(screen.queryByText('That password isn’t right')).toBeNull();
+  expect(p.onCheckPassword).toHaveBeenCalledTimes(1);
+  expect(p.onDelete).toHaveBeenCalledTimes(1);
+});
+
+it('a transient delete then a retry while not banned takes the normal path', async () => {
+  const p = {
+    ...base(),
+    onDelete: jest
+      .fn()
+      .mockResolvedValueOnce({ ok: false, error: { kind: 'transient' } })
+      .mockResolvedValueOnce({ ok: true, value: true }),
+    onConfirmDeletedAfterUncertain: jest.fn().mockResolvedValue(false),
+  };
+  await render(<DeleteAccountScreen {...p} />);
+  await confirm();
+  await fireEvent.press(button());
+  expect(await screen.findByText(/try again in a minute/)).toBeTruthy();
+  await fireEvent.press(button());
+  await waitFor(() => {
+    expect(p.onDeleted).toHaveBeenCalledTimes(1);
+  });
+  expect(p.onConfirmDeletedAfterUncertain).toHaveBeenCalledTimes(1);
+  expect(p.onCheckPassword).toHaveBeenCalledTimes(2);
+  expect(p.onDelete).toHaveBeenCalledTimes(2);
+});
+
+it('a thrown delete then "wrong password" asks the session before blaming the password', async () => {
+  const p = {
+    ...base(),
+    onCheckPassword: jest.fn().mockResolvedValueOnce('ok').mockResolvedValue('wrong'),
+    onDelete: jest.fn().mockRejectedValueOnce(new Error('socket closed')),
+    onConfirmDeletedAfterUncertain: jest.fn().mockResolvedValueOnce(false).mockResolvedValue(true),
+  };
+  await render(<DeleteAccountScreen {...p} />);
+  await confirm();
+  await fireEvent.press(button());
+  expect(await screen.findByText('We couldn’t delete your account. Try again.')).toBeTruthy();
+  await fireEvent.press(button());
+  await waitFor(() => {
+    expect(p.onDeleted).toHaveBeenCalledTimes(1);
+  });
+  expect(screen.queryByText('That password isn’t right')).toBeNull();
+  expect(p.onConfirmDeletedAfterUncertain).toHaveBeenCalledTimes(2);
+});
+
+it('a wrong password after a clean refusal is still just a wrong password', async () => {
+  const p = {
+    ...base(),
+    onCheckPassword: jest.fn().mockResolvedValue('wrong'),
+    onConfirmDeletedAfterUncertain: jest.fn().mockResolvedValue(true),
+  };
+  await render(<DeleteAccountScreen {...p} />);
+  await confirm();
+  await fireEvent.press(button());
+  expect(await screen.findByText('That password isn’t right')).toBeTruthy();
+  expect(p.onConfirmDeletedAfterUncertain).not.toHaveBeenCalled();
+  expect(p.onDeleted).not.toHaveBeenCalled();
+});
+
+it('shows no unsynced warning while the count is still loading', async () => {
+  await render(<DeleteAccountScreen {...base()} unsynced={null} />);
+  expect(screen.queryByTestId('unsynced-banner')).toBeNull();
 });
 
 it('warns about unsynced admissions first', async () => {

@@ -18,8 +18,9 @@ export default function DeleteAccountRoute() {
   const checkPassword = useAuth((s) => s.checkPassword);
   const signOutAfterDeletion = useAuth((s) => s.signOutAfterDeletion);
   const userId = state.status === 'signedIn' ? state.userId : null;
-  // -1 = unknown (the guard failed): the screen then says "some admissions may not have synced".
-  const [unsynced, setUnsynced] = useState(0);
+  // null = still counting (no warning yet); -1 = the guard failed: "some admissions may not have
+  // synced".
+  const [unsynced, setUnsynced] = useState<number | null>(null);
 
   useEffect(() => {
     if (userId === null) {

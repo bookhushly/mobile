@@ -4,6 +4,7 @@ import { View } from 'react-native';
 
 import type { AccountFailure } from '@/features/auth/api/accountApi';
 import { unsyncedWarning } from '@/features/auth/domain/deletionPlan';
+import { transientMessage } from '@/features/auth/domain/transientMessage';
 import type { Result } from '@/shared/lib/result';
 import { space } from '@/shared/theme';
 import { Banner, Button, Card, Icon, Input, PasswordField, Screen, Stack, Text } from '@/shared/ui';
@@ -12,11 +13,11 @@ type PasswordCheck = 'ok' | 'wrong' | 'transient' | 'closed';
 
 type Props = {
   email: string;
-  /** Gate admissions still waiting to sync; `-1` when the count could not be read. */
-  unsynced: number;
+  /** Gate admissions still waiting to sync; `null` while counting, `-1` when it could not be read. */
+  unsynced: number | null;
   onCheckPassword: (password: string) => Promise<PasswordCheck>;
   onDelete: () => Promise<Result<true, AccountFailure>>;
-  /** After a 401: did a session refresh fail with `user_banned` (so the delete went through)? */
+  /** After an uncertain delete: did a session refresh fail with `user_banned` (it went through)? */
   onConfirmDeletedAfterUncertain: () => Promise<boolean>;
   onDeleted: () => void;
   onCancel: () => void;
@@ -33,11 +34,6 @@ const UNCONFIRMED = 'We couldn’t confirm the deletion. Sign in again to check.
 const FAILED = 'We couldn’t delete your account. Try again.';
 const EXPLANATION =
   'Deleting removes your name, email, phone and saved items. Booking and payment records are kept, anonymised, because the law requires them. This can’t be undone.';
-
-function transientMessage(retryAfterSec: number | undefined): string {
-  const when = retryAfterSec === undefined ? 'a minute' : `${String(retryAfterSec)} seconds`;
-  return `We couldn’t reach Bookhushly — try again in ${when}`;
-}
 
 export function DeleteAccountScreen({
   email,
@@ -58,6 +54,10 @@ export function DeleteAccountScreen({
   // Once the account is gone the lock stays held: the screen is being torn down and a second
   // tap must never send another delete.
   const finished = useRef(false);
+  // A delete that failed without a verdict (transient, failed, thrown) may still have gone
+  // through: the server renames the login, so a retry's password check would read as "wrong
+  // password" (contract §1.5). While uncertain, the session is asked first.
+  const uncertain = useRef(false);
 
   function deleted() {
     finished.current = true;
@@ -65,7 +65,7 @@ export function DeleteAccountScreen({
   }
 
   const ready = password.length > 0 && confirm === CONFIRM_WORD;
-  const warning = unsyncedWarning(unsynced);
+  const warning = unsynced === null ? null : unsyncedWarning(unsynced);
 
   async function run() {
     if (inFlight.current || !ready) return;
@@ -74,9 +74,18 @@ export function DeleteAccountScreen({
     setFieldError(undefined);
     setNotice(null);
     try {
+      if (uncertain.current && (await onConfirmDeletedAfterUncertain())) {
+        deleted();
+        return;
+      }
       // The password is checked in the app and never sent to the delete route (decision 3).
       const check = await onCheckPassword(password);
       if (check === 'wrong') {
+        // The renamed login of a deleted account also reads as "wrong": ask the session again.
+        if (uncertain.current && (await onConfirmDeletedAfterUncertain())) {
+          deleted();
+          return;
+        }
         setFieldError(WRONG_PASSWORD);
         return;
       }
@@ -112,6 +121,7 @@ export function DeleteAccountScreen({
           else setNotice({ tone: 'neutral', message: UNCONFIRMED });
           break;
         case 'transient':
+          uncertain.current = true;
           setNotice({ tone: 'neutral', message: transientMessage(e.retryAfterSec) });
           break;
         case 'failed':
@@ -119,9 +129,11 @@ export function DeleteAccountScreen({
         case 'weakPassword':
         case 'emailTaken':
           // The last three cannot come from the delete route; all are safe to retry.
+          uncertain.current = true;
           setNotice({ tone: 'neutral', message: FAILED });
       }
     } catch {
+      uncertain.current = true;
       setNotice({ tone: 'neutral', message: FAILED });
     } finally {
       if (!finished.current) {
@@ -170,7 +182,9 @@ export function DeleteAccountScreen({
           </Stack>
         </View>
       </Card>
-      {warning !== null ? <Banner tone="warning" message={warning} testID="unsynced-banner" /> : null}
+      {warning !== null ? (
+        <Banner tone="warning" message={warning} testID="unsynced-banner" />
+      ) : null}
       <Stack gap="s4">
         <PasswordField
           label="Password"
