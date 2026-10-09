@@ -185,7 +185,7 @@ Offline, on the **live-ticket** event, use a ticket that's **not in the offline 
 
 ## 9. Accounts (UI-B)
 
-Use a **throwaway email you own** for these (a new address you can read on the phone). It will be deleted at the end. Needs this new build.
+Use a **throwaway email you own** for these (a new address you can read on the phone). It will be deleted at the end. Needs this new build: the **Android preview build** covers everything here; the items marked **(iPhone)** need the iOS build and can wait for it.
 
 - [ ] **Welcome:** signed out, you see Create account and Sign in. The terms and privacy links open.
 - [ ] **Illustrations:** the picture on Welcome and the ones in the empty states look right, with nothing overlapping the text or the buttons.
@@ -198,9 +198,11 @@ Use a **throwaway email you own** for these (a new address you can read on the p
 - [ ] **Forgot password:** with the throwaway account, Forgot password → code → new password → you're signed in. Sign out and sign in later with the new password: it works.
 - [ ] **Leave the reset:** after entering a reset code, press Cancel on New password → you are signed out and back on Welcome. Do it once more, but close the app on New password instead → on reopening you are signed out.
 - [ ] **Delete account:** from Account, a wrong password says so. The correct password plus typing DELETE deletes the throwaway account and returns to Welcome with "Your account was deleted". Signing in with it again says the account was closed.
+- [ ] **Delete with the network cut:** on another throwaway account, press Delete account and switch airplane mode on within about a second (before the response arrives). It says it couldn't reach Bookhushly. Turn airplane mode off and press Delete account again: you end on Welcome with "Your account was deleted", never "That password isn't right".
 - [ ] **Blocked delete (if you have one):** an account with an upcoming confirmed booking shows why it can't be deleted, in plain words, and is not deleted.
 - [ ] **Airplane mode:** every account screen (sign in, create account, code, forgot password, new password, delete account) says it couldn't reach Bookhushly in grey, never in red.
 - [ ] **Gate staff:** signed in as the scanner account, the account sheet shows Delete account; with an unsynced admission it warns first and lets you back out.
+- [ ] **Gate sheet → Delete account (iPhone):** from the scanner account sheet, tapping Delete account closes the sheet and the Delete account screen opens every time (try it three times).
 - [ ] **Delete from a gate account:** with a spare scanner account you don't need, deleting it returns to Welcome with "Your account was deleted". (Skip if you only have the one scanner account.)
 - [ ] **Receptionist:** a receptionist account does not show Delete account.
 - [ ] **Slow start:** on a slow connection (or just after airplane mode), opening the app shows "Loading your account…" instead of a frozen splash screen.

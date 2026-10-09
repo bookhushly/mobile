@@ -1,6 +1,6 @@
 # Backend status vs. the mobile requirements
 
-**Verified 2026-10-04** by reading `../web` (branch `general`, ≈ `main`) — code and migrations only, nothing was run. This **supersedes** `MOBILE_APP_REQUIREMENTS.md` wherever they disagree. Re-verify before relying on an item for a release; the web repo moves fast.
+**Verified 2026-10-04** by reading `../web` (branch `general`, ≈ `main`), **§6/§6a re-verified 2026-10-08** against web `origin/main` @ `30c7da90` (native auth, PR #206) — code and migrations only, nothing was run. This **supersedes** `MOBILE_APP_REQUIREMENTS.md` wherever they disagree. Re-verify before relying on an item for a release; the web repo moves fast.
 
 Web paths below are relative to `/Users/mac/Developer/bookhushly/web/`. `../web-aw` is just another git worktree of the same repo — ignore it. The web repo also carries a newer copy of the requirements doc at `docs/mobile/MOBILE_APP_REQUIREMENTS.md` (annotated with what's done) and specs under `docs/superpowers/specs/` (`2026-10-02-signed-ticket-codes-design.md`, `2026-10-03-offline-scan-backend-design.md`, `2026-10-03-scan-override-pin-design.md`, `2026-10-03-atomic-hotel-checkin-design.md`).
 
@@ -125,15 +125,15 @@ Contract doc: web `docs/mobile/NATIVE_AUTH_API.md`; code-verified on `origin/mai
 
 ## 7. Customer API gaps
 
-| Flow                                          | State                                                                                                                                                                                        |
-| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hotel booking                                 | **Server action only** (`bookHotelRoomAction` → `book_hotel_room` RPC). `POST /api/bookings/hotel` only sends a notification.                                                                |
-| Apartment booking                             | `POST /api/bookings/apartment` exists but multipart + admin client.                                                                                                                          |
-| Event booking                                 | HTTP routes exist (see §2.4).                                                                                                                                                                |
-| My bookings                                   | No list route — server actions / direct RLS reads.                                                                                                                                           |
-| Trips, messages, KYC submit                   | Server actions. `GET /api/customer/kyc` exists.                                                                                                                                              |
-| Saved listings, reviews, organizers, waitlist | HTTP routes exist.                                                                                                                                                                           |
-| Listings                                      | `GET /api/listings?category=…` (required): `page` (0-based, 20/page), `search, sort, city, state, price_min, price_max, min_rating` + per-category filters. → `{items, nextPage?, totalCount | null}`. Anonymous; `s-maxage=30`. `GET /api/listings/{id}`, `/lock` exist. |
+| Flow                                          | State                                                                                                                                                                                                                                                                      |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hotel booking                                 | **Server action only** (`bookHotelRoomAction` → `book_hotel_room` RPC). `POST /api/bookings/hotel` only sends a notification.                                                                                                                                              |
+| Apartment booking                             | `POST /api/bookings/apartment` exists but multipart + admin client.                                                                                                                                                                                                        |
+| Event booking                                 | HTTP routes exist (see §2.4).                                                                                                                                                                                                                                              |
+| My bookings                                   | No list route — server actions / direct RLS reads.                                                                                                                                                                                                                         |
+| Trips, messages, KYC submit                   | Server actions. `GET /api/customer/kyc` exists.                                                                                                                                                                                                                            |
+| Saved listings, reviews, organizers, waitlist | HTTP routes exist.                                                                                                                                                                                                                                                         |
+| Listings                                      | `GET /api/listings?category=…` (required): `page` (0-based, 20/page), `search, sort, city, state, price_min, price_max, min_rating` + per-category filters. → `{items, nextPage?, totalCount \| null}`. Anonymous; `s-maxage=30`. `GET /api/listings/{id}`, `/lock` exist. |
 
 ## 8. Risks
 
