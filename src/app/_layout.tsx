@@ -40,6 +40,15 @@ function Navigator() {
     setRoute(route);
     if (route !== 'loading') void SplashScreen.hideAsync();
   }, [route, setRoute]);
+  // A slow session/mode lookup must not pin the splash: after 2 s show the in-app loading screen.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void SplashScreen.hideAsync();
+    }, 2000);
+    return () => {
+      clearTimeout(t);
+    };
+  }, []);
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
