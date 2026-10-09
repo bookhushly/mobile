@@ -34,7 +34,9 @@ type Props = {
   onOpenMail: () => void;
 };
 
-type Notice = { kind: 'neutral'; message: string } | { kind: 'sent' };
+// `retry`: a verify that could not be judged; the code is kept and can be sent again.
+type Notice =
+  { kind: 'neutral'; message: string } | { kind: 'retry'; message: string } | { kind: 'sent' };
 type Cooldown = { startedAt: number; seconds: number };
 
 const CODE_LENGTH = 6;
@@ -49,6 +51,7 @@ const TITLE: Record<CodePurpose, string> = {
 const WRONG_MESSAGE = 'That code is wrong or has expired';
 const TOO_MANY_MESSAGE = 'Too many tries. Send a new code.';
 const UNKNOWN_MESSAGE = "We couldn't check that code. Try again.";
+const RESEND_FAILED_MESSAGE = "We couldn't send a new code. Try again.";
 
 function transientMessage(retryAfterSec: number | undefined): string {
   const when = retryAfterSec === undefined ? 'a minute' : `${String(retryAfterSec)} seconds`;
@@ -84,8 +87,10 @@ export function CodeScreen({
     startedAt: now(),
     seconds: COOLDOWN_SEC,
   }));
-  // Single-flight: state lags a render behind a second change event, the refs do not.
-  const inFlight = useRef(false);
+  // Single-flight per action: state lags a render behind a second event, the refs do not. They are
+  // separate so a resend in flight never swallows the 6th digit (the field would look dead).
+  const verifyInFlight = useRef(false);
+  const resendInFlight = useRef(false);
   const verified = useRef(false);
 
   const left = cooldownLeft(cooldown.startedAt, nowMs, cooldown.seconds);
@@ -102,8 +107,8 @@ export function CodeScreen({
   }, [waiting, now]);
 
   async function verify(next: string) {
-    if (inFlight.current || verified.current) return;
-    inFlight.current = true;
+    if (verifyInFlight.current || verified.current) return;
+    verifyInFlight.current = true;
     setVerifying(true);
     setFieldMessage(null);
     setNotice(null);
@@ -122,19 +127,22 @@ export function CodeScreen({
           break;
         }
         case 'transient':
-          setNotice({ kind: 'neutral', message: transientMessage(undefined) });
+          setNotice({ kind: 'retry', message: transientMessage(undefined) });
           break;
         case 'unknown':
-          setNotice({ kind: 'neutral', message: UNKNOWN_MESSAGE });
+          setNotice({ kind: 'retry', message: UNKNOWN_MESSAGE });
       }
     } catch {
       // A thrown verify (supabase-js rejecting) is a transient failure, never a stuck spinner.
-      setNotice({ kind: 'neutral', message: transientMessage(undefined) });
+      setNotice({ kind: 'retry', message: transientMessage(undefined) });
     } finally {
-      inFlight.current = false;
+      verifyInFlight.current = false;
       setVerifying(false);
     }
   }
+
+  // A success never leaves a `retry` notice behind, so no ref is read in render here.
+  const canRetry = code.length === CODE_LENGTH && !verifying;
 
   function changeCode(next: string) {
     if (next === code) return;
@@ -143,8 +151,8 @@ export function CodeScreen({
   }
 
   async function resend() {
-    if (inFlight.current || waiting) return;
-    inFlight.current = true;
+    if (resendInFlight.current || waiting) return;
+    resendInFlight.current = true;
     setResending(true);
     setNotice(null);
     try {
@@ -158,7 +166,12 @@ export function CodeScreen({
         setCooldown({ startedAt: at, seconds: COOLDOWN_SEC });
         return;
       }
-      const retry = r.error.kind === 'transient' ? r.error.retryAfterSec : undefined;
+      if (r.error.kind !== 'transient') {
+        // invalid / failed / …: the route itself refused, so "couldn't reach" would be untrue.
+        setNotice({ kind: 'neutral', message: RESEND_FAILED_MESSAGE });
+        return;
+      }
+      const retry = r.error.retryAfterSec;
       setNotice({ kind: 'neutral', message: transientMessage(retry) });
       // The server's wait wins only when it is longer than what is left.
       const remaining = cooldownLeft(cooldown.startedAt, at, cooldown.seconds);
@@ -166,7 +179,7 @@ export function CodeScreen({
     } catch {
       setNotice({ kind: 'neutral', message: transientMessage(undefined) });
     } finally {
-      inFlight.current = false;
+      resendInFlight.current = false;
       setResending(false);
     }
   }
@@ -179,7 +192,7 @@ export function CodeScreen({
           <Button
             label={waiting ? `Send a new code in ${mmss(left)}` : 'Send a new code'}
             variant="secondary"
-            disabled={waiting}
+            disabled={waiting || verifying}
             loading={resending}
             onPress={() => {
               void resend();
@@ -226,8 +239,18 @@ export function CodeScreen({
             {fieldMessage}
           </Text>
         ) : null}
-        {notice?.kind === 'neutral' ? (
+        {notice?.kind === 'neutral' || notice?.kind === 'retry' ? (
           <Banner tone="neutral" message={notice.message} live="polite" />
+        ) : null}
+        {notice?.kind === 'retry' && canRetry ? (
+          <View style={{ alignSelf: 'flex-start' }}>
+            <TextLink
+              label="Try again"
+              onPress={() => {
+                void verify(code);
+              }}
+            />
+          </View>
         ) : null}
         {notice?.kind === 'sent' ? (
           <Banner tone="success" message="We sent a new code." live="polite" testID="resent" />

@@ -9,6 +9,8 @@ import { CodeScreen } from '@/features/auth/screens/CodeScreen';
 import { api } from '@/shared/api/instance';
 
 const MAIL_URL = 'message://';
+// Module scope: a stable identity, so the screen's interval effect survives route re-renders.
+const now = () => Date.now();
 
 const params = z.object({
   purpose: z.enum(['signup', 'confirm', 'recovery']),
@@ -49,7 +51,7 @@ export default function CodeRoute() {
     <CodeScreen
       purpose={purpose}
       email={email}
-      now={() => Date.now()}
+      now={now}
       onVerify={(code) => verifyCode(email, code, recovery ? 'recovery' : 'signup')}
       onResend={() => (recovery ? forgotPassword(api, email) : resendConfirmation(api, email))}
       onChangeEmail={() => {

@@ -130,6 +130,94 @@ it('a transient resend failure is neutral and can lengthen the wait', async () =
   expect(screen.queryByText('We sent a new code.')).toBeNull();
 });
 
+it('a resend in flight never blocks the sixth digit', async () => {
+  let resolve: (v: { ok: true; value: true }) => void = () => undefined;
+  const p = {
+    ...base(),
+    onResend: jest.fn(
+      () =>
+        new Promise<{ ok: true; value: true }>((r) => {
+          resolve = r;
+        }),
+    ),
+  };
+  await render(<CodeScreen {...p} />);
+  await tick(60_000);
+  await fireEvent.press(screen.getByRole('button', { name: 'Send a new code' }));
+  expect(p.onResend).toHaveBeenCalledTimes(1);
+  await fireEvent.changeText(screen.getByLabelText('Code'), '123456');
+  await waitFor(() => {
+    expect(p.onVerify).toHaveBeenCalledTimes(1);
+  });
+  expect(p.onVerify).toHaveBeenCalledWith('123456');
+  await act(async () => {
+    resolve({ ok: true, value: true });
+    await Promise.resolve();
+  });
+  expect(await screen.findByText('We sent a new code.')).toBeTruthy();
+});
+
+it('Send a new code is disabled while a verify is in flight', async () => {
+  let resolve: (v: null) => void = () => undefined;
+  const p = {
+    ...base(),
+    onVerify: jest.fn(
+      () =>
+        new Promise<null>((r) => {
+          resolve = r;
+        }),
+    ),
+  };
+  await render(<CodeScreen {...p} />);
+  await tick(60_000);
+  expect(screen.getByRole('button', { name: 'Send a new code' })).toBeEnabled();
+  await fireEvent.changeText(screen.getByLabelText('Code'), '123456');
+  expect(screen.getByRole('button', { name: 'Send a new code' })).toBeDisabled();
+  await act(async () => {
+    resolve(null);
+    await Promise.resolve();
+  });
+  expect(p.onVerified).toHaveBeenCalledTimes(1);
+});
+
+it('a non-transient resend failure says the code was not sent', async () => {
+  const p = {
+    ...base(),
+    onResend: jest.fn().mockResolvedValue({ ok: false, error: { kind: 'failed' } }),
+  };
+  await render(<CodeScreen {...p} />);
+  await tick(60_000);
+  await fireEvent.press(screen.getByRole('button', { name: 'Send a new code' }));
+  expect(await screen.findByText("We couldn't send a new code. Try again.")).toBeTruthy();
+  expect(screen.queryByText(/reach Bookhushly/)).toBeNull();
+  // Not a rate limit: the wait is not restarted.
+  expect(screen.getByRole('button', { name: 'Send a new code' })).toBeEnabled();
+});
+
+it('Try again re-sends the kept code after a transient verify failure', async () => {
+  const p = {
+    ...base(),
+    onVerify: jest.fn().mockResolvedValueOnce('transient').mockResolvedValueOnce(null),
+  };
+  await render(<CodeScreen {...p} />);
+  await fireEvent.changeText(screen.getByLabelText('Code'), '123456');
+  await fireEvent.press(await screen.findByRole('link', { name: 'Try again' }));
+  await waitFor(() => {
+    expect(p.onVerified).toHaveBeenCalledTimes(1);
+  });
+  expect(p.onVerify).toHaveBeenCalledTimes(2);
+  expect(p.onVerify).toHaveBeenLastCalledWith('123456');
+  expect(screen.queryByRole('link', { name: 'Try again' })).toBeNull();
+});
+
+it('Try again is not offered for a wrong code', async () => {
+  const p = { ...base(), onVerify: jest.fn().mockResolvedValue('badCode') };
+  await render(<CodeScreen {...p} />);
+  await fireEvent.changeText(screen.getByLabelText('Code'), '000000');
+  expect(await screen.findByText('That code is wrong or has expired')).toBeTruthy();
+  expect(screen.queryByRole('link', { name: 'Try again' })).toBeNull();
+});
+
 it('a transient verify failure is neutral and keeps the code', async () => {
   const p = { ...base(), onVerify: jest.fn().mockResolvedValue('transient') };
   await render(<CodeScreen {...p} />);
