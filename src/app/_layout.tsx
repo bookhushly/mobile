@@ -24,7 +24,8 @@ void SplashScreen.preventAutoHideAsync();
 function Navigator() {
   const auth = useAuth((s) => s.state);
   const recovery = useAuth((s) => s.recovery);
-  const userId = auth.status === 'signedIn' ? auth.userId : null;
+  // No mode lookup mid-reset: the user is signed in by a code only until the new password is saved.
+  const userId = auth.status === 'signedIn' && !recovery ? auth.userId : null;
   const { state: mode, chosen } = useModeState(userId);
   const route = resolveRoute({
     versionOk: isVersionSupported(APP_VERSION, MIN_SUPPORTED_VERSION),

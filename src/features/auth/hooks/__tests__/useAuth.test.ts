@@ -40,6 +40,10 @@ jest.mock('@/shared/supabase/client', () => ({
 
 const signedIn = { status: 'signedIn', userId: 'u1', email: 'a@b.co' } as const;
 
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
 beforeEach(async () => {
   jest.clearAllMocks();
   await secureKv.delete(RECOVERY_KEY);
@@ -86,6 +90,26 @@ describe('verifyCode', () => {
     expect(await recoveryPending()).toBe(false);
   });
 
+  it('recovery: verifyOtp rejecting clears the mark and reads as transient', async () => {
+    mockVerifyOtp.mockRejectedValue(new Error('network'));
+    expect(await useAuth.getState().verifyCode('a@b.co', '123456', 'recovery')).toBe('transient');
+    expect(useAuth.getState().recovery).toBe(false);
+    expect(await recoveryPending()).toBe(false);
+  });
+
+  it('recovery: a failing marker write clears the flag and reads as transient', async () => {
+    jest.spyOn(secureKv, 'set').mockRejectedValueOnce(new Error('keychain'));
+    expect(await useAuth.getState().verifyCode('a@b.co', '123456', 'recovery')).toBe('transient');
+    expect(useAuth.getState().recovery).toBe(false);
+    expect(mockVerifyOtp).not.toHaveBeenCalled();
+  });
+
+  it('signup: verifyOtp rejecting propagates (no recovery state to undo)', async () => {
+    mockVerifyOtp.mockRejectedValue(new Error('network'));
+    await expect(useAuth.getState().verifyCode('a@b.co', '123456', 'signup')).rejects.toThrow();
+    expect(useAuth.getState().recovery).toBe(false);
+  });
+
   it('transient verify failures are reported as such', async () => {
     mockVerifyOtp.mockResolvedValue({ error: { status: 503, message: 'down' } });
     expect(await useAuth.getState().verifyCode('a@b.co', '123456', 'signup')).toBe('transient');
@@ -103,6 +127,13 @@ describe('recovery lifecycle', () => {
     expect(mockSignOut).not.toHaveBeenCalled();
   });
 
+  it('finishRecovery clears the flag even if the marker delete throws', async () => {
+    useAuth.setState({ state: signedIn, recovery: true });
+    jest.spyOn(secureKv, 'delete').mockRejectedValueOnce(new Error('keychain'));
+    await expect(useAuth.getState().finishRecovery()).resolves.toBeUndefined();
+    expect(useAuth.getState().recovery).toBe(false);
+  });
+
   it('abandonRecovery clears the mark and signs out this device only', async () => {
     useAuth.setState({ state: signedIn, recovery: true });
     await secureKv.set(RECOVERY_KEY, '1');
@@ -118,6 +149,15 @@ describe('recovery lifecycle', () => {
     mockSignOut.mockRejectedValue(new Error('offline'));
     await useAuth.getState().abandonRecovery();
     expect(mockRemoveItem).toHaveBeenCalledWith('bh-auth');
+    expect(useAuth.getState().state).toEqual({ status: 'signedOut' });
+  });
+
+  it('abandonRecovery ends signed out even if both remote and local sign-out throw', async () => {
+    useAuth.setState({ state: signedIn, recovery: true });
+    mockSignOut.mockRejectedValue(new Error('offline'));
+    mockRemoveItem.mockRejectedValue(new Error('keychain'));
+    await expect(useAuth.getState().abandonRecovery()).resolves.toBeUndefined();
+    expect(useAuth.getState().recovery).toBe(false);
     expect(useAuth.getState().state).toEqual({ status: 'signedOut' });
   });
 });

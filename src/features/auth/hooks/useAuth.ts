@@ -35,6 +35,18 @@ type Store = {
   signOutAfterDeletion: () => Promise<void>;
 };
 
+// Clears the reset-in-progress state. Best effort and never rejects: the store flag is always
+// cleared, and a marker that could not be deleted only causes a local sign-out at the next start.
+async function clearRecovery(set: (p: { recovery: boolean }) => void): Promise<void> {
+  try {
+    await recoveryMarker.finish();
+  } catch {
+    // see above
+  } finally {
+    set({ recovery: false });
+  }
+}
+
 // Drops this device's session only (no server-side revocation of other sessions).
 async function signOutLocally(): Promise<void> {
   await performSignOut({
@@ -82,32 +94,38 @@ export const useAuth = create<Store>((set, get) => ({
     return { blocked: null };
   },
   async verifyCode(email, code, type) {
-    if (type === 'recovery') {
-      // Before verifyOtp: its SIGNED_IN event must already see the reset in progress.
-      set({ recovery: true });
+    if (type !== 'recovery') {
+      const { error } = await supabase.auth.verifyOtp({ email, token: code, type });
+      return error ? mapVerifyError(error) : null;
+    }
+    // Before verifyOtp: its SIGNED_IN event must already see the reset in progress. Any failure
+    // (thrown or returned) must undo that, or the app would stay pinned to the auth screens.
+    set({ recovery: true });
+    try {
       await recoveryMarker.begin();
-    }
-    const { error } = await supabase.auth.verifyOtp({ email, token: code, type });
-    if (error) {
-      if (type === 'recovery') {
-        await recoveryMarker.finish();
-        set({ recovery: false });
-      }
+      const { error } = await supabase.auth.verifyOtp({ email, token: code, type });
+      if (!error) return null;
+      await clearRecovery(set);
       return mapVerifyError(error);
+    } catch {
+      await clearRecovery(set);
+      return 'transient';
     }
-    return null;
   },
   async finishRecovery() {
-    await recoveryMarker.finish();
-    set({ recovery: false });
+    await clearRecovery(set);
   },
   async abandonRecovery() {
     // Leaving the new-password screen (or a cold start mid-reset): the code alone must never
     // leave the user signed in. Local only: the user's other sessions stay; offline gate data
-    // is kept (FR-3.11).
-    await recoveryMarker.finish();
-    set({ recovery: false });
-    await signOutLocally();
+    // is kept (FR-3.11). Never rejects: whatever fails, the app ends up signed out.
+    await clearRecovery(set);
+    try {
+      await signOutLocally();
+    } catch {
+      queryClient.clear();
+      get().dispatch({ type: 'SIGNED_OUT' });
+    }
   },
   async checkPassword(password) {
     const s = get().state;
