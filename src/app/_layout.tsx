@@ -23,6 +23,7 @@ void SplashScreen.preventAutoHideAsync();
 
 function Navigator() {
   const auth = useAuth((s) => s.state);
+  const recovery = useAuth((s) => s.recovery);
   const userId = auth.status === 'signedIn' ? auth.userId : null;
   const { state: mode, chosen } = useModeState(userId);
   const route = resolveRoute({
@@ -30,6 +31,7 @@ function Navigator() {
     auth: auth.status,
     mode,
     chosenMode: chosen,
+    recovery,
   });
 
   const setRoute = useRouteStore((s) => s.setRoute);

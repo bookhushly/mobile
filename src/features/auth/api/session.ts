@@ -1,6 +1,6 @@
 import type { SessionLite } from '@/features/auth/domain/authState';
 import { resolveInitialSession } from '@/features/auth/domain/storedSession';
-import { useAuth } from '@/features/auth/hooks/useAuth';
+import { recoveryPending, useAuth } from '@/features/auth/hooks/useAuth';
 import { queryClient } from '@/shared/api/queryClient';
 import { sessionStore, STORAGE_KEY, supabase } from '@/shared/supabase/client';
 
@@ -16,9 +16,21 @@ export function startSessionListener(): () => void {
     const s = lite(session);
     switch (event) {
       case 'INITIAL_SESSION':
-        void resolveInitialSession(s, () => sessionStore.getItem(STORAGE_KEY)).then((resolved) => {
-          dispatch({ type: 'INITIAL_SESSION', session: resolved });
-        });
+        void resolveInitialSession(s, () => sessionStore.getItem(STORAGE_KEY)).then(
+          async (resolved) => {
+            if (resolved !== null && (await recoveryPending())) {
+              // Killed mid-reset: a reset code alone must never leave the user signed in.
+              try {
+                await useAuth.getState().abandonRecovery();
+              } catch {
+                // Fail safe: whatever went wrong, the app must not resume as signed in.
+                dispatch({ type: 'SIGNED_OUT' });
+              }
+              return;
+            }
+            dispatch({ type: 'INITIAL_SESSION', session: resolved });
+          },
+        );
         break;
       case 'SIGNED_IN':
         if (s) dispatch({ type: 'SIGNED_IN', session: s });

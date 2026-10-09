@@ -12,3 +12,12 @@ it.each([
 ])('%j -> %s', (e, expected) => {
   expect(mapSignInError(e)).toBe(expected);
 });
+
+it('unconfirmed email by code or by message', () => {
+  expect(mapSignInError({ status: 400, code: 'email_not_confirmed' })).toBe('emailNotConfirmed');
+  expect(mapSignInError({ status: 400, message: 'Email not confirmed' })).toBe('emailNotConfirmed');
+});
+
+it('a banned (deleted) account is closed', () => {
+  expect(mapSignInError({ status: 400, code: 'user_banned' })).toBe('accountClosed');
+});
