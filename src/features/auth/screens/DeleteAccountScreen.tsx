@@ -27,12 +27,12 @@ type Notice =
   | { tone: 'warning'; title: string; message: string };
 
 const CONFIRM_WORD = 'DELETE';
-const WRONG_PASSWORD = "That password isn't right";
-const BLOCKED_TITLE = "You can't delete your account yet";
-const UNCONFIRMED = "We couldn't confirm the deletion. Sign in again to check.";
-const FAILED = "We couldn't delete your account. Try again.";
+const WRONG_PASSWORD = 'That password isn’t right';
+const BLOCKED_TITLE = 'You can’t delete your account yet';
+const UNCONFIRMED = 'We couldn’t confirm the deletion. Sign in again to check.';
+const FAILED = 'We couldn’t delete your account. Try again.';
 const EXPLANATION =
-  "Deleting removes your name, email, phone and saved items. Booking and payment records are kept, anonymised, because the law requires them. This can't be undone.";
+  'Deleting removes your name, email, phone and saved items. Booking and payment records are kept, anonymised, because the law requires them. This can’t be undone.';
 
 function transientMessage(retryAfterSec: number | undefined): string {
   const when = retryAfterSec === undefined ? 'a minute' : `${String(retryAfterSec)} seconds`;

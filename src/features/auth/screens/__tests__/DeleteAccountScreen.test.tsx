@@ -22,7 +22,7 @@ const button = () => screen.getByRole('button', { name: 'Delete account' });
 it('shows whose account this is and what deletion does', async () => {
   await render(<DeleteAccountScreen {...base()} />);
   expect(screen.getByText('ada@b.co')).toBeTruthy();
-  expect(screen.getByText(/This can't be undone/)).toBeTruthy();
+  expect(screen.getByText(/This can’t be undone/)).toBeTruthy();
   expect(screen.queryByTestId('banner')).toBeNull();
 });
 
@@ -55,7 +55,7 @@ it('a wrong password never reaches the server', async () => {
   await render(<DeleteAccountScreen {...p} />);
   await confirm();
   await fireEvent.press(button());
-  expect(await screen.findByText("That password isn't right")).toBeTruthy();
+  expect(await screen.findByText('That password isn’t right')).toBeTruthy();
   expect(p.onDelete).not.toHaveBeenCalled();
 });
 
@@ -65,7 +65,7 @@ it('an outage during the password check is neutral, not "wrong password"', async
   await confirm();
   await fireEvent.press(button());
   expect(await screen.findByTestId('banner')).toBeTruthy();
-  expect(screen.queryByText("That password isn't right")).toBeNull();
+  expect(screen.queryByText('That password isn’t right')).toBeNull();
   expect(p.onDelete).not.toHaveBeenCalled();
 });
 
@@ -97,7 +97,7 @@ it('lists every blocker', async () => {
   await render(<DeleteAccountScreen {...p} />);
   await confirm();
   await fireEvent.press(button());
-  expect(await screen.findByText("You can't delete your account yet")).toBeTruthy();
+  expect(await screen.findByText('You can’t delete your account yet')).toBeTruthy();
   expect(screen.getByText(/You have a booking that has not ended yet\./)).toBeTruthy();
   expect(screen.getByText(/Your wallet still has money in it\./)).toBeTruthy();
   expect(p.onDeleted).not.toHaveBeenCalled();
@@ -143,7 +143,7 @@ it('an unconfirmed lost response asks the user to sign in again to check', async
   await confirm();
   await fireEvent.press(button());
   expect(
-    await screen.findByText("We couldn't confirm the deletion. Sign in again to check."),
+    await screen.findByText('We couldn’t confirm the deletion. Sign in again to check.'),
   ).toBeTruthy();
   expect(p.onDeleted).not.toHaveBeenCalled();
 });
@@ -159,7 +159,7 @@ it('a failed delete is safe to retry', async () => {
   await render(<DeleteAccountScreen {...p} />);
   await confirm();
   await fireEvent.press(button());
-  expect(await screen.findByText("We couldn't delete your account. Try again.")).toBeTruthy();
+  expect(await screen.findByText('We couldn’t delete your account. Try again.')).toBeTruthy();
   await fireEvent.press(button());
   await waitFor(() => {
     expect(p.onDeleted).toHaveBeenCalled();
@@ -169,7 +169,7 @@ it('a failed delete is safe to retry', async () => {
 
 it('warns about unsynced admissions first', async () => {
   await render(<DeleteAccountScreen {...base()} unsynced={3} />);
-  expect(screen.getByText(/3 admissions haven't synced/)).toBeTruthy();
+  expect(screen.getByText(/3 admissions haven’t synced/)).toBeTruthy();
 });
 
 it('says "some" when the unsynced count could not be read', async () => {

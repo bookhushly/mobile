@@ -56,7 +56,7 @@ describe('checkPassword', () => {
 
 describe('signOutAfterDeletion', () => {
   it('wipes this account’s local data even though there are unsynced admissions', async () => {
-    await useAuth.getState().signOutAfterDeletion();
+    await useAuth.getState().signOutAfterDeletion('u1');
     expect(wipe).toHaveBeenCalledWith('u1');
     expect(mockSignOut).toHaveBeenCalledWith({ scope: 'local' });
     expect(useAuth.getState().state).toEqual({ status: 'signedOut' });
@@ -66,7 +66,16 @@ describe('signOutAfterDeletion', () => {
   it('ends signed out with the notice even if both remote and local sign-out throw', async () => {
     mockSignOut.mockRejectedValue(new Error('offline'));
     mockRemoveItem.mockRejectedValue(new Error('keychain'));
-    await expect(useAuth.getState().signOutAfterDeletion()).resolves.toBeUndefined();
+    await expect(useAuth.getState().signOutAfterDeletion('u1')).resolves.toBeUndefined();
+    expect(wipe).toHaveBeenCalledWith('u1');
+    expect(useAuth.getState().state).toEqual({ status: 'signedOut' });
+    expect(useAuthNotice.getState().notice).toBe('accountDeleted');
+  });
+
+  it('wipes the captured account even when the session is already gone', async () => {
+    // A banned refreshSession() makes supabase-js emit SIGNED_OUT before the route gets here.
+    useAuth.setState({ state: { status: 'signedOut' } });
+    await useAuth.getState().signOutAfterDeletion('u1');
     expect(wipe).toHaveBeenCalledWith('u1');
     expect(useAuth.getState().state).toEqual({ status: 'signedOut' });
     expect(useAuthNotice.getState().notice).toBe('accountDeleted');
@@ -74,7 +83,7 @@ describe('signOutAfterDeletion', () => {
 
   it('still signs out and sets the notice when the wipe throws', async () => {
     wipe.mockRejectedValueOnce(new Error('disk'));
-    await expect(useAuth.getState().signOutAfterDeletion()).resolves.toBeUndefined();
+    await expect(useAuth.getState().signOutAfterDeletion('u1')).resolves.toBeUndefined();
     expect(useAuth.getState().state).toEqual({ status: 'signedOut' });
     expect(useAuthNotice.getState().notice).toBe('accountDeleted');
   });

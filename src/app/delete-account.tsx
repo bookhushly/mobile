@@ -54,8 +54,9 @@ export default function DeleteAccountRoute() {
           afterUncertain((await supabase.auth.refreshSession()).error) === 'deleted'
         }
         onDeleted={() => {
-          // Flips auth to signed out; the effect above then leaves this screen.
-          void signOutAfterDeletion();
+          // The id is captured here: a banned refresh may already have emitted SIGNED_OUT, and
+          // the wipe must still run. Signing out flips auth; the effect above then leaves.
+          void signOutAfterDeletion(state.userId);
         }}
         onCancel={() => {
           router.back();

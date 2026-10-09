@@ -11,8 +11,8 @@ export function unsyncedWarning(unsynced: number): string | null {
   if (deletionGate(unsynced) === 'proceed') return null;
   const n = String(unsynced);
   return unsynced === 1
-    ? `${n} admission hasn't synced. Deleting your account removes it from this phone.`
-    : `${n} admissions haven't synced. Deleting your account removes them from this phone.`;
+    ? `${n} admission hasn’t synced. Deleting your account removes it from this phone.`
+    : `${n} admissions haven’t synced. Deleting your account removes them from this phone.`;
 }
 
 /**

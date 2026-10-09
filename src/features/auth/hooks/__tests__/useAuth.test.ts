@@ -189,7 +189,7 @@ describe('checkPassword', () => {
 describe('signOutAfterDeletion', () => {
   it('signs out locally and sets the one-shot notice', async () => {
     useAuth.setState({ state: signedIn });
-    await useAuth.getState().signOutAfterDeletion();
+    await useAuth.getState().signOutAfterDeletion('u1');
     expect(mockSignOut).toHaveBeenCalledWith({ scope: 'local' });
     expect(useAuth.getState().state).toEqual({ status: 'signedOut' });
     expect(useAuthNotice.getState().notice).toBe('accountDeleted');

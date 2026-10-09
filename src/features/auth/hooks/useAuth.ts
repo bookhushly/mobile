@@ -33,7 +33,8 @@ type Store = {
   abandonRecovery: () => Promise<void>;
   /** `closed`: the account is banned, i.e. a deletion already went through. */
   checkPassword: (password: string) => Promise<'ok' | 'wrong' | 'transient' | 'closed'>;
-  signOutAfterDeletion: () => Promise<void>;
+  /** `userId` is captured before the delete starts: the session may already be gone by now. */
+  signOutAfterDeletion: (userId: string) => Promise<void>;
 };
 
 // Clears the reset-in-progress state. Best effort and never rejects: the store flag is always
@@ -138,14 +139,13 @@ export const useAuth = create<Store>((set, get) => ({
     if (kind === 'accountClosed') return 'closed';
     return 'transient';
   },
-  async signOutAfterDeletion() {
-    const s = get().state;
-    if (s.status === 'signedIn') {
-      try {
-        await wipeOnSignOut(s.userId);
-      } catch {
-        // The account is gone server-side; local data is wiped best effort and sign-out still runs.
-      }
+  async signOutAfterDeletion(userId) {
+    // Wipe by the captured id, whatever the store says: a banned refresh can have emitted
+    // SIGNED_OUT already, and the encrypted roster/outbox must not outlive a deleted account.
+    try {
+      await wipeOnSignOut(userId);
+    } catch {
+      // The account is gone server-side; local data is wiped best effort and sign-out still runs.
     }
     // Never rejects: the account no longer exists, so whatever fails the app ends up signed out.
     try {
