@@ -9,7 +9,10 @@
     "userInterfaceStyle": "light",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.bookhushly.app"
+      "bundleIdentifier": "com.bookhushly.app",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": ["message"]
+      }
     },
     "android": {
       "adaptiveIcon": {
