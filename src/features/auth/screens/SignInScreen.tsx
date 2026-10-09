@@ -69,6 +69,9 @@ export function SignInScreen({
       return;
     }
     setFieldErrors({});
+    // Each attempt starts clean so a stale banner never outlives a retry; `current` in the catch
+    // below can then only be this attempt's own error.
+    setError(null);
     setSubmitting(true);
     try {
       const failure = await onSubmit(parsed.data.email, parsed.data.password);
