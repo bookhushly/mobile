@@ -3,6 +3,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import { SignInScreen } from '@/features/auth/screens/SignInScreen';
 import { color } from '@/shared/theme';
 
+const extra = { onForgot: jest.fn(), onCreateAccount: jest.fn(), onConfirmEmail: jest.fn() };
+
 async function fill(email: string, password: string) {
   await fireEvent.changeText(screen.getByLabelText('Email'), email);
   await fireEvent.changeText(screen.getByLabelText('Password'), password);
@@ -10,7 +12,7 @@ async function fill(email: string, password: string) {
 
 it('validates inputs before calling onSubmit', async () => {
   const onSubmit = jest.fn();
-  await render(<SignInScreen onSubmit={onSubmit} />);
+  await render(<SignInScreen {...extra} onSubmit={onSubmit} />);
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
   expect(await screen.findByText('Enter a valid email address')).toBeTruthy();
   expect(onSubmit).not.toHaveBeenCalled();
@@ -18,7 +20,7 @@ it('validates inputs before calling onSubmit', async () => {
 
 it('shows the mapped error copy and never blocks retry', async () => {
   const onSubmit = jest.fn().mockResolvedValue('network');
-  await render(<SignInScreen onSubmit={onSubmit} />);
+  await render(<SignInScreen {...extra} onSubmit={onSubmit} />);
   await fill('a@b.com', 'pw');
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
   await waitFor(() => {
@@ -29,7 +31,7 @@ it('shows the mapped error copy and never blocks retry', async () => {
 
 it('rate limited copy tells the user to wait a minute', async () => {
   const onSubmit = jest.fn().mockResolvedValue('rateLimited');
-  await render(<SignInScreen onSubmit={onSubmit} />);
+  await render(<SignInScreen {...extra} onSubmit={onSubmit} />);
   await fill('a@b.com', 'pw');
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
   await waitFor(() => {
@@ -39,7 +41,7 @@ it('rate limited copy tells the user to wait a minute', async () => {
 
 it('passes the normalised email to onSubmit', async () => {
   const onSubmit = jest.fn().mockResolvedValue(null);
-  await render(<SignInScreen onSubmit={onSubmit} />);
+  await render(<SignInScreen {...extra} onSubmit={onSubmit} />);
   await fill('  A@B.COM ', 'pw');
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
   await waitFor(() => {
@@ -49,7 +51,7 @@ it('passes the normalised email to onSubmit', async () => {
 
 it('announces errors politely so screen readers hear them', async () => {
   const onSubmit = jest.fn().mockResolvedValue('invalidCredentials');
-  await render(<SignInScreen onSubmit={onSubmit} />);
+  await render(<SignInScreen {...extra} onSubmit={onSubmit} />);
   await fill('a@b.com', 'pw');
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
   const msg = await screen.findByText(/email or password is not right/i);
@@ -58,7 +60,7 @@ it('announces errors politely so screen readers hear them', async () => {
 
 it('never gets stuck loading if onSubmit throws', async () => {
   const onSubmit = jest.fn().mockRejectedValue(new Error('storage down'));
-  await render(<SignInScreen onSubmit={onSubmit} />);
+  await render(<SignInScreen {...extra} onSubmit={onSubmit} />);
   await fill('a@b.com', 'pw');
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
   await waitFor(() => {
@@ -67,18 +69,11 @@ it('never gets stuck loading if onSubmit throws', async () => {
   expect(screen.getByText(/couldn’t sign you in/i)).toBeTruthy();
 });
 
-it('the account link label matches its visible text', async () => {
-  await render(<SignInScreen onSubmit={jest.fn()} />);
-  expect(
-    screen.getByRole('link', { name: 'New to Bookhushly? Create your account on bookhushly.com.' }),
-  ).toBeTruthy();
-});
-
 it.each(['network', 'rateLimited', 'unavailable'] as const)(
   'a transient %s failure is a neutral banner, never red',
   async (failure) => {
     const onSubmit = jest.fn().mockResolvedValue(failure);
-    await render(<SignInScreen onSubmit={onSubmit} />);
+    await render(<SignInScreen {...extra} onSubmit={onSubmit} />);
     await fill('a@b.com', 'pw');
     await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
     const banner = await screen.findByTestId('banner');
@@ -88,9 +83,82 @@ it.each(['network', 'rateLimited', 'unavailable'] as const)(
 
 it('wrong credentials are a danger banner', async () => {
   const onSubmit = jest.fn().mockResolvedValue('invalidCredentials');
-  await render(<SignInScreen onSubmit={onSubmit} />);
+  await render(<SignInScreen {...extra} onSubmit={onSubmit} />);
   await fill('a@b.com', 'pw');
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
   const banner = await screen.findByTestId('banner');
   expect(banner).toHaveStyle({ backgroundColor: color.status.danger.bg });
+});
+
+it('an unconfirmed email starts the confirm flow with the typed email', async () => {
+  const onConfirmEmail = jest.fn().mockResolvedValue(undefined);
+  await render(
+    <SignInScreen
+      onSubmit={jest.fn().mockResolvedValue('emailNotConfirmed')}
+      onForgot={jest.fn()}
+      onCreateAccount={jest.fn()}
+      onConfirmEmail={onConfirmEmail}
+    />,
+  );
+  await fill('Ada@B.co', 'Abcdefg1!');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await waitFor(() => {
+    expect(onConfirmEmail).toHaveBeenCalledWith('ada@b.co');
+  });
+});
+
+it('a failed confirm handoff never leaves the button stuck loading', async () => {
+  const onConfirmEmail = jest.fn().mockRejectedValue(new Error('down'));
+  await render(
+    <SignInScreen
+      onSubmit={jest.fn().mockResolvedValue('emailNotConfirmed')}
+      onForgot={jest.fn()}
+      onCreateAccount={jest.fn()}
+      onConfirmEmail={onConfirmEmail}
+    />,
+  );
+  await fill('a@b.co', 'pw');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
+  });
+  expect(screen.getByText(/Confirm your email first/)).toBeTruthy();
+});
+
+it('forgot password carries the typed email', async () => {
+  const onForgot = jest.fn();
+  await render(
+    <SignInScreen
+      onSubmit={jest.fn()}
+      onForgot={onForgot}
+      onCreateAccount={jest.fn()}
+      onConfirmEmail={jest.fn()}
+    />,
+  );
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'ada@b.co');
+  await fireEvent.press(screen.getByRole('link', { name: 'Forgot password?' }));
+  expect(onForgot).toHaveBeenCalledWith('ada@b.co');
+});
+
+it('the create-account link hands off', async () => {
+  const onCreateAccount = jest.fn();
+  await render(<SignInScreen {...extra} onSubmit={jest.fn()} onCreateAccount={onCreateAccount} />);
+  await fireEvent.press(screen.getByRole('link', { name: 'New here? Create account' }));
+  expect(onCreateAccount).toHaveBeenCalled();
+  expect(screen.queryByText(/bookhushly\.com/)).toBeNull();
+});
+
+it('a closed account is shown as a refusal (danger), not a network problem', async () => {
+  await render(
+    <SignInScreen
+      onSubmit={jest.fn().mockResolvedValue('accountClosed')}
+      onForgot={jest.fn()}
+      onCreateAccount={jest.fn()}
+      onConfirmEmail={jest.fn()}
+    />,
+  );
+  await fill('a@b.co', 'pw');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  expect(await screen.findByText(/This account was closed/)).toBeTruthy();
+  expect(screen.getByTestId('banner')).toHaveStyle({ backgroundColor: color.status.danger.bg });
 });

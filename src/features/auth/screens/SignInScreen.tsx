@@ -1,13 +1,31 @@
+import { ArrowLeft } from 'lucide-react-native';
 import { useState } from 'react';
-import { Linking, Pressable } from 'react-native';
+import { View } from 'react-native';
 
 import { signInCopy, type SignInError } from '@/features/auth/domain/signInErrors';
 import { signInSchema } from '@/features/auth/schemas/signIn';
-import { density, type StatusTone } from '@/shared/theme';
-import { Banner, Button, Input, Screen, Stack, Text } from '@/shared/ui';
+import { type StatusTone } from '@/shared/theme';
+import {
+  Banner,
+  Button,
+  IconButton,
+  Input,
+  PasswordField,
+  Screen,
+  Stack,
+  Text,
+  TextLink,
+} from '@/shared/ui';
 
 type Props = {
   onSubmit: (email: string, password: string) => Promise<SignInError | null>;
+  /** Hands the typed (normalised) email to the forgot-password flow. */
+  onForgot: (email: string) => void;
+  onCreateAccount: () => void;
+  /** Unconfirmed email: the route resends the code and moves to the code screen. */
+  onConfirmEmail: (email: string) => Promise<void>;
+  /** Back to Welcome; the header button is hidden when absent (bare unit renders). */
+  onBack?: () => void;
 };
 
 type FieldErrors = { email?: string; password?: string };
@@ -25,7 +43,13 @@ function shownError(kind: SignInError): ShownError {
   return { kind, tone: TRANSIENT.has(kind) ? 'neutral' : 'danger' };
 }
 
-export function SignInScreen({ onSubmit }: Props) {
+export function SignInScreen({
+  onSubmit,
+  onForgot,
+  onCreateAccount,
+  onConfirmEmail,
+  onBack,
+}: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -49,15 +73,31 @@ export function SignInScreen({ onSubmit }: Props) {
     try {
       const failure = await onSubmit(parsed.data.email, parsed.data.password);
       setError(failure ? shownError(failure) : null);
+      // The banner stays visible as the handoff happens, and remains if the handoff fails.
+      if (failure === 'emailNotConfirmed') await onConfirmEmail(parsed.data.email);
     } catch {
-      setError(shownError('unknown'));
+      setError((current) => current ?? shownError('unknown'));
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <Screen scroll>
+    <Screen
+      scroll
+      header={
+        onBack !== undefined ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56 }}>
+            <IconButton icon={ArrowLeft} accessibilityLabel="Back" onPress={onBack} />
+          </View>
+        ) : undefined
+      }
+      footer={
+        <View style={{ alignItems: 'center' }}>
+          <TextLink label="New here? Create account" onPress={onCreateAccount} />
+        </View>
+      }
+    >
       <Stack gap="s3">
         <Text variant="displaySm" accessibilityRole="header">
           Welcome back
@@ -78,12 +118,11 @@ export function SignInScreen({ onSubmit }: Props) {
           autoComplete="email"
           textContentType="username"
         />
-        <Input
+        <PasswordField
           label="Password"
           value={password}
           onChangeText={setPassword}
           error={fieldErrors.password}
-          secureTextEntry
           returnKeyType="go"
           onSubmitEditing={() => {
             void submit();
@@ -99,20 +138,15 @@ export function SignInScreen({ onSubmit }: Props) {
             void submit();
           }}
         />
+        <View style={{ alignItems: 'flex-start' }}>
+          <TextLink
+            label="Forgot password?"
+            onPress={() => {
+              onForgot(email.trim().toLowerCase());
+            }}
+          />
+        </View>
       </Stack>
-      <Pressable
-        accessibilityRole="link"
-        accessibilityLabel="New to Bookhushly? Create your account on bookhushly.com."
-        hitSlop={8}
-        style={{ minHeight: density.customer.controlHeight, justifyContent: 'center' }}
-        onPress={() => {
-          void Linking.openURL('https://www.bookhushly.com');
-        }}
-      >
-        <Text variant="bodySm" tone="linkText">
-          New to Bookhushly? Create your account on bookhushly.com.
-        </Text>
-      </Pressable>
     </Screen>
   );
 }
