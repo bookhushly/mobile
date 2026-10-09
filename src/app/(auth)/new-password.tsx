@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { BackHandler } from 'react-native';
 
@@ -12,27 +13,37 @@ export default function NewPasswordRoute() {
   // Set synchronously on a successful save, before `finishRecovery` clears the store flag: the
   // unmount cleanup and the hardware back button must never sign the user out after a save.
   const saved = useRef(false);
+  // Leaving twice (Cancel then back) must not sign out twice or replace the route twice.
+  const leaving = useRef(false);
 
+  // Cancel, Start again or Android back: the reset is abandoned (spec decision 4). The store
+  // keeps `recovery` until this device is signed out, so the auth group stays in front
+  // throughout; this screen then leaves for Welcome itself.
   const leave = () => {
-    if (saved.current) return;
-    void abandonRecovery();
+    if (saved.current || leaving.current) return;
+    leaving.current = true;
+    void abandonRecovery().then(() => {
+      router.replace('/welcome');
+    });
   };
 
   useEffect(() => {
-    // Android hardware back: leaving the reset signs out (spec decision 4), never just pops.
+    // Android hardware back: never just pops.
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (!saved.current) void abandonRecovery();
+      leave();
       return true;
     });
     return () => {
       sub.remove();
     };
-  }, [abandonRecovery]);
+  });
 
   useEffect(
     () => () => {
       // Unmounted some other way (e.g. the navigator reset) while the reset is still in progress.
-      if (!saved.current && useAuth.getState().recovery) void useAuth.getState().abandonRecovery();
+      if (!saved.current && !leaving.current && useAuth.getState().recovery) {
+        void useAuth.getState().abandonRecovery();
+      }
     },
     [],
   );

@@ -17,6 +17,10 @@ const recoveryMarker = createRecovery(secureKv);
 /** Read by the session listener at cold start: a leftover marker means "sign out locally". */
 export const recoveryPending = (): Promise<boolean> => recoveryMarker.pending();
 
+/** A marker with no session behind it (cold start, signed out) is stale: drop it, best effort. */
+export const clearStaleRecovery = (): Promise<void> =>
+  recoveryMarker.finish().catch(() => undefined);
+
 type Store = {
   state: AuthState;
   /** A password reset is in progress: signed in by a code, but no new password saved yet. */
@@ -121,13 +125,15 @@ export const useAuth = create<Store>((set, get) => ({
     // Leaving the new-password screen (or a cold start mid-reset): the code alone must never
     // leave the user signed in. Local only: the user's other sessions stay; offline gate data
     // is kept (FR-3.11). Never rejects: whatever fails, the app ends up signed out.
-    await clearRecovery(set);
+    // Order matters: the flag (and marker) stay set until this device is signed out, so the
+    // root layout never sees "signed in, no reset" and starts a mode lookup with a reset session.
     try {
       await signOutLocally();
     } catch {
       queryClient.clear();
       get().dispatch({ type: 'SIGNED_OUT' });
     }
+    await clearRecovery(set);
   },
   async checkPassword(password) {
     const s = get().state;

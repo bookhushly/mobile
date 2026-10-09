@@ -144,6 +144,27 @@ describe('recovery lifecycle', () => {
     expect(useAuth.getState().state).toEqual({ status: 'signedOut' });
   });
 
+  it('abandonRecovery keeps the reset flag and marker until this device is signed out', async () => {
+    // Otherwise the root layout briefly sees "signed in, no reset" and starts a mode lookup.
+    useAuth.setState({ state: signedIn, recovery: true });
+    await secureKv.set(RECOVERY_KEY, '1');
+    const seen: { status: string; recovery: boolean }[] = [];
+    const unsub = useAuth.subscribe((s) => {
+      seen.push({ status: s.state.status, recovery: s.recovery });
+    });
+    mockSignOut.mockImplementation(async () => {
+      expect(useAuth.getState().recovery).toBe(true);
+      expect(await recoveryPending()).toBe(true);
+      return { error: null };
+    });
+    await useAuth.getState().abandonRecovery();
+    unsub();
+    expect(seen).not.toContainEqual({ status: 'signedIn', recovery: false });
+    expect(seen.find((x) => !x.recovery)?.status).toBe('signedOut');
+    expect(useAuth.getState().recovery).toBe(false);
+    expect(await recoveryPending()).toBe(false);
+  });
+
   it('abandonRecovery signs out locally even if the remote call fails', async () => {
     useAuth.setState({ state: signedIn, recovery: true });
     mockSignOut.mockRejectedValue(new Error('offline'));
