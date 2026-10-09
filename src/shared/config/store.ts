@@ -4,4 +4,7 @@ export function storeUrl(): string {
   return '';
 }
 
-export const WEB_URL = 'https://www.bookhushly.com';
+// Apex only: `www` redirects, and the redirect drops the Bearer header on API calls.
+export const WEB_URL = 'https://bookhushly.com';
+export const TERMS_URL = `${WEB_URL}/terms`;
+export const PRIVACY_URL = `${WEB_URL}/privacy`;

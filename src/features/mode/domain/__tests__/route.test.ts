@@ -8,7 +8,13 @@ const single: ModeState = {
 describe('resolveRoute', () => {
   it('update gate wins over everything', () => {
     expect(
-      resolveRoute({ versionOk: false, auth: 'signedIn', mode: single, chosenMode: null }),
+      resolveRoute({
+        versionOk: false,
+        auth: 'signedIn',
+        mode: single,
+        chosenMode: null,
+        recovery: false,
+      }),
     ).toBe('update');
   });
   it('shows loading while auth or mode is loading', () => {
@@ -18,6 +24,7 @@ describe('resolveRoute', () => {
         auth: 'loading',
         mode: { status: 'idle' },
         chosenMode: null,
+        recovery: false,
       }),
     ).toBe('loading');
     expect(
@@ -26,6 +33,7 @@ describe('resolveRoute', () => {
         auth: 'signedIn',
         mode: { status: 'loading' },
         chosenMode: null,
+        recovery: false,
       }),
     ).toBe('loading');
   });
@@ -36,6 +44,7 @@ describe('resolveRoute', () => {
         auth: 'signedOut',
         mode: { status: 'idle' },
         chosenMode: null,
+        recovery: false,
       }),
     ).toBe('auth');
   });
@@ -46,6 +55,7 @@ describe('resolveRoute', () => {
         auth: 'signedIn',
         mode: { status: 'error' },
         chosenMode: null,
+        recovery: false,
       }),
     ).toBe('modeError');
   });
@@ -56,6 +66,7 @@ describe('resolveRoute', () => {
         auth: 'signedIn',
         mode: { status: 'ready', resolution: { kind: 'webOnly' } },
         chosenMode: null,
+        recovery: false,
       }),
     ).toBe('webOnly');
   });
@@ -65,13 +76,53 @@ describe('resolveRoute', () => {
       resolution: { kind: 'modes', modes: ['gate', 'customer'], defaultMode: 'gate' },
     };
     expect(
-      resolveRoute({ versionOk: true, auth: 'signedIn', mode: m, chosenMode: 'customer' }),
+      resolveRoute({
+        versionOk: true,
+        auth: 'signedIn',
+        mode: m,
+        chosenMode: 'customer',
+        recovery: false,
+      }),
     ).toBe('customer');
     expect(
-      resolveRoute({ versionOk: true, auth: 'signedIn', mode: m, chosenMode: 'receptionist' }),
+      resolveRoute({
+        versionOk: true,
+        auth: 'signedIn',
+        mode: m,
+        chosenMode: 'receptionist',
+        recovery: false,
+      }),
     ).toBe('gate');
-    expect(resolveRoute({ versionOk: true, auth: 'signedIn', mode: m, chosenMode: null })).toBe(
-      'gate',
-    );
+    expect(
+      resolveRoute({
+        versionOk: true,
+        auth: 'signedIn',
+        mode: m,
+        chosenMode: null,
+        recovery: false,
+      }),
+    ).toBe('gate');
+  });
+  it('a password reset in progress keeps the sign-in screens in front even when signed in', () => {
+    expect(
+      resolveRoute({
+        versionOk: true,
+        auth: 'signedIn',
+        mode: single,
+        chosenMode: null,
+        recovery: true,
+      }),
+    ).toBe('auth');
+  });
+  it('an unsupported version still wins over recovery', () => {
+    expect(
+      resolveRoute({
+        versionOk: false,
+        auth: 'signedIn',
+        mode: single,
+        chosenMode: null,
+        recovery: true,
+      }),
+    ).toBe('update');
   });
 });

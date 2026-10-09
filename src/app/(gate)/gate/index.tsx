@@ -61,6 +61,9 @@ export default function GateEventsRoute() {
         // Keep the sheet open: closing the Modal while the sign-out guard presents its Alert
         // can swallow the alert on iOS. A completed sign-out unmounts this route anyway.
         onSignOut={signOut}
+        onDeleteAccount={() => {
+          router.push('/delete-account');
+        }}
         onClose={() => {
           setAccount(false);
         }}

@@ -2,7 +2,7 @@ import * as Sentry from '@sentry/react-native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import { startSessionListener } from '@/features/auth/api/session';
 import { useAuth } from '@/features/auth/hooks/useAuth';
@@ -21,22 +21,44 @@ export { ScreenError as ErrorBoundary } from '@/shared/ui/ScreenError';
 initMonitoring(APP_VERSION);
 void SplashScreen.preventAutoHideAsync();
 
+// Hides the splash once; a second call (route settled and the 2 s fallback) is a no-op, and a
+// rejected hide (already hidden by the OS) is not an unhandled promise.
+function useHideSplashOnce(): () => void {
+  const hidden = useRef(false);
+  return useCallback(() => {
+    if (hidden.current) return;
+    hidden.current = true;
+    SplashScreen.hideAsync().catch(() => undefined);
+  }, []);
+}
+
 function Navigator() {
   const auth = useAuth((s) => s.state);
-  const userId = auth.status === 'signedIn' ? auth.userId : null;
+  const recovery = useAuth((s) => s.recovery);
+  // No mode lookup mid-reset: the user is signed in by a code only until the new password is saved.
+  const userId = auth.status === 'signedIn' && !recovery ? auth.userId : null;
   const { state: mode, chosen } = useModeState(userId);
   const route = resolveRoute({
     versionOk: isVersionSupported(APP_VERSION, MIN_SUPPORTED_VERSION),
     auth: auth.status,
     mode,
     chosenMode: chosen,
+    recovery,
   });
 
   const setRoute = useRouteStore((s) => s.setRoute);
+  const hideSplash = useHideSplashOnce();
   useEffect(() => {
     setRoute(route);
-    if (route !== 'loading') void SplashScreen.hideAsync();
-  }, [route, setRoute]);
+    if (route !== 'loading') hideSplash();
+  }, [route, setRoute, hideSplash]);
+  // A slow session/mode lookup must not pin the splash: after 2 s show the in-app loading screen.
+  useEffect(() => {
+    const t = setTimeout(hideSplash, 2000);
+    return () => {
+      clearTimeout(t);
+    };
+  }, [hideSplash]);
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -61,6 +83,8 @@ function Navigator() {
       <Stack.Protected guard={route === 'customer'}>
         <Stack.Screen name="(customer)" />
       </Stack.Protected>
+      {/* Unguarded: it must survive the sign-out that a successful deletion triggers. */}
+      <Stack.Screen name="delete-account" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

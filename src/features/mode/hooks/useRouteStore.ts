@@ -13,7 +13,7 @@ export const useRouteStore = create<Store>((set) => ({
 
 export const ROUTE_HREF = {
   update: '/update-required',
-  auth: '/sign-in',
+  auth: '/welcome',
   modeError: '/mode-error',
   webOnly: '/web-only',
   gate: '/gate',

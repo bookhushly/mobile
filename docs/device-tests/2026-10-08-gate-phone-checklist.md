@@ -2,7 +2,7 @@
 
 **Build:** Android preview, https://expo.dev/accounts/dnl-bookhushly/projects/book-h/builds/1c675070-0259-42fd-bb72-4a0f509f2b02
 **Phone:** Moto G06 (a second Android phone for the two-phone tests).
-**Covers:** Phase 1 (online), Phase 2a (offline), Phase 2b (lookup, override, activity, shift summary).
+**Covers:** Phase 1 (online), Phase 2a (offline), Phase 2b (lookup, override, activity, shift summary), the UI-A redesign (section 8) and accounts (UI-B, section 9).
 
 Tick each box and note anything odd next to it: what you did, what you saw, and roughly when. Screenshots help.
 
@@ -180,6 +180,33 @@ Offline, on the **live-ticket** event, use a ticket that's **not in the offline 
 - [ ] **Long status pill:** at the largest text size, the long states (e.g. "2 need attention · 3 to sync", "Time last checked 13 h ago · 1 to sync") still show the whole text including "to sync".
 - [ ] **VoiceOver outcomes:** on iPhone with VoiceOver on, an outcome (Admitted, Already used, Refused, Couldn't check) is read out when it appears.
 - [ ] **VoiceOver Admit:** with VoiceOver on, the Admit button in Find guest → Booking can be reached by swiping, separately from the guest's row.
+
+---
+
+## 9. Accounts (UI-B)
+
+Use a **throwaway email you own** for these (a new address you can read on the phone). It will be deleted at the end. Needs this new build: the **Android preview build** covers everything here; the items marked **(iPhone)** need the iOS build and can wait for it.
+
+- [ ] **Welcome:** signed out, you see Create account and Sign in. The terms and privacy links open.
+- [ ] **Illustrations:** the picture on Welcome and the ones in the empty states look right, with nothing overlapping the text or the buttons.
+- [ ] **Create account:** with the throwaway email, the password checklist ticks as you type. Create account sends a 6-digit code to that email; entering it signs you in to the customer screen.
+- [ ] **Code autofill (iPhone):** when the code email arrives, the code is offered above the keyboard.
+- [ ] **Open email app (iPhone):** the code screen shows "Open email app", and tapping it opens Mail.
+- [ ] **Resend:** the Resend link waits 60 seconds, then sends a new code. The old code stops working.
+- [ ] **Try again on the code screen:** turn airplane mode on, enter the code → it says it couldn't reach Bookhushly. Turn airplane mode off and press Try again: the same code is checked again without retyping it.
+- [ ] **Existing email:** creating an account with the QA customer's email offers Sign in instead and Verify this email.
+- [ ] **Forgot password:** with the throwaway account, Forgot password → code → new password → you're signed in. Sign out and sign in later with the new password: it works.
+- [ ] **Leave the reset:** after entering a reset code, press Cancel on New password → you are signed out and back on Welcome. Do it once more, but close the app on New password instead → on reopening you are signed out.
+- [ ] **Delete account:** from Account, a wrong password says so. The correct password plus typing DELETE deletes the throwaway account and returns to Welcome with "Your account was deleted". Signing in with it again says the account was closed.
+- [ ] **Delete with the network cut:** on another throwaway account, press Delete account and switch airplane mode on within about a second (before the response arrives). It says it couldn't reach Bookhushly. Turn airplane mode off and press Delete account again: you end on Welcome with "Your account was deleted", never "That password isn't right".
+- [ ] **Blocked delete (if you have one):** an account with an upcoming confirmed booking shows why it can't be deleted, in plain words, and is not deleted.
+- [ ] **Airplane mode:** every account screen (sign in, create account, code, forgot password, new password, delete account) says it couldn't reach Bookhushly in grey, never in red.
+- [ ] **Gate staff:** signed in as the scanner account, the account sheet shows Delete account; with an unsynced admission it warns first and lets you back out.
+- [ ] **Gate sheet → Delete account (iPhone):** from the scanner account sheet, tapping Delete account closes the sheet and the Delete account screen opens every time (try it three times).
+- [ ] **Delete from a gate account:** with a spare scanner account you don't need, deleting it returns to Welcome with "Your account was deleted". (Skip if you only have the one scanner account.)
+- [ ] **Receptionist:** a receptionist account does not show Delete account.
+- [ ] **Slow start:** on a slow connection (or just after airplane mode), opening the app shows "Loading your account…" instead of a frozen splash screen.
+- [ ] **Every screen opens:** Create account, the code screen, Forgot password, New password and Delete account all open when you tap through to them; nothing stays on the same screen or shows an error page.
 
 ---
 

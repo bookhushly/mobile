@@ -16,6 +16,8 @@ type Props = {
   closeDisabled?: boolean;
   /** Overrides back/swipe-down (defaults to onClose unless closeDisabled). */
   onRequestClose?: () => void;
+  /** iOS only: the sheet has finished sliding away (RN Modal `onDismiss`). */
+  onDismissed?: () => void;
   right?: ReactNode;
   footer?: ReactNode;
   scroll?: boolean;
@@ -30,6 +32,7 @@ export function Sheet({
   closeLabel = 'Close',
   closeDisabled = false,
   onRequestClose,
+  onDismissed,
   right,
   footer,
   scroll = false,
@@ -52,6 +55,7 @@ export function Sheet({
       presentationStyle="pageSheet"
       testID={testID}
       onRequestClose={requestClose}
+      onDismiss={onDismissed}
     >
       <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: color.surface }}>
         <View

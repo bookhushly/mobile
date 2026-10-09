@@ -1,30 +1,19 @@
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { useSignOut } from '@/features/auth/hooks/useSignOut';
 import { useModeState } from '@/features/mode/hooks/useModeState';
-import { Button, Screen, Stack, Text } from '@/shared/ui';
+import { ModeErrorScreen } from '@/features/mode/screens/StatusScreens';
 
 export default function ModeError() {
   const auth = useAuth((s) => s.state);
+  // Runs the unsynced-admissions guard before signing out.
   const signOut = useSignOut();
   const { retry } = useModeState(auth.status === 'signedIn' ? auth.userId : null);
   return (
-    <Screen>
-      <Stack gap="s3">
-        <Text variant="titleLg">We couldn’t load your account</Text>
-        <Text variant="body" tone="textSecondary">
-          Check your connection and try again.
-        </Text>
-      </Stack>
-      <Stack gap="s3">
-        <Button label="Try again" onPress={retry} />
-        <Button
-          variant="secondary"
-          label="Sign out"
-          onPress={() => {
-            signOut();
-          }}
-        />
-      </Stack>
-    </Screen>
+    <ModeErrorScreen
+      onRetry={retry}
+      onSignOut={() => {
+        signOut();
+      }}
+    />
   );
 }
