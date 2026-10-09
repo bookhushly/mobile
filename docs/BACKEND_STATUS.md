@@ -6,21 +6,22 @@ Web paths below are relative to `/Users/mac/Developer/bookhushly/web/`. `../web-
 
 ## 1. BACKEND-REQ status
 
-| REQ | Status | Notes |
-|---|---|---|
-| 1 Bearer auth | **Done** (PR #157) | `lib/auth/bearer.js`, `lib/supabase/{server,bearer-client,middleware}.js` |
-| 2 Batch admit | **Done** | `app/api/events/[id]/scan/batch/route.js` |
-| 3 Roster | **Done, with deviations** | no ETag; masked phone only; see §3 |
-| 4 Atomic hotel check-in | **Done** | RPC `check_in_hotel_booking`; stable error `code`s |
-| 5 Native push | **Not done** | `/api/push/subscribe` is Web Push only (`endpoint`,`p256dh`,`auth`) |
-| 6 Receptionist scoping | **Done** | room status, checkout, check-in GET preview now hotel-scoped |
-| 7 Customer HTTP APIs | **Not done** | see §7 |
-| 8 Deep links | **Not done** | no `.well-known`, no AASA/assetlinks, no app-scheme return |
-| 9 BH2 signed codes | **Done but OFF by default** | issued only when `TICKET_TOKEN_FORMAT=2` + keys provisioned. Production state unknown — ask the owner |
-| 10 Token TTL | Partial | only local `supabase/config.toml` (`jwt_expiry=3600`, refresh rotation on); dashboard unconfirmed |
-| 11 Claim by email | **Not done** | no route/RPC |
-| 12 Override PIN | **Done** | `lib/scan/override-pin.js`, `event_scan_settings`; PIN managed by vendor server actions on web |
-| 13 NOWPayments native | Partial | hosted `invoice_url` returned; no return/deep-link strategy |
+| REQ                                      | Status                                                                     | Notes                                                                                                 |
+| ---------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 1 Bearer auth                            | **Done** (PR #157)                                                         | `lib/auth/bearer.js`, `lib/supabase/{server,bearer-client,middleware}.js`                             |
+| 2 Batch admit                            | **Done**                                                                   | `app/api/events/[id]/scan/batch/route.js`                                                             |
+| 3 Roster                                 | **Done, with deviations**                                                  | no ETag; masked phone only; see §3                                                                    |
+| 4 Atomic hotel check-in                  | **Done**                                                                   | RPC `check_in_hotel_booking`; stable error `code`s                                                    |
+| 5 Native push                            | **Not done**                                                               | `/api/push/subscribe` is Web Push only (`endpoint`,`p256dh`,`auth`)                                   |
+| 6 Receptionist scoping                   | **Done**                                                                   | room status, checkout, check-in GET preview now hotel-scoped                                          |
+| 7 Customer HTTP APIs                     | **Not done**                                                               | see §7                                                                                                |
+| 8 Deep links                             | **Not done**                                                               | no `.well-known`, no AASA/assetlinks, no app-scheme return                                            |
+| 9 BH2 signed codes                       | **Done but OFF by default**                                                | issued only when `TICKET_TOKEN_FORMAT=2` + keys provisioned. Production state unknown — ask the owner |
+| 10 Token TTL                             | Partial                                                                    | only local `supabase/config.toml` (`jwt_expiry=3600`, refresh rotation on); dashboard unconfirmed     |
+| 11 Claim by email                        | **Not done**                                                               | no route/RPC                                                                                          |
+| 12 Override PIN                          | **Done**                                                                   | `lib/scan/override-pin.js`, `event_scan_settings`; PIN managed by vendor server actions on web        |
+| 13 NOWPayments native                    | Partial                                                                    | hosted `invoice_url` returned; no return/deep-link strategy                                           |
+| Native auth (signup/verify/reset/delete) | **Done on web `main`** (PR #206, `30c7da90`); production deploy UNVERIFIED | see §6, §6a                                                                                           |
 
 ## 2. Corrections to the handover doc
 
@@ -35,6 +36,7 @@ Web paths below are relative to `/Users/mac/Developer/bookhushly/web/`. `../web-
 ## 3. Gate staff contracts (all accept `Authorization: Bearer <access_token>`)
 
 **Live scan** `POST /api/events/{id}/scan` `{ticket_id}` → `{ok, ticket, booking}` (verified 2026-10-05, `app/api/events/[id]/scan/route.js`).
+
 - Status map: `forbidden` 403 (also an unknown listing), `not_found` 404, `lookup_failed` 503 (also a non-UUID listing id), `invalid_code` **409 for a rotating code (malformed, bad signature, unknown key) and 400 for a static non-UUID**, and 409 for `booking_qr | wrong_event | not_confirmed | static_not_allowed | already_checked_in | expired_code`. Unknown codes default to 409.
 - Refusal bodies always carry `checked_in_at, scanned_by, ticket, ticket_count`, null unless set. `already_checked_in` → `ticket:{ticket_type, ticket_index}` (no id or seat); `scanned_by` is the scanner's **name, or their email when they have no name** (PII; batch returns the name only). `booking_qr` sets `ticket_count`.
 - **`by_me` and name-only `scanned_by` came from web PR #192 (commit `104d7d3b`); PR #192 and #205 are on web `main` (checked 2026-10-07, `c8fe25e8`).** Production probe 2026-10-07 (signed out): `/api/events/scannable`, `…/scan/roster` and `…/scan/batch` return 401; `/api/ticket-keys` returns one signing key, `kid "1"`. Whether customers are issued BH2 (`TICKET_TOKEN_FORMAT=2`) is unverified until a real ticket is checked. Historical 2026-10-05 note: There `already_checked_in` carries `scanned_by` = scanner name, or `"gate staff"` if unnamed; never an email; and `by_me: true|false`, or both `null` if the lookup fails (don't guess). Until the PR is deployed, `scanned_by` may still be an email and `by_me` is absent: treat a missing `by_me` as unknown.
@@ -45,6 +47,7 @@ Web paths below are relative to `/Users/mac/Developer/bookhushly/web/`. `../web-
 
 **Roster** `GET /api/events/{id}/scan/roster?cursor=<ticketUuid>&limit=1..5000(default 2000)&since=<ISO>`
 → `{ok: true, event:{id,title,event_date,require_dynamic_ticket,total,admitted}, tickets:[{id,ticket_type,ticket_index,booking_id,booking_status,checked_in_at,scanned_by,by_me,holder_name,phone_masked,seat}], next_after, server_time}`.
+
 - **First page only** also has `keys` (Ed25519 public key set), `keys_error`, and `override` (`null` or `{enabled, alg:"scrypt", N, r, p, dk_len, salt, hash, set_at}`; defaults N=8192 r=8 p=1 dk_len=32, base64url salt/hash, 6-digit PIN).
   - The app reads the first page's `override`: `null` clears a stored verifier; absent keeps it.
 - Keyset pagination ordered by `id`; loop until `next_after` is null. `no-store, private`.
@@ -54,6 +57,7 @@ Web paths below are relative to `/Users/mac/Developer/bookhushly/web/`. `../web-
 - **Verified 2026-10-07 (`c8fe25e8`):** `scanned_by` is the scanner's name or null; `by_me` is null when the ticket isn't checked in. Tickets of **every** booking status are returned (`pending|confirmed|completed|cancelled`; refunds become `cancelled`) and only `confirmed` admits; `event.total`/`admitted` include non-confirmed tickets. `since` means `created_at > since OR checked_in_at > since`. Unknown event → 403; non-UUID event id → 404 with no `code`. Timestamps carry microseconds.
 
 **Batch** `POST /api/events/{id}/scan/batch`
+
 - Request `{device_id (8–64 chars [A-Za-z0-9_-]), items:[{client_seq (int ≥0, unique), ticket_id (uuid or BH1/BH2, ≤400 chars), scanned_at (ISO), mode:"offline"|"offline_override"|"manual_lookup", reason? (≤200), approved_by? (≤80)}]}`; 1–200 items. `offline_override` needs `reason` (≥3 chars) and `approved_by`.
 - Response 200 `{results:[{client_seq, ok, code, replayed, …}]}`, `no-store`. `ok` → `ticket, checked_in_at (backdated to client time), booking:{id,total_tickets,checked_in_count}`. `already_checked_in` → `ticket, checked_in_at, scanned_by (name), by_me`.
 - Item codes: `ok, already_checked_in, not_found, forbidden, wrong_event, not_confirmed, static_not_allowed, booking_qr, bad_timestamp, expired_code, invalid_code, bad_item`.
@@ -82,24 +86,54 @@ Web paths below are relative to `/Users/mac/Developer/bookhushly/web/`. `../web-
 - `callback_url` = `${NEXT_PUBLIC_BASE_URL}payment/callback?reference=…&provider=…` (a web page; **no app return exists**). Note: built without a slash, so the env value must end in `/`.
 - Status: `GET /api/payment/status/{reference}` → `{payment:{id, reference, amount, currency, status, paid_at, channel, fulfilled, created_at, metadata, request_type}, request}`. `status` is the raw DB value (crypto: `waiting|confirming|sending|partially_paid|expired|failed|finished`). No explicit auth check — relies on RLS; verify a bearer client can poll it. Also `/verify`, `/check-status`, `/reconcile`.
 
-## 6. Auth / signup
+## 6. Auth / signup (native auth, web PR #206, merged to `main` as `30c7da90` on 2026-10-08; production deploy UNVERIFIED)
 
-- Login: use `supabase-js` `signInWithPassword` directly.
-- **Signup is a server action only** (`app/actions/auth.js`): `admin.auth.admin.generateLink` + manual insert into `public.users` (rolls back the auth user on failure) + app-sent Resend email. No DB trigger. **Mobile cannot sign up until web adds a route or trigger.**
-- Email confirmation is required; confirm/recovery links go to the web `/auth/confirm?token_hash=…&type=signup|recovery` (server `verifyOtp`), `next` must be same-origin. No mobile redirect URLs are allowlisted.
-- No customer account-deletion endpoint (App Store requires one if sign-up is in-app). No min-version/maintenance/`X-App-Version` handling.
+Contract doc: web `docs/mobile/NATIVE_AUTH_API.md`; code-verified on `origin/main` @ `30c7da90` (nothing run against production). All routes are on the apex, JSON, errors `{error, code}`; branch on `code`. Route responses are `no-store`; proxy-generated 429/503 are not.
+
+- **Login:** unchanged. `supabase.auth.signInWithPassword` directly (not behind the web proxy or its limiter). Unconfirmed email fails with "Email not confirmed" (code `email_not_confirmed`, UNVERIFIED): offer "Send code" (resend-confirmation), then the code screen. A deleted (banned) account fails with `user_banned` (web probe, UNVERIFIED in code).
+- **Sign-up** `POST /api/auth/signup` (anon, `auth` tier). Body `{name (1–100 after trim), email (≤254, trimmed and lowercased), password, coords?:{lat,lng}}`; the role is always customer. Password: ≥8 chars, ≤72 UTF-8 bytes, upper, lower, digit, one of `@$!%*?&`.
+  - 201 `{ok, user:{id,email}, verification:"otp"}`. No session. The `users` row, wallet and admin notice exist already; an email send failure does not fail the sign-up.
+  - 400 `invalid_input` (`fields` optional; can include `password`).
+  - 409 `email_taken` (also for an existing **unconfirmed** account: offer Resend).
+  - 422 `weak_password` (`fields.password` = failed rule ids or `too_long`; absent when Supabase's own policy refused).
+  - 503 `unavailable` (Supabase sign-ups off or email rate limit); 500 `signup_failed`.
+  - Not idempotent: a retry after a lost 201 gets 409 — treat it as "probably created" and go to the code screen.
+- **Verify:** `supabase.auth.verifyOtp({email, token, type:"signup"})` returns the session. Use the normalised `user.email` from the 201. The code is 6 digits (web probe; validate `^\d{6,10}$`). Emails say it expires in 1 hour (`mailer_otp_exp` UNVERIFIED). Code and link share one token; only the newest email's code works. The code is in the email subject (iOS autofill).
+- **Resend** `POST /api/auth/resend-confirmation {email}` (anon, `auth`): always 202 `{ok:true}`; 400 `invalid_input` if malformed. Sends only to an existing unconfirmed account and invalidates the previous code. This is the only way a web-registered user gets a code (web emails carry the link only).
+- **Forgot** `POST /api/auth/forgot-password {email}` (anon, `auth`): always 202; 400 if malformed. Resend = call it again. Then `verifyOtp({email, token, type:"recovery"})` gives a signed-in session. Whether recovery reaches an unconfirmed account, or confirms the email, is UNVERIFIED.
+- **Reset** `POST /api/auth/reset-password {password}` (Bearer, network-checked, `auth` tier): 200 `{ok}`; 401 `unauthorized`; 422 `weak_password` (`fields.password`; `"policy"` when Supabase refused; also for a missing body); 500 `update_failed`. Never `updateUser({password})` (bypasses the server rules). Other sessions are probably not revoked (UNVERIFIED).
+- **Rate limits:** the `auth` tier is 5/60 s **per IP**, one bucket shared by all four routes above and web's `/login`, `/register`, `/forgot-password` and `/reset-password` POSTs. It fails **closed**: 503 `{error}` with **no `code`**, `Retry-After: 30` — treat as transient, not as signup's `503 unavailable`. The 429 is `{error, code:"rate_limited", retry_after}` + `Retry-After`. `verifyOtp` and `signInWithPassword` are not behind this limiter.
+- **Headers:** `X-App-Version` and `X-Platform` are not read by any route. Nothing in the backend tells app requests apart from web ones: the JSON routes always email a code, web's Server Actions never do.
+- **Staging:** none of these routes is on the staging Basic-auth allowlist (§8).
+- Never `supabase.auth.signUp` (still possible with the anon key; creates an auth user with no `users` row or wallet).
+
+### 6a. Account deletion
+
+- `POST /api/account/delete` (Bearer, network-checked; `user` tier, 30/60 s **per IP**, fails open). Body `{confirm:"DELETE", password?}`. The app does **not** send `password`; it checks it with `signInWithPassword` first.
+  - 200 `{ok, status:"deleted"}` (never `"scheduled"`)
+  - 400 `confirmation_required`
+  - 401 `unauthorized` | `invalid_password` (branch on `code`; **any** server-side `signInWithPassword` error, including a Supabase rate limit, reads as `invalid_password`)
+  - 403 `not_customer` (receptionists, vendors, admins; gate staff carry role `customer` and **can** delete)
+  - 409 `has_active_bookings` | `has_wallet_balance` | `open_dispute` with `detail` and `blockers[]` (show `detail`)
+  - 500 `delete_failed` (safe to retry)
+- Blockers: a confirmed or checked-in hotel/apartment booking with check-out ≥ today (Lagos), a confirmed event booking dated ≥ today, wallet balance > 0, an open or under-review dispute raised by the user. Pending/unpaid bookings don't block.
+- Re-auth: optional password only. No OTP or recency check.
+- Effect: anonymise, not delete. `users` PII is scrubbed and the email becomes `deleted-<id>@deleted.invalid` (the address can be registered again); push subscriptions, saved listings, follows, waitlist and notifications are removed; `event_scanners` deactivated, wallet closed; the auth user is renamed, given a random password and banned for ~100 years. Bookings, payments, wallet transactions and reviews are kept.
+- After a 200: `signOut({scope:"local"})` and wipe SecureStore, caches and the encrypted roster/outbox (a gate outbox can never sync again — warn first if it isn't empty). The old access token still passes locally-verified routes until it expires.
+- A retry after a lost 200 gets 401 `unauthorized` (the user is banned): on that, `refreshSession()`; `user_banned` means it was deleted.
+- Public page for Play/App Store: `https://bookhushly.com/account/delete`.
 
 ## 7. Customer API gaps
 
-| Flow | State |
-|---|---|
-| Hotel booking | **Server action only** (`bookHotelRoomAction` → `book_hotel_room` RPC). `POST /api/bookings/hotel` only sends a notification. |
-| Apartment booking | `POST /api/bookings/apartment` exists but multipart + admin client. |
-| Event booking | HTTP routes exist (see §2.4). |
-| My bookings | No list route — server actions / direct RLS reads. |
-| Trips, messages, KYC submit | Server actions. `GET /api/customer/kyc` exists. |
-| Saved listings, reviews, organizers, waitlist | HTTP routes exist. |
-| Listings | `GET /api/listings?category=…` (required): `page` (0-based, 20/page), `search, sort, city, state, price_min, price_max, min_rating` + per-category filters. → `{items, nextPage?, totalCount|null}`. Anonymous; `s-maxage=30`. `GET /api/listings/{id}`, `/lock` exist. |
+| Flow                                          | State                                                                                                                                                                                        |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hotel booking                                 | **Server action only** (`bookHotelRoomAction` → `book_hotel_room` RPC). `POST /api/bookings/hotel` only sends a notification.                                                                |
+| Apartment booking                             | `POST /api/bookings/apartment` exists but multipart + admin client.                                                                                                                          |
+| Event booking                                 | HTTP routes exist (see §2.4).                                                                                                                                                                |
+| My bookings                                   | No list route — server actions / direct RLS reads.                                                                                                                                           |
+| Trips, messages, KYC submit                   | Server actions. `GET /api/customer/kyc` exists.                                                                                                                                              |
+| Saved listings, reviews, organizers, waitlist | HTTP routes exist.                                                                                                                                                                           |
+| Listings                                      | `GET /api/listings?category=…` (required): `page` (0-based, 20/page), `search, sort, city, state, price_min, price_max, min_rating` + per-category filters. → `{items, nextPage?, totalCount | null}`. Anonymous; `s-maxage=30`. `GET /api/listings/{id}`, `/lock` exist. |
 
 ## 8. Risks
 
@@ -110,9 +144,18 @@ Web paths below are relative to `/Users/mac/Developer/bookhushly/web/`. `../web-
 
 ## 9. Web-side work to request (not mobile work)
 
-Signup route/trigger · hotel-booking JSON route · apartment booking JSON · my-bookings route · scannable-events route · universal links + AASA/assetlinks + app return for payments · native push (REQ-5) · claim-by-email (REQ-11) · account deletion · min-version/maintenance endpoint · staging Bearer exemption · confirm `TICKET_TOKEN_FORMAT=2` + keys in production.
+Hotel-booking JSON route · apartment booking JSON · my-bookings route · scannable-events route · universal links + AASA/assetlinks + app return for payments · native push (REQ-5) · claim-by-email (REQ-11) · min-version/maintenance endpoint · staging Bearer exemption · confirm `TICKET_TOKEN_FORMAT=2` + keys in production.
+
 - **Gate scanning (Phase 1, 2026-10-05): all four asked for are implemented on web branch `feat/mobile-scan-api-tweaks` (PR #192).** Merged to web `main` as `826a2736` (PR #192). **Live on production** (probe 2026-10-07, signed out; the 2026-10-05 probe still got 404): `GET /api/events/scannable`, `GET …/scan/summary` and `POST …/scan` all return 401 `{error, code:"unauthorized"}`. The 429 shape with `Retry-After` and the authenticated bodies are not yet checked on production; verify with the QA account in Phase 1 device testing. Remaining gap: `/api/events/scannable` returns owner entries that mobile can't use while vendors are `webOnly`.
-- **Native auth asks (2026-10-08): written up in the web repo at `docs/mobile/NATIVE_AUTH_ASKS.md`.** P0 for web regardless of mobile: the `signup` server action takes `role` from the client unchecked and writes it with the service-role client (`app/actions/auth.js:86-160`, read on web `general` @ `c8ed4bdb`), and password rules are client-side only. For UI-B: `POST /api/auth/signup` (customer only, same code path as the action), 6-digit code in signup and recovery emails, `POST /api/auth/resend-confirmation`, `POST /api/auth/forgot-password` (always 202), `POST /api/account/delete` + a public deletion page, and confirmation of the production email hook and OTP expiry. Mobile verifies with `verifyOtp({email, token, type})`, so no universal links are needed for auth.
+- **Native auth (2026-10-08): delivered in web PR #206 (`30c7da90` on `main`); see §6 and §6a.** Asks 0–5 from `docs/mobile/NATIVE_AUTH_ASKS.md` are done, including the P0: `signup` now forces the role and the server enforces the password rules. Ask 6 (universal links) was deferred to the payment-return work. Still open on web:
+  (a) the owner must confirm `mailer_otp_exp` (emails say 1 hour) and which Send Email hook is live;
+  (b) raw anon `supabase.auth.signUp` still works and creates an orphan auth user (no `users` row or wallet); closing it needs "Allow new users to sign up" off, untested;
+  (c) `/api/account/delete` maps any server-side password-check error (including a Supabase rate limit or outage) to 401 `invalid_password`. Ask for a separate transient (503) code for a failed check. Mobile sidesteps it by checking the password client-side and never sending it;
+  (d) `X-App-Version` / `X-Platform` are not read; the min-version/maintenance endpoint is still open;
+  (e) the `auth` tier is one 5/min IP bucket across signup/resend/forgot/reset and the web auth pages, which is tight for carrier-grade NAT (shared mobile IPs). Ask whether it can be keyed per IP+email or relaxed for resend/forgot;
+  (f) staging allowlist/Bearer exemption for the auth routes;
+  (g) whether recovery reaches an unconfirmed account and whether verifying a recovery code confirms the email (Supabase behaviour, unverified);
+  (h) confirm PR #206 is deployed to production (probe `POST /api/auth/forgot-password` with a malformed email, expect 400 `invalid_input`).
 - **Roster `since` misses backdated admissions (found 2026-10-07).** `admit_tickets_batch` backdates `checked_in_at` to the device's `scanned_at`, but roster `since` filters on `checked_in_at > since`, so another phone's offline admissions synced after this phone's mark are missed by deltas until the 30-min full refresh (cross-door double-admit window). Request: filter `since` on a synced/updated-at column.
 
 ## 10. Verified during Phase 0 (2026-10-04)
@@ -121,7 +164,7 @@ Signup route/trigger · hotel-booking JSON route · apartment booking JSON · my
 - `GET /api/health` (public, no staging Basic-auth wall): 200 `{ ok: true, db: 'up', ts }`; 503 `{ ok: false, db: 'down', ts }`; `no-store`.
 - Mode resolution reads (RLS, verified in the baseline migration): `users` select own, `hotel_staff` (`hotel_staff_read_own`), `event_scanners` (`event_scanners_self_select`), `vendor_scanners` (`vendor_scanners_self_select`, baseline:11151). Scan and roster also need an active `vendor_scanners` row for the listing's vendor. Mobile can read it, so the gate-mode count checks both tables (corrected 2026-10-05; the earlier note that mobile could not see `vendor_scanners` was wrong).
 - Production Supabase issues the **legacy anon JWT** key (`role: anon`), not a publishable key.
-- Still missing on the backend (see §9): sign-up/forgot-password routes, universal links, min-version endpoint, staging Bearer exemption, scannable-events route.
+- Still missing on the backend (see §9): universal links, min-version endpoint, staging Bearer exemption, scannable-events route. (Sign-up/forgot-password routes landed 2026-10-08, see §6.)
 - **2026-10-05, verified with the QA customer account against production:** Bearer `GET https://bookhushly.com/api/customer/kyc` → 200 `{kyc:null}`; without Bearer → 401 `{status:null}`; via `www.` → 308 → header dropped → 401. RLS reads for mode resolution work (`users` own row, `hotel_staff` null, `event_scanners` 0 rows). **`/api/health` returns 404 on production** — production is deployed from a commit older than web `main` (health landed 2026-10-04); don't depend on routes newer than the live deploy without checking.
 
 - **Phase 2a (2026-10-07): offline scanning built — device verification pending (see plan Task 17 step 6).**

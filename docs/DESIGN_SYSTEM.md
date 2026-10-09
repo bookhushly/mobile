@@ -175,7 +175,7 @@ Shadows tinted ink (`26,13,77`), never black; no violet glow.
 
 ```
 src/shared/theme/  tokens.ts (private) · theme.ts (roles, textTone, surfaceTone) · type.ts · density.ts · elevation.ts · motion.ts · sizes.ts · fonts.ts · contrast.ts · index.ts
-src/shared/ui/     Text · Box · Stack · Inline · Card · Icon · Money · formatNaira · Button · IconButton · ToggleButton · TextLink · Input · SearchField · PinField · Screen · Header · Sheet · ListRow · SectionHeader · SegmentedControl · Divider · StatusPill · Banner · EmptyState · ErrorState · Skeleton · SkeletonRows · Spinner · Illustration · SuccessMark · OutcomeScreen · OutcomeAction · ShellPlaceholder · DensityProvider · useDensity · useDensityName · useMotionTier · PressableScale
+src/shared/ui/     Text · Box · Stack · Inline · Card · Icon · Money · formatNaira · Button · IconButton · ToggleButton · TextLink · Input · PasswordField · CodeField · RuleList · SearchField · PinField · Screen · Header · Sheet · ListRow · SectionHeader · SegmentedControl · Divider · StatusPill · Banner · EmptyState · ErrorState · Skeleton · SkeletonRows · Spinner · Illustration · SuccessMark · OutcomeScreen · OutcomeAction · ShellPlaceholder · DensityProvider · useDensity · useDensityName · useMotionTier · PressableScale
 ```
 
 - Screens import **semantic roles only** (`color.action`, `color.outcome.admitted`), never the palette.
