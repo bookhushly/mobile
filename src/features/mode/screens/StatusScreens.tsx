@@ -52,7 +52,7 @@ export function ModeErrorScreen({ onRetry, onSignOut }: ModeErrorProps) {
   return (
     <Screen footer={<Button label="Sign out" variant="secondary" onPress={onSignOut} />}>
       <ErrorState
-        title="We couldn't load your account"
+        title="We couldn’t load your account"
         message="Check your connection and try again."
         onRetry={onRetry}
       />

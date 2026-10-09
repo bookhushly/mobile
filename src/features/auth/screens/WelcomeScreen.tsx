@@ -1,9 +1,9 @@
 import { View } from 'react-native';
 
+import { TermsLine } from '@/features/auth/components/TermsLine';
 import type { AuthNotice } from '@/features/auth/hooks/useAuthNotice';
-import { PRIVACY_URL, TERMS_URL } from '@/shared/config/store';
 import { space } from '@/shared/theme';
-import { Banner, Button, Illustration, Screen, Stack, Text, TextLink } from '@/shared/ui';
+import { Banner, Button, Illustration, Screen, Stack, Text } from '@/shared/ui';
 
 type Props = {
   notice: AuthNotice;
@@ -28,34 +28,7 @@ export function WelcomeScreen({
         <>
           <Button label="Create account" onPress={onCreateAccount} />
           <Button label="Sign in" variant="secondary" onPress={onSignIn} />
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              justifyContent: 'center',
-              columnGap: space.s1,
-            }}
-          >
-            <Text variant="caption" tone="textSecondary">
-              By continuing you agree to our
-            </Text>
-            <TextLink
-              label="Terms"
-              onPress={() => {
-                onOpenLink(TERMS_URL);
-              }}
-            />
-            <Text variant="caption" tone="textSecondary">
-              and
-            </Text>
-            <TextLink
-              label="Privacy policy"
-              onPress={() => {
-                onOpenLink(PRIVACY_URL);
-              }}
-            />
-          </View>
+          <TermsLine onOpenLink={onOpenLink} />
         </>
       }
     >

@@ -1,3 +1,5 @@
+import { transientMessage } from './transientMessage';
+
 export type SignInError =
   | 'invalidCredentials'
   | 'emailNotConfirmed'
@@ -27,8 +29,9 @@ export const signInCopy: Record<SignInError, string> = {
   invalidCredentials: 'That email or password is not right. Check them and try again.',
   emailNotConfirmed: 'Confirm your email first. We’ll send you a code.',
   accountClosed: 'This account was closed. Contact support@bookhushly.com if this is a mistake.',
-  rateLimited: 'Too many attempts. Please try again in a minute.',
-  network: 'We couldn’t reach the server. Check your connection and try again.',
-  unavailable: 'Something went wrong on our side. Please try again shortly.',
+  // Transient (never the user's fault): the same family as every other account screen.
+  rateLimited: transientMessage(),
+  network: transientMessage(),
+  unavailable: transientMessage(),
   unknown: 'We couldn’t sign you in. Please try again.',
 };

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import { SignInScreen } from '@/features/auth/screens/SignInScreen';
 import { color } from '@/shared/theme';
@@ -32,7 +32,7 @@ it('shows the mapped error copy and never blocks retry', async () => {
   await fill('a@b.com', 'pw');
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
   await waitFor(() => {
-    expect(screen.getByText(/couldn’t reach the server/i)).toBeTruthy();
+    expect(screen.getByText(/couldn’t reach Bookhushly — try again in a minute/i)).toBeTruthy();
   });
   expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
 });
@@ -145,6 +145,41 @@ it('the create-account link hands off', async () => {
   await fireEvent.press(screen.getByRole('link', { name: 'New here? Create account' }));
   expect(onCreateAccount).toHaveBeenCalled();
   expect(screen.queryByText(/bookhushly\.com/)).toBeNull();
+});
+
+it('an unconfirmed email is an info banner: a next step, not a refusal', async () => {
+  await render(
+    <SignInScreen
+      {...props()}
+      onSubmit={jest.fn().mockResolvedValue('emailNotConfirmed')}
+      onConfirmEmail={jest.fn().mockResolvedValue(undefined)}
+    />,
+  );
+  await fill('a@b.co', 'pw');
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  expect(await screen.findByText(/Confirm your email first/)).toBeTruthy();
+  expect(screen.getByTestId('banner')).toHaveStyle({ backgroundColor: color.status.info.bg });
+});
+
+it('a double tap signs in once', async () => {
+  let resolve: (v: null) => void = () => undefined;
+  const onSubmit = jest.fn(
+    () =>
+      new Promise<null>((r) => {
+        resolve = r;
+      }),
+  );
+  await render(<SignInScreen {...props()} onSubmit={onSubmit} />);
+  await fill('a@b.com', 'pw');
+  const button = screen.getByRole('button', { name: 'Sign in' });
+  await fireEvent.press(button);
+  await fireEvent.press(button);
+  expect(onSubmit).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    resolve(null);
+    await Promise.resolve();
+  });
+  expect(button).toBeEnabled();
 });
 
 it('a closed account is shown as a refusal (danger), not a network problem', async () => {

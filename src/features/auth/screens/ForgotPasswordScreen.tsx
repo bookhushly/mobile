@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import type { AccountFailure } from '@/features/auth/api/accountApi';
+import { transientMessage } from '@/features/auth/domain/transientMessage';
 import { forgotPasswordSchema } from '@/features/auth/schemas/forgotPassword';
 import type { Result } from '@/shared/lib/result';
 import { Banner, Button, IconButton, Input, Screen, Stack, Text } from '@/shared/ui';
@@ -17,12 +18,7 @@ type Props = {
   onBack?: () => void;
 };
 
-const HINT = "If an account uses this email, we'll send a 6-digit code.";
-
-function transientMessage(retryAfterSec: number | undefined): string {
-  const when = retryAfterSec === undefined ? 'a minute' : `${String(retryAfterSec)} seconds`;
-  return `We couldn’t reach Bookhushly — try again in ${when}`;
-}
+const HINT = 'If an account uses this email, we’ll send a 6-digit code.';
 
 export function ForgotPasswordScreen({ initialEmail, onSubmit, onSent, onBack }: Props) {
   const [email, setEmail] = useState(initialEmail);

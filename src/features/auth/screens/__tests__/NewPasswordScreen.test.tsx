@@ -93,7 +93,7 @@ it('a failed save says so without blame', async () => {
   p.onSave.mockResolvedValue({ ok: false, error: { kind: 'failed' } });
   await render(<NewPasswordScreen {...p} />);
   await typeAndSave(VALID);
-  expect(await screen.findByText("We couldn't save your password. Try again.")).toBeTruthy();
+  expect(await screen.findByText('We couldn’t save your password. Try again.')).toBeTruthy();
 });
 
 it('a rejected save reads as a failed save', async () => {

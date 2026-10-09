@@ -127,7 +127,7 @@ it('shows the no-leak copy under the field and a back button when given', async 
     />,
   );
   expect(
-    screen.getByText("If an account uses this email, we'll send a 6-digit code."),
+    screen.getByText('If an account uses this email, we’ll send a 6-digit code.'),
   ).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Back' }));
   expect(onBack).toHaveBeenCalled();
@@ -141,7 +141,9 @@ it('a double tap sends once', async () => {
     }),
   );
   const onSent = jest.fn();
-  await render(<ForgotPasswordScreen initialEmail="ada@b.co" onSubmit={onSubmit} onSent={onSent} />);
+  await render(
+    <ForgotPasswordScreen initialEmail="ada@b.co" onSubmit={onSubmit} onSent={onSent} />,
+  );
   const button = screen.getByRole('button', { name: 'Send code' });
   await fireEvent.press(button);
   await fireEvent.press(button);

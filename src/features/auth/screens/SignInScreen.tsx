@@ -1,5 +1,5 @@
 import { ArrowLeft } from 'lucide-react-native';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import { signInCopy, type SignInError } from '@/features/auth/domain/signInErrors';
@@ -40,7 +40,10 @@ const TRANSIENT: ReadonlySet<SignInError> = new Set([
 ]);
 
 function shownError(kind: SignInError): ShownError {
-  return { kind, tone: TRANSIENT.has(kind) ? 'neutral' : 'danger' };
+  if (TRANSIENT.has(kind)) return { kind, tone: 'neutral' };
+  // A next step, not a refusal: the route resends the code and moves on.
+  if (kind === 'emailNotConfirmed') return { kind, tone: 'info' };
+  return { kind, tone: 'danger' };
 }
 
 export function SignInScreen({
@@ -55,8 +58,11 @@ export function SignInScreen({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<ShownError | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Single-flight: `submitting` lags a render behind a double tap, the ref does not.
+  const inFlight = useRef(false);
 
   async function submit() {
+    if (inFlight.current) return;
     const parsed = signInSchema.safeParse({ email, password });
     if (!parsed.success) {
       const next: FieldErrors = {};
@@ -72,6 +78,7 @@ export function SignInScreen({
     // Each attempt starts clean so a stale banner never outlives a retry; `current` in the catch
     // below can then only be this attempt's own error.
     setError(null);
+    inFlight.current = true;
     setSubmitting(true);
     try {
       const failure = await onSubmit(parsed.data.email, parsed.data.password);
@@ -81,6 +88,7 @@ export function SignInScreen({
     } catch {
       setError((current) => current ?? shownError('unknown'));
     } finally {
+      inFlight.current = false;
       setSubmitting(false);
     }
   }

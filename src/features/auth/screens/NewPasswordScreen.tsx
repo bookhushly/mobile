@@ -5,8 +5,18 @@ import { View } from 'react-native';
 import type { AccountFailure } from '@/features/auth/api/accountApi';
 import { passwordRules, RULES } from '@/features/auth/domain/passwordRules';
 import { WEAK_PASSWORD_MESSAGE } from '@/features/auth/domain/signUpErrors';
+import { transientMessage } from '@/features/auth/domain/transientMessage';
 import type { Result } from '@/shared/lib/result';
-import { Banner, Button, IconButton, PasswordField, RuleList, Screen, Stack, Text } from '@/shared/ui';
+import {
+  Banner,
+  Button,
+  IconButton,
+  PasswordField,
+  RuleList,
+  Screen,
+  Stack,
+  Text,
+} from '@/shared/ui';
 
 type Props = {
   onSave: (password: string) => Promise<Result<true, AccountFailure>>;
@@ -20,12 +30,7 @@ type Notice = { kind: 'neutral'; message: string } | { kind: 'expired' };
 
 const TOO_LONG_MESSAGE = 'That password is too long';
 const EXPIRED_MESSAGE = 'Your reset expired. Start again.';
-const FAILED_MESSAGE = "We couldn't save your password. Try again.";
-
-function transientMessage(retryAfterSec: number | undefined): string {
-  const when = retryAfterSec === undefined ? 'a minute' : `${String(retryAfterSec)} seconds`;
-  return `We couldn’t reach Bookhushly — try again in ${when}`;
-}
+const FAILED_MESSAGE = 'We couldn’t save your password. Try again.';
 
 export function NewPasswordScreen({ onSave, onSaved, onLeave }: Props) {
   const [password, setPassword] = useState('');

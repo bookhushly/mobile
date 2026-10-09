@@ -14,7 +14,11 @@ it('update required is never a dead end', async () => {
   expect(screen.queryByRole('button', { name: 'Update' })).toBeNull();
   const onOpen = jest.fn();
   await rerender(
-    <UpdateRequiredScreen storeUrl="https://play.google.com/x" platform="android" onOpen={onOpen} />,
+    <UpdateRequiredScreen
+      storeUrl="https://play.google.com/x"
+      platform="android"
+      onOpen={onOpen}
+    />,
   );
   await fireEvent.press(screen.getByRole('button', { name: 'Update' }));
   expect(onOpen).toHaveBeenCalledWith('https://play.google.com/x');

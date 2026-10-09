@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { AccessibilityInfo, Platform } from 'react-native';
 
 import { CodeScreen } from '@/features/auth/screens/CodeScreen';
 
@@ -21,6 +22,46 @@ beforeEach(() => {
 });
 afterEach(() => {
   jest.useRealTimers();
+  jest.restoreAllMocks();
+});
+
+it('announces Verifying… and a wrong code on iOS', async () => {
+  jest.replaceProperty(Platform, 'OS', 'ios');
+  // The preset's AccessibilityInfo is already a jest.fn: clear calls left by earlier tests.
+  const spy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockClear();
+  let resolve: (v: 'badCode') => void = () => undefined;
+  const p = {
+    ...base(),
+    onVerify: jest.fn(
+      () =>
+        new Promise<'badCode'>((r) => {
+          resolve = r;
+        }),
+    ),
+  };
+  await render(<CodeScreen {...p} />);
+  expect(spy).not.toHaveBeenCalled();
+  await fireEvent.changeText(screen.getByLabelText('Code'), '000000');
+  expect(spy.mock.calls.map((c) => c[0])).toEqual(['Verifying…']);
+  await act(async () => {
+    resolve('badCode');
+    await Promise.resolve();
+  });
+  expect(await screen.findByText('That code is wrong or has expired')).toBeTruthy();
+  expect(spy.mock.calls.map((c) => c[0])).toEqual([
+    'Verifying…',
+    'That code is wrong or has expired',
+  ]);
+  // The same wrong code again is said again: the line went away in between.
+  await fireEvent.changeText(screen.getByLabelText('Code'), '000001');
+  await act(async () => {
+    resolve('badCode');
+    await Promise.resolve();
+  });
+  await waitFor(() => {
+    expect(spy).toHaveBeenCalledTimes(4);
+  });
+  expect(spy).toHaveBeenLastCalledWith('That code is wrong or has expired');
 });
 
 async function tick(ms: number) {
@@ -188,7 +229,7 @@ it('a non-transient resend failure says the code was not sent', async () => {
   await render(<CodeScreen {...p} />);
   await tick(60_000);
   await fireEvent.press(screen.getByRole('button', { name: 'Send a new code' }));
-  expect(await screen.findByText("We couldn't send a new code. Try again.")).toBeTruthy();
+  expect(await screen.findByText('We couldn’t send a new code. Try again.')).toBeTruthy();
   expect(screen.queryByText(/reach Bookhushly/)).toBeNull();
   // Not a rate limit: the wait is not restarted.
   expect(screen.getByRole('button', { name: 'Send a new code' })).toBeEnabled();
@@ -240,7 +281,7 @@ it('an unknown verify result asks to try again without blaming the code', async 
   const p = { ...base(), onVerify: jest.fn().mockResolvedValue('unknown') };
   await render(<CodeScreen {...p} />);
   await fireEvent.changeText(screen.getByLabelText('Code'), '123456');
-  expect(await screen.findByText("We couldn't check that code. Try again.")).toBeTruthy();
+  expect(await screen.findByText('We couldn’t check that code. Try again.')).toBeTruthy();
   expect(screen.getByLabelText('Code').props.value).toBe('123456');
 });
 

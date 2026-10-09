@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import type { AccountFailure } from '@/features/auth/api/accountApi';
+import { transientMessage } from '@/features/auth/domain/transientMessage';
 import type { VerifyError } from '@/features/auth/domain/verifyErrors';
 import { cooldownLeft } from '@/shared/lib/cooldown';
 import { maskEmail } from '@/shared/lib/maskEmail';
@@ -16,6 +17,7 @@ import {
   Stack,
   Text,
   TextLink,
+  useAnnounce,
 } from '@/shared/ui';
 
 export type CodePurpose = 'signup' | 'confirm' | 'recovery';
@@ -48,15 +50,11 @@ const TITLE: Record<CodePurpose, string> = {
   confirm: 'Confirm your email first',
   recovery: 'Enter your reset code',
 };
+const VERIFYING_MESSAGE = 'Verifying…';
 const WRONG_MESSAGE = 'That code is wrong or has expired';
 const TOO_MANY_MESSAGE = 'Too many tries. Send a new code.';
-const UNKNOWN_MESSAGE = "We couldn't check that code. Try again.";
-const RESEND_FAILED_MESSAGE = "We couldn't send a new code. Try again.";
-
-function transientMessage(retryAfterSec: number | undefined): string {
-  const when = retryAfterSec === undefined ? 'a minute' : `${String(retryAfterSec)} seconds`;
-  return `We couldn’t reach Bookhushly — try again in ${when}`;
-}
+const UNKNOWN_MESSAGE = 'We couldn’t check that code. Try again.';
+const RESEND_FAILED_MESSAGE = 'We couldn’t send a new code. Try again.';
 
 function mmss(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -95,6 +93,10 @@ export function CodeScreen({
 
   const left = cooldownLeft(cooldown.startedAt, nowMs, cooldown.seconds);
   const waiting = left > 0;
+
+  // iOS: the lines below appear with their text, so each one is announced as it shows.
+  useAnnounce(verifying ? VERIFYING_MESSAGE : null, true);
+  useAnnounce(fieldMessage, true);
 
   useEffect(() => {
     if (!waiting) return;
@@ -230,7 +232,7 @@ export function CodeScreen({
           <Inline gap="s2">
             <Spinner tone="textSecondary" />
             <Text variant="bodySm" tone="textSecondary" accessibilityLiveRegion="polite">
-              Verifying…
+              {VERIFYING_MESSAGE}
             </Text>
           </Inline>
         ) : null}
