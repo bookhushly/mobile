@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { WifiOff } from 'lucide-react-native';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, Platform } from 'react-native';
 
 import { color } from '@/shared/theme';
 import { Banner } from '@/shared/ui/Banner';
@@ -25,6 +25,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   jest.useRealTimers();
+  jest.restoreAllMocks();
 });
 
 it('status pill uses its tone, never violet', async () => {
@@ -85,6 +86,31 @@ it('neutral banner for a transient failure is not red', async () => {
   expect(screen.getByText("We couldn't reach the server").props.accessibilityLiveRegion).toBe(
     'polite',
   );
+});
+
+it('banner announces a changed message on iOS, not the one it mounted with', async () => {
+  jest.replaceProperty(Platform, 'OS', 'ios');
+  // The preset's AccessibilityInfo is already a jest.fn: clear calls left by earlier tests.
+  const spy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockClear();
+  await render(<Banner tone="neutral" message="Offline" />);
+  expect(spy).not.toHaveBeenCalled();
+  await screen.rerender(<Banner tone="neutral" message="Back online" />);
+  expect(spy).toHaveBeenCalledTimes(1);
+  expect(spy).toHaveBeenCalledWith('Back online');
+  await screen.rerender(<Banner tone="neutral" message="Back online" />);
+  expect(spy).toHaveBeenCalledTimes(1);
+});
+
+it('an assertive banner also announces the message it mounts with, on iOS only', async () => {
+  jest.replaceProperty(Platform, 'OS', 'ios');
+  const spy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockClear();
+  await render(<Banner tone="warning" message="Sync failed" live="assertive" />);
+  expect(spy).toHaveBeenCalledWith('Sync failed');
+  spy.mockClear();
+  jest.replaceProperty(Platform, 'OS', 'android');
+  await render(<Banner tone="warning" message="Roster is stale" live="assertive" />);
+  await screen.rerender(<Banner tone="warning" message="Roster is fresh" live="assertive" />);
+  expect(spy).not.toHaveBeenCalled();
 });
 
 it('banner shows a title and one action', async () => {

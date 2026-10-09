@@ -20,7 +20,9 @@ export function PasswordField(props: Props) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={shown ? 'Hide password' : 'Show password'}
-          hitSlop={12}
+          // The slop never reaches left into the text; the box itself is a full target.
+          hitSlop={{ left: 0, right: 12, top: 12, bottom: 12 }}
+          style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
           onPress={() => {
             setShown((s) => !s);
           }}

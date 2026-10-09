@@ -1,6 +1,6 @@
 import { UserRound } from 'lucide-react-native';
-import type { ReactNode } from 'react';
-import { View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { Platform, View } from 'react-native';
 
 import { space } from '@/shared/theme';
 import { Button, Card, Icon, Sheet, Stack, Text, TextLink } from '@/shared/ui';
@@ -11,6 +11,7 @@ type Props = {
   /** The route passes <ModeSwitcher/>: gate code must not import the mode feature. */
   modeSwitcher: ReactNode;
   onSignOut: () => void;
+  /** Called once the sheet is out of the way (iOS waits for the Modal to dismiss). */
   onDeleteAccount: () => void;
   onClose: () => void;
 };
@@ -24,12 +25,20 @@ export function AccountSheet({
   onDeleteAccount,
   onClose,
 }: Props) {
+  // iOS can swallow a push made in the same tick as closing the RN Modal: push after dismissal.
+  const [deleteAfterDismiss, setDeleteAfterDismiss] = useState(false);
   return (
     <Sheet
       visible={visible}
       title="Account"
       onClose={onClose}
+      onDismissed={() => {
+        if (!deleteAfterDismiss) return;
+        setDeleteAfterDismiss(false);
+        onDeleteAccount();
+      }}
       scroll
+      testID="account-sheet"
       footer={<Button variant="secondary" label="Sign out" onPress={onSignOut} />}
     >
       <Stack gap="s5">
@@ -48,7 +57,18 @@ export function AccountSheet({
         </Card>
         {modeSwitcher}
         <View style={{ alignSelf: 'flex-start' }}>
-          <TextLink label="Delete account" onPress={onDeleteAccount} />
+          <TextLink
+            label="Delete account"
+            onPress={() => {
+              if (Platform.OS === 'ios') {
+                setDeleteAfterDismiss(true);
+                onClose();
+                return;
+              }
+              onClose();
+              onDeleteAccount();
+            }}
+          />
         </View>
       </Stack>
     </Sheet>

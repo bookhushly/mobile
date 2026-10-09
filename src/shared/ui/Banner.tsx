@@ -9,6 +9,7 @@ import { View } from 'react-native';
 
 import { color, radius, space, type ColorRole, type StatusTone } from '@/shared/theme';
 
+import { useAnnounce } from './announce';
 import { Button } from './Button';
 import { Icon } from './Icon';
 import { Text } from './Text';
@@ -35,6 +36,10 @@ type Props = {
   /** Replaces the tone's glyph (a network-related caller may pass WifiOff). */
   icon?: LucideIcon;
   action?: { label: string; onPress: () => void };
+  /**
+   * Android: the live region on the message. iOS: a changed message is announced; `assertive`
+   * also announces the message a banner mounts with.
+   */
   live?: 'polite' | 'assertive';
   testID?: string;
 };
@@ -49,6 +54,7 @@ export function Banner({
   live = 'polite',
   testID = 'banner',
 }: Props) {
+  useAnnounce(message, live === 'assertive');
   return (
     <View
       testID={testID}

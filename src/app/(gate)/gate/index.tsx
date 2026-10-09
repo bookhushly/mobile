@@ -62,7 +62,6 @@ export default function GateEventsRoute() {
         // can swallow the alert on iOS. A completed sign-out unmounts this route anyway.
         onSignOut={signOut}
         onDeleteAccount={() => {
-          setAccount(false);
           router.push('/delete-account');
         }}
         onClose={() => {

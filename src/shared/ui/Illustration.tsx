@@ -3,14 +3,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { color } from '@/shared/theme';
 
 export type IllustrationName =
-  | 'camera'
-  | 'noEvents'
-  | 'offline'
-  | 'search'
-  | 'welcome'
-  | 'find'
-  | 'pay'
-  | 'showUp';
+  'camera' | 'noEvents' | 'offline' | 'search' | 'welcome' | 'find' | 'pay' | 'showUp';
 
 // Rounded rectangle as a path (react-native-svg marks Rect's x/y as deprecated transform aliases).
 function roundedRect(x: number, y: number, w: number, h: number, r: number): string {
@@ -165,7 +158,9 @@ export function Illustration({ name, size = 160 }: { name: IllustrationName; siz
           <Path d={roundedRect(72, 38, 16, 4, 2)} fill={ink} />
           <Path
             d={[0, 1, 2]
-              .flatMap((r) => [0, 1, 2].map((c) => roundedRect(62 + c * 13, 56 + r * 13, 10, 10, 2)))
+              .flatMap((r) =>
+                [0, 1, 2].map((c) => roundedRect(62 + c * 13, 56 + r * 13, 10, 10, 2)),
+              )
               .join('')}
             fill={ink}
           />

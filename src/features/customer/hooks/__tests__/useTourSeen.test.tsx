@@ -82,7 +82,14 @@ it('a failing read never blocks the app: treated as seen', async () => {
   });
 });
 
-it('no user: stays null', async () => {
+it('no user: stays null and never reads the keychain', async () => {
+  const get = jest.fn(mockKv.get);
+  mockKv.get = get;
   const { result } = await renderHook(() => useTourSeen(null));
   expect(result.current.seen).toBeNull();
+  await act(() => {
+    result.current.markSeen();
+  });
+  expect(get).not.toHaveBeenCalled();
+  expect(mockKv.map.size).toBe(0);
 });

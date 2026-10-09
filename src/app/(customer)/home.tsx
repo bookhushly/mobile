@@ -14,7 +14,8 @@ export default function CustomerHomeRoute() {
   const signOut = useSignOut();
   const userId = state.status === 'signedIn' ? state.userId : null;
   const { modes, choose } = useModeSwitcher(userId);
-  const { seen, markSeen } = useTourSeen(userId);
+  // Switched off: no keychain read for the tour marker at all.
+  const { seen, markSeen } = useTourSeen(CUSTOMER_TOUR_ENABLED ? userId : null);
   // Only a resolved "not seen" shows the tour: null (still reading) falls through to the shell.
   if (CUSTOMER_TOUR_ENABLED && seen === false) return <TourScreen onDone={markSeen} />;
   return (

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Flashlight, Search } from 'lucide-react-native';
 
-import { space } from '@/shared/theme';
+import { space, typeVariants } from '@/shared/theme';
 import { DensityProvider } from '@/shared/ui/DensityProvider';
 import { IconButton } from '@/shared/ui/IconButton';
 import { TextLink } from '@/shared/ui/TextLink';
@@ -82,6 +82,12 @@ it('toggle flips back to off when checked and can hide its visible label', async
 it('text link has a 44 pt target', async () => {
   await render(<TextLink label="Change event" onPress={jest.fn()} />);
   expect(screen.getByRole('link', { name: 'Change event' })).toHaveStyle({ minHeight: 44 });
+});
+
+it('a small text link is caption-sized and keeps its 44 pt target', async () => {
+  await render(<TextLink label="Terms" size="sm" onPress={jest.fn()} />);
+  expect(screen.getByRole('link', { name: 'Terms' })).toHaveStyle({ minHeight: 44 });
+  expect(screen.getByText('Terms')).toHaveStyle({ fontSize: typeVariants.caption.size });
 });
 
 it('text link fires onPress', async () => {

@@ -42,7 +42,9 @@ it('skip ends the tour', async () => {
 it('shows the three scenes with serif headlines', async () => {
   await render(<TourScreen onDone={jest.fn()} />);
   for (const name of ['find', 'pay', 'showUp'])
-    expect(screen.getByTestId(`illustration-${name}`, { includeHiddenElements: true })).toBeTruthy();
+    expect(
+      screen.getByTestId(`illustration-${name}`, { includeHiddenElements: true }),
+    ).toBeTruthy();
   for (const h of ['Find your place', 'Pay in naira', 'Show up'])
     expect(screen.getByRole('header', { name: h })).toBeTruthy();
 });

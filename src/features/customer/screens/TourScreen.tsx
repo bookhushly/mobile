@@ -9,7 +9,15 @@ import {
 } from 'react-native';
 
 import { color, radius, space } from '@/shared/theme';
-import { Button, Illustration, Screen, Stack, Text, useMotionTier, type IllustrationName } from '@/shared/ui';
+import {
+  Button,
+  Illustration,
+  Screen,
+  Stack,
+  Text,
+  useMotionTier,
+  type IllustrationName,
+} from '@/shared/ui';
 
 type Page = { scene: IllustrationName; headline: string; body: string };
 
