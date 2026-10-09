@@ -31,7 +31,8 @@ type Store = {
   ) => Promise<VerifyError | null>;
   finishRecovery: () => Promise<void>;
   abandonRecovery: () => Promise<void>;
-  checkPassword: (password: string) => Promise<'ok' | 'wrong' | 'transient'>;
+  /** `closed`: the account is banned, i.e. a deletion already went through. */
+  checkPassword: (password: string) => Promise<'ok' | 'wrong' | 'transient' | 'closed'>;
   signOutAfterDeletion: () => Promise<void>;
 };
 
@@ -133,7 +134,9 @@ export const useAuth = create<Store>((set, get) => ({
     const { error } = await supabase.auth.signInWithPassword({ email: s.email, password });
     if (!error) return 'ok';
     const kind = mapSignInError(error);
-    return kind === 'invalidCredentials' ? 'wrong' : 'transient';
+    if (kind === 'invalidCredentials') return 'wrong';
+    if (kind === 'accountClosed') return 'closed';
+    return 'transient';
   },
   async signOutAfterDeletion() {
     const s = get().state;
@@ -144,7 +147,13 @@ export const useAuth = create<Store>((set, get) => ({
         // The account is gone server-side; local data is wiped best effort and sign-out still runs.
       }
     }
-    await signOutLocally();
+    // Never rejects: the account no longer exists, so whatever fails the app ends up signed out.
+    try {
+      await signOutLocally();
+    } catch {
+      queryClient.clear();
+      get().dispatch({ type: 'SIGNED_OUT' });
+    }
     useAuthNotice.getState().set('accountDeleted');
   },
 }));

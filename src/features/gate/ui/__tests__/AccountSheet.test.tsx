@@ -11,6 +11,7 @@ it('shows who is signed in, the mode switch slot, and signs out', async () => {
       email="door@example.com"
       modeSwitcher={<Text>Mode switch</Text>}
       onSignOut={onSignOut}
+      onDeleteAccount={jest.fn()}
       onClose={jest.fn()}
     />,
   );
@@ -18,4 +19,20 @@ it('shows who is signed in, the mode switch slot, and signs out', async () => {
   expect(screen.getByText('Mode switch')).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Sign out' }));
   expect(onSignOut).toHaveBeenCalledTimes(1);
+});
+
+it('links to account deletion', async () => {
+  const onDeleteAccount = jest.fn();
+  await render(
+    <AccountSheet
+      visible
+      email="door@example.com"
+      modeSwitcher={null}
+      onSignOut={jest.fn()}
+      onDeleteAccount={onDeleteAccount}
+      onClose={jest.fn()}
+    />,
+  );
+  await fireEvent.press(screen.getByRole('link', { name: 'Delete account' }));
+  expect(onDeleteAccount).toHaveBeenCalledTimes(1);
 });

@@ -1,3 +1,5 @@
+import { router } from 'expo-router';
+
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { useSignOut } from '@/features/auth/hooks/useSignOut';
 import { CustomerShell } from '@/features/customer/screens/CustomerShell';
@@ -13,6 +15,9 @@ export default function CustomerHomeRoute() {
       identity={state.status === 'signedIn' ? state.email : ''}
       onSignOut={() => {
         signOut();
+      }}
+      onDeleteAccount={() => {
+        router.push('/delete-account');
       }}
     >
       <ModeSwitcher modes={modes} current="customer" onChoose={choose} />

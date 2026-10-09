@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
 import { space } from '@/shared/theme';
-import { Button, Card, Icon, Sheet, Stack, Text } from '@/shared/ui';
+import { Button, Card, Icon, Sheet, Stack, Text, TextLink } from '@/shared/ui';
 
 type Props = {
   visible: boolean;
@@ -11,11 +11,19 @@ type Props = {
   /** The route passes <ModeSwitcher/>: gate code must not import the mode feature. */
   modeSwitcher: ReactNode;
   onSignOut: () => void;
+  onDeleteAccount: () => void;
   onClose: () => void;
 };
 
-// FR-1.9: whose session is active on a shared phone, plus mode switch and sign-out.
-export function AccountSheet({ visible, email, modeSwitcher, onSignOut, onClose }: Props) {
+// FR-1.9: whose session is active on a shared phone, plus mode switch, sign-out and deletion.
+export function AccountSheet({
+  visible,
+  email,
+  modeSwitcher,
+  onSignOut,
+  onDeleteAccount,
+  onClose,
+}: Props) {
   return (
     <Sheet
       visible={visible}
@@ -39,6 +47,9 @@ export function AccountSheet({ visible, email, modeSwitcher, onSignOut, onClose 
           </View>
         </Card>
         {modeSwitcher}
+        <View style={{ alignSelf: 'flex-start' }}>
+          <TextLink label="Delete account" onPress={onDeleteAccount} />
+        </View>
       </Stack>
     </Sheet>
   );

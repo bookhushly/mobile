@@ -64,6 +64,8 @@ function Navigator() {
       <Stack.Protected guard={route === 'customer'}>
         <Stack.Screen name="(customer)" />
       </Stack.Protected>
+      {/* Unguarded: it must survive the sign-out that a successful deletion triggers. */}
+      <Stack.Screen name="delete-account" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

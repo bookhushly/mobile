@@ -1,10 +1,15 @@
 import type { ReactNode } from 'react';
 
-import { ShellPlaceholder } from '@/shared/ui';
+import { Button, SectionHeader, ShellPlaceholder, Stack } from '@/shared/ui';
 
-type Props = { identity: string; onSignOut: () => void; children?: ReactNode };
+type Props = {
+  identity: string;
+  onSignOut: () => void;
+  onDeleteAccount: () => void;
+  children?: ReactNode;
+};
 
-export function CustomerShell({ identity, onSignOut, children }: Props) {
+export function CustomerShell({ identity, onSignOut, onDeleteAccount, children }: Props) {
   return (
     <ShellPlaceholder
       title="Bookhushly"
@@ -13,6 +18,10 @@ export function CustomerShell({ identity, onSignOut, children }: Props) {
       onSignOut={onSignOut}
     >
       {children}
+      <Stack gap="s2">
+        <SectionHeader label="Account" />
+        <Button variant="secondary" label="Delete account" onPress={onDeleteAccount} />
+      </Stack>
     </ShellPlaceholder>
   );
 }
