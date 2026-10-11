@@ -39,3 +39,4 @@ export { SuccessMark } from './SuccessMark';
 export { Text } from './Text';
 export { TextLink } from './TextLink';
 export { ToggleButton } from './ToggleButton';
+export { useWide } from './useWide';
