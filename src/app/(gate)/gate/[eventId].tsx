@@ -17,7 +17,7 @@ import { useScanSession } from '@/features/gate/hooks/useScanSession';
 import { useScanSummary } from '@/features/gate/hooks/useScanSummary';
 import type { ActivityTab, Approval } from '@/features/gate/offline/outboxStore';
 import { ScannerScreen } from '@/features/gate/screens/ScannerScreen';
-import { useAppActive, useCameraAccess } from '@/features/gate/ui/ScannerCamera';
+import { useAppActive, useCameraAccess } from '@/shared/ui/camera';
 import { clock } from '@/shared/api/instance';
 import { latestOnly } from '@/shared/lib/latest';
 import { onceGuard } from '@/shared/lib/once';

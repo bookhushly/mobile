@@ -11,7 +11,7 @@ import { color, radius, space } from '@/shared/theme';
 const TICKET = '3f2b8c4e-1a2b-4c3d-8e9f-0a1b2c3d4e5f';
 const mockCamera = { renders: 0, raw: TICKET };
 
-// The real ScannerCamera runs against a fake CameraView (frame de-dupe, pause, memo).
+// The real QrCamera runs against a fake CameraView (frame de-dupe, pause, memo).
 jest.mock('expo-camera', () => {
   const { Pressable, Text } = jest.requireActual<typeof import('react-native')>('react-native');
   return {

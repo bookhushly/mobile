@@ -17,16 +17,15 @@ import type { ScanSummary } from '@/features/gate/schemas/scan';
 import { useScanView } from '@/features/gate/state/scanView';
 import { useSyncView } from '@/features/gate/state/syncView';
 import { ActivityScreen } from '@/features/gate/ui/ActivityScreen';
-import { CameraPrompt } from '@/features/gate/ui/CameraPrompt';
 import { EnterCodeSheet } from '@/features/gate/ui/EnterCodeSheet';
 import { FindGuestSheet } from '@/features/gate/ui/FindGuestSheet';
 import { GateStatus } from '@/features/gate/ui/GateStatus';
 import { OutcomeOverlay } from '@/features/gate/ui/OutcomeOverlay';
 import { PinSheet } from '@/features/gate/ui/PinSheet';
 import { RecentSheet } from '@/features/gate/ui/RecentSheet';
-import { ScannerCamera, type CameraPermission } from '@/features/gate/ui/ScannerCamera';
 import { borderWidth, color, radius, space } from '@/shared/theme';
 import { IconButton, Text, ToggleButton } from '@/shared/ui';
+import { CameraPrompt, QrCamera, type CameraPermission } from '@/shared/ui/camera';
 
 type Props = {
   title: string;
@@ -327,7 +326,7 @@ export function ScannerScreen(p: Props) {
       <View style={{ flex: 1 }}>
         {p.permission === 'granted' && p.focused ? (
           <>
-            <ScannerCamera
+            <QrCamera
               torch={torch}
               paused={
                 entering ||
@@ -367,6 +366,10 @@ export function ScannerScreen(p: Props) {
           <CameraPrompt
             state={p.permission === 'unknown' ? 'ask' : 'denied'}
             canAsk={p.canAskPermission}
+            askTitle="Allow camera to scan tickets"
+            body="The camera is only used to read ticket codes. Nothing is recorded."
+            byHandLabel="Enter codes by hand"
+            tone="inverse"
             onAllow={p.onRequestPermission}
             onOpenSettings={p.onOpenSettings}
             onEnterByHand={() => {
