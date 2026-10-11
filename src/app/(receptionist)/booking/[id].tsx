@@ -1,9 +1,21 @@
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import { z } from 'zod';
 
-import { DeskPlaceholderScreen } from '@/features/receptionist/screens/DeskPlaceholderScreen';
+import { BookingScreen } from '@/features/receptionist/screens/BookingScreen';
+
+// Any non-empty id: an unknown or malformed one reads as "isn't at this hotel" / a load error.
+const idParam = z.string().trim().min(1).catch('');
 
 export default function BookingRoute() {
-  // Read only to settle the typed route; Task 12 parses it with a schema.
-  useLocalSearchParams<{ id: string }>();
-  return <DeskPlaceholderScreen back title="Booking" message="Booking details arrive next." />;
+  const params = useLocalSearchParams<{ id: string }>();
+  const id = idParam.parse(params.id);
+  return (
+    <BookingScreen
+      id={id}
+      onBack={() => {
+        if (router.canGoBack()) router.back();
+        else router.replace('/guests');
+      }}
+    />
+  );
 }

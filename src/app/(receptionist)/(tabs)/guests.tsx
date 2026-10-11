@@ -1,5 +1,22 @@
-import { DeskPlaceholderScreen } from '@/features/receptionist/screens/DeskPlaceholderScreen';
+import { router, useLocalSearchParams } from 'expo-router';
+import { z } from 'zod';
+
+import { GuestsScreen } from '@/features/receptionist/screens/GuestsScreen';
+
+const tabParam = z.enum(['arriving', 'inHouse', 'leaving']).catch('arriving');
 
 export default function GuestsRoute() {
-  return <DeskPlaceholderScreen title="Guests" message="Guest lists and search arrive next." />;
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const tab = tabParam.parse(params.tab);
+  return (
+    <GuestsScreen
+      tab={tab}
+      onTabChange={(next) => {
+        router.setParams({ tab: next });
+      }}
+      onOpenBooking={(id) => {
+        router.push({ pathname: '/booking/[id]', params: { id } });
+      }}
+    />
+  );
 }
