@@ -1,7 +1,9 @@
 import type { RoomRow, RoomStatus } from '@/features/receptionist/schemas/desk';
 
 export type RoomFilter = 'all' | RoomStatus;
-export const SETTABLE_STATUSES: readonly RoomStatus[] = [
+// Statuses the desk may set directly; `occupied` only changes through check-in/out and reassign.
+export type SettableStatus = Exclude<RoomStatus, 'occupied'>;
+export const SETTABLE_STATUSES: readonly SettableStatus[] = [
   'available',
   'dirty',
   'reserved',
