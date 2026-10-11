@@ -1,0 +1,193 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+
+import { deskDb } from '@/features/receptionist/api/deskDb';
+import { reassignRoom } from '@/features/receptionist/api/deskApi';
+import type { RoomRow } from '@/features/receptionist/schemas/desk';
+import { useShiftLog } from '@/features/receptionist/state/shiftLog';
+import { ChooseRoomSheet } from '@/features/receptionist/ui/ChooseRoomSheet';
+import type { ApiError } from '@/shared/lib/errors';
+import { err, ok } from '@/shared/lib/result';
+
+import { booking, deskWrapper, HOTEL, makeQueryClient } from '../../hooks/__tests__/deskTestUtils';
+
+const mockNow = Date.parse('2026-10-11T09:42:00Z');
+const NOW = mockNow;
+jest.mock('@/shared/api/instance', () => ({ api: {}, clock: { serverNow: () => mockNow } }));
+jest.mock('@/features/receptionist/api/deskDb', () => ({
+  deskDb: { bookingById: jest.fn(), rooms: jest.fn() },
+}));
+jest.mock('@/features/receptionist/api/deskApi', () => ({ reassignRoom: jest.fn() }));
+const mockCue = jest.fn();
+jest.mock('@/shared/platform/feedback', () => ({
+  createFeedback: () => ({
+    load: () => Promise.resolve(),
+    cue: mockCue,
+    isMuted: () => false,
+    setMuted: () => Promise.resolve(),
+    release: () => undefined,
+  }),
+}));
+jest.mock('expo-router', () => ({ useIsFocused: () => true }));
+
+const mockRooms = jest.spyOn(deskDb, 'rooms');
+const mockById = jest.spyOn(deskDb, 'bookingById');
+const mockReassign = jest.mocked(reassignRoom);
+
+function room(
+  id: string,
+  number: number,
+  floor: number | null,
+  type: string,
+  status: RoomRow['status'] = 'available',
+): RoomRow {
+  return {
+    id,
+    room_number: number,
+    floor,
+    status,
+    room_type_id: type,
+    last_cleaned_at: null,
+    hotel_room_types: { name: type === 'deluxe' ? 'Deluxe' : 'Standard' },
+  };
+}
+const CURRENT = room('r204', 204, 2, 'deluxe', 'occupied');
+const ROOMS = [
+  room('r101', 101, 1, 'standard'),
+  room('r102', 102, 1, 'standard', 'dirty'),
+  room('r204', 204, 2, 'deluxe'),
+  room('r305', 305, 3, 'deluxe'),
+  room('r306', 306, 3, 'standard'),
+];
+const ADA_ROOM = {
+  id: CURRENT.id,
+  room_number: CURRENT.room_number,
+  floor: CURRENT.floor,
+  status: CURRENT.status,
+  room_type_id: CURRENT.room_type_id,
+  hotel_room_types: CURRENT.hotel_room_types,
+};
+const ADA = booking('b1', { guest_name: 'Ada Obi', hotel_rooms: ADA_ROOM });
+const fail = (e: ApiError) => err(e);
+
+async function renderSheet() {
+  const qc = makeQueryClient();
+  const invalidate = jest.spyOn(qc, 'invalidateQueries');
+  const onClose = jest.fn();
+  const onMoved = jest.fn();
+  const Wrapper = deskWrapper(qc);
+  const r = await render(
+    <Wrapper>
+      <ChooseRoomSheet booking={ADA} onClose={onClose} onMoved={onMoved} />
+    </Wrapper>,
+  );
+  return { ...r, invalidate, onClose, onMoved };
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  useShiftLog.getState().clear();
+  mockRooms.mockResolvedValue(ok(ROOMS));
+});
+
+it('lists free rooms, same type first, grouped by floor, without the current room', async () => {
+  await renderSheet();
+  const rows = await screen.findAllByRole('button', { name: /^Room \d+/ });
+  expect(rows.map((r) => String(r.props.accessibilityLabel))).toEqual([
+    'Room 305 · Deluxe',
+    'Room 101 · Standard',
+    'Room 306 · Standard',
+  ]);
+  // Floors are headed in list order; rooms of another type come after their own header.
+  const headers = screen
+    .getAllByRole('header')
+    .map((h) => String(h.props.children))
+    .filter((t) => t !== 'Choose another room');
+  expect(headers).toEqual(['Floor 3', 'Other room types', 'Floor 1', 'Floor 3']);
+});
+
+it('says when there is no free room', async () => {
+  mockRooms.mockResolvedValue(ok([CURRENT, room('r102', 102, 1, 'standard', 'dirty')]));
+  await renderSheet();
+  expect(await screen.findByText('No free rooms right now')).toBeTruthy();
+  expect(screen.getByText('Mark a cleaned room as available on the Rooms tab.')).toBeTruthy();
+});
+
+it('tap → confirm → Move posts once, logs, refetches and hands back the re-read booking', async () => {
+  const moved = {
+    ...ADA,
+    hotel_rooms: {
+      ...ADA_ROOM,
+      id: 'r305',
+      room_number: 305,
+      floor: 3,
+      status: 'reserved' as const,
+    },
+  };
+  mockReassign.mockResolvedValue(ok({ success: true, room_number: 305 }));
+  mockById.mockResolvedValue(ok(moved));
+  const { invalidate, onMoved } = await renderSheet();
+  await fireEvent.press(await screen.findByRole('button', { name: 'Room 305 · Deluxe' }));
+  expect(screen.getByText('Move Ada Obi to Room 305?')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
+  await waitFor(() => {
+    expect(onMoved).toHaveBeenCalledWith(moved);
+  });
+  expect(mockReassign).toHaveBeenCalledTimes(1);
+  expect(mockReassign.mock.calls[0]?.slice(1)).toEqual(['b1', 'r305']);
+  expect(mockById).toHaveBeenCalledWith(HOTEL, 'b1');
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] });
+  expect(useShiftLog.getState().entries).toEqual([
+    { at: NOW, kind: 'reassign', text: 'Moved Ada Obi to Room 305' },
+  ]);
+  expect(mockCue).toHaveBeenCalledWith('success');
+});
+
+it('Cancel on the confirm goes back to the list', async () => {
+  await renderSheet();
+  await fireEvent.press(await screen.findByRole('button', { name: 'Room 101 · Standard' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.getByRole('button', { name: 'Room 101 · Standard' })).toBeTruthy();
+  expect(mockReassign).not.toHaveBeenCalled();
+});
+
+it('409 means the room was just taken: back to the list with the reason', async () => {
+  mockReassign.mockResolvedValue(fail({ kind: 'conflict', code: 'conflict' }));
+  await renderSheet();
+  await fireEvent.press(await screen.findByRole('button', { name: 'Room 305 · Deluxe' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
+  expect(await screen.findByText('Room 305 was just taken. Choose another.')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Room 101 · Standard' })).toBeTruthy();
+  expect(mockRooms).toHaveBeenCalledTimes(2);
+});
+
+it('a timeout is uncertain; Check again re-reads and finishes when the move is there', async () => {
+  mockReassign.mockResolvedValue(fail({ kind: 'timeout' }));
+  const movedRow = { ...ADA, hotel_rooms: { ...ADA_ROOM, id: 'r305', room_number: 305 } };
+  const { onMoved } = await renderSheet();
+  await fireEvent.press(await screen.findByRole('button', { name: 'Room 305 · Deluxe' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
+  expect(await screen.findByText("Couldn't confirm the move.")).toBeTruthy();
+  // Not there yet: offer Move again, nothing re-posted by itself.
+  mockById.mockResolvedValueOnce(ok(ADA));
+  await fireEvent.press(screen.getByRole('button', { name: 'Check again' }));
+  expect(await screen.findByRole('button', { name: 'Move' })).toBeTruthy();
+  expect(mockReassign).toHaveBeenCalledTimes(1);
+  // Second attempt also times out, but this time the re-read finds the new room.
+  await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
+  await screen.findByText("Couldn't confirm the move.");
+  mockById.mockResolvedValueOnce(ok(movedRow));
+  await fireEvent.press(screen.getByRole('button', { name: 'Check again' }));
+  await waitFor(() => {
+    expect(onMoved).toHaveBeenCalledWith(movedRow);
+  });
+  expect(useShiftLog.getState().entries).toHaveLength(1);
+});
+
+it('403 is a refusal in words', async () => {
+  mockReassign.mockResolvedValue(fail({ kind: 'forbidden' }));
+  await renderSheet();
+  await fireEvent.press(await screen.findByRole('button', { name: 'Room 305 · Deluxe' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
+  expect(await screen.findByText("You can't change rooms at this hotel.")).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Move' })).toBeNull();
+});

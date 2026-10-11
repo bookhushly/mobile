@@ -10,6 +10,7 @@ import { useDeskLive } from '@/features/receptionist/hooks/useDeskLive';
 import { useHotel } from '@/features/receptionist/hooks/useHotel';
 import { HotelGateScreen } from '@/features/receptionist/screens/HotelGateScreen';
 import { useShiftLog } from '@/features/receptionist/state/shiftLog';
+import { CheckInSheet, type CheckInRequest } from '@/features/receptionist/ui/CheckInSheet';
 import { DeskAccountSheet } from '@/features/receptionist/ui/DeskAccountSheet';
 import { clock } from '@/shared/api/instance';
 import { lagosToday } from '@/shared/lib/lagosDay';
@@ -54,8 +55,11 @@ export default function ReceptionistLayout() {
   );
 
   const [account, setAccount] = useState(false);
-  // Task 13 renders the check-in sheet from this; until then the request is held and harmless.
-  const [, setCheckInRequest] = useState<{ code?: string } | null>(null);
+  // Every "Check in" button opens the one sheet; a new id per open restarts its flow.
+  const [checkIn, setCheckIn] = useState<{ visible: boolean; request: CheckInRequest }>({
+    visible: false,
+    request: { id: 0, code: null },
+  });
 
   if (hotel.status !== 'ready')
     return (
@@ -76,12 +80,24 @@ export default function ReceptionistLayout() {
             setAccount(true);
           },
           openCheckIn: (code) => {
-            setCheckInRequest(code === undefined ? {} : { code });
+            setCheckIn((c) => ({
+              visible: true,
+              request: { id: c.request.id + 1, code: code ?? null },
+            }));
           },
         }}
       >
         <DeskLive hotelId={hotel.hotel.id} />
         <Stack screenOptions={{ headerShown: false }} />
+        <CheckInSheet
+          visible={checkIn.visible}
+          request={checkIn.request}
+          onClose={() => {
+            setCheckIn((c) => ({ ...c, visible: false }));
+          }}
+          // 401 after refresh: the same sign-out as the account sheet (clears the shift log too).
+          onSignedOut={signOut}
+        />
         <DeskAccountSheet
           visible={account}
           email={email}
