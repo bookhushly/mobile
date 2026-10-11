@@ -17,9 +17,7 @@ export type Warning =
   | { kind: 'earlyCheckOut'; days: number; date: IsoDate }
   | { kind: 'roomNotReady'; roomNumber: number; status: RoomStatus };
 export type Blocker =
-  | { kind: 'cancelled' }
-  | { kind: 'unpaid' }
-  | { kind: 'checkedOut'; at: string | null };
+  { kind: 'cancelled' } | { kind: 'unpaid' } | { kind: 'checkedOut'; at: string | null };
 export type BookingView = {
   stage: Stage;
   actions: DeskAction[];

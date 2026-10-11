@@ -5,8 +5,7 @@ const EVENT_TICKET = /^BH[12]\.|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-
 
 export type CheckInCode = string & { readonly __brand: 'CheckInCode' };
 export type CodeParse =
-  | { ok: true; code: CheckInCode }
-  | { ok: false; reason: 'empty' | 'shape' | 'eventTicket' };
+  { ok: true; code: CheckInCode } | { ok: false; reason: 'empty' | 'shape' | 'eventTicket' };
 
 export function parseCheckInCode(raw: string): CodeParse {
   const t = raw.trim();
