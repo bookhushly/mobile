@@ -78,6 +78,11 @@ export function GuestsScreen({
     if (wide) setSelectedId(id);
     else onOpenBooking(id);
   };
+  // A new tab starts without a detail open: the old guest may not be in this list at all.
+  const changeTab = (next: GuestTab) => {
+    setSelectedId(null);
+    onTabChange(next);
+  };
 
   let list: ReactNode;
   if (guests.loading) {
@@ -100,7 +105,12 @@ export function GuestsScreen({
         keyExtractor={(b: BookingRow) => b.id}
         keyboardShouldPersistTaps="handled"
         renderItem={({ item }) => (
-          <GuestRow booking={item} today={today} onPress={open} selected={item.id === selectedId} />
+          <GuestRow
+            booking={item}
+            today={today}
+            onPress={open}
+            selected={wide ? item.id === selectedId : undefined}
+          />
         )}
         ListEmptyComponent={
           <EmptyState
@@ -122,7 +132,7 @@ export function GuestsScreen({
       <SegmentedControl
         value={tab}
         options={TABS.map((t) => ({ ...t, count: counts?.[t.value] ?? 0 }))}
-        onChange={onTabChange}
+        onChange={changeTab}
       />
       <SearchField
         label="Search guests"

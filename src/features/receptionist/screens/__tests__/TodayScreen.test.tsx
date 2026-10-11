@@ -152,7 +152,8 @@ it('shows skeletons on first load', async () => {
   });
   await renderToday();
   expect(screen.getByLabelText('Loading')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Check in a guest' })).toBeNull();
+  // A check-in needs no list: the button is there while loading and on error.
+  expect(screen.getByRole('button', { name: 'Check in a guest' })).toBeTruthy();
 });
 
 it('shows an error with Try again when nothing could be loaded', async () => {
@@ -167,6 +168,7 @@ it('shows an error with Try again when nothing could be loaded', async () => {
   });
   await renderToday();
   expect(screen.getByText("Couldn't load today")).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Check in a guest' })).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
   expect(refetch).toHaveBeenCalledTimes(1);
 });

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { RefreshControl, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/ui/Button';
@@ -9,6 +9,7 @@ import { ListRow, SectionHeader } from '@/shared/ui/ListRow';
 import { Screen } from '@/shared/ui/Screen';
 import { SegmentedControl } from '@/shared/ui/SegmentedControl';
 import { Sheet } from '@/shared/ui/Sheet';
+import { color } from '@/shared/theme';
 
 const metrics = {
   frame: { x: 0, y: 0, width: 390, height: 844 },
@@ -106,6 +107,19 @@ const accessibleAncestor = (el: { parent: unknown }) => {
   return false;
 };
 
+it('list row exposes selection as accessibility state, only when told', async () => {
+  await render(
+    <>
+      <ListRow title="Open" onPress={jest.fn()} selected />
+      <ListRow title="Other" onPress={jest.fn()} selected={false} />
+      <ListRow title="Plain" onPress={jest.fn()} />
+    </>,
+  );
+  expect(screen.getByRole('button', { name: 'Open', selected: true })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Other', selected: false })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Plain' })).not.toBeSelected();
+});
+
 it('an ungrouped static row keeps its label and leaves a trailing control reachable', async () => {
   const onPress = jest.fn();
   await render(
@@ -175,6 +189,28 @@ it('screen widens its body for a tablet panel and keeps the form width otherwise
   const panel = JSON.stringify(panelJson());
   expect(panel).toContain('"maxWidth":960');
   expect(panel).not.toContain('"maxWidth":640');
+});
+
+it('screen colours a pull-to-refresh control from the theme, keeping caller overrides', async () => {
+  const { toJSON } = await render(
+    <Screen scroll refreshControl={<RefreshControl refreshing={false} onRefresh={jest.fn()} />}>
+      <Text>Body</Text>
+    </Screen>,
+  );
+  const json = JSON.stringify(toJSON());
+  expect(json).toContain(`"tintColor":"${color.textSecondary}"`);
+  expect(json).toContain(`"colors":["${color.actionFill}"]`);
+  const { toJSON: overridden } = await render(
+    <Screen
+      scroll
+      refreshControl={
+        <RefreshControl refreshing={false} onRefresh={jest.fn()} tintColor={color.onInverse} />
+      }
+    >
+      <Text>Body</Text>
+    </Screen>,
+  );
+  expect(JSON.stringify(overridden())).toContain(`"tintColor":"${color.onInverse}"`);
 });
 
 it('screen keeps working for existing callers (children + scroll)', async () => {

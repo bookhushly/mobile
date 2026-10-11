@@ -81,13 +81,6 @@ export function TodayScreen({ onOpenGuests, onOpenFreeRooms, onOpenBooking }: Pr
           }}
           onPress={openCount}
         />
-        <Button
-          label="Check in a guest"
-          icon={ScanLine}
-          onPress={() => {
-            openCheckIn();
-          }}
-        />
         <View>
           <SectionHeader label="Arriving today" count={arriving.length} />
           {shown.length === 0 ? (
@@ -125,6 +118,14 @@ export function TodayScreen({ onOpenGuests, onOpenFreeRooms, onOpenBooking }: Pr
         />
       }
     >
+      {/* Always offered: typing a code needs no list, so a failed read must not block a check-in. */}
+      <Button
+        label="Check in a guest"
+        icon={ScanLine}
+        onPress={() => {
+          openCheckIn();
+        }}
+      />
       {body}
     </Screen>
   );

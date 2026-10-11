@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import { useState, type ComponentProps } from 'react';
 
 import { splitGuests, type GuestTab } from '@/features/receptionist/domain/guestLists';
@@ -92,7 +92,13 @@ it('switches tabs with the counts in the labels and opens a row', async () => {
   const onTabChange = jest.fn();
   await render(<Harness onOpenBooking={onOpenBooking} onTabChange={onTabChange} />);
   expect(screen.getByRole('tab', { name: 'Arriving (2)' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: /^Ada Obi, No room yet, 11–13 Oct · 2 nights · •••• 4567, Arriving$/ })).toBeTruthy();
+  expect(
+    screen.getByRole('button', {
+      name: /^Ada Obi, No room yet, 11–13 Oct · 2 nights · •••• 4567, Arriving$/,
+    }),
+  ).toBeTruthy();
+  // Phones never mark a row selected.
+  expect(screen.queryByRole('button', { name: /^Ada Obi/, selected: true })).toBeNull();
   expect(screen.queryByText('Chidi Eze')).toBeNull();
   // The full phone never appears in a row (R19).
   expect(screen.queryByText(/2348031234567/)).toBeNull();
@@ -176,7 +182,25 @@ it('on a tablet, a row opens in the right pane instead of pushing', async () => 
   expect(screen.queryByText('Choose a guest')).toBeNull();
   expect(screen.getByRole('header', { name: 'Ada Obi' })).toBeTruthy();
   expect(screen.getByText('A1B2C3D4')).toBeTruthy();
-  expect(screen.getByRole('button', { name: /^Ada Obi.*, selected$/ })).toBeTruthy();
-  await fireEvent.press(screen.getByRole('button', { name: 'Check in' }));
+  expect(screen.getByRole('button', { name: /^Ada Obi/, selected: true })).toBeTruthy();
+  expect(screen.getByRole('button', { name: /^Bola Ade/, selected: false })).toBeTruthy();
+  // The summary scrolls; the actions are pinned outside the scroll content.
+  const pane = within(screen.getByTestId('guest-detail-pane'));
+  expect(within(pane.getByTestId('booking-detail-scroll')).getByText('A1B2C3D4')).toBeTruthy();
+  expect(
+    within(pane.getByTestId('booking-detail-scroll')).queryByRole('button', { name: 'Check in' }),
+  ).toBeNull();
+  await fireEvent.press(pane.getByRole('button', { name: 'Check in' }));
   expect(openCheckIn).toHaveBeenCalledWith('A1B2C3D4');
+});
+
+it('on a tablet, changing tab closes the open detail', async () => {
+  mockWide.mockReturnValue(true);
+  guestsReady(rows);
+  await render(<Harness />);
+  await fireEvent.press(screen.getByRole('button', { name: /^Ada Obi/ }));
+  expect(screen.getByRole('header', { name: 'Ada Obi' })).toBeTruthy();
+  await fireEvent.press(screen.getByRole('tab', { name: 'In house (2)' }));
+  expect(screen.queryByRole('header', { name: 'Ada Obi' })).toBeNull();
+  expect(screen.getByText('Choose a guest')).toBeTruthy();
 });

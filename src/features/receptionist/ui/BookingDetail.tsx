@@ -1,8 +1,11 @@
+import { ScrollView, View } from 'react-native';
+
 import type { BookingView } from '@/features/receptionist/domain/bookingState';
 import { viewBooking } from '@/features/receptionist/domain/bookingState';
 import { useDesk } from '@/features/receptionist/hooks/DeskContext';
 import type { BookingRow } from '@/features/receptionist/schemas/desk';
 import { BookingSummary } from '@/features/receptionist/ui/BookingSummary';
+import { space } from '@/shared/theme';
 import { Button, Stack } from '@/shared/ui';
 
 export type BookingActionHandlers = {
@@ -54,20 +57,29 @@ export function BookingActions({ booking, view, onChooseRoom, onCheckOut }: Acti
 
 type DetailProps = BookingActionHandlers & { booking: BookingRow; testID?: string };
 
-// Summary + actions in one column: the tablet detail pane. BookingScreen uses the same two parts
-// with the actions pinned in the screen footer.
+// The tablet detail pane: the summary scrolls, the actions stay pinned beneath it (the same shape
+// as BookingScreen's footer) so Check in / Check out never leave the screen at large text.
 export function BookingDetail({ booking, onChooseRoom, onCheckOut, testID }: DetailProps) {
   const { today } = useDesk();
   const view = viewBooking(booking, today);
   return (
-    <Stack gap="s7" testID={testID}>
-      <BookingSummary booking={booking} view={view} />
-      <BookingActions
-        booking={booking}
-        view={view}
-        onChooseRoom={onChooseRoom}
-        onCheckOut={onCheckOut}
-      />
-    </Stack>
+    <View style={{ flex: 1 }} testID={testID}>
+      <ScrollView
+        testID="booking-detail-scroll"
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: space.s5 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <BookingSummary booking={booking} view={view} />
+      </ScrollView>
+      <View style={{ paddingTop: space.s3 }}>
+        <BookingActions
+          booking={booking}
+          view={view}
+          onChooseRoom={onChooseRoom}
+          onCheckOut={onCheckOut}
+        />
+      </View>
+    </View>
   );
 }

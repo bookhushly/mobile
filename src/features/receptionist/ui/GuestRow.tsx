@@ -12,7 +12,7 @@ type Props = {
   booking: BookingRow;
   today: IsoDate;
   onPress: (id: string) => void;
-  /** Two-pane only: the row whose detail is open on the right. */
+  /** Two-pane only: the row whose detail is open on the right (undefined on phones). */
   selected?: boolean;
   testID?: string;
 };
@@ -45,9 +45,7 @@ export function GuestRow({ booking, today, onPress, selected = false, testID }: 
   ]
     .filter((s): s is string => s !== null)
     .join(' · ');
-  const spoken = [name, room, dates, status.label, selected ? 'selected' : null]
-    .filter((s): s is string => s !== null)
-    .join(', ');
+  const spoken = [name, room, dates, status.label].join(', ');
   return (
     <View style={{ backgroundColor: selected ? color.selectedWash : 'transparent' }}>
       <ListRow
@@ -61,6 +59,7 @@ export function GuestRow({ booking, today, onPress, selected = false, testID }: 
         }
         trailing={<StatusPill tone={status.tone} label={status.label} size="sm" />}
         accessibilityLabel={spoken}
+        selected={selected}
         onPress={() => {
           onPress(booking.id);
         }}

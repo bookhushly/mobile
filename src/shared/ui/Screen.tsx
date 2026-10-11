@@ -1,4 +1,4 @@
-import { useContext, type ReactElement, type ReactNode } from 'react';
+import { cloneElement, useContext, type ReactElement, type ReactNode } from 'react';
 import { ScrollView, View, type RefreshControlProps } from 'react-native';
 import { SafeAreaInsetsContext, SafeAreaView } from 'react-native-safe-area-context';
 
@@ -27,6 +27,15 @@ export function Screen({
 }: Props) {
   // Context, not the hook: the hook throws without a provider, which bare unit renders lack.
   const insets = useContext(SafeAreaInsetsContext) ?? { bottom: 0 };
+  // Theme colours for the pull-to-refresh spinner (Android would otherwise show its default blue).
+  const refresh =
+    refreshControl === undefined
+      ? undefined
+      : cloneElement(refreshControl, {
+          tintColor: refreshControl.props.tintColor ?? color.textSecondary,
+          colors: refreshControl.props.colors ?? [color.actionFill],
+          progressBackgroundColor: refreshControl.props.progressBackgroundColor ?? color.surface,
+        });
   const body = {
     paddingHorizontal: space.s5,
     paddingVertical: space.s5,
@@ -46,7 +55,7 @@ export function Screen({
           contentContainerStyle={body}
           keyboardShouldPersistTaps="handled"
           automaticallyAdjustKeyboardInsets
-          refreshControl={refreshControl}
+          refreshControl={refresh}
         >
           {children}
         </ScrollView>

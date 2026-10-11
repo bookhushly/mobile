@@ -23,6 +23,8 @@ type Props = {
    * (a button) so iOS does not fold it into the row's label and off the swipe order.
    */
   groupAccessibility?: boolean;
+  /** Two-pane lists: the row whose detail is open (spoken as "selected" by the OS). */
+  selected?: boolean;
   testID?: string;
 };
 
@@ -36,6 +38,7 @@ export function ListRow({
   accessibilityLabel,
   numberOfLines = 1,
   groupAccessibility = true,
+  selected,
   testID,
 }: Props) {
   const d = useDensity();
@@ -92,6 +95,7 @@ export function ListRow({
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={name}
+      accessibilityState={selected === undefined ? undefined : { selected }}
       onPress={onPress}
       style={({ pressed }) => [style, { backgroundColor: pressed ? color.wash : 'transparent' }]}
     >
