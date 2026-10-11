@@ -8,4 +8,6 @@ export const layout = {
   tabletGutter: 24,
   tabletBreakpoint: 768,
   formMaxWidth: 640,
+  // Tablet two-pane screens (DESIGN_SYSTEM §2: ≈960 for tablet panels).
+  panelMaxWidth: 960,
 } as const;

@@ -11,7 +11,8 @@ export function useRooms(): {
   rooms: RoomRow[];
   loading: boolean;
   error: boolean;
-  refetch: () => void;
+  /** Settles when the fetch ends, even on failure (pull-to-refresh spinners wait on it). */
+  refetch: () => Promise<void>;
   updatedAt: number;
 } {
   const { hotel } = useDesk();
@@ -34,7 +35,7 @@ export function useRooms(): {
     loading: q.isPending,
     // Only when there is nothing to show; a failed background refetch keeps the rows (R10).
     error: q.isError && q.data === undefined,
-    refetch: () => void refetch(),
+    refetch: () => refetch().then(() => undefined),
     updatedAt: q.dataUpdatedAt,
   };
 }

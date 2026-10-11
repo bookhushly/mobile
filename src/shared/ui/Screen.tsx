@@ -12,9 +12,19 @@ type Props = {
   footer?: ReactNode;
   bg?: 'canvas' | 'surface';
   refreshControl?: ReactElement<RefreshControlProps>;
+  /** `panel`: the tablet two-pane width (960) instead of the form width (640). */
+  width?: 'form' | 'panel';
 };
 
-export function Screen({ children, scroll, header, footer, bg = 'canvas', refreshControl }: Props) {
+export function Screen({
+  children,
+  scroll,
+  header,
+  footer,
+  bg = 'canvas',
+  refreshControl,
+  width = 'form',
+}: Props) {
   // Context, not the hook: the hook throws without a provider, which bare unit renders lack.
   const insets = useContext(SafeAreaInsetsContext) ?? { bottom: 0 };
   const body = {
@@ -22,7 +32,7 @@ export function Screen({ children, scroll, header, footer, bg = 'canvas', refres
     paddingVertical: space.s5,
     gap: space.s5,
     width: '100%' as const,
-    maxWidth: layout.formMaxWidth,
+    maxWidth: width === 'panel' ? layout.panelMaxWidth : layout.formMaxWidth,
     alignSelf: 'center' as const,
   };
   return (

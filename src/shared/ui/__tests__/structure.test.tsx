@@ -158,6 +158,25 @@ it('screen renders header, body and a sticky footer', async () => {
   expect(screen.getByText('Primary')).toBeTruthy();
 });
 
+it('screen widens its body for a tablet panel and keeps the form width otherwise', async () => {
+  const { toJSON: formJson } = await render(
+    <Screen>
+      <Text>Form</Text>
+    </Screen>,
+  );
+  const form = JSON.stringify(formJson());
+  expect(form).toContain('"maxWidth":640');
+  expect(form).not.toContain('"maxWidth":960');
+  const { toJSON: panelJson } = await render(
+    <Screen width="panel">
+      <Text>Panel</Text>
+    </Screen>,
+  );
+  const panel = JSON.stringify(panelJson());
+  expect(panel).toContain('"maxWidth":960');
+  expect(panel).not.toContain('"maxWidth":640');
+});
+
 it('screen keeps working for existing callers (children + scroll)', async () => {
   await render(
     <Screen scroll>

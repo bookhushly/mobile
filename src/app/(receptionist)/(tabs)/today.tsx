@@ -1,7 +1,19 @@
-import { DeskPlaceholderScreen } from '@/features/receptionist/screens/DeskPlaceholderScreen';
+import { router } from 'expo-router';
+
+import { TodayScreen } from '@/features/receptionist/screens/TodayScreen';
 
 export default function TodayRoute() {
   return (
-    <DeskPlaceholderScreen title="Today" message="Arrivals, in-house and departures arrive next." />
+    <TodayScreen
+      onOpenGuests={(tab) => {
+        router.push({ pathname: '/guests', params: { tab } });
+      }}
+      onOpenFreeRooms={() => {
+        router.push({ pathname: '/rooms', params: { filter: 'available' } });
+      }}
+      onOpenBooking={(id) => {
+        router.push({ pathname: '/booking/[id]', params: { id } });
+      }}
+    />
   );
 }
