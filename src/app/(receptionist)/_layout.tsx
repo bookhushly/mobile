@@ -6,6 +6,7 @@ import { useSignOut } from '@/features/auth/hooks/useSignOut';
 import { useModeSwitcher } from '@/features/mode/hooks/useModeSwitcher';
 import { ModeSwitcher } from '@/features/mode/screens/ModeSwitcher';
 import { DeskProvider } from '@/features/receptionist/hooks/DeskContext';
+import { useDeskLive } from '@/features/receptionist/hooks/useDeskLive';
 import { useHotel } from '@/features/receptionist/hooks/useHotel';
 import { HotelGateScreen } from '@/features/receptionist/screens/HotelGateScreen';
 import { useShiftLog } from '@/features/receptionist/state/shiftLog';
@@ -20,6 +21,12 @@ export const unstable_settings = { initialRouteName: '(tabs)' };
 
 // R4: the desk's day is the Lagos day by the server clock, re-read each minute so midnight moves it.
 const TODAY_TICK_MS = 60_000;
+
+// R10: one Realtime channel per hotel for the whole desk; events only trigger refetches.
+function DeskLive({ hotelId }: { hotelId: string }) {
+  useDeskLive(hotelId);
+  return null;
+}
 
 export default function ReceptionistLayout() {
   const state = useAuth((s) => s.state);
@@ -73,6 +80,7 @@ export default function ReceptionistLayout() {
           },
         }}
       >
+        <DeskLive hotelId={hotel.hotel.id} />
         <Stack screenOptions={{ headerShown: false }} />
         <DeskAccountSheet
           visible={account}
