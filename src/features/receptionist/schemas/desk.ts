@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { isIsoDate } from '@/shared/lib/lagosDay';
+
 export const ROOM_STATUSES = [
   'available',
   'occupied',
@@ -11,7 +13,10 @@ export const ROOM_STATUSES = [
 export const roomStatus = z.enum(ROOM_STATUSES);
 export type RoomStatus = z.infer<typeof roomStatus>;
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine(isIsoDate, 'Not a calendar date');
 const roomType = z.object({ name: z.string() }).nullable();
 
 // Explicit columns only (R19). Keep in sync with deskDb's select strings.

@@ -27,11 +27,14 @@ const refused = (refusal: Refusal) => ({ kind: 'refused', refusal }) as const;
 function conflict(act: DeskAct, code: string, body: unknown): Refusal {
   if (act === 'roomStatus') return { kind: 'roomOccupied', roomNumber: null };
   if (act === 'reassign') return { kind: 'roomTaken' };
+  if (act === 'checkOut') {
+    // A check-out can only collide with itself; any other 409 code is a request we don't know.
+    return code === 'already_checked_out' ? { kind: 'alreadyOut' } : { kind: 'invalid' };
+  }
   if (code === 'already_checked_in') {
     const b = alreadyCheckedInBody.safeParse(body);
     return { kind: 'alreadyIn', at: b.success ? (b.data.checked_in_at ?? null) : null };
   }
-  if (code === 'already_checked_out') return { kind: 'alreadyOut' };
   const room = roomConflictBody.safeParse(body);
   const roomNumber = room.success ? (room.data.room_number ?? null) : null;
   if (code === 'room_unavailable') {

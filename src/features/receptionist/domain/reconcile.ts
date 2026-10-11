@@ -2,7 +2,11 @@
 export type Reconciled = 'done' | 'notDone' | 'elsewhere';
 const GRACE_MS = 60_000;
 
-type CheckInState = { booking_status: string | null; checked_in_at: string | null };
+type CheckInState = {
+  booking_status: string | null;
+  checked_in: boolean | null;
+  checked_in_at: string | null;
+};
 type CheckOutState = { booking_status: string | null; checked_out_at: string | null };
 
 function byUs(sentAtMs: number, at: string | null): Reconciled {
@@ -10,9 +14,14 @@ function byUs(sentAtMs: number, at: string | null): Reconciled {
   return Number.isFinite(ms) && ms >= sentAtMs - GRACE_MS ? 'done' : 'elsewhere';
 }
 
+// Same rule as bookingState's isInHouse: a null status with the legacy flag set counts as in.
+function wasCheckedIn(row: CheckInState): boolean {
+  if (row.booking_status === 'checked_in' || row.booking_status === 'checked_out') return true;
+  return row.booking_status === null && row.checked_in === true;
+}
+
 export function reconcileCheckIn(sentAtMs: number, row: CheckInState | null): Reconciled {
-  if (row === null) return 'notDone';
-  if (row.booking_status !== 'checked_in' && row.booking_status !== 'checked_out') return 'notDone';
+  if (row === null || !wasCheckedIn(row)) return 'notDone';
   return byUs(sentAtMs, row.checked_in_at);
 }
 

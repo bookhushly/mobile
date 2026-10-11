@@ -38,3 +38,7 @@ it('parses a row without a room', () => {
 it('rejects a booking_status the DB constraint does not allow', () => {
   expect(bookingRow.safeParse({ ...full, booking_status: 'completed' }).success).toBe(false);
 });
+
+it('rejects a date that does not exist on the calendar', () => {
+  expect(bookingRow.safeParse({ ...full, check_in_date: '2026-02-30' }).success).toBe(false);
+});

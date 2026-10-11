@@ -1,6 +1,7 @@
 import {
   checkInFlow,
   initialFlow,
+  type FlowEvent,
   type FlowState,
 } from '@/features/receptionist/domain/checkInFlow';
 import { parseCheckInCode, type CheckInCode } from '@/features/receptionist/domain/checkInCode';
@@ -230,4 +231,60 @@ describe('bookingChanged', () => {
 it('reset returns to entry from anywhere', () => {
   expect(checkInFlow(sending, { type: 'reset' })).toBe(initialFlow);
   expect(checkInFlow({ step: 'done', booking }, { type: 'reset' })).toBe(initialFlow);
+});
+
+describe('every unlisted (state, event) pair leaves the state untouched', () => {
+  const refusal = { kind: 'unpaid' } as const;
+  const states: FlowState[] = [
+    { step: 'entry', error: null },
+    { step: 'looking', code: CODE },
+    { step: 'notFound', code: CODE },
+    { step: 'lookupFailed', code: CODE },
+    preview,
+    sending,
+    { step: 'refused', booking, refusal },
+    uncertain,
+    rechecking,
+    { step: 'rateLimited', booking, untilMs: null },
+    { step: 'done', booking },
+    { step: 'elsewhere', booking },
+  ];
+  const events: FlowEvent[] = [
+    { type: 'submit', raw: 'AB12CD34' },
+    { type: 'found', booking },
+    { type: 'lookupError' },
+    { type: 'confirm', nowMs: NOW },
+    { type: 'answer', outcome: { kind: 'uncertain' }, nowMs: NOW },
+    { type: 'recheck' },
+    { type: 'rechecked', booking, reconciled: 'done' },
+    { type: 'recheckError' },
+    { type: 'bookingChanged', booking },
+    { type: 'reset' },
+  ];
+  const listed = new Set([
+    'entry:submit',
+    'notFound:submit',
+    'lookupFailed:submit',
+    'looking:found',
+    'looking:lookupError',
+    'preview:confirm',
+    'rateLimited:confirm',
+    'sending:answer',
+    'uncertain:recheck',
+    'rechecking:rechecked',
+    'rechecking:recheckError',
+    'preview:bookingChanged',
+    'refused:bookingChanged',
+  ]);
+  const pairs: [string, FlowState, FlowEvent][] = [];
+  for (const s of states) {
+    for (const e of events) {
+      if (e.type !== 'reset' && !listed.has(`${s.step}:${e.type}`)) {
+        pairs.push([`${s.step} + ${e.type}`, s, e]);
+      }
+    }
+  }
+  it.each(pairs)('%s', (_name, s, e) => {
+    expect(checkInFlow(s, e)).toBe(s);
+  });
 });

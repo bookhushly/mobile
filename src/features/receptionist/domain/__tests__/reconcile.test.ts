@@ -11,6 +11,7 @@ describe('reconcileCheckIn', () => {
     expect(
       reconcileCheckIn(SENT, {
         booking_status: 'checked_in',
+        checked_in: true,
         checked_in_at: '2026-10-11T09:42:05Z',
       }),
     ).toBe('done');
@@ -19,12 +20,14 @@ describe('reconcileCheckIn', () => {
     expect(
       reconcileCheckIn(SENT, {
         booking_status: 'checked_in',
+        checked_in: true,
         checked_in_at: '2026-10-11T09:41:30Z',
       }),
     ).toBe('done');
     expect(
       reconcileCheckIn(SENT, {
         booking_status: 'checked_in',
+        checked_in: true,
         checked_in_at: '2026-10-11T09:40:00Z',
       }),
     ).toBe('elsewhere');
@@ -33,20 +36,29 @@ describe('reconcileCheckIn', () => {
     expect(
       reconcileCheckIn(SENT, {
         booking_status: 'checked_out',
+        checked_in: true,
         checked_in_at: '2026-10-11T09:42:05Z',
       }),
     ).toBe('done');
   });
   it('is not done while the booking is still confirmed or missing', () => {
-    expect(reconcileCheckIn(SENT, { booking_status: 'confirmed', checked_in_at: null })).toBe(
-      'notDone',
-    );
+    expect(
+      reconcileCheckIn(SENT, {
+        booking_status: 'confirmed',
+        checked_in: false,
+        checked_in_at: null,
+      }),
+    ).toBe('notDone');
     expect(reconcileCheckIn(SENT, null)).toBe('notDone');
   });
   it('treats an unreadable check-in time on a checked-in row as elsewhere', () => {
-    expect(reconcileCheckIn(SENT, { booking_status: 'checked_in', checked_in_at: 'bad' })).toBe(
-      'elsewhere',
-    );
+    expect(
+      reconcileCheckIn(SENT, {
+        booking_status: 'checked_in',
+        checked_in: true,
+        checked_in_at: 'bad',
+      }),
+    ).toBe('elsewhere');
   });
 });
 
@@ -83,4 +95,17 @@ describe('reconcileReassign', () => {
     expect(reconcileReassign({ hotel_rooms: null }, 'r9')).toBe('notDone');
     expect(reconcileReassign(null, 'r9')).toBe('notDone');
   });
+});
+
+it('reconcileCheckIn treats a null status with checked_in true as checked in, like isInHouse', () => {
+  expect(
+    reconcileCheckIn(SENT, {
+      booking_status: null,
+      checked_in: true,
+      checked_in_at: '2026-10-11T09:42:05Z',
+    }),
+  ).toBe('done');
+  expect(
+    reconcileCheckIn(SENT, { booking_status: null, checked_in: false, checked_in_at: null }),
+  ).toBe('notDone');
 });

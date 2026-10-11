@@ -100,3 +100,9 @@ it.each<DeskAct>(['checkIn', 'checkOut', 'reassign', 'roomStatus'])(
     );
   },
 );
+
+it('a check-out 409 with an unknown code is an invalid request, never a room conflict', () => {
+  expect(deskOutcome('checkOut', err({ kind: 'conflict', code: 'something_else' }))).toEqual(
+    refused({ kind: 'invalid' }),
+  );
+});
