@@ -6,7 +6,12 @@ import type { RoomRow } from '@/features/receptionist/schemas/desk';
 
 import { deskWrapper, HOTEL, makeQueryClient } from './deskTestUtils';
 
-jest.mock('expo-router', () => ({ useIsFocused: () => true }));
+let mockFocused = true;
+jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused }));
+
+beforeEach(() => {
+  mockFocused = true;
+});
 jest.mock('@/features/receptionist/api/deskDb', () => ({ deskDb: { rooms: jest.fn() } }));
 
 const room: RoomRow = {
@@ -29,6 +34,15 @@ it('loads the hotel rooms and reports a first-load failure', async () => {
   expect(mockRooms).toHaveBeenCalledWith(HOTEL);
   expect(hook.result.current.rooms).toEqual([room]);
   expect(hook.result.current.error).toBe(false);
+
+  // Regaining focus with stale data refetches (R10).
+  mockFocused = false;
+  await hook.rerender(undefined);
+  mockFocused = true;
+  await hook.rerender(undefined);
+  await waitFor(() => {
+    expect(mockRooms).toHaveBeenCalledTimes(2);
+  });
   await hook.unmount();
   qc.clear();
 

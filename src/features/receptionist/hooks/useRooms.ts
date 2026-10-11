@@ -4,6 +4,7 @@ import { useIsFocused } from 'expo-router';
 import { deskDb } from '@/features/receptionist/api/deskDb';
 import { DESK_POLL_MS, deskKeys, DeskLoadError } from '@/features/receptionist/hooks/deskKeys';
 import { useDesk } from '@/features/receptionist/hooks/DeskContext';
+import { useFocusRefetch } from '@/features/receptionist/hooks/useFocusRefetch';
 import type { RoomRow } from '@/features/receptionist/schemas/desk';
 
 export function useRooms(): {
@@ -26,11 +27,13 @@ export function useRooms(): {
     refetchOnWindowFocus: true,
     placeholderData: keepPreviousData,
   });
+  useFocusRefetch(isFocused, q);
   const { refetch } = q;
   return {
     rooms: q.data ?? [],
     loading: q.isPending,
-    error: q.isError,
+    // Only when there is nothing to show; a failed background refetch keeps the rows (R10).
+    error: q.isError && q.data === undefined,
     refetch: () => void refetch(),
     updatedAt: q.dataUpdatedAt,
   };

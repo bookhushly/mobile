@@ -27,7 +27,9 @@ export function useDeskLive(hotelId: string): void {
       LIVE_SETTLE_MS,
       { maxWaitMs: LIVE_MAX_WAIT_MS },
     );
-    let channel = supabase.channel(`desk:${hotelId}`);
+    // A unique topic per run: `channel(topic)` returns a still-leaving channel of the same name, and
+    // a quick remount would attach to it and then lose it with the old one.
+    let channel = supabase.channel(`desk:${hotelId}:${String(Date.now())}`);
     for (const table of LIVE_TABLES) {
       channel = channel.on(
         'postgres_changes',

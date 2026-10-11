@@ -5,13 +5,15 @@ import { useGuests } from '@/features/receptionist/hooks/useGuests';
 
 import { booking, deskWrapper, HOTEL, makeQueryClient, TODAY } from './deskTestUtils';
 
-jest.mock('expo-router', () => ({ useIsFocused: () => true }));
+let mockFocused = true;
+jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused }));
 jest.mock('@/features/receptionist/api/deskDb', () => ({ deskDb: { guests: jest.fn() } }));
 
 let mockGuests: jest.SpiedFunction<typeof deskDb.guests>;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockFocused = true;
   mockGuests = jest.spyOn(deskDb, 'guests');
 });
 
@@ -81,10 +83,39 @@ it('keeps the rows on screen when a background refetch fails', async () => {
     result.current.refetch();
   });
   await waitFor(() => {
-    expect(result.current.error).toBe(true);
+    expect(mockGuests).toHaveBeenCalledTimes(2);
   });
+  // Let the failed result settle into the observer.
+  await act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
   expect(result.current.rows).toHaveLength(1);
   expect(result.current.lists?.arriving).toHaveLength(1);
+  // Rows are still on screen, so this is not an error state (R10).
+  expect(result.current.error).toBe(false);
   expect(result.current.loading).toBe(false);
   await done();
+});
+
+it('refetches stale data when the tab regains focus, not on other re-renders', async () => {
+  mockGuests.mockResolvedValue({ ok: true, value: [booking('a')] });
+  const qc = makeQueryClient();
+  const hook = await renderHook(() => useGuests(), { wrapper: deskWrapper(qc) });
+  await waitFor(() => {
+    expect(hook.result.current.loading).toBe(false);
+  });
+  expect(mockGuests).toHaveBeenCalledTimes(1);
+
+  await hook.rerender(undefined);
+  expect(mockGuests).toHaveBeenCalledTimes(1);
+
+  mockFocused = false;
+  await hook.rerender(undefined);
+  expect(mockGuests).toHaveBeenCalledTimes(1);
+
+  mockFocused = true;
+  await hook.rerender(undefined);
+  await waitFor(() => {
+    expect(mockGuests).toHaveBeenCalledTimes(2);
+  });
+  await hook.unmount();
+  qc.clear();
 });

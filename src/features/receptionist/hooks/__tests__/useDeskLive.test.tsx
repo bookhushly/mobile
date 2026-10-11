@@ -81,7 +81,8 @@ async function run() {
 
 it('subscribes to bookings and rooms for this hotel and refetches once joined', async () => {
   const { fake, channel, invalidate, done } = await run();
-  expect(channel).toHaveBeenCalledWith('desk:h1');
+  // A unique topic per run so a quick remount never attaches to a leaving channel.
+  expect(channel).toHaveBeenCalledWith(expect.stringMatching(/^desk:h1:\d+$/));
   expect(fake.bindings.map((b) => b.filter)).toEqual([
     { event: '*', schema: 'public', table: 'hotel_bookings', filter: 'hotel_id=eq.h1' },
     { event: '*', schema: 'public', table: 'hotel_rooms', filter: 'hotel_id=eq.h1' },
