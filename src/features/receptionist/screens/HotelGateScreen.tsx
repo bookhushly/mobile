@@ -54,7 +54,7 @@ export function HotelGateScreen({ state, onSignOut }: Props) {
       );
     case 'pick':
       return (
-        <Screen scroll header={<Header title="Choose a hotel" />}>
+        <Screen scroll header={<Header title="Choose a hotel" />} footer={signOut}>
           <View>
             {state.hotels.map((h) => (
               <ListRow

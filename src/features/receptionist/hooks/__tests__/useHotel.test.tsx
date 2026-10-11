@@ -52,6 +52,7 @@ async function run(rows: StaffHotelRow[] | { kind: 'network' }) {
   });
   return {
     result: hook.result,
+    qc,
     done: async () => {
       await hook.unmount();
       qc.clear();
@@ -164,5 +165,15 @@ it('reports an error with a retry that refetches', async () => {
     expect(result.current.status).toBe('ready');
   });
   expect(mockStaff).toHaveBeenCalledTimes(2);
+  await done();
+});
+
+it('keeps serving the hotel when a background refresh fails', async () => {
+  const { result, qc, done } = await run([row('h1', 'Eko Suites')]);
+  expect(result.current.status).toBe('ready');
+  mockStaff.mockResolvedValue({ ok: false, error: { kind: 'unavailable', status: 503 } });
+  await act(() => qc.refetchQueries({ queryKey: ['desk', 'staff', USER] }));
+  expect(mockStaff).toHaveBeenCalledTimes(2);
+  expect(expectStatus(result.current, 'ready').hotel.id).toBe('h1');
   await done();
 });

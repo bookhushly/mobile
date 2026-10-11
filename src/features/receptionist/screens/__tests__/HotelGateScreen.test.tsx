@@ -39,11 +39,12 @@ it('explains an unavailable hotel and lets the user sign out', async () => {
   expect(onSignOut).toHaveBeenCalledTimes(1);
 });
 
-it('lists the hotels to choose from and reports the choice', async () => {
+it('lists the hotels to choose from, reports the choice, and still lets the user sign out', async () => {
   const choose = jest.fn();
-  await render(
-    <HotelGateScreen state={{ status: 'pick', hotels, choose }} onSignOut={jest.fn()} />,
-  );
+  const onSignOut = jest.fn();
+  await render(<HotelGateScreen state={{ status: 'pick', hotels, choose }} onSignOut={onSignOut} />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign out' }));
+  expect(onSignOut).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('header', { name: 'Choose a hotel' })).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Eko Suites, Ikeja, Lagos' }));
   expect(choose).toHaveBeenCalledWith('h1');

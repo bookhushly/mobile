@@ -72,9 +72,12 @@ export function useHotel(userId: string): HotelState {
   }, [userId]);
 
   const { refetch } = q;
-  if (q.isError) return { status: 'error', retry: () => void refetch() };
-  if (q.data === undefined || stored === null || stored.userId !== userId)
-    return { status: 'loading' };
+  // Error only when there is nothing to show: a failed background refetch (TanStack keeps `data`
+  // and sets `isError`) must never tear the desk down mid-shift. With an empty userId the query
+  // is disabled and this stays `loading`; the root stack moves a signed-out user away anyway.
+  if (q.data === undefined)
+    return q.isError ? { status: 'error', retry: () => void refetch() } : { status: 'loading' };
+  if (stored === null || stored.userId !== userId) return { status: 'loading' };
   const { total, hotels } = q.data;
   if (total === 0) return { status: 'none' };
   if (hotels.length === 0) return { status: 'unavailable' };
