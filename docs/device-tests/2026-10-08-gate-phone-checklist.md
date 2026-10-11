@@ -2,6 +2,7 @@
 
 **Build:** Android preview, https://expo.dev/accounts/dnl-bookhushly/projects/book-h/builds/1c675070-0259-42fd-bb72-4a0f509f2b02
 **Phone:** Moto G06 (a second Android phone for the two-phone tests).
+**Newer build:** for the 9 October build use `2026-10-09-phone-checks-ui-a-ui-b.md`; this file is the full reference.
 **Covers:** Phase 1 (online), Phase 2a (offline), Phase 2b (lookup, override, activity, shift summary), the UI-A redesign (section 8) and accounts (UI-B, section 9).
 
 Tick each box and note anything odd next to it: what you did, what you saw, and roughly when. Screenshots help.
