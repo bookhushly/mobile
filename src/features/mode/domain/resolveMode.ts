@@ -15,9 +15,10 @@ export function resolveMode(i: ModeInputs, lastMode: Mode | null = null): ModeRe
     return { kind: 'webOnly' };
   }
   const modes: Mode[] = [];
-  if (i.role === 'receptionist' && i.hotelStaff) modes.push('receptionist');
+  // A receptionist always lands on the front desk; without a hotel_staff row the desk explains.
+  if (i.role === 'receptionist') modes.push('receptionist');
   if (i.activeScannerCount > 0) modes.push('gate');
-  modes.push('customer');
+  if (i.role === 'customer') modes.push('customer');
   const preferred = lastMode && modes.includes(lastMode) ? lastMode : null;
   return { kind: 'modes', modes, defaultMode: preferred ?? modes[0] ?? 'customer' };
 }

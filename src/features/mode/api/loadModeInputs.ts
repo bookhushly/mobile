@@ -28,7 +28,7 @@ export async function loadModeInputs(
   if (!profile.success || !staff.success) return err({ kind: 'validation' });
   return ok({
     role: profile.data.role,
-    hotelStaff: staff.data ? { hotelId: staff.data.hotel_id } : null,
+    hotelStaff: staff.data[0] ? { hotelId: staff.data[0].hotel_id } : null,
     activeScannerCount: s.value.length,
   });
 }

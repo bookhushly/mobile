@@ -7,4 +7,5 @@ export const profileRow = z.object({
   email: z.string().nullable().optional(),
 });
 
-export const hotelStaffRow = z.object({ hotel_id: z.string() }).nullable();
+// A staff member may belong to several hotels; the query is limited to one row.
+export const hotelStaffRow = z.array(z.object({ hotel_id: z.string() }));

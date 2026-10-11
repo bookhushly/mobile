@@ -17,6 +17,6 @@ export const ROUTE_HREF = {
   modeError: '/mode-error',
   webOnly: '/web-only',
   gate: '/gate',
-  receptionist: '/front-desk',
+  receptionist: '/today',
   customer: '/home',
 } as const;
