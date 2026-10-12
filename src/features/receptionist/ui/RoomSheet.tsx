@@ -172,6 +172,7 @@ export function RoomSheet({ room, onClose, onOpenBooking }: Props) {
   if (shown === null) return null;
   return (
     <Open
+      key={shown.id}
       room={shown}
       visible={room !== null}
       onClose={onClose}

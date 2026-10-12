@@ -65,6 +65,7 @@ export function ChooseRoomSheet({ booking, onClose, onMoved, onOpenRooms }: Prop
   if (shown === null) return null;
   return (
     <Open
+      key={shown.id}
       booking={shown}
       visible={booking !== null}
       onClose={onClose}

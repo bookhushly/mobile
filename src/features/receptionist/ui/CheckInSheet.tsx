@@ -64,6 +64,8 @@ export function CheckInSheet({ visible, request, onClose, onOpenRooms }: Props) 
     flow.bookingChanged(b);
   });
 
+  // iOS can swallow a navigation made in the same tick as closing the RN Modal: wait for it.
+  const [roomsAfterDismiss, setRoomsAfterDismiss] = useState(false);
   // A new open starts fresh (adjusting state during render, not in an effect). Starts unseen so
   // a sheet mounted already open with a code looks it up at once.
   const [seen, setSeen] = useState({ visible: false, id: visible ? -1 : request.id });
@@ -75,6 +77,8 @@ export function CheckInSheet({ visible, request, onClose, onOpenRooms }: Props) 
     reassign.reset();
     flow.reset();
     if (visible && request.code !== null) flow.submit(request.code);
+    // Reopened before the old one finished leaving: drop the pending navigation to Rooms.
+    if (visible) setRoomsAfterDismiss(false);
   }
 
   const scan = useScanOnce(state.step, flow.submit);
@@ -93,8 +97,6 @@ export function CheckInSheet({ visible, request, onClose, onOpenRooms }: Props) 
     if (choosing) reassign.settle();
     onClose();
   };
-  // iOS can swallow a navigation made in the same tick as closing the RN Modal: wait for it.
-  const [roomsAfterDismiss, setRoomsAfterDismiss] = useState(false);
   const openRooms = () => {
     close();
     if (Platform.OS === 'ios') setRoomsAfterDismiss(true);
