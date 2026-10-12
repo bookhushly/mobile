@@ -27,13 +27,22 @@ type Props = {
 const TOO_MANY = "This hotel's network is sending too many requests";
 const firstName = (b: BookingRow) => guestName(b).split(' ')[0] ?? 'guest';
 
-// Guest, room and stay, with the R15 early-leave note and what happens to the room.
-function Summary({ booking, today }: { booking: BookingRow; today: IsoDate }) {
+// Guest, room and stay. While the check-out is still to come (`pending`), also the R15 early-leave
+// note and what will happen to the room; once it is settled (refused, elsewhere) neither applies.
+function Summary({
+  booking,
+  today,
+  pending,
+}: {
+  booking: BookingRow;
+  today: IsoDate;
+  pending: boolean;
+}) {
   const view = viewBooking(booking, today);
-  const room = booking.hotel_rooms;
+  const room = pending ? booking.hotel_rooms : null;
   return (
     <Stack gap="s4">
-      {view.warnings.map((w) => (
+      {(pending ? view.warnings : []).map((w) => (
         <Banner key={w.kind} tone="info" message={warningText(w)} />
       ))}
       <Stack gap="s1">
@@ -65,7 +74,11 @@ function step(
   const withBanner = (banner: ReactNode) => (
     <Stack gap="s4">
       {banner}
-      <Summary booking={booking} today={today} />
+      <Summary
+        booking={booking}
+        today={today}
+        pending={state.step !== 'refused' && state.step !== 'elsewhere'}
+      />
     </Stack>
   );
   switch (state.step) {
@@ -186,12 +199,16 @@ function Open({ booking, onClose }: Props & { booking: BookingRow }) {
   // R17: tick on the server clock while a 429 holds the button.
   const now = useTicking(state.step === 'rateLimited' && state.untilMs !== null);
   useAnnounce(state.step === 'done' ? 'Checked out' : null);
-  const { body, footer } = step(c, booking, today, now, onClose);
+  const close = () => {
+    c.settle();
+    onClose();
+  };
+  const { body, footer } = step(c, booking, today, now, close);
   return (
     <Sheet
       visible
       title={state.step === 'done' ? 'Checked out' : `Check out ${firstName(booking)}`}
-      onClose={onClose}
+      onClose={close}
       closeDisabled={state.step === 'sending' || state.step === 'rechecking'}
       scroll
       testID="check-out-sheet"

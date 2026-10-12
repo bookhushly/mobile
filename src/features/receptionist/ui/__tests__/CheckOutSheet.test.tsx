@@ -135,6 +135,24 @@ it('a timeout is uncertain; Check again re-reads and finishes when the check-out
   expect(useShiftLog.getState().entries).toHaveLength(1);
 });
 
+it('closing after an uncertain answer refetches the desk (it may have gone through)', async () => {
+  mockCheckOut.mockResolvedValue(fail({ kind: 'network' }));
+  const { invalidate, onClose } = await renderSheet();
+  await fireEvent.press(screen.getByRole('button', { name: 'Check out' }));
+  await screen.findByText("Couldn't confirm the check-out. It may have gone through.");
+  expect(invalidate).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] });
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+it('closing before anything was sent does not refetch', async () => {
+  const { invalidate, onClose } = await renderSheet();
+  await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(invalidate).not.toHaveBeenCalled();
+});
+
 it('409 already_checked_out after our send is re-read: someone else did it earlier', async () => {
   mockCheckOut.mockResolvedValue(fail({ kind: 'conflict', code: 'already_checked_out' }));
   mockById.mockResolvedValue(ok(outRow('2026-10-11T08:15:00Z')));
@@ -147,6 +165,9 @@ it('409 already_checked_out after our send is re-read: someone else did it earli
   expect(useShiftLog.getState().entries).toEqual([]);
   expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] });
   expect(screen.getByRole('button', { name: 'Done' })).toBeTruthy();
+  // Settled: no future-tense room line, no early-leave note.
+  expect(screen.queryByText(/will be marked dirty/)).toBeNull();
+  expect(screen.queryByText(/leaving 2 days early/)).toBeNull();
 });
 
 it('409 already_checked_out that the re-read shows as ours is a plain success', async () => {
@@ -163,6 +184,9 @@ it('a 400 not_checked_in is a refusal in words', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'Check out' }));
   expect(await screen.findByText("This guest isn't checked in.")).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Check out' })).toBeNull();
+  expect(screen.queryByText(/will be marked dirty/)).toBeNull();
+  expect(screen.queryByText(/leaving 2 days early/)).toBeNull();
+  expect(screen.getByText('Room 204 · Deluxe')).toBeTruthy();
   expect(mockCue).toHaveBeenCalledWith('error');
 });
 

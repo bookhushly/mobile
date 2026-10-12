@@ -24,7 +24,8 @@ export function ActivityScreen({ onBack }: Props) {
       <FlatList
         data={entries}
         style={{ flex: 1 }}
-        keyExtractor={(e: ShiftEntry, i) => `${String(e.at)}-${String(i)}`}
+        // Stable across prepends (an index key would shift every row on each new entry).
+        keyExtractor={(e: ShiftEntry) => `${String(e.at)}-${e.kind}-${e.text}`}
         renderItem={({ item }) => (
           <ListRow title={item.text} subtitle={lagosTime(new Date(item.at).toISOString())} />
         )}

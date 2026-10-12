@@ -27,6 +27,8 @@ export type CheckOut = {
   state: CheckOutState;
   confirm: () => void;
   recheck: () => void;
+  /** Call on close: an unsettled answer may hide a check-out that went through, so refetch. */
+  settle: () => void;
 };
 
 const CONFIRM: CheckOutState = { step: 'confirm', notDone: false };
@@ -138,6 +140,10 @@ export function useCheckOut(booking: BookingRow): CheckOut {
     },
     recheck: () => {
       void recheck();
+    },
+    settle: () => {
+      if (state.step === 'uncertain' || state.step === 'rateLimited')
+        void qc.invalidateQueries({ queryKey: deskKeys.all(hotel.id) });
     },
   };
 }

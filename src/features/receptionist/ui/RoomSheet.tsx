@@ -1,5 +1,5 @@
 import { Circle, CircleDot } from 'lucide-react-native';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import {
   canChangeStatus,
@@ -60,9 +60,19 @@ function Occupied({ room, onOpenBooking }: { room: RoomRow; onOpenBooking: (id: 
   );
 }
 
-function Settable({ room, onClose }: { room: RoomRow; onClose: () => void }) {
+// One Sheet for the whole time the room is open (iOS can't swap Modals mid-presentation): when
+// the board reports the room occupied (e.g. right after a 409), only the body and footer change.
+function Open({ room, onClose, onOpenBooking }: Props & { room: RoomRow }) {
+  const occupied = !canChangeStatus(room);
   const current: SettableStatus | null = room.status === 'occupied' ? null : room.status;
-  const [selected, setSelected] = useState<SettableStatus | null>(current);
+  // The radio follows the room's status until the desk picks; a change underneath resets it.
+  const [picked, setPicked] = useState<SettableStatus | null>(null);
+  const [seen, setSeen] = useState(current);
+  if (seen !== current) {
+    setSeen(current);
+    setPicked(null);
+  }
+  const selected = picked ?? current;
   const { state, save } = useRoomStatus(room, onClose);
   const now = useTicking(state.step === 'rateLimited' && state.untilMs !== null);
 
@@ -87,6 +97,21 @@ function Settable({ room, onClose }: { room: RoomRow; onClose: () => void }) {
   const waiting = state.step === 'rateLimited' && secondsLeft(state.untilMs, now) > 0;
   const unchanged = selected === null || selected === current;
 
+  let footer: ReactNode;
+  if (state.step === 'refused')
+    footer = <Button variant="secondary" label="Close" onPress={onClose} />;
+  else if (!occupied)
+    footer = (
+      <Button
+        label={state.step === 'retry' ? 'Try again' : 'Save'}
+        loading={state.step === 'sending'}
+        disabled={unchanged || waiting}
+        onPress={() => {
+          if (selected !== null) save(selected);
+        }}
+      />
+    );
+
   return (
     <Sheet
       visible
@@ -95,25 +120,14 @@ function Settable({ room, onClose }: { room: RoomRow; onClose: () => void }) {
       closeDisabled={state.step === 'sending'}
       scroll
       testID="room-sheet"
-      footer={
-        state.step === 'refused' ? (
-          <Button variant="secondary" label="Close" onPress={onClose} />
-        ) : (
-          <Button
-            label={state.step === 'retry' ? 'Try again' : 'Save'}
-            loading={state.step === 'sending'}
-            disabled={unchanged || waiting}
-            onPress={() => {
-              if (selected !== null) save(selected);
-            }}
-          />
-        )
-      }
+      footer={footer}
     >
       <Stack gap="s4">
         <StatusPill tone={roomTone(room.status)} label={statusLabel(room.status)} />
         {banner}
-        {state.step === 'refused' ? null : (
+        {occupied ? (
+          <Occupied room={room} onOpenBooking={onOpenBooking} />
+        ) : state.step === 'refused' ? null : (
           <Stack gap="s1">
             <Text variant="label" tone="textSecondary" accessibilityRole="header">
               Mark as
@@ -127,7 +141,7 @@ function Settable({ room, onClose }: { room: RoomRow; onClose: () => void }) {
                   <Icon as={selected === s ? CircleDot : Circle} size="md" tone="textPrimary" />
                 }
                 onPress={() => {
-                  setSelected(s);
+                  setPicked(s);
                 }}
               />
             ))}
@@ -142,14 +156,5 @@ function Settable({ room, onClose }: { room: RoomRow; onClose: () => void }) {
 // the statuses the desk may set and **Save**. Opened from the Rooms screen only.
 export function RoomSheet({ room, onClose, onOpenBooking }: Props) {
   if (room === null) return null;
-  if (!canChangeStatus(room))
-    return (
-      <Sheet visible title={roomTitle(room)} onClose={onClose} scroll testID="room-sheet">
-        <Stack gap="s4">
-          <StatusPill tone={roomTone(room.status)} label={statusLabel(room.status)} />
-          <Occupied room={room} onOpenBooking={onOpenBooking} />
-        </Stack>
-      </Sheet>
-    );
-  return <Settable room={room} onClose={onClose} />;
+  return <Open room={room} onClose={onClose} onOpenBooking={onOpenBooking} />;
 }

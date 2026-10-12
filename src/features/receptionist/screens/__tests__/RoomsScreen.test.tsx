@@ -9,7 +9,7 @@ import { useFreshness } from '@/features/receptionist/hooks/useFreshness';
 import { useGuests } from '@/features/receptionist/hooks/useGuests';
 import { useRooms } from '@/features/receptionist/hooks/useRooms';
 import type { RoomRow } from '@/features/receptionist/schemas/desk';
-import { RoomsScreen } from '@/features/receptionist/screens/RoomsScreen';
+import { gridColumns, RoomsScreen } from '@/features/receptionist/screens/RoomsScreen';
 import { useShiftLog } from '@/features/receptionist/state/shiftLog';
 import type { ApiError } from '@/shared/lib/errors';
 import { err, ok } from '@/shared/lib/result';
@@ -33,6 +33,20 @@ jest.mock('@/features/receptionist/hooks/useRooms', () => ({ useRooms: jest.fn()
 jest.mock('@/features/receptionist/hooks/useGuests', () => ({ useGuests: jest.fn() }));
 jest.mock('@/features/receptionist/hooks/useFreshness', () => ({ useFreshness: jest.fn() }));
 jest.mock('@/shared/ui/useWide', () => ({ useWide: jest.fn() }));
+// Counts Modal sheets mounted: switching views must keep the one sheet, never swap it.
+const mockSheetMounts = { count: 0 };
+jest.mock('@/shared/ui/Sheet', () => {
+  const actual = jest.requireActual<typeof import('@/shared/ui/Sheet')>('@/shared/ui/Sheet');
+  const { useEffect: useMountEffect } = jest.requireActual<typeof import('react')>('react');
+  return {
+    Sheet: (props: ComponentProps<typeof actual.Sheet>) => {
+      useMountEffect(() => {
+        mockSheetMounts.count += 1;
+      }, []);
+      return <actual.Sheet {...props} />;
+    },
+  };
+});
 const mockCue = jest.fn();
 jest.mock('@/shared/platform/feedback', () => ({
   createFeedback: () => ({
@@ -114,12 +128,15 @@ async function renderRooms(initial: RoomFilter = 'all') {
   const onOpenBooking = jest.fn();
   const signOut = jest.fn();
   const Wrapper = deskWrapper(qc, { signOut });
-  await render(
+  const tree = () => (
     <Wrapper>
       <Harness initial={initial} onOpenBooking={onOpenBooking} />
-    </Wrapper>,
+    </Wrapper>
   );
-  return { qc, invalidate, onOpenBooking, signOut };
+  await render(tree());
+  // Re-render with whatever useRooms now returns (the board refetched).
+  const rerender = () => screen.rerender(tree());
+  return { qc, invalidate, onOpenBooking, signOut, rerender };
 }
 
 const roomRows = () =>
@@ -138,8 +155,16 @@ async function markAvailable() {
   await fireEvent.press(screen.getByRole('button', { name: 'Save' }));
 }
 
+// Fake timers: FlatList's 50 ms cell-batching timer otherwise fires between act() scopes on a
+// loaded machine (an intermittent "not wrapped in act" warning). RNTL advances them in waitFor.
+afterEach(() => {
+  jest.useRealTimers();
+});
+
 beforeEach(() => {
+  jest.useFakeTimers();
   jest.clearAllMocks();
+  mockSheetMounts.count = 0;
   useShiftLog.getState().clear();
   mockWide.mockReturnValue(false);
   jest.mocked(useFreshness).mockReturnValue(null);
@@ -248,6 +273,42 @@ it('409 means a guest was just checked in', async () => {
   expect(mockStaff).not.toHaveBeenCalled();
 });
 
+it('after a 409 the board shows the room occupied: the same sheet switches to the guest view', async () => {
+  mockSet.mockResolvedValue(fail({ kind: 'conflict', code: 'conflict' }));
+  const { rerender } = await renderRooms();
+  await markAvailable();
+  await screen.findByText('A guest was just checked in to this room.');
+  expect(mockSheetMounts.count).toBe(1);
+  roomsReady(ROOMS.map((r) => (r.id === 'r103' ? { ...r, status: 'occupied' as const } : r)));
+  await rerender();
+  expect(
+    screen.getByText('A guest is checked in. Check them out first to change this room.'),
+  ).toBeTruthy();
+  expect(screen.getByText('A guest was just checked in to this room.')).toBeTruthy();
+  expect(screen.getByRole('header', { name: 'Room 103' })).toBeTruthy();
+  expect(screen.queryByRole('radio', { name: 'Available' })).toBeNull();
+  expect(mockSheetMounts.count).toBe(1);
+});
+
+it('the radio follows the room until the desk picks, and resets when the status changes', async () => {
+  const { rerender } = await renderRooms();
+  await openRoom(103);
+  expect(screen.getByRole('radio', { name: 'Dirty' })).toBeChecked();
+  // Cleaned elsewhere: the selection follows, and there is nothing to save.
+  roomsReady(ROOMS.map((r) => (r.id === 'r103' ? { ...r, status: 'available' as const } : r)));
+  await rerender();
+  expect(screen.getByRole('radio', { name: 'Available' })).toBeChecked();
+  expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  // A pick sticks until the room changes again underneath.
+  await fireEvent.press(screen.getByRole('radio', { name: 'Reserved' }));
+  expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+  roomsReady(ROOMS.map((r) => (r.id === 'r103' ? { ...r, status: 'dirty' as const } : r)));
+  await rerender();
+  expect(screen.getByRole('radio', { name: 'Dirty' })).toBeChecked();
+  expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  expect(mockSheetMounts.count).toBe(1);
+});
+
 it('404 says the room is gone', async () => {
   mockSet.mockResolvedValue(fail({ kind: 'notFound' }));
   await renderRooms();
@@ -329,4 +390,15 @@ it('a tablet shows the board as a grid of tiles that open the same sheet', async
   await fireEvent.press(screen.getByTestId('room-tile-r205'));
   expect(await screen.findByRole('header', { name: 'Room 205' })).toBeTruthy();
   expect(screen.getByRole('radio', { name: 'Reserved' })).toBeChecked();
+});
+
+it('fits as many 140 pt tiles as the width allows, at least one', () => {
+  expect(gridColumns(0)).toBe(1);
+  expect(gridColumns(139)).toBe(1);
+  expect(gridColumns(140)).toBe(1);
+  // n tiles need n × 140 + (n − 1) × 8 (gap s3).
+  expect(gridColumns(287)).toBe(1);
+  expect(gridColumns(288)).toBe(2);
+  expect(gridColumns(600)).toBe(4);
+  expect(gridColumns(900)).toBe(6);
 });

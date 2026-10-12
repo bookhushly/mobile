@@ -52,17 +52,18 @@ export function FilterChips<T extends string>({
             style={{
               minHeight: d.minTarget,
               justifyContent: 'center',
-              paddingHorizontal: space.s4,
-              borderRadius: radius.rFull,
-              // Checked reads by fill, never by violet alone.
-              backgroundColor: checked ? color.textPrimary : color.surface,
-              borderWidth: borderWidth.hairline,
-              borderColor: checked ? color.textPrimary : color.border,
+              paddingHorizontal: space.s3,
+              borderRadius: radius.r2,
+              // DESIGN_SYSTEM §6/§7: a selected chip is wash + violet; the heavier border keeps the
+              // state visible without relying on hue alone.
+              backgroundColor: checked ? color.wash : color.surface,
+              borderWidth: checked ? borderWidth.thick : borderWidth.hairline,
+              borderColor: checked ? color.actionPressed : color.border,
             }}
           >
             <Text
               variant="label"
-              tone={checked ? 'onInverse' : 'textPrimary'}
+              tone={checked ? 'linkText' : 'textPrimary'}
               numberOfLines={1}
               maxScale={1.3}
               tabular

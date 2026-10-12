@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
-import { color } from '@/shared/theme';
+import { borderWidth, color, radius } from '@/shared/theme';
 import { FilterChips } from '@/shared/ui/FilterChips';
 import { ListRow } from '@/shared/ui/ListRow';
 
@@ -23,14 +23,22 @@ it('filter chips are a single-choice group with counts in the label', async () =
   expect(onChange).toHaveBeenCalledWith('dirty');
 });
 
-it('each chip is at least a 44 pt target and the chosen one is filled, not just tinted', async () => {
+it('each chip is at least a 44 pt target; the chosen one is wash + violet with a heavier border', async () => {
   await render(
     <FilterChips label="Room status" value="dirty" options={OPTIONS} onChange={jest.fn()} />,
   );
   expect(screen.getByRole('radio', { name: 'All 24' })).toHaveStyle({ minHeight: 44 });
   expect(screen.getByRole('radio', { name: 'Dirty 3' })).toHaveStyle({
-    backgroundColor: color.textPrimary,
+    backgroundColor: color.wash,
+    borderColor: color.actionPressed,
+    borderWidth: borderWidth.thick,
+    borderRadius: radius.r2,
   });
+  expect(screen.getByRole('radio', { name: 'All 24' })).toHaveStyle({
+    backgroundColor: color.surface,
+    borderWidth: borderWidth.hairline,
+  });
+  expect(screen.getByText('Dirty 3')).toHaveStyle({ color: color.linkText });
 });
 
 it('a list row can be a radio option', async () => {
