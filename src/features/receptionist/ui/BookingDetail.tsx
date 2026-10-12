@@ -9,9 +9,9 @@ import { space } from '@/shared/theme';
 import { Button, Stack } from '@/shared/ui';
 
 export type BookingActionHandlers = {
-  /** Task 13 wires the Choose-room sheet; without it the button is not offered. */
+  /** Opens the Choose-room sheet; without it the button is not offered. */
   onChooseRoom?: (booking: BookingRow) => void;
-  /** Task 14 wires the Check-out sheet; without it the button is not offered. */
+  /** Opens the Check-out sheet; without it the button is not offered. */
   onCheckOut?: (booking: BookingRow) => void;
 };
 
@@ -70,7 +70,7 @@ export function BookingDetail({ booking, onChooseRoom, onCheckOut, testID }: Det
         contentContainerStyle={{ paddingBottom: space.s5 }}
         keyboardShouldPersistTaps="handled"
       >
-        <BookingSummary booking={booking} view={view} />
+        <BookingSummary booking={booking} view={view} today={today} />
       </ScrollView>
       <View style={{ paddingTop: space.s3 }}>
         <BookingActions

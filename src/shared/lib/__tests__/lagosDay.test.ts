@@ -3,6 +3,7 @@ import {
   isIsoDate,
   lagosTime,
   lagosToday,
+  lagosWhen,
   longDate,
   shortDate,
   stayRange,
@@ -29,6 +30,13 @@ it('shows Lagos wall time for an ISO instant', () => {
   expect(lagosTime('2026-10-11T09:42:00Z')).toBe('10:42');
   expect(lagosTime('2026-10-11T23:05:00+00:00')).toBe('00:05');
   expect(lagosTime('nonsense')).toBe('');
+});
+it('says the time alone for today and adds the date otherwise', () => {
+  expect(lagosWhen('2026-10-11T09:42:00Z', '2026-10-11')).toBe('at 10:42');
+  expect(lagosWhen('2026-10-10T09:42:00Z', '2026-10-11')).toBe('on Sat 10 Oct at 10:42');
+  // 23:30Z is already the next Lagos day.
+  expect(lagosWhen('2026-10-10T23:30:00Z', '2026-10-11')).toBe('at 00:30');
+  expect(lagosWhen('nonsense', '2026-10-11')).toBe('');
 });
 it('validates ISO dates', () => {
   expect(isIsoDate('2026-02-29')).toBe(false);

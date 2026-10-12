@@ -41,7 +41,7 @@ export function useRoomStatus(room: RoomRow, onSaved: () => void): RoomStatusCha
   const busy = useRef(false);
 
   const refetchRooms = () => {
-    void qc.invalidateQueries({ queryKey: deskKeys.rooms(hotel.id) });
+    void qc.invalidateQueries({ queryKey: deskKeys.rooms(hotel.id) }, { cancelRefetch: false });
   };
   const refuse = (copy: { message: string; tone: RefusalCopy['tone'] }) => {
     feedback.cue('error');
@@ -78,7 +78,7 @@ export function useRoomStatus(room: RoomRow, onSaved: () => void): RoomStatusCha
           text: `${roomTitle(room)} marked ${statusPhrase(status)}`,
         });
         feedback.cue('success');
-        void qc.invalidateQueries({ queryKey: deskKeys.all(hotel.id) });
+        void qc.invalidateQueries({ queryKey: deskKeys.all(hotel.id) }, { cancelRefetch: false });
         setState({ step: 'idle' });
         onSaved();
         break;

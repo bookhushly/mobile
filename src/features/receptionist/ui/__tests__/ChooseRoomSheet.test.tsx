@@ -1,4 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { useState, type ComponentProps } from 'react';
+import { Platform } from 'react-native';
 
 import { deskDb } from '@/features/receptionist/api/deskDb';
 import { reassignRoom } from '@/features/receptionist/api/deskApi';
@@ -28,6 +30,17 @@ jest.mock('@/shared/platform/feedback', () => ({
   }),
 }));
 jest.mock('expo-router', () => ({ useIsFocused: () => true }));
+// The RN Modal mock renders nothing once hidden, so the last props are kept to fire a dismissal.
+const mockSheet: { last: { visible: boolean; onDismissed?: () => void } | null } = { last: null };
+jest.mock('@/shared/ui/Sheet', () => {
+  const actual = jest.requireActual<typeof import('@/shared/ui/Sheet')>('@/shared/ui/Sheet');
+  return {
+    Sheet: (props: ComponentProps<typeof actual.Sheet>) => {
+      mockSheet.last = props;
+      return <actual.Sheet {...props} />;
+    },
+  };
+});
 
 const mockRooms = jest.spyOn(deskDb, 'rooms');
 const mockById = jest.spyOn(deskDb, 'bookingById');
@@ -69,19 +82,36 @@ const ADA_ROOM = {
 const ADA = booking('b1', { guest_name: 'Ada Obi', hotel_rooms: ADA_ROOM });
 const fail = (e: ApiError) => err(e);
 
+// Plays the route: Close (or Open rooms) sets the booking back to null.
+function Host(props: { onClose: () => void; onMoved: () => void; onOpenRooms: () => void }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <ChooseRoomSheet
+      booking={open ? ADA : null}
+      onClose={() => {
+        props.onClose();
+        setOpen(false);
+      }}
+      onMoved={props.onMoved}
+      onOpenRooms={props.onOpenRooms}
+    />
+  );
+}
+
 async function renderSheet() {
   const qc = makeQueryClient();
   const invalidate = jest.spyOn(qc, 'invalidateQueries');
   const onClose = jest.fn();
   const onMoved = jest.fn();
+  const onOpenRooms = jest.fn();
   const signOut = jest.fn();
   const Wrapper = deskWrapper(qc, { signOut });
   const r = await render(
     <Wrapper>
-      <ChooseRoomSheet booking={ADA} onClose={onClose} onMoved={onMoved} />
+      <Host onClose={onClose} onMoved={onMoved} onOpenRooms={onOpenRooms} />
     </Wrapper>,
   );
-  return { ...r, invalidate, onClose, onMoved, signOut };
+  return { ...r, invalidate, onClose, onMoved, onOpenRooms, signOut };
 }
 
 const WITHOUT_305 = ROOMS.filter((r) => r.id !== 'r305');
@@ -95,8 +125,17 @@ async function gone305() {
   expect(mockRooms).toHaveBeenCalledTimes(2);
 }
 
+// Fake timers (as in RoomsScreen.test): FlatList's 50 ms cell-batching timer otherwise fires
+// between act() scopes on a loaded machine (an intermittent "not wrapped in act" warning).
+afterEach(() => {
+  jest.useRealTimers();
+  jest.restoreAllMocks();
+});
+
 beforeEach(() => {
+  jest.useFakeTimers();
   jest.clearAllMocks();
+  mockSheet.last = null;
   useShiftLog.getState().clear();
   mockRooms.mockResolvedValue(ok(ROOMS));
 });
@@ -117,11 +156,54 @@ it('lists free rooms, same type first, grouped by floor, without the current roo
   expect(headers).toEqual(['Floor 3', 'Other room types', 'Floor 1', 'Floor 3']);
 });
 
-it('says when there is no free room', async () => {
+it('says when there is no free room; on Android Open rooms closes and goes at once', async () => {
+  jest.replaceProperty(Platform, 'OS', 'android');
   mockRooms.mockResolvedValue(ok([CURRENT, room('r102', 102, 1, 'standard', 'dirty')]));
-  await renderSheet();
+  const { onClose, onOpenRooms } = await renderSheet();
   expect(await screen.findByText('No free rooms right now')).toBeTruthy();
   expect(screen.getByText('Mark a cleaned room as available on the Rooms tab.')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Open rooms' }));
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(onOpenRooms).toHaveBeenCalledTimes(1);
+  expect(screen.queryByText('No free rooms right now')).toBeNull();
+});
+
+it('on iPhone, Open rooms waits for the sheet to slide away', async () => {
+  jest.replaceProperty(Platform, 'OS', 'ios');
+  mockRooms.mockResolvedValue(ok([CURRENT]));
+  const { onClose, onOpenRooms } = await renderSheet();
+  await fireEvent.press(await screen.findByRole('button', { name: 'Open rooms' }));
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(onOpenRooms).not.toHaveBeenCalled();
+  // Hidden but still mounted until iOS reports the dismissal.
+  expect(mockSheet.last?.visible).toBe(false);
+  await act(() => {
+    mockSheet.last?.onDismissed?.();
+  });
+  expect(onOpenRooms).toHaveBeenCalledTimes(1);
+});
+
+it('closing after an uncertain move refetches the desk (the Booking screen does not poll)', async () => {
+  mockReassign.mockResolvedValue(fail({ kind: 'timeout' }));
+  const { invalidate, onClose } = await renderSheet();
+  await fireEvent.press(await screen.findByRole('button', { name: 'Room 305 · Deluxe' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Move to Room 305' }));
+  await screen.findByText("Couldn't confirm the move. It may have gone through.");
+  expect(invalidate).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] }, { cancelRefetch: false });
+});
+
+it('Cancel after an uncertain move also refetches', async () => {
+  mockReassign.mockResolvedValue(fail({ kind: 'timeout' }));
+  const { invalidate } = await renderSheet();
+  await fireEvent.press(await screen.findByRole('button', { name: 'Room 305 · Deluxe' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Move to Room 305' }));
+  await screen.findByText("Couldn't confirm the move. It may have gone through.");
+  mockRooms.mockReturnValue(new Promise(() => undefined));
+  await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] }, { cancelRefetch: false });
 });
 
 it('tap → confirm → Move posts once, logs, refetches and hands back the re-read booking', async () => {
@@ -141,7 +223,7 @@ it('tap → confirm → Move posts once, logs, refetches and hands back the re-r
   await fireEvent.press(await screen.findByRole('button', { name: 'Room 305 · Deluxe' }));
   mockRooms.mockResolvedValue(ok(WITHOUT_305));
   expect(screen.getByText('Move Ada Obi to Room 305?')).toBeTruthy();
-  await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Move to Room 305' }));
   await waitFor(() => {
     expect(onMoved).toHaveBeenCalledWith(moved);
   });
@@ -149,7 +231,7 @@ it('tap → confirm → Move posts once, logs, refetches and hands back the re-r
   expect(mockReassign).toHaveBeenCalledTimes(1);
   expect(mockReassign.mock.calls[0]?.slice(1)).toEqual(['b1', 'r305']);
   expect(mockById).toHaveBeenCalledWith(HOTEL, 'b1');
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] });
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] }, { cancelRefetch: false });
   expect(useShiftLog.getState().entries).toEqual([
     { at: NOW, kind: 'reassign', text: 'Moved Ada Obi to Room 305' },
   ]);
@@ -169,7 +251,7 @@ it('409 means the room was just taken: back to the list with the reason', async 
   await renderSheet();
   await fireEvent.press(await screen.findByRole('button', { name: 'Room 305 · Deluxe' }));
   mockRooms.mockResolvedValue(ok(WITHOUT_305));
-  await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Move to Room 305' }));
   expect(await screen.findByText('Room 305 was just taken. Choose another.')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Room 101 · Standard' })).toBeTruthy();
   await gone305();
@@ -181,16 +263,18 @@ it('a timeout is uncertain; Check again re-reads and finishes when the move is t
   const { onMoved } = await renderSheet();
   await fireEvent.press(await screen.findByRole('button', { name: 'Room 305 · Deluxe' }));
   mockRooms.mockResolvedValue(ok(WITHOUT_305));
-  await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
-  expect(await screen.findByText("Couldn't confirm the move.")).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Move to Room 305' }));
+  expect(
+    await screen.findByText("Couldn't confirm the move. It may have gone through."),
+  ).toBeTruthy();
   // Not there yet: offer Move again, nothing re-posted by itself.
   mockById.mockResolvedValueOnce(ok(ADA));
   await fireEvent.press(screen.getByRole('button', { name: 'Check again' }));
-  expect(await screen.findByRole('button', { name: 'Move' })).toBeTruthy();
+  expect(await screen.findByRole('button', { name: 'Move to Room 305' })).toBeTruthy();
   expect(mockReassign).toHaveBeenCalledTimes(1);
   // Second attempt also times out, but this time the re-read finds the new room.
-  await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
-  await screen.findByText("Couldn't confirm the move.");
+  await fireEvent.press(screen.getByRole('button', { name: 'Move to Room 305' }));
+  await screen.findByText("Couldn't confirm the move. It may have gone through.");
   mockById.mockResolvedValueOnce(ok(movedRow));
   await fireEvent.press(screen.getByRole('button', { name: 'Check again' }));
   await waitFor(() => {
@@ -204,9 +288,9 @@ it('403 is a refusal in words', async () => {
   mockReassign.mockResolvedValue(fail({ kind: 'forbidden' }));
   await renderSheet();
   await fireEvent.press(await screen.findByRole('button', { name: 'Room 305 · Deluxe' }));
-  await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Move to Room 305' }));
   expect(await screen.findByText("You can't change rooms at this hotel.")).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Move' })).toBeNull();
+  expect(screen.queryByRole('button', { name: /^Move to/ })).toBeNull();
 });
 
 it('two quick presses on Move send one request', async () => {
@@ -218,7 +302,7 @@ it('two quick presses on Move send one request', async () => {
   );
   await renderSheet();
   await fireEvent.press(await screen.findByRole('button', { name: 'Room 305 · Deluxe' }));
-  const move = screen.getByRole('button', { name: 'Move' });
+  const move = screen.getByRole('button', { name: 'Move to Room 305' });
   // Same element, before any re-render: both presses see the confirm step.
   await fireEvent.press(move);
   await fireEvent.press(move);
@@ -231,7 +315,7 @@ it('a 401 after refresh signs out', async () => {
   mockReassign.mockResolvedValue(fail({ kind: 'auth' }));
   const { signOut, onMoved } = await renderSheet();
   await fireEvent.press(await screen.findByRole('button', { name: 'Room 305 · Deluxe' }));
-  await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Move to Room 305' }));
   await waitFor(() => {
     expect(signOut).toHaveBeenCalledTimes(1);
   });

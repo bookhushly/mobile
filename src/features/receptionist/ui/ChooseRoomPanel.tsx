@@ -21,8 +21,7 @@ import {
 } from '@/shared/ui';
 
 type Item =
-  | { kind: 'header'; key: string; label: string }
-  | { kind: 'room'; key: string; room: RoomRow };
+  { kind: 'header'; key: string; label: string } | { kind: 'room'; key: string; room: RoomRow };
 
 const floorLabel = (r: RoomRow) => (r.floor === null ? 'No floor' : `Floor ${String(r.floor)}`);
 export const roomLabel = (r: RoomRow) => {
@@ -61,11 +60,18 @@ export const CHOOSE_ROOM_TITLE = 'Choose another room';
 export const isReassignBusy = (r: Reassign) =>
   r.state.step === 'sending' || r.state.step === 'rechecking';
 
-type BodyProps = { booking: BookingRow; r: Reassign; now: number; onClose: () => void };
+type BodyProps = {
+  booking: BookingRow;
+  r: Reassign;
+  now: number;
+  onClose: () => void;
+  /** "No free rooms": leave the sheet for the Rooms tab (dirty rooms), so one can be marked ready. */
+  onOpenRooms?: () => void;
+};
 
 // R9: the room list, then the inline confirm and its outcomes. The host sheet supplies the
 // footer from `chooseRoomFooter` so it stays pinned.
-export function ChooseRoomBody({ booking, r, now, onClose }: BodyProps) {
+export function ChooseRoomBody({ booking, r, now, onClose, onOpenRooms }: BodyProps) {
   const { state } = r;
   const name = guestName(booking);
 
@@ -95,6 +101,8 @@ export function ChooseRoomBody({ booking, r, now, onClose }: BodyProps) {
           style={{ flex: 1 }}
           keyExtractor={(i: Item) => i.key}
           keyboardShouldPersistTaps="handled"
+          initialNumToRender={12}
+          windowSize={7}
           renderItem={({ item }) =>
             item.kind === 'header' ? (
               <SectionHeader label={item.label} />
@@ -112,6 +120,11 @@ export function ChooseRoomBody({ booking, r, now, onClose }: BodyProps) {
               icon={DoorOpen}
               title="No free rooms right now"
               message="Mark a cleaned room as available on the Rooms tab."
+              action={
+                onOpenRooms === undefined
+                  ? undefined
+                  : { label: 'Open rooms', onPress: onOpenRooms }
+              }
             />
           }
         />
@@ -148,7 +161,11 @@ export function ChooseRoomBody({ booking, r, now, onClose }: BodyProps) {
       return (
         <Stack gap="s4">
           {question}
-          <Banner tone="neutral" message="Couldn't confirm the move." live="assertive" />
+          <Banner
+            tone="neutral"
+            message="Couldn't confirm the move. It may have gone through."
+            live="assertive"
+          />
         </Stack>
       );
     case 'rechecking':
@@ -206,7 +223,7 @@ export function chooseRoomFooter(r: Reassign, nowMs: number, onCancel?: () => vo
       return (
         <>
           <Button
-            label="Move"
+            label={`Move to Room ${String(state.room.room_number)}`}
             loading={state.step === 'sending'}
             disabled={state.step === 'rateLimited' && secondsLeft(state.untilMs, nowMs) > 0}
             onPress={r.move}

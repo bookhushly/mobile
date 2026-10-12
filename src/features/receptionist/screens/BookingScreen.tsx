@@ -4,11 +4,15 @@ import type { ReactNode } from 'react';
 import { viewBooking } from '@/features/receptionist/domain/bookingState';
 import { useDesk } from '@/features/receptionist/hooks/DeskContext';
 import { useBooking } from '@/features/receptionist/hooks/useBooking';
-import { BookingActions, type BookingActionHandlers } from '@/features/receptionist/ui/BookingDetail';
+import {
+  BookingActions,
+  type BookingActionHandlers,
+} from '@/features/receptionist/ui/BookingDetail';
 import { BookingSummary } from '@/features/receptionist/ui/BookingSummary';
 import { EmptyState, ErrorState, Header, IconButton, Screen, SkeletonRows } from '@/shared/ui';
 
-type Props = BookingActionHandlers & { id: string; onBack: () => void };
+// `id`: null when the route param isn't a booking id at all (shown as not at this hotel).
+type Props = BookingActionHandlers & { id: string | null; onBack: () => void };
 
 // `/booking/[id]` on phones (tablets show the same parts in the Guests right pane).
 export function BookingScreen({ id, onBack, onChooseRoom, onCheckOut }: Props) {
@@ -31,7 +35,7 @@ export function BookingScreen({ id, onBack, onChooseRoom, onCheckOut }: Props) {
     );
   } else {
     const view = viewBooking(booking, today);
-    body = <BookingSummary booking={booking} view={view} />;
+    body = <BookingSummary booking={booking} view={view} today={today} />;
     footer = (
       <BookingActions
         booking={booking}

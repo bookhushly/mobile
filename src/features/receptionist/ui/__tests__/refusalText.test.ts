@@ -12,6 +12,13 @@ it('words every check-in refusal (spec §4), refusals never neutral', () => {
     tone: 'warning',
   });
   expect(refusalText({ kind: 'alreadyIn', at: null }).message).toBe('Already checked in.');
+  // With the desk's day: today's time alone, another day's with its date.
+  expect(
+    refusalText({ kind: 'alreadyIn', at: '2026-10-11T09:42:00Z' }, { today: '2026-10-11' }).message,
+  ).toBe('Already checked in at 10:42.');
+  expect(
+    refusalText({ kind: 'alreadyIn', at: '2026-10-10T09:42:00Z' }, { today: '2026-10-11' }).message,
+  ).toBe('Already checked in on Sat 10 Oct at 10:42.');
   expect(refusalText({ kind: 'alreadyOut' }).message).toBe('This guest has already checked out.');
   expect(refusalText({ kind: 'roomOccupied', roomNumber: 204 })).toEqual({
     message: 'Room 204 still has a guest checked in.',
@@ -26,8 +33,10 @@ it('words every check-in refusal (spec §4), refusals never neutral', () => {
     'Room 204 still has a guest checked in.',
   );
   expect(
-    refusalText({ kind: 'roomUnavailable', roomNumber: null, roomStatus: null }, { roomNumber: 204 })
-      .message,
+    refusalText(
+      { kind: 'roomUnavailable', roomNumber: null, roomStatus: null },
+      { roomNumber: 204 },
+    ).message,
   ).toBe("Room 204 isn't available.");
   expect(
     refusalText({ kind: 'roomUnavailable', roomNumber: 204, roomStatus: 'under_maintenance' }),
@@ -50,6 +59,10 @@ it('words every check-in refusal (spec §4), refusals never neutral', () => {
 });
 
 it('words reassign refusals for the room, not the guest', () => {
+  // A move names two things; either may be gone.
+  expect(refusalText({ kind: 'notFound' }, { act: 'reassign' }).message).toBe(
+    'This booking or room no longer exists.',
+  );
   expect(refusalText({ kind: 'roomTaken' }, { act: 'reassign', roomNumber: 305 })).toEqual({
     message: 'Room 305 was just taken. Choose another.',
     tone: 'warning',

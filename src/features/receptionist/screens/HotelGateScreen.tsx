@@ -1,14 +1,30 @@
 import { Building2 } from 'lucide-react-native';
+import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
 import type { HotelState } from '@/features/receptionist/hooks/useHotel';
 import { space } from '@/shared/theme';
-import { Button, EmptyState, ErrorState, Header, ListRow, Screen, Spinner, Text } from '@/shared/ui';
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  Header,
+  ListRow,
+  Screen,
+  Spinner,
+  Text,
+} from '@/shared/ui';
 
-type Props = { state: HotelState; onSignOut: () => void };
+type Props = {
+  state: HotelState;
+  onSignOut: () => void;
+  /** The route passes <ModeSwitcher/> (renders nothing for a one-mode user): staff with no usable
+   * hotel can still reach their other mode. Desk code must not import the mode feature. */
+  modeSwitcher: ReactNode;
+};
 
 // R7/R8: what stands between sign-in and the desk until exactly one hotel is in hand.
-export function HotelGateScreen({ state, onSignOut }: Props) {
+export function HotelGateScreen({ state, onSignOut, modeSwitcher }: Props) {
   const signOut = <Button variant="secondary" label="Sign out" onPress={onSignOut} />;
   switch (state.status) {
     case 'loading':
@@ -24,32 +40,35 @@ export function HotelGateScreen({ state, onSignOut }: Props) {
       );
     case 'error':
       return (
-        <Screen footer={signOut}>
+        <Screen scroll footer={signOut}>
           <ErrorState
             title="Couldn't load your hotel"
             message="Check your connection and try again."
             onRetry={state.retry}
           />
+          {modeSwitcher}
         </Screen>
       );
     case 'none':
       return (
-        <Screen footer={signOut}>
+        <Screen scroll footer={signOut}>
           <EmptyState
             icon={Building2}
             title="No hotel assigned"
             message="Ask the hotel owner to add you as front desk staff."
           />
+          {modeSwitcher}
         </Screen>
       );
     case 'unavailable':
       return (
-        <Screen footer={signOut}>
+        <Screen scroll footer={signOut}>
           <EmptyState
             icon={Building2}
             title="This hotel isn't available right now"
             message="Contact the hotel owner."
           />
+          {modeSwitcher}
         </Screen>
       );
     case 'pick':
@@ -67,6 +86,7 @@ export function HotelGateScreen({ state, onSignOut }: Props) {
               />
             ))}
           </View>
+          {modeSwitcher}
         </Screen>
       );
     case 'ready':

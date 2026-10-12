@@ -28,6 +28,8 @@ export type CheckInFlow = {
   recheck: () => void;
   bookingChanged: (booking: BookingRow) => void;
   reset: () => void;
+  /** The sheet is closing: after an unconfirmed check-in, refetch so screens show the truth. */
+  settle: () => void;
 };
 
 export function checkedInText(b: BookingRow): string {
@@ -53,7 +55,7 @@ function finished(d: Done, booking: BookingRow): void {
         : `Checked in ${guestName(booking)} · Room ${String(room.room_number)}`,
   });
   d.feedback.cue('success');
-  void d.qc.invalidateQueries({ queryKey: deskKeys.all(d.hotelId) });
+  void d.qc.invalidateQueries({ queryKey: deskKeys.all(d.hotelId) }, { cancelRefetch: false });
 }
 
 // The check-in state machine (domain/checkInFlow) with its I/O: lookup, one POST per confirm,
@@ -136,7 +138,7 @@ export function useCheckIn(): CheckInFlow {
       if (reconciled === 'done') finished({ qc, feedback, hotelId }, r.value ?? booking);
       else if (reconciled === 'elsewhere') {
         feedback.cue('warning');
-        void qc.invalidateQueries({ queryKey: deskKeys.all(hotelId) });
+        void qc.invalidateQueries({ queryKey: deskKeys.all(hotelId) }, { cancelRefetch: false });
       }
       dispatch({ type: 'rechecked', booking: r.value, reconciled });
     });
@@ -165,6 +167,11 @@ export function useCheckIn(): CheckInFlow {
     },
     reset: () => {
       dispatch({ type: 'reset' });
+    },
+    // It may have gone through, and the Booking screen doesn't poll.
+    settle: () => {
+      if (state.step === 'uncertain')
+        void qc.invalidateQueries({ queryKey: deskKeys.all(hotelId) }, { cancelRefetch: false });
     },
   };
 }

@@ -31,7 +31,14 @@ export default function GuestsRoute() {
         onChooseRoom={setMoving}
         onCheckOut={setLeaving}
       />
-      <ChooseRoomSheet booking={moving} onClose={closeMove} onMoved={closeMove} />
+      <ChooseRoomSheet
+        booking={moving}
+        onClose={closeMove}
+        onMoved={closeMove}
+        onOpenRooms={() => {
+          router.navigate({ pathname: '/rooms', params: { filter: 'dirty' } });
+        }}
+      />
       <CheckOutSheet
         booking={leaving}
         onClose={() => {

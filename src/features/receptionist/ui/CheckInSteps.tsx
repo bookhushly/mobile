@@ -11,7 +11,7 @@ import { secondsLeft } from '@/features/receptionist/ui/ChooseRoomPanel';
 import { guestName } from '@/features/receptionist/ui/GuestRow';
 import { refusalText } from '@/features/receptionist/ui/refusalText';
 import { warningText } from '@/features/receptionist/ui/warningText';
-import { daysBetween, lagosTime, type IsoDate } from '@/shared/lib/lagosDay';
+import { daysBetween, lagosWhen, type IsoDate } from '@/shared/lib/lagosDay';
 import { space } from '@/shared/theme';
 import { Banner, Button, Spinner, Stack, SuccessMark, Text } from '@/shared/ui';
 
@@ -76,7 +76,8 @@ function Done({ booking, today }: { booking: BookingRow; today: IsoDate }) {
   );
 }
 
-// The preview and everything that follows a confirm show the same summary with one banner.
+// The preview and everything that follows a confirm show the same summary with one banner. Only
+// check-in warnings apply here: an in-house booking's early-leave note is for check-out (R15).
 function WithSummary({
   booking,
   today,
@@ -86,12 +87,14 @@ function WithSummary({
   today: IsoDate;
   banner: ReactNode;
 }) {
+  const view = viewBooking(booking, today);
   return (
     <Stack gap="s4">
       {banner}
       <BookingSummary
         booking={booking}
-        view={viewBooking(booking, today)}
+        view={{ ...view, warnings: view.warnings.filter((w) => w.kind !== 'earlyCheckOut') }}
+        today={today}
         testID="check-in-preview"
       />
     </Stack>
@@ -126,7 +129,13 @@ export function checkInStep(p: StepProps): { body: ReactNode; footer: ReactNode 
   const cancel = <Button variant="secondary" label="Cancel" onPress={p.onClose} />;
   const done = <Button label="Done" onPress={p.onClose} />;
 
+  if (state.step === 'looking' && p.tab === 'type')
+    return { body: <Waiting text="Finding booking…" />, footer: undefined };
+
   switch (state.step) {
+    // Scanning: the same tree as entry/notFound so the camera isn't remounted; it pauses under a
+    // spinner until the lookup answers. Typing: a plain wait.
+    case 'looking':
     case 'entry':
     case 'notFound': {
       const error = state.step === 'entry' ? state.error : null;
@@ -149,6 +158,7 @@ export function checkInStep(p: StepProps): { body: ReactNode; footer: ReactNode 
               onFind={find}
               // Still scanning after "no booking": the desk tries the next code without a tap.
               cameraOn={p.visible}
+              looking={state.step === 'looking'}
               onScan={p.onScan}
             />
           </Stack>
@@ -156,8 +166,6 @@ export function checkInStep(p: StepProps): { body: ReactNode; footer: ReactNode 
         footer: p.tab === 'type' ? <Button label="Find booking" onPress={find} /> : undefined,
       };
     }
-    case 'looking':
-      return { body: <Waiting text="Finding booking…" />, footer: undefined };
     case 'lookupFailed':
       return {
         body: (
@@ -181,7 +189,7 @@ export function checkInStep(p: StepProps): { body: ReactNode; footer: ReactNode 
       const b = state.booking;
       const view = viewBooking(b, today);
       const inHouse = isInHouse(b)
-        ? refusalText({ kind: 'alreadyIn', at: b.checked_in_at })
+        ? refusalText({ kind: 'alreadyIn', at: b.checked_in_at }, { today })
         : null;
       const notReady = view.warnings.some((w) => w.kind === 'roomNotReady');
       return {
@@ -194,13 +202,19 @@ export function checkInStep(p: StepProps): { body: ReactNode; footer: ReactNode 
             }
           />
         ),
+        // A room marked not ready makes moving the guest the primary action (R15: still allowed).
         footer: (
           <>
-            {flow.canConfirm ? (
-              <Button label="Check in" loading={state.step === 'sending'} onPress={flow.confirm} />
-            ) : null}
             {flow.canConfirm && notReady && state.step === 'preview' ? (
-              <Button variant="secondary" label="Choose another room" onPress={p.onChooseRoom} />
+              <Button label="Choose another room" onPress={p.onChooseRoom} />
+            ) : null}
+            {flow.canConfirm ? (
+              <Button
+                variant={notReady ? 'secondary' : 'primary'}
+                label="Check in"
+                loading={state.step === 'sending'}
+                onPress={flow.confirm}
+              />
             ) : null}
             {state.step === 'sending' ? null : cancel}
           </>
@@ -210,6 +224,7 @@ export function checkInStep(p: StepProps): { body: ReactNode; footer: ReactNode 
     case 'refused': {
       const t = refusalText(state.refusal, {
         roomNumber: state.booking.hotel_rooms?.room_number,
+        today,
       });
       return {
         body: (
@@ -222,7 +237,9 @@ export function checkInStep(p: StepProps): { body: ReactNode; footer: ReactNode 
                 message={t.message}
                 live="assertive"
                 action={
-                  t.chooseRoom ? { label: 'Choose another room', onPress: p.onChooseRoom } : undefined
+                  t.chooseRoom
+                    ? { label: 'Choose another room', onPress: p.onChooseRoom }
+                    : undefined
                 }
               />
             }
@@ -242,7 +259,9 @@ export function checkInStep(p: StepProps): { body: ReactNode; footer: ReactNode 
               <Banner
                 tone="neutral"
                 message={
-                  s > 0 ? `${TOO_MANY} — try again in ${String(s)} s.` : `${TOO_MANY} — try again in a moment.`
+                  s > 0
+                    ? `${TOO_MANY} — try again in ${String(s)} s.`
+                    : `${TOO_MANY} — try again in a moment.`
                 }
               />
             }
@@ -286,7 +305,7 @@ export function checkInStep(p: StepProps): { body: ReactNode; footer: ReactNode 
       return { body: <Done booking={state.booking} today={today} />, footer: done };
     case 'elsewhere': {
       const at = state.booking.checked_in_at;
-      const when = at === null ? '' : lagosTime(at);
+      const when = at === null ? '' : lagosWhen(at, today);
       return {
         body: (
           <WithSummary
@@ -298,7 +317,7 @@ export function checkInStep(p: StepProps): { body: ReactNode; footer: ReactNode 
                 message={
                   when === ''
                     ? 'Already checked in (by another desk or device).'
-                    : `Already checked in at ${when} (by another desk or device).`
+                    : `Already checked in ${when} (by another desk or device).`
                 }
                 live="assertive"
               />

@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Platform } from 'react-native';
 
 import { deskDb } from '@/features/receptionist/api/deskDb';
 import { checkIn, reassignRoom } from '@/features/receptionist/api/deskApi';
@@ -32,18 +33,30 @@ jest.mock('@/shared/platform/feedback', () => ({
 }));
 jest.mock('expo-router', () => ({ useIsFocused: () => true }));
 
-// The camera stub: a button that "scans" mockCamera.raw; the prompt renders its copy.
-const mockCamera = { raw: 'AB12CD34', permission: 'granted' as string, mounts: 0 };
+// The camera stub: a button that "scans" mockCamera.raw; the prompt renders its copy. It counts
+// mounts/unmounts and reports `paused` in its label.
+const mockCamera = {
+  raw: 'AB12CD34',
+  permission: 'granted' as string,
+  mounts: 0,
+  unmounts: 0,
+};
 jest.mock('@/shared/ui/camera', () => {
   const { Pressable, Text: RNText } =
     jest.requireActual<typeof import('react-native')>('react-native');
+  const { useEffect } = jest.requireActual<typeof import('react')>('react');
   return {
-    QrCamera: ({ onCode }: { onCode: (raw: string) => void }) => {
-      mockCamera.mounts += 1;
+    QrCamera: ({ onCode, paused }: { onCode: (raw: string) => void; paused: boolean }) => {
+      useEffect(() => {
+        mockCamera.mounts += 1;
+        return () => {
+          mockCamera.unmounts += 1;
+        };
+      }, []);
       return (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="fake-camera"
+          accessibilityLabel={paused ? 'fake-camera-paused' : 'fake-camera'}
           onPress={() => {
             onCode(mockCamera.raw);
           }}
@@ -90,14 +103,15 @@ async function renderSheet(code: string | null = null) {
   const qc = makeQueryClient();
   const invalidate = jest.spyOn(qc, 'invalidateQueries');
   const onClose = jest.fn();
+  const onOpenRooms = jest.fn();
   const signOut = jest.fn();
   const Wrapper = deskWrapper(qc, { signOut });
   const r = await render(
     <Wrapper>
-      <CheckInSheet visible request={{ id: 1, code }} onClose={onClose} />
+      <CheckInSheet visible request={{ id: 1, code }} onClose={onClose} onOpenRooms={onOpenRooms} />
     </Wrapper>,
   );
-  return { ...r, qc, invalidate, onClose, signOut };
+  return { ...r, qc, invalidate, onClose, onOpenRooms, signOut };
 }
 
 async function typeAndFind(raw: string) {
@@ -111,12 +125,21 @@ async function toPreview() {
   await screen.findByRole('header', { name: 'Ada Obi' });
 }
 
+// Fake timers (as in RoomsScreen.test): the room step's FlatList batching timer otherwise fires
+// between act() scopes on a loaded machine (an intermittent "not wrapped in act" warning).
+// RNTL's waitFor advances them.
+afterEach(() => {
+  jest.useRealTimers();
+});
+
 beforeEach(() => {
+  jest.useFakeTimers();
   jest.clearAllMocks();
   mockNow = NOW;
   mockCamera.raw = 'AB12CD34';
   mockCamera.permission = 'granted';
   mockCamera.mounts = 0;
+  mockCamera.unmounts = 0;
   useShiftLog.getState().clear();
 });
 
@@ -137,7 +160,7 @@ it('type a code → preview → Check in → done, with a shift-log entry and a 
   expect(useShiftLog.getState().entries).toEqual([
     { at: NOW, kind: 'checkIn', text: 'Checked in Ada Obi · Room 204' },
   ]);
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] });
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] }, { cancelRefetch: false });
   expect(mockCue).toHaveBeenCalledWith('success');
 
   await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
@@ -314,7 +337,7 @@ it('409 room_occupied offers Choose another room, and a move updates the preview
   expect(screen.getAllByTestId('check-in-sheet')).toHaveLength(1);
   expect(screen.queryByTestId('choose-room-sheet')).toBeNull();
   await fireEvent.press(await screen.findByRole('button', { name: /Room 305/ }));
-  await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Move to Room 305' }));
   await waitFor(() => {
     expect(mockReassign.mock.calls[0]?.slice(1)).toEqual(['b1', 'r305']);
   });
@@ -327,7 +350,9 @@ it('409 room_occupied offers Choose another room, and a move updates the preview
 it('Cancel on the room list goes back to the refusal without moving', async () => {
   // The server named no room: the booking's own room stands in.
   mockCheckIn.mockResolvedValue(fail({ kind: 'conflict', code: 'room_occupied', body: {} }));
-  mockRooms.mockResolvedValue(ok([{ ...ROOM, id: 'r305', room_number: 305, last_cleaned_at: null }]));
+  mockRooms.mockResolvedValue(
+    ok([{ ...ROOM, id: 'r305', room_number: 305, last_cleaned_at: null }]),
+  );
   await renderSheet();
   await toPreview();
   await fireEvent.press(screen.getByRole('button', { name: 'Check in' }));
@@ -343,14 +368,16 @@ it('a 401 on the in-sheet move signs out', async () => {
   mockCheckIn.mockResolvedValue(
     fail({ kind: 'conflict', code: 'room_occupied', body: { room_number: 204 } }),
   );
-  mockRooms.mockResolvedValue(ok([{ ...ROOM, id: 'r305', room_number: 305, last_cleaned_at: null }]));
+  mockRooms.mockResolvedValue(
+    ok([{ ...ROOM, id: 'r305', room_number: 305, last_cleaned_at: null }]),
+  );
   mockReassign.mockResolvedValue(fail({ kind: 'auth' }));
   const { signOut } = await renderSheet();
   await toPreview();
   await fireEvent.press(screen.getByRole('button', { name: 'Check in' }));
   await fireEvent.press(await screen.findByRole('button', { name: 'Choose another room' }));
   await fireEvent.press(await screen.findByRole('button', { name: /Room 305/ }));
-  await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Move to Room 305' }));
   await waitFor(() => {
     expect(signOut).toHaveBeenCalledTimes(1);
   });
@@ -374,7 +401,7 @@ it('403 is a refusal; 429 is neutral with a countdown that re-enables Check in',
     ),
   ).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Check in' })).toBeDisabled();
-  // The sheet ticks on the server clock (real 1 s interval here).
+  // The sheet ticks on the server clock (a 1 s interval; waitFor advances the fake timers).
   mockNow = NOW + 12_000;
   await waitFor(
     () => {
@@ -414,6 +441,22 @@ it('an in-house or unpaid preview has no Check in button', async () => {
   expect(await screen.findByText('Already checked in at 10:00.')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Check in' })).toBeNull();
   expect(mockCheckIn).not.toHaveBeenCalled();
+  // Check-in context: the early-leave note (a check-out warning) isn't shown.
+  expect(screen.queryByText(/early\./)).toBeNull();
+});
+
+it('a check-in on an earlier day is said with its date', async () => {
+  mockByCode.mockResolvedValue(
+    ok({
+      ...ADA,
+      booking_status: 'checked_in',
+      checked_in: true,
+      checked_in_at: '2026-10-10T09:00:00Z',
+    }),
+  );
+  await renderSheet();
+  await typeAndFind('ab12cd34');
+  expect(await screen.findByText('Already checked in on Sat 10 Oct at 10:00.')).toBeTruthy();
 });
 
 it('scan: the camera mounts only on the Scan tab; one lookup per scanned code', async () => {
@@ -428,6 +471,29 @@ it('scan: the camera mounts only on the Scan tab; one lookup per scanned code', 
   expect(mockByCode).toHaveBeenCalledTimes(1);
   // Not in entry any more: the camera is gone.
   expect(screen.queryByRole('button', { name: 'fake-camera' })).toBeNull();
+});
+
+it('scan: the camera stays mounted, paused, while a scanned code is looked up', async () => {
+  let answer: (v: Awaited<ReturnType<typeof deskDb.bookingByCode>>) => void = () => undefined;
+  mockByCode.mockReturnValue(
+    new Promise((resolve) => {
+      answer = resolve;
+    }),
+  );
+  await renderSheet();
+  await fireEvent.press(screen.getByRole('tab', { name: 'Scan QR' }));
+  expect(mockCamera.mounts).toBe(1);
+  await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
+  // Looking: the same camera, paused, under a spinner.
+  expect(screen.getByRole('button', { name: 'fake-camera-paused' })).toBeTruthy();
+  expect(screen.getByLabelText('Finding booking…')).toBeTruthy();
+  await act(() => {
+    answer(ok(null));
+  });
+  expect(await screen.findByText(/No booking with code AB12CD34/)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'fake-camera' })).toBeTruthy();
+  expect(mockCamera.mounts).toBe(1);
+  expect(mockCamera.unmounts).toBe(0);
 });
 
 it('scan: after "no booking" the camera keeps running; the same code waits for an edit', async () => {
@@ -462,4 +528,98 @@ it('a scanned event ticket is told apart and never looked up', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
   expect(screen.getByText("That's an event ticket, not a hotel check-in code.")).toBeTruthy();
   expect(mockByCode).not.toHaveBeenCalled();
+});
+
+it('closing after an uncertain check-in refetches the desk (the Booking screen does not poll)', async () => {
+  mockCheckIn.mockResolvedValue(fail({ kind: 'timeout' }));
+  const { invalidate, onClose } = await renderSheet();
+  await toPreview();
+  await fireEvent.press(screen.getByRole('button', { name: 'Check in' }));
+  await screen.findByText("Couldn't confirm the check-in. It may have gone through.");
+  expect(invalidate).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] }, { cancelRefetch: false });
+});
+
+it('closing without an uncertain outcome does not refetch', async () => {
+  const { invalidate, onClose } = await renderSheet();
+  await toPreview();
+  await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(invalidate).not.toHaveBeenCalled();
+});
+
+it('a room marked not ready makes Choose another room the primary action', async () => {
+  mockByCode.mockResolvedValue(
+    ok({ ...ADA, hotel_rooms: { ...ROOM, status: 'under_maintenance' as const } }),
+  );
+  await renderSheet();
+  await typeAndFind('ab12cd34');
+  await screen.findByRole('button', { name: 'Choose another room' });
+  const order = screen.getAllByRole('button').map((b) => String(b.props.accessibilityLabel));
+  // Primary first in the footer; Check in is still offered (R15), as the secondary.
+  expect(order.indexOf('Choose another room')).toBeLessThan(order.indexOf('Check in'));
+  expect(screen.getByRole('button', { name: 'Check in' })).toBeEnabled();
+});
+
+it('an uncertain in-sheet move says it may have gone through; closing then refetches', async () => {
+  mockCheckIn.mockResolvedValue(
+    fail({ kind: 'conflict', code: 'room_occupied', body: { room_number: 204 } }),
+  );
+  // The refetch that closing triggers stays in flight: nothing on screen waits for it.
+  mockRooms
+    .mockResolvedValueOnce(ok([{ ...ROOM, id: 'r305', room_number: 305, last_cleaned_at: null }]))
+    .mockReturnValue(new Promise(() => undefined));
+  mockReassign.mockResolvedValue(fail({ kind: 'timeout' }));
+  const { invalidate, onClose } = await renderSheet();
+  await toPreview();
+  await fireEvent.press(screen.getByRole('button', { name: 'Check in' }));
+  await fireEvent.press(await screen.findByRole('button', { name: 'Choose another room' }));
+  await fireEvent.press(await screen.findByRole('button', { name: /Room 305/ }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Move to Room 305' }));
+  expect(
+    await screen.findByText("Couldn't confirm the move. It may have gone through."),
+  ).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] }, { cancelRefetch: false });
+});
+
+describe('no free rooms → Open rooms', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  async function toEmptyPicker() {
+    mockCheckIn.mockResolvedValue(
+      fail({ kind: 'conflict', code: 'room_occupied', body: { room_number: 204 } }),
+    );
+    mockRooms.mockResolvedValue(ok([]));
+    const r = await renderSheet();
+    await toPreview();
+    await fireEvent.press(screen.getByRole('button', { name: 'Check in' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Choose another room' }));
+    expect(await screen.findByText('No free rooms right now')).toBeTruthy();
+    return r;
+  }
+
+  it('on iPhone, closes the sheet and opens Rooms once it has gone', async () => {
+    jest.replaceProperty(Platform, 'OS', 'ios');
+    const { onClose, onOpenRooms } = await toEmptyPicker();
+    await fireEvent.press(screen.getByRole('button', { name: 'Open rooms' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onOpenRooms).not.toHaveBeenCalled();
+    // The RN Modal mock can't render a hidden sheet, so its dismissal is fired directly.
+    await fireEvent(screen.getByTestId('check-in-sheet'), 'dismiss');
+    expect(onOpenRooms).toHaveBeenCalledTimes(1);
+  });
+
+  it('on Android, closes the sheet and opens Rooms at once', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    const { onClose, onOpenRooms } = await toEmptyPicker();
+    await fireEvent.press(screen.getByRole('button', { name: 'Open rooms' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onOpenRooms).toHaveBeenCalledTimes(1);
+  });
 });

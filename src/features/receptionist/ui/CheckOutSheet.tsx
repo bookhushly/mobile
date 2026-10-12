@@ -14,7 +14,7 @@ import { secondsLeft } from '@/features/receptionist/ui/ChooseRoomPanel';
 import { guestName, nightsLabel, roomLine } from '@/features/receptionist/ui/GuestRow';
 import { refusalText } from '@/features/receptionist/ui/refusalText';
 import { warningText } from '@/features/receptionist/ui/warningText';
-import { lagosTime, stayRange, type IsoDate } from '@/shared/lib/lagosDay';
+import { lagosWhen, stayRange, type IsoDate } from '@/shared/lib/lagosDay';
 import { space } from '@/shared/theme';
 import { Banner, Button, Sheet, Spinner, Stack, SuccessMark, Text, useAnnounce } from '@/shared/ui';
 
@@ -150,7 +150,7 @@ function step(
         footer: undefined,
       };
     case 'refused': {
-      const t = refusalText(state.refusal, { act: 'checkOut' });
+      const t = refusalText(state.refusal, { act: 'checkOut', today });
       return {
         body: withBanner(<Banner tone={t.tone} message={t.message} live="assertive" />),
         footer: <Button variant="secondary" label="Close" onPress={onClose} />,
@@ -158,7 +158,7 @@ function step(
     }
     case 'elsewhere': {
       const at = state.booking.checked_out_at;
-      const when = at === null ? '' : lagosTime(at);
+      const when = at === null ? '' : lagosWhen(at, today);
       return {
         body: withBanner(
           <Banner
@@ -166,7 +166,7 @@ function step(
             message={
               when === ''
                 ? 'Already checked out (by another desk or device).'
-                : `Already checked out at ${when} (by another desk or device).`
+                : `Already checked out ${when} (by another desk or device).`
             }
             live="assertive"
           />,

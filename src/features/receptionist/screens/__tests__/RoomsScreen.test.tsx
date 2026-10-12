@@ -1,5 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { useState, type ComponentProps } from 'react';
+import { Platform } from 'react-native';
 
 import { setRoomStatus } from '@/features/receptionist/api/deskApi';
 import { deskDb } from '@/features/receptionist/api/deskDb';
@@ -33,13 +34,18 @@ jest.mock('@/features/receptionist/hooks/useRooms', () => ({ useRooms: jest.fn()
 jest.mock('@/features/receptionist/hooks/useGuests', () => ({ useGuests: jest.fn() }));
 jest.mock('@/features/receptionist/hooks/useFreshness', () => ({ useFreshness: jest.fn() }));
 jest.mock('@/shared/ui/useWide', () => ({ useWide: jest.fn() }));
-// Counts Modal sheets mounted: switching views must keep the one sheet, never swap it.
-const mockSheetMounts = { count: 0 };
+// Counts Modal sheets mounted: switching views must keep the one sheet, never swap it. Keeps the
+// last props too: the RN Modal mock renders nothing once hidden, so a dismissal is fired by hand.
+const mockSheetMounts: {
+  count: number;
+  last: { visible: boolean; onDismissed?: () => void } | null;
+} = { count: 0, last: null };
 jest.mock('@/shared/ui/Sheet', () => {
   const actual = jest.requireActual<typeof import('@/shared/ui/Sheet')>('@/shared/ui/Sheet');
   const { useEffect: useMountEffect } = jest.requireActual<typeof import('react')>('react');
   return {
     Sheet: (props: ComponentProps<typeof actual.Sheet>) => {
+      mockSheetMounts.last = props;
       useMountEffect(() => {
         mockSheetMounts.count += 1;
       }, []);
@@ -159,12 +165,14 @@ async function markAvailable() {
 // loaded machine (an intermittent "not wrapped in act" warning). RNTL advances them in waitFor.
 afterEach(() => {
   jest.useRealTimers();
+  jest.restoreAllMocks();
 });
 
 beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
   mockSheetMounts.count = 0;
+  mockSheetMounts.last = null;
   useShiftLog.getState().clear();
   mockWide.mockReturnValue(false);
   jest.mocked(useFreshness).mockReturnValue(null);
@@ -229,6 +237,7 @@ it('a failed load says so and retries', async () => {
 });
 
 it('an occupied room shows its guest with a link to the booking, and no Save', async () => {
+  jest.replaceProperty(Platform, 'OS', 'android');
   const { onOpenBooking } = await renderRooms();
   await openRoom(204);
   expect(
@@ -237,9 +246,28 @@ it('an occupied room shows its guest with a link to the booking, and no Save', a
   expect(screen.getByText('Ada Obi')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
   expect(screen.queryByRole('radio', { name: 'Available' })).toBeNull();
+  // Android: the sheet closes and the booking opens at once.
   await fireEvent.press(screen.getByRole('link', { name: "Open Ada Obi's booking" }));
   expect(onOpenBooking).toHaveBeenCalledWith('b1');
   expect(screen.queryByRole('header', { name: 'Room 204' })).toBeNull();
+});
+
+it('on iPhone, Open booking closes the sheet and opens the booking once it has gone', async () => {
+  jest.replaceProperty(Platform, 'OS', 'ios');
+  const { onOpenBooking } = await renderRooms();
+  await openRoom(204);
+  await fireEvent.press(screen.getByRole('link', { name: "Open Ada Obi's booking" }));
+  // Hidden but still mounted (one sheet), waiting for the slide-away.
+  expect(screen.queryByRole('header', { name: 'Room 204' })).toBeNull();
+  expect(onOpenBooking).not.toHaveBeenCalled();
+  expect(mockSheetMounts.last?.visible).toBe(false);
+  await act(() => {
+    mockSheetMounts.last?.onDismissed?.();
+  });
+  expect(onOpenBooking).toHaveBeenCalledTimes(1);
+  expect(onOpenBooking).toHaveBeenCalledWith('b1');
+  // One sheet throughout: hiding it didn't swap it for another.
+  expect(mockSheetMounts.count).toBe(1);
 });
 
 it('dirty → available → Save sends it, logs it, refetches and closes', async () => {
@@ -259,7 +287,7 @@ it('dirty → available → Save sends it, logs it, refetches and closes', async
   expect(useShiftLog.getState().entries).toEqual([
     { at: NOW, kind: 'roomStatus', text: 'Room 103 marked available' },
   ]);
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] });
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] }, { cancelRefetch: false });
   expect(mockCue).toHaveBeenCalledWith('success');
 });
 
@@ -269,7 +297,10 @@ it('409 means a guest was just checked in', async () => {
   await markAvailable();
   expect(await screen.findByText('A guest was just checked in to this room.')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL, 'rooms'] });
+  expect(invalidate).toHaveBeenCalledWith(
+    { queryKey: ['desk', HOTEL, 'rooms'] },
+    { cancelRefetch: false },
+  );
   expect(mockStaff).not.toHaveBeenCalled();
 });
 
@@ -348,7 +379,10 @@ it('a timeout is neutral and may be tried again (the change is idempotent)', asy
   const { invalidate } = await renderRooms();
   await markAvailable();
   expect(await screen.findByText("Couldn't confirm. Check the board and try again.")).toBeTruthy();
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL, 'rooms'] });
+  expect(invalidate).toHaveBeenCalledWith(
+    { queryKey: ['desk', HOTEL, 'rooms'] },
+    { cancelRefetch: false },
+  );
   expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled();
 });
 

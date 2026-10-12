@@ -42,7 +42,7 @@ it('shows the booking and Check in opens the sheet with its code', async () => {
   expect(screen.getByRole('header', { name: 'Ada Obi' })).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Check in' }));
   expect(openCheckIn).toHaveBeenCalledWith('A1B2C3D4');
-  // Not wired yet (Tasks 13/14): no half-working buttons.
+  // No handlers passed: no half-working buttons.
   expect(screen.queryByRole('button', { name: 'Choose another room' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Check out' })).toBeNull();
 });
@@ -72,7 +72,9 @@ it('offers no action for a cancelled booking', async () => {
   loaded(booking('b1', { booking_status: 'cancelled' }));
   await renderBooking({ onCheckOut: jest.fn(), onChooseRoom: jest.fn() });
   expect(screen.getByText('This booking was cancelled.')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: /Check in|Check out|Choose another room/ })).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: /Check in|Check out|Choose another room/ }),
+  ).toBeNull();
 });
 
 it('says when the booking is not at this hotel', async () => {

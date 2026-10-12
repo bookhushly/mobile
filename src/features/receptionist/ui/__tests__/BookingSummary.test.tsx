@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 function renderSummary(b: BookingRow, today = TODAY) {
-  return render(<BookingSummary booking={b} view={viewBooking(b, today)} />);
+  return render(<BookingSummary booking={b} view={viewBooking(b, today)} today={today} />);
 }
 
 const room: BookingRow['hotel_rooms'] = {
@@ -112,4 +112,8 @@ it('states a cancelled booking and a finished stay', async () => {
   );
   expect(screen.getByText('Checked out')).toBeTruthy();
   expect(screen.getByText('This guest checked out at 10:42.')).toBeTruthy();
+  await renderSummary(
+    booking('b8', { booking_status: 'checked_out', checked_out_at: '2026-10-09T09:42:00Z' }),
+  );
+  expect(screen.getByText('This guest checked out on Fri 9 Oct at 10:42.')).toBeTruthy();
 });

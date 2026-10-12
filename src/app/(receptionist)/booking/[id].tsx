@@ -7,8 +7,12 @@ import { BookingScreen } from '@/features/receptionist/screens/BookingScreen';
 import { CheckOutSheet } from '@/features/receptionist/ui/CheckOutSheet';
 import { ChooseRoomSheet } from '@/features/receptionist/ui/ChooseRoomSheet';
 
-// Any non-empty id: an unknown or malformed one reads as "isn't at this hotel" / a load error.
-const idParam = z.string().trim().min(1).catch('');
+// Booking ids are UUIDs: anything else is "isn't at this hotel" without a query.
+const idParam = z.uuid().nullable().catch(null);
+
+const openRooms = () => {
+  router.navigate({ pathname: '/rooms', params: { filter: 'dirty' } });
+};
 
 export default function BookingRoute() {
   const params = useLocalSearchParams<{ id: string }>();
@@ -30,7 +34,12 @@ export default function BookingRoute() {
         onCheckOut={setLeaving}
       />
       {/* A completed move invalidates the desk queries, so the screen re-reads the booking. */}
-      <ChooseRoomSheet booking={moving} onClose={closeMove} onMoved={closeMove} />
+      <ChooseRoomSheet
+        booking={moving}
+        onClose={closeMove}
+        onMoved={closeMove}
+        onOpenRooms={openRooms}
+      />
       {/* Its own sheet, never opened from inside another (iOS can't stack page sheets). */}
       <CheckOutSheet
         booking={leaving}

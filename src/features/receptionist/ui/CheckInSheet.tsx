@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 
 import type { FlowState } from '@/features/receptionist/domain/checkInFlow';
 import { useCheckIn } from '@/features/receptionist/hooks/useCheckIn';
@@ -22,6 +23,8 @@ type Props = {
   /** A new id per open; with a code the booking is looked up at once (Booking screen path). */
   request: CheckInRequest;
   onClose: () => void;
+  /** "No free rooms" → Open rooms: called once the sheet is out of the way. */
+  onOpenRooms: () => void;
 };
 
 // One lookup per scanned value until the flow is back at entry or the desk edits the code (the
@@ -47,7 +50,7 @@ function useScanOnce(step: FlowState['step'], submit: (raw: string) => void) {
 // R13–R17: type or scan → preview → Check in → one of the §4 outcomes. Lives once in the
 // receptionist layout; every "Check in" button opens it through `openCheckIn`. Choosing another
 // room (R9) is a step inside this sheet: iOS can't present a second Modal over a page sheet.
-export function CheckInSheet({ visible, request, onClose }: Props) {
+export function CheckInSheet({ visible, request, onClose, onOpenRooms }: Props) {
   const { hotel, today } = useDesk();
   const flow = useCheckIn();
   const { state } = flow;
@@ -84,8 +87,28 @@ export function CheckInSheet({ visible, request, onClose }: Props) {
 
   useAnnounce(state.step === 'done' ? 'Checked in' : null);
 
+  // Leaving after an unconfirmed check-in or move refetches the desk (it may have gone through).
+  const close = () => {
+    flow.settle();
+    if (choosing) reassign.settle();
+    onClose();
+  };
+  // iOS can swallow a navigation made in the same tick as closing the RN Modal: wait for it.
+  const [roomsAfterDismiss, setRoomsAfterDismiss] = useState(false);
+  const openRooms = () => {
+    close();
+    if (Platform.OS === 'ios') setRoomsAfterDismiss(true);
+    else onOpenRooms();
+  };
+  const dismissed = () => {
+    if (!roomsAfterDismiss) return;
+    setRoomsAfterDismiss(false);
+    onOpenRooms();
+  };
+
   if (choosing && booking !== null) {
     const leave = () => {
+      reassign.settle();
       reassign.reset();
       setChoosing(false);
     };
@@ -93,12 +116,19 @@ export function CheckInSheet({ visible, request, onClose }: Props) {
       <Sheet
         visible={visible}
         title={CHOOSE_ROOM_TITLE}
-        onClose={onClose}
+        onClose={close}
+        onDismissed={dismissed}
         closeDisabled={isReassignBusy(reassign)}
         testID="check-in-sheet"
         footer={chooseRoomFooter(reassign, now, leave)}
       >
-        <ChooseRoomBody booking={booking} r={reassign} now={now} onClose={leave} />
+        <ChooseRoomBody
+          booking={booking}
+          r={reassign}
+          now={now}
+          onClose={leave}
+          onOpenRooms={openRooms}
+        />
       </Sheet>
     );
   }
@@ -120,14 +150,15 @@ export function CheckInSheet({ visible, request, onClose }: Props) {
     onChooseRoom: () => {
       setChoosing(true);
     },
-    onClose,
+    onClose: close,
   });
 
   return (
     <Sheet
       visible={visible}
       title={checkInTitle(state)}
-      onClose={onClose}
+      onClose={close}
+      onDismissed={dismissed}
       closeDisabled={state.step === 'sending' || state.step === 'rechecking'}
       scroll
       testID="check-in-sheet"

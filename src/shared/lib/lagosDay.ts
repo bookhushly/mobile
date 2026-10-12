@@ -78,3 +78,12 @@ export function lagosTime(iso: string): string {
   const d = new Date(ms + LAGOS_OFFSET_MS);
   return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
 }
+
+/** "at 10:42" for an instant on `today` (Lagos), else "on Sat 10 Oct at 10:42"; '' if unreadable. */
+export function lagosWhen(iso: string, today: IsoDate): string {
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return '';
+  const day = lagosToday(ms);
+  const time = lagosTime(iso);
+  return day === today ? `at ${time}` : `on ${shortDate(day)} at ${time}`;
+}

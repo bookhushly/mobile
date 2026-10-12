@@ -1,5 +1,5 @@
 import type { Blocker, Warning } from '@/features/receptionist/domain/bookingState';
-import { lagosTime, shortDate } from '@/shared/lib/lagosDay';
+import { lagosWhen, shortDate, type IsoDate } from '@/shared/lib/lagosDay';
 import type { StatusTone } from '@/shared/theme';
 
 const days = (n: number) => `${String(n)} ${n === 1 ? 'day' : 'days'}`;
@@ -16,21 +16,22 @@ export function warningText(w: Warning): string {
   }
 }
 
-// Spec §4: refusals in words, danger/warning tone; a finished stay is neutral.
-export function blockerText(b: Blocker): { message: string; tone: StatusTone } {
+export const CANCELLED_TEXT = 'This booking was cancelled.';
+export const UNPAID_TEXT =
+  "Payment hasn't been completed for this booking. The guest can pay on the Bookhushly app or website.";
+
+// Spec §4: refusals in words, danger/warning tone; a finished stay is neutral. `today` (the desk's
+// Lagos day) decides whether a time needs its date.
+export function blockerText(b: Blocker, today: IsoDate): { message: string; tone: StatusTone } {
   switch (b.kind) {
     case 'cancelled':
-      return { message: 'This booking was cancelled.', tone: 'danger' };
+      return { message: CANCELLED_TEXT, tone: 'danger' };
     case 'unpaid':
-      return {
-        message:
-          "Payment hasn't been completed for this booking. The guest can pay on the Bookhushly app or website.",
-        tone: 'warning',
-      };
+      return { message: UNPAID_TEXT, tone: 'warning' };
     case 'checkedOut': {
-      const at = b.at === null ? '' : lagosTime(b.at);
+      const when = b.at === null ? '' : lagosWhen(b.at, today);
       return {
-        message: at === '' ? 'This guest has checked out.' : `This guest checked out at ${at}.`,
+        message: when === '' ? 'This guest has checked out.' : `This guest checked out ${when}.`,
         tone: 'neutral',
       };
     }

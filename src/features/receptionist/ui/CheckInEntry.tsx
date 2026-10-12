@@ -1,7 +1,7 @@
-import { Linking, View } from 'react-native';
+import { Linking, StyleSheet, View } from 'react-native';
 
 import { color, radius } from '@/shared/theme';
-import { Input, SegmentedControl, Stack, Text } from '@/shared/ui';
+import { Input, SegmentedControl, Spinner, Stack, Text } from '@/shared/ui';
 import { CameraPrompt, QrCamera, useAppActive, useCameraAccess } from '@/shared/ui/camera';
 
 export type EntryTab = 'type' | 'scan';
@@ -20,16 +20,20 @@ type Props = {
   onFind: () => void;
   /** The camera runs only while the sheet is up and the flow is waiting for a code. */
   cameraOn: boolean;
+  /** A scanned code is being looked up: the camera stays mounted but paused under a spinner. */
+  looking: boolean;
   onScan: (raw: string) => void;
 };
 
 function ScanPane({
   on,
+  looking,
   error,
   onScan,
   onTypeInstead,
 }: {
   on: boolean;
+  looking: boolean;
   error: string | null;
   onScan: (raw: string) => void;
   onTypeInstead: () => void;
@@ -65,11 +69,18 @@ function ScanPane({
         }}
       >
         {on && active && permission === 'granted' ? (
-          <QrCamera torch={false} paused={false} onCode={onScan} />
+          <QrCamera torch={false} paused={looking} onCode={onScan} />
+        ) : null}
+        {looking ? (
+          <View
+            style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}
+          >
+            <Spinner tone="onInverse" label="Finding booking…" />
+          </View>
         ) : null}
       </View>
       <Text variant="bodySm" tone={error === null ? 'textSecondary' : 'dangerFg'}>
-        {error ?? "Point the camera at the guest's QR code."}
+        {looking ? 'Finding booking…' : (error ?? "Point the camera at the guest's QR code.")}
       </Text>
     </Stack>
   );
@@ -84,6 +95,7 @@ export function CheckInEntry({
   error,
   onFind,
   cameraOn,
+  looking,
   onScan,
 }: Props) {
   return (
@@ -106,6 +118,7 @@ export function CheckInEntry({
       ) : (
         <ScanPane
           on={cameraOn}
+          looking={looking}
           error={error}
           onScan={onScan}
           onTypeInstead={() => {

@@ -38,6 +38,9 @@ type Props = {
 
 const FILTERS: readonly RoomFilter[] = ['all', ...ROOM_STATUSES];
 const TILE_GAP = space.s3;
+// About one screen of rows first, and a smaller render window than the default 21 screens.
+const LIST_FIRST_BATCH = 12;
+const LIST_WINDOW = 7;
 
 const filterLabel = (f: RoomFilter) => (f === 'all' ? 'All' : ROOM_STATUS_LABEL[f]);
 
@@ -61,8 +64,6 @@ export function RoomsScreen({ filter, onFilterChange, onOpenBooking }: Props) {
   const rooms = useRooms();
   const freshness = useFreshness(rooms.updatedAt);
   const [opened, setOpened] = useState<Room | null>(null);
-  // Before the first layout pass, estimate the grid width from the window.
-  const [measured, setMeasured] = useState<number | null>(null);
 
   const counts = roomCounts(rooms.rooms);
   const shown = filterRooms(rooms.rooms, filter);
@@ -96,39 +97,40 @@ export function RoomsScreen({ filter, onFilterChange, onOpenBooking }: Props) {
       />
     );
   else if (wide) {
-    const width = measured ?? Math.min(window.width, layout.panelMaxWidth) - 2 * space.s5;
+    // From the window alone (rail and gutters are fixed tokens), so the column count — and the
+    // list's key — only change on rotation, never after the first layout pass.
+    const width =
+      Math.min(window.width - layout.tabletRailWidth, layout.panelMaxWidth) -
+      2 * layout.tabletGutter;
     const cols = gridColumns(width);
     list = (
-      <View
+      <FlatList
+        key={`cols-${String(cols)}`}
+        data={shown.length === 0 ? [] : padded(shown, cols)}
+        numColumns={cols}
         style={{ flex: 1 }}
-        onLayout={(e) => {
-          setMeasured(e.nativeEvent.layout.width);
-        }}
-      >
-        <FlatList
-          key={`cols-${String(cols)}`}
-          data={shown.length === 0 ? [] : padded(shown, cols)}
-          numColumns={cols}
-          style={{ flex: 1 }}
-          keyExtractor={(c: Cell) => c.id}
-          columnWrapperStyle={cols > 1 ? { gap: TILE_GAP } : undefined}
-          contentContainerStyle={{ gap: TILE_GAP }}
-          renderItem={({ item }) =>
-            'spacer' in item ? (
-              <View style={{ flex: 1, minWidth: ROOM_TILE_MIN_WIDTH }} />
-            ) : (
-              <RoomTile room={item} onPress={setOpened} testID={`room-tile-${item.id}`} />
-            )
-          }
-          ListEmptyComponent={empty}
-        />
-      </View>
+        keyExtractor={(c: Cell) => c.id}
+        columnWrapperStyle={cols > 1 ? { gap: TILE_GAP } : undefined}
+        contentContainerStyle={{ gap: TILE_GAP }}
+        initialNumToRender={LIST_FIRST_BATCH}
+        windowSize={LIST_WINDOW}
+        renderItem={({ item }) =>
+          'spacer' in item ? (
+            <View style={{ flex: 1, minWidth: ROOM_TILE_MIN_WIDTH }} />
+          ) : (
+            <RoomTile room={item} onPress={setOpened} testID={`room-tile-${item.id}`} />
+          )
+        }
+        ListEmptyComponent={empty}
+      />
     );
   } else
     list = (
       <FlatList
         data={shown}
         style={{ flex: 1 }}
+        initialNumToRender={LIST_FIRST_BATCH}
+        windowSize={LIST_WINDOW}
         keyExtractor={(r: Room) => r.id}
         renderItem={({ item }) => <RoomRow room={item} today={today} onPress={setOpened} />}
         ListEmptyComponent={empty}
@@ -164,14 +166,7 @@ export function RoomsScreen({ filter, onFilterChange, onOpenBooking }: Props) {
         />
         {list}
       </View>
-      <RoomSheet
-        room={live}
-        onClose={close}
-        onOpenBooking={(id) => {
-          close();
-          onOpenBooking(id);
-        }}
-      />
+      <RoomSheet room={live} onClose={close} onOpenBooking={onOpenBooking} />
     </Screen>
   );
 }

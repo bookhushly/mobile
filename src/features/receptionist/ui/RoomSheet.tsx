@@ -1,5 +1,6 @@
 import { Circle, CircleDot } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
+import { Platform } from 'react-native';
 
 import {
   canChangeStatus,
@@ -62,7 +63,13 @@ function Occupied({ room, onOpenBooking }: { room: RoomRow; onOpenBooking: (id: 
 
 // One Sheet for the whole time the room is open (iOS can't swap Modals mid-presentation): when
 // the board reports the room occupied (e.g. right after a 409), only the body and footer change.
-function Open({ room, onClose, onOpenBooking }: Props & { room: RoomRow }) {
+function Open({
+  room,
+  visible,
+  onClose,
+  onOpenBooking,
+  onDismissed,
+}: Props & { room: RoomRow; visible: boolean; onDismissed: () => void }) {
   const occupied = !canChangeStatus(room);
   const current: SettableStatus | null = room.status === 'occupied' ? null : room.status;
   // The radio follows the room's status until the desk picks; a change underneath resets it.
@@ -114,9 +121,10 @@ function Open({ room, onClose, onOpenBooking }: Props & { room: RoomRow }) {
 
   return (
     <Sheet
-      visible
+      visible={visible}
       title={roomTitle(room)}
       onClose={onClose}
+      onDismissed={onDismissed}
       closeDisabled={state.step === 'sending'}
       scroll
       testID="room-sheet"
@@ -154,7 +162,33 @@ function Open({ room, onClose, onOpenBooking }: Props & { room: RoomRow }) {
 
 // Spec §3 Room sheet: current status, the in-house guest when occupied, otherwise a radio list of
 // the statuses the desk may set and **Save**. Opened from the Rooms screen only.
+// "Open booking" closes the sheet first. iOS can swallow a push made in the same tick as closing
+// the RN Modal, so there the sheet stays mounted (hidden, last room) until it has slid away.
 export function RoomSheet({ room, onClose, onOpenBooking }: Props) {
-  if (room === null) return null;
-  return <Open room={room} onClose={onClose} onOpenBooking={onOpenBooking} />;
+  const [leaving, setLeaving] = useState<{ room: RoomRow; bookingId: string } | null>(null);
+  // Reopened before the old one finished leaving: drop the pending push.
+  if (room !== null && leaving !== null) setLeaving(null);
+  const shown = room ?? leaving?.room ?? null;
+  if (shown === null) return null;
+  return (
+    <Open
+      room={shown}
+      visible={room !== null}
+      onClose={onClose}
+      onOpenBooking={(id) => {
+        if (Platform.OS === 'ios') {
+          setLeaving({ room: shown, bookingId: id });
+          onClose();
+          return;
+        }
+        onClose();
+        onOpenBooking(id);
+      }}
+      onDismissed={() => {
+        if (leaving === null) return;
+        setLeaving(null);
+        onOpenBooking(leaving.bookingId);
+      }}
+    />
+  );
 }

@@ -35,18 +35,23 @@ it('words each warning with the date and the number of days', () => {
 });
 
 it('words each blocker, with the Lagos check-out time when known', () => {
-  expect(blockerText({ kind: 'cancelled' })).toEqual({
+  const today = '2026-10-11';
+  expect(blockerText({ kind: 'cancelled' }, today)).toEqual({
     message: 'This booking was cancelled.',
     tone: 'danger',
   });
-  expect(blockerText({ kind: 'unpaid' }).message).toBe(
+  expect(blockerText({ kind: 'unpaid' }, today).message).toBe(
     "Payment hasn't been completed for this booking. The guest can pay on the Bookhushly app or website.",
   );
-  expect(blockerText({ kind: 'checkedOut', at: '2026-10-11T09:42:00Z' })).toEqual({
+  expect(blockerText({ kind: 'checkedOut', at: '2026-10-11T09:42:00Z' }, today)).toEqual({
     message: 'This guest checked out at 10:42.',
     tone: 'neutral',
   });
-  expect(blockerText({ kind: 'checkedOut', at: null }).message).toBe(
+  // Not today: the date comes with the time.
+  expect(blockerText({ kind: 'checkedOut', at: '2026-10-10T09:42:00Z' }, today).message).toBe(
+    'This guest checked out on Sat 10 Oct at 10:42.',
+  );
+  expect(blockerText({ kind: 'checkedOut', at: null }, today).message).toBe(
     'This guest has checked out.',
   );
 });

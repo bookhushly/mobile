@@ -38,6 +38,8 @@ export type Reassign = {
   recheck: () => void;
   /** Back to the room list, dropping any in-flight result (a fresh open). */
   reset: () => void;
+  /** The desk is leaving the panel: after an unconfirmed move, refetch so screens show the truth. */
+  settle: () => void;
 };
 
 const PICK: ReassignState = { step: 'pick', taken: null };
@@ -86,6 +88,12 @@ export function useReassign(
           currentRoomId: booking.hotel_rooms?.id ?? null,
         });
 
+  // The move may have gone through: the Booking screen doesn't poll, so refetch what it shows.
+  const settle = () => {
+    if (state.step === 'uncertain')
+      void qc.invalidateQueries({ queryKey: deskKeys.all(hotel.id) }, { cancelRefetch: false });
+  };
+
   const restart = (next: ReassignState) => {
     gen.current += 1;
     busy.current = false;
@@ -100,7 +108,7 @@ export function useReassign(
       text: `Moved ${guestName(b)} to Room ${String(room.room_number)}`,
     });
     feedback.cue('success');
-    void qc.invalidateQueries({ queryKey: deskKeys.all(hotel.id) });
+    void qc.invalidateQueries({ queryKey: deskKeys.all(hotel.id) }, { cancelRefetch: false });
     let result = row;
     if (result === undefined) {
       const r = await deskDb.bookingById(hotel.id, b.id);
@@ -185,6 +193,7 @@ export function useReassign(
       restart({ step: 'confirm', room, notDone: false });
     },
     back: () => {
+      settle();
       restart(PICK);
     },
     move: () => {
@@ -196,5 +205,6 @@ export function useReassign(
     reset: () => {
       restart(PICK);
     },
+    settle,
   };
 }

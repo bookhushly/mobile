@@ -7,11 +7,11 @@ import type { BookingRow } from '@/features/receptionist/schemas/desk';
 import { guestName, nightsLabel } from '@/features/receptionist/ui/GuestRow';
 import { stageLabel } from '@/features/receptionist/ui/stageLabel';
 import { blockerText, warningText } from '@/features/receptionist/ui/warningText';
-import { shortDate } from '@/shared/lib/lagosDay';
+import { shortDate, type IsoDate } from '@/shared/lib/lagosDay';
 import { space } from '@/shared/theme';
 import { Banner, Divider, Icon, Stack, StatusPill, Text, useDensity } from '@/shared/ui';
 
-type Props = { booking: BookingRow; view: BookingView; testID?: string };
+type Props = { booking: BookingRow; view: BookingView; today: IsoDate; testID?: string };
 
 export function paymentLabel(status: BookingRow['payment_status']): string {
   switch (status) {
@@ -65,11 +65,11 @@ function Value({ children }: { children: string }) {
 
 // Label/value booking rows (Mobbin §2: Hyatt, Trip.com). Presentational: the stage, warnings and
 // blocker come from `viewBooking`. The full phone number is shown only here (R19).
-export function BookingSummary({ booking: b, view, testID }: Props) {
+export function BookingSummary({ booking: b, view, today, testID }: Props) {
   const d = useDensity();
   const status = stageLabel(view.stage);
   const party = partyLabel(b);
-  const blocker = view.blocker === null ? null : blockerText(view.blocker);
+  const blocker = view.blocker === null ? null : blockerText(view.blocker, today);
   const phone = b.guest_phone;
   return (
     <Stack gap="s4" testID={testID}>
