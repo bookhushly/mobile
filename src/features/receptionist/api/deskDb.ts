@@ -25,7 +25,7 @@ type DbRow = { data: unknown; error: { code?: string } | null; status: number };
 export type DeskQuery = PromiseLike<DbRow> & {
   eq(column: string, value: string): DeskQuery;
   or(filters: string): DeskQuery;
-  order(column: string): DeskQuery;
+  order(column: string, opts?: { ascending: boolean }): DeskQuery;
   limit(count: number): DeskQuery;
   maybeSingle(): PromiseLike<DbRow>;
 };
@@ -61,13 +61,15 @@ export function createDeskDb(client: SupabaseLike): DeskDb {
   return {
     staffHotels: (userId) =>
       read(client.from('hotel_staff').select(STAFF_COLUMNS).eq('user_id', userId), staffRows),
+    // In house (incl. legacy rows with no booking_status but checked_in), plus today's paid
+    // arrivals. Newest check-in first so the cap drops the oldest rows; splitGuests re-sorts.
     guests: (hotelId, today) =>
       read(
         bookings(hotelId)
           .or(
-            `booking_status.eq.checked_in,and(booking_status.eq.confirmed,payment_status.eq.completed,check_in_date.lte.${today},check_out_date.gte.${today})`,
+            `booking_status.eq.checked_in,and(booking_status.is.null,checked_in.is.true),and(booking_status.eq.confirmed,payment_status.eq.completed,check_in_date.lte.${today},check_out_date.gte.${today})`,
           )
-          .order('check_in_date')
+          .order('check_in_date', { ascending: false })
           .limit(500),
         bookingRows,
       ),

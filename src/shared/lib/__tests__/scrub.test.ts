@@ -23,6 +23,18 @@ describe('scrubBreadcrumb', () => {
   it('drops console breadcrumbs', () => {
     expect(scrubBreadcrumb({ category: 'console', message: 'hi' })).toBeNull();
   });
+  it('drops touch breadcrumbs (accessibility labels can be guest names)', () => {
+    expect(
+      scrubBreadcrumb({
+        category: 'touch',
+        message: 'Touch event within element: View',
+        data: { path: [{ label: 'Ada Obi, Room 204, In house' }] },
+      }),
+    ).toBeNull();
+    expect(
+      scrubEvent({ breadcrumbs: [{ category: 'touch' }, { category: 'navigation' }] }).breadcrumbs,
+    ).toEqual([{ category: 'navigation' }]);
+  });
   it('strips query strings from http breadcrumbs', () => {
     const b = scrubBreadcrumb({
       category: 'xhr',

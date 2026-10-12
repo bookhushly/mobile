@@ -25,8 +25,8 @@ function fake(res: Res) {
       calls.push(['or', f]);
       return q;
     },
-    order: (c: string) => {
-      calls.push(['order', c]);
+    order: (c: string, opts?: { ascending: boolean }) => {
+      calls.push(opts === undefined ? ['order', c] : ['order', c, opts]);
       return q;
     },
     limit: (n: number) => {
@@ -104,7 +104,7 @@ describe('staffHotels', () => {
 });
 
 describe('guests', () => {
-  it('filters by hotel and today, ordered by check-in date, capped at 500', async () => {
+  it('filters by hotel and today, newest check-in first, capped at 500', async () => {
     const f = fake({ data: [booking] });
     const r = await f.db.guests('h1', '2026-10-11');
     expect(f.state).toEqual({ table: 'hotel_bookings', select: BOOKING_COLUMNS });
@@ -112,9 +112,11 @@ describe('guests', () => {
       ['eq', 'hotel_id', 'h1'],
       [
         'or',
-        'booking_status.eq.checked_in,and(booking_status.eq.confirmed,payment_status.eq.completed,check_in_date.lte.2026-10-11,check_out_date.gte.2026-10-11)',
+        // Legacy in-house rows (no booking_status, checked_in) load too.
+        'booking_status.eq.checked_in,and(booking_status.is.null,checked_in.is.true),and(booking_status.eq.confirmed,payment_status.eq.completed,check_in_date.lte.2026-10-11,check_out_date.gte.2026-10-11)',
       ],
-      ['order', 'check_in_date'],
+      // Descending, so the 500 cap drops the oldest rows.
+      ['order', 'check_in_date', { ascending: false }],
       ['limit', 500],
     ]);
     expect(r.ok).toBe(true);
