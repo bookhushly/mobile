@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
-import { RefreshControl, Text } from 'react-native';
+import { Dimensions, RefreshControl, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/ui/Button';
@@ -189,6 +189,32 @@ it('screen widens its body for a tablet panel and keeps the form width otherwise
   const panel = JSON.stringify(panelJson());
   expect(panel).toContain('"maxWidth":960');
   expect(panel).not.toContain('"maxWidth":640');
+});
+
+it('screen uses 16 pt side gutters on phones and 24 on tablets', async () => {
+  const spy = jest
+    .spyOn(Dimensions, 'get')
+    .mockReturnValue({ width: 390, height: 844, scale: 2, fontScale: 1 });
+  const phone = await render(
+    <Screen header={<Text>Head</Text>} footer={<Text>Foot</Text>}>
+      <Text>Phone</Text>
+    </Screen>,
+  );
+  const phoneJson = JSON.stringify(phone.toJSON());
+  expect(phoneJson).toContain('"paddingHorizontal":16');
+  expect(phoneJson).not.toContain('"paddingHorizontal":24');
+  await phone.unmount();
+
+  spy.mockReturnValue({ width: 1024, height: 768, scale: 2, fontScale: 1 });
+  const tablet = await render(
+    <Screen header={<Text>Head</Text>} footer={<Text>Foot</Text>}>
+      <Text>Tablet</Text>
+    </Screen>,
+  );
+  const tabletJson = JSON.stringify(tablet.toJSON());
+  expect(tabletJson).toContain('"paddingHorizontal":24');
+  expect(tabletJson).not.toContain('"paddingHorizontal":16');
+  spy.mockRestore();
 });
 
 it('screen colours a pull-to-refresh control from the theme, keeping caller overrides', async () => {

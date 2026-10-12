@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import { BedDouble, LayoutDashboard, Users } from 'lucide-react-native';
 
-import { color, typeVariants } from '@/shared/theme';
+import { color, layout, typeVariants } from '@/shared/theme';
 import { fontFamily } from '@/shared/theme/fonts';
 import { useDensity, useWide } from '@/shared/ui';
 
@@ -19,10 +19,14 @@ export default function DeskTabsLayout() {
         // linkText (violet 700) rather than the fill: a 12 px label needs the 7:1 shade.
         tabBarActiveTintColor: color.linkText,
         tabBarInactiveTintColor: color.textSecondary,
+        // A non-colour cue for the active tab (WCAG 1.4.1): a selected wash behind it.
+        tabBarActiveBackgroundColor: color.selectedWash,
         tabBarStyle: {
           backgroundColor: color.surface,
           borderTopColor: color.border,
           borderRightColor: color.border,
+          // Pinned so screens can size from the window (Rooms grid) without measuring.
+          ...(wide ? { width: layout.tabletRailWidth, minWidth: layout.tabletRailWidth } : null),
         },
         tabBarItemStyle: { minHeight: d.controlHeight },
         tabBarLabelStyle: {

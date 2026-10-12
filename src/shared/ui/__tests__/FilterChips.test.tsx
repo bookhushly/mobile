@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
-import { borderWidth, color, radius } from '@/shared/theme';
+import { borderWidth, color, density, radius } from '@/shared/theme';
+import { DensityProvider } from '@/shared/ui/DensityProvider';
 import { FilterChips } from '@/shared/ui/FilterChips';
 import { ListRow } from '@/shared/ui/ListRow';
 
@@ -39,6 +40,18 @@ it('each chip is at least a 44 pt target; the chosen one is wash + violet with a
     borderWidth: borderWidth.hairline,
   });
   expect(screen.getByText('Dirty 3')).toHaveStyle({ color: color.linkText });
+});
+
+it('chips sit the density target gap apart (at least 8 pt)', async () => {
+  await render(
+    <DensityProvider density="work">
+      <FilterChips label="Room status" value="all" options={OPTIONS} onChange={jest.fn()} />
+    </DensityProvider>,
+  );
+  const group = screen.getByLabelText('Room status');
+  const gap = density.work.targetGap;
+  expect(gap).toBeGreaterThanOrEqual(8);
+  expect(group.props.contentContainerStyle).toMatchObject({ gap });
 });
 
 it('a list row can be a radio option', async () => {

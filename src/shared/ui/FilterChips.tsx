@@ -36,7 +36,8 @@ export function FilterChips<T extends string>({
       accessibilityRole="radiogroup"
       accessibilityLabel={label}
       style={{ flexGrow: 0 }}
-      contentContainerStyle={{ gap: space.s2 }}
+      // The density's target gap (≥ 8 pt) between adjacent chips, so a tap lands on the one meant.
+      contentContainerStyle={{ gap: d.targetGap }}
     >
       {options.map((o) => {
         const checked = o.value === value;
