@@ -25,6 +25,8 @@ type Props = {
   groupAccessibility?: boolean;
   /** Two-pane lists: the row whose detail is open (spoken as "selected" by the OS). */
   selected?: boolean;
+  /** A single-choice option: the row is a radio and this is its state (needs `onPress`). */
+  checked?: boolean;
   testID?: string;
 };
 
@@ -39,6 +41,7 @@ export function ListRow({
   numberOfLines = 1,
   groupAccessibility = true,
   selected,
+  checked,
   testID,
 }: Props) {
   const d = useDensity();
@@ -93,9 +96,11 @@ export function ListRow({
   return (
     <Pressable
       testID={testID}
-      accessibilityRole="button"
+      accessibilityRole={checked === undefined ? 'button' : 'radio'}
       accessibilityLabel={name}
-      accessibilityState={selected === undefined ? undefined : { selected }}
+      accessibilityState={
+        checked !== undefined ? { checked } : selected === undefined ? undefined : { selected }
+      }
       onPress={onPress}
       style={({ pressed }) => [style, { backgroundColor: pressed ? color.wash : 'transparent' }]}
     >

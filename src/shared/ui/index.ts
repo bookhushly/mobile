@@ -9,6 +9,7 @@ export { CodeField } from './CodeField';
 export { DensityProvider, useDensity, useDensityName } from './DensityProvider';
 export { Divider } from './Divider';
 export { EmptyState } from './EmptyState';
+export { FilterChips } from './FilterChips';
 export { ErrorState } from './ErrorState';
 export { Header } from './Header';
 export { Icon } from './Icon';
