@@ -85,6 +85,8 @@ export default function ReceptionistLayout() {
               request: { id: c.request.id + 1, code: code ?? null },
             }));
           },
+          // A 401 after refresh during a desk action: the same sign-out as the account sheet.
+          signOut,
         }}
       >
         <DeskLive hotelId={hotel.hotel.id} />
@@ -95,8 +97,6 @@ export default function ReceptionistLayout() {
           onClose={() => {
             setCheckIn((c) => ({ ...c, visible: false }));
           }}
-          // 401 after refresh: the same sign-out as the account sheet (clears the shift log too).
-          onSignedOut={signOut}
         />
         <DeskAccountSheet
           visible={account}

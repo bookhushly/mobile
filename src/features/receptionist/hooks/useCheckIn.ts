@@ -58,18 +58,19 @@ function finished(d: Done, booking: BookingRow): void {
 
 // The check-in state machine (domain/checkInFlow) with its I/O: lookup, one POST per confirm,
 // and the R3 re-read. Nothing here re-posts on its own.
-export function useCheckIn(onSignedOut: () => void): CheckInFlow {
-  const { hotel, today } = useDesk();
+export function useCheckIn(): CheckInFlow {
+  const { hotel, today, signOut } = useDesk();
   const qc = useQueryClient();
   // Not loaded: the desk wants the haptic only, never the gate's sounds.
   const [feedback] = useState(createFeedback);
   const [state, dispatch] = useReducer(checkInFlow, initialFlow);
 
-  // Latest callback without making it an effect dependency (an inline prop would re-run lookups).
-  const signedOut = useRef(onSignedOut);
+  // 401 after refresh: the desk's sign-out (layout-owned). Latest callback without making it an
+  // effect dependency (a new context value would re-run lookups).
+  const signedOut = useRef(signOut);
   useEffect(() => {
-    signedOut.current = onSignedOut;
-  }, [onSignedOut]);
+    signedOut.current = signOut;
+  }, [signOut]);
 
   const hotelId = hotel.id;
 

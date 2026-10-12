@@ -14,6 +14,7 @@ export const desk: Desk = {
   today: TODAY,
   openAccount: () => undefined,
   openCheckIn: () => undefined,
+  signOut: () => undefined,
 };
 
 // gcTime Infinity: no 5-minute GC timer after unmount to keep the Jest worker alive.
@@ -21,11 +22,12 @@ export function makeQueryClient(): QueryClient {
   return new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
 }
 
-export function deskWrapper(qc: QueryClient) {
+export function deskWrapper(qc: QueryClient, over: Partial<Desk> = {}) {
+  const value = { ...desk, ...over };
   return function Wrapper({ children }: { children: ReactNode }) {
     return (
       <QueryClientProvider client={qc}>
-        <DeskProvider value={desk}>{children}</DeskProvider>
+        <DeskProvider value={value}>{children}</DeskProvider>
       </QueryClientProvider>
     );
   };

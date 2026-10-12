@@ -7,7 +7,8 @@ import { useDesk } from '@/features/receptionist/hooks/DeskContext';
 import { useFocusRefetch } from '@/features/receptionist/hooks/useFocusRefetch';
 import type { RoomRow } from '@/features/receptionist/schemas/desk';
 
-export function useRooms(): {
+// `enabled: false` (a room picker not yet open) holds the query; `loading` stays true meanwhile.
+export function useRooms({ enabled = true }: { enabled?: boolean } = {}): {
   rooms: RoomRow[];
   loading: boolean;
   error: boolean;
@@ -19,16 +20,17 @@ export function useRooms(): {
   const isFocused = useIsFocused();
   const q = useQuery({
     queryKey: deskKeys.rooms(hotel.id),
+    enabled,
     queryFn: async () => {
       const r = await deskDb.rooms(hotel.id);
       if (!r.ok) throw new DeskLoadError(r.error);
       return r.value;
     },
-    refetchInterval: isFocused ? DESK_POLL_MS : false,
+    refetchInterval: enabled && isFocused ? DESK_POLL_MS : false,
     refetchOnWindowFocus: true,
     placeholderData: keepPreviousData,
   });
-  useFocusRefetch(isFocused, q);
+  useFocusRefetch(enabled && isFocused, q);
   const { refetch } = q;
   return {
     rooms: q.data ?? [],

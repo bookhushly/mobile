@@ -21,6 +21,14 @@ it('words every check-in refusal (spec §4), refusals never neutral', () => {
   expect(refusalText({ kind: 'roomOccupied', roomNumber: null }).message).toBe(
     'The room still has a guest checked in.',
   );
+  // The server omitted the number: the booking's room stands in.
+  expect(refusalText({ kind: 'roomOccupied', roomNumber: null }, { roomNumber: 204 }).message).toBe(
+    'Room 204 still has a guest checked in.',
+  );
+  expect(
+    refusalText({ kind: 'roomUnavailable', roomNumber: null, roomStatus: null }, { roomNumber: 204 })
+      .message,
+  ).toBe("Room 204 isn't available.");
   expect(
     refusalText({ kind: 'roomUnavailable', roomNumber: 204, roomStatus: 'under_maintenance' }),
   ).toEqual({ message: 'Room 204 is under maintenance.', tone: 'warning', chooseRoom: true });

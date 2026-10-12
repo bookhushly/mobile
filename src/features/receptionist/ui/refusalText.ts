@@ -11,6 +11,7 @@ export type RefusalCopy = {
   chooseRoom: boolean;
 };
 
+// `roomNumber`: the room the desk is looking at, used when the server's refusal names none.
 type Ctx = { act?: DeskAct; roomNumber?: number };
 
 const roomWord = (n: number | null) => (n === null ? 'The room' : `Room ${String(n)}`);
@@ -36,9 +37,13 @@ export function refusalText(r: Refusal, ctx: Ctx = {}): RefusalCopy {
     case 'notCheckedIn':
       return say("This guest isn't checked in.", 'warning');
     case 'roomOccupied':
-      return say(`${roomWord(r.roomNumber)} still has a guest checked in.`, 'warning', true);
+      return say(
+        `${roomWord(r.roomNumber ?? ctx.roomNumber ?? null)} still has a guest checked in.`,
+        'warning',
+        true,
+      );
     case 'roomUnavailable': {
-      const room = roomWord(r.roomNumber);
+      const room = roomWord(r.roomNumber ?? ctx.roomNumber ?? null);
       const why =
         r.roomStatus === 'under_maintenance'
           ? `${room} is under maintenance.`

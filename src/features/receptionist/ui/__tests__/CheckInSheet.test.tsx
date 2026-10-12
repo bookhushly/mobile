@@ -90,14 +90,14 @@ async function renderSheet(code: string | null = null) {
   const qc = makeQueryClient();
   const invalidate = jest.spyOn(qc, 'invalidateQueries');
   const onClose = jest.fn();
-  const onSignedOut = jest.fn();
-  const Wrapper = deskWrapper(qc);
+  const signOut = jest.fn();
+  const Wrapper = deskWrapper(qc, { signOut });
   const r = await render(
     <Wrapper>
-      <CheckInSheet visible request={{ id: 1, code }} onClose={onClose} onSignedOut={onSignedOut} />
+      <CheckInSheet visible request={{ id: 1, code }} onClose={onClose} />
     </Wrapper>,
   );
-  return { ...r, qc, invalidate, onClose, onSignedOut };
+  return { ...r, qc, invalidate, onClose, signOut };
 }
 
 async function typeAndFind(raw: string) {
@@ -208,6 +208,27 @@ it('a timeout is uncertain; Check again that finds our check-in shows done', asy
   expect(useShiftLog.getState().entries).toHaveLength(1);
 });
 
+it('done via Check again keeps the early-arrival note', async () => {
+  const early = { ...ADA, check_in_date: '2026-10-13' };
+  mockByCode.mockResolvedValue(ok(early));
+  mockCheckIn.mockResolvedValue(fail({ kind: 'timeout' }));
+  await renderSheet();
+  await typeAndFind('ab12cd34');
+  await fireEvent.press(await screen.findByRole('button', { name: 'Check in' }));
+  await screen.findByText("Couldn't confirm the check-in. It may have gone through.");
+  mockById.mockResolvedValue(
+    ok({
+      ...early,
+      booking_status: 'checked_in',
+      checked_in: true,
+      checked_in_at: '2026-10-11T09:42:10Z',
+    }),
+  );
+  await fireEvent.press(screen.getByRole('button', { name: 'Check again' }));
+  expect(await screen.findByText('Checked in · Room 204')).toBeTruthy();
+  expect(screen.getByText(/2 days early/)).toBeTruthy();
+});
+
 it('Check again that finds it still confirmed returns to the preview with Check in enabled', async () => {
   mockCheckIn.mockResolvedValue(fail({ kind: 'network' }));
   await renderSheet();
@@ -275,7 +296,11 @@ it('409 room_occupied offers Choose another room, and a move updates the preview
     fail({ kind: 'conflict', code: 'room_occupied', body: { room_number: 204 } }),
   );
   const r305 = { ...ROOM, id: 'r305', room_number: 305, floor: 3 };
-  mockRooms.mockResolvedValue(ok([{ ...r305, last_cleaned_at: null }]));
+  // The refetch after the move stays in flight: the panel has closed by then and nothing on
+  // screen depends on it, so its answer would only land after the test.
+  mockRooms
+    .mockResolvedValueOnce(ok([{ ...r305, last_cleaned_at: null }]))
+    .mockReturnValue(new Promise(() => undefined));
   const moved = { ...ADA, hotel_rooms: r305 };
   mockReassign.mockResolvedValue(ok({ success: true, room_number: 305 }));
   mockById.mockResolvedValue(ok(moved));
@@ -284,6 +309,10 @@ it('409 room_occupied offers Choose another room, and a move updates the preview
   await fireEvent.press(screen.getByRole('button', { name: 'Check in' }));
   expect(await screen.findByText('Room 204 still has a guest checked in.')).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Choose another room' }));
+  // A step inside the same sheet (iOS can't stack a second Modal on a page sheet).
+  expect(screen.getByRole('header', { name: 'Choose another room' })).toBeTruthy();
+  expect(screen.getAllByTestId('check-in-sheet')).toHaveLength(1);
+  expect(screen.queryByTestId('choose-room-sheet')).toBeNull();
   await fireEvent.press(await screen.findByRole('button', { name: /Room 305/ }));
   await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
   await waitFor(() => {
@@ -293,6 +322,38 @@ it('409 room_occupied offers Choose another room, and a move updates the preview
   expect(await screen.findByText(/Room 305/)).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Check in' })).toBeTruthy();
   expect(screen.queryByText('Room 204 still has a guest checked in.')).toBeNull();
+});
+
+it('Cancel on the room list goes back to the refusal without moving', async () => {
+  // The server named no room: the booking's own room stands in.
+  mockCheckIn.mockResolvedValue(fail({ kind: 'conflict', code: 'room_occupied', body: {} }));
+  mockRooms.mockResolvedValue(ok([{ ...ROOM, id: 'r305', room_number: 305, last_cleaned_at: null }]));
+  await renderSheet();
+  await toPreview();
+  await fireEvent.press(screen.getByRole('button', { name: 'Check in' }));
+  expect(await screen.findByText('Room 204 still has a guest checked in.')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Choose another room' }));
+  await screen.findByRole('button', { name: /Room 305/ });
+  await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.getByText('Room 204 still has a guest checked in.')).toBeTruthy();
+  expect(mockReassign).not.toHaveBeenCalled();
+});
+
+it('a 401 on the in-sheet move signs out', async () => {
+  mockCheckIn.mockResolvedValue(
+    fail({ kind: 'conflict', code: 'room_occupied', body: { room_number: 204 } }),
+  );
+  mockRooms.mockResolvedValue(ok([{ ...ROOM, id: 'r305', room_number: 305, last_cleaned_at: null }]));
+  mockReassign.mockResolvedValue(fail({ kind: 'auth' }));
+  const { signOut } = await renderSheet();
+  await toPreview();
+  await fireEvent.press(screen.getByRole('button', { name: 'Check in' }));
+  await fireEvent.press(await screen.findByRole('button', { name: 'Choose another room' }));
+  await fireEvent.press(await screen.findByRole('button', { name: /Room 305/ }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
+  await waitFor(() => {
+    expect(signOut).toHaveBeenCalledTimes(1);
+  });
 });
 
 it('403 is a refusal; 429 is neutral with a countdown that re-enables Check in', async () => {
@@ -331,11 +392,11 @@ it('403 is a refusal; 429 is neutral with a countdown that re-enables Check in',
 
 it('a 401 after refresh hands over to the session-expired path', async () => {
   mockCheckIn.mockResolvedValue(fail({ kind: 'auth' }));
-  const { onSignedOut } = await renderSheet();
+  const { signOut } = await renderSheet();
   await toPreview();
   await fireEvent.press(screen.getByRole('button', { name: 'Check in' }));
   await waitFor(() => {
-    expect(onSignedOut).toHaveBeenCalledTimes(1);
+    expect(signOut).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -367,6 +428,23 @@ it('scan: the camera mounts only on the Scan tab; one lookup per scanned code', 
   expect(mockByCode).toHaveBeenCalledTimes(1);
   // Not in entry any more: the camera is gone.
   expect(screen.queryByRole('button', { name: 'fake-camera' })).toBeNull();
+});
+
+it('scan: after "no booking" the camera keeps running; the same code waits for an edit', async () => {
+  mockByCode.mockResolvedValue(ok(null));
+  await renderSheet();
+  await fireEvent.press(screen.getByRole('tab', { name: 'Scan QR' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
+  expect(await screen.findByText(/No booking with code AB12CD34/)).toBeTruthy();
+  const cam = screen.getByRole('button', { name: 'fake-camera' });
+  await fireEvent.press(cam);
+  expect(mockByCode).toHaveBeenCalledTimes(1);
+  // A different code goes straight through.
+  mockCamera.raw = 'CD34AB12';
+  mockByCode.mockResolvedValue(ok(ADA));
+  await fireEvent.press(cam);
+  expect(await screen.findByRole('header', { name: 'Ada Obi' })).toBeTruthy();
+  expect(mockByCode).toHaveBeenLastCalledWith(HOTEL, 'CD34AB12');
 });
 
 it('scan: the prompt uses the light tone and offers typing instead', async () => {

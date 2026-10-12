@@ -74,13 +74,25 @@ async function renderSheet() {
   const invalidate = jest.spyOn(qc, 'invalidateQueries');
   const onClose = jest.fn();
   const onMoved = jest.fn();
-  const Wrapper = deskWrapper(qc);
+  const signOut = jest.fn();
+  const Wrapper = deskWrapper(qc, { signOut });
   const r = await render(
     <Wrapper>
       <ChooseRoomSheet booking={ADA} onClose={onClose} onMoved={onMoved} />
     </Wrapper>,
   );
-  return { ...r, invalidate, onClose, onMoved };
+  return { ...r, invalidate, onClose, onMoved, signOut };
+}
+
+const WITHOUT_305 = ROOMS.filter((r) => r.id !== 'r305');
+
+// The refetch after a move (or a 409) no longer offers Room 305; waiting for that to show lets
+// the trailing query update land inside waitFor instead of after the test.
+async function gone305() {
+  await waitFor(() => {
+    expect(screen.queryByRole('button', { name: 'Room 305 · Deluxe' })).toBeNull();
+  });
+  expect(mockRooms).toHaveBeenCalledTimes(2);
 }
 
 beforeEach(() => {
@@ -127,11 +139,13 @@ it('tap → confirm → Move posts once, logs, refetches and hands back the re-r
   mockById.mockResolvedValue(ok(moved));
   const { invalidate, onMoved } = await renderSheet();
   await fireEvent.press(await screen.findByRole('button', { name: 'Room 305 · Deluxe' }));
+  mockRooms.mockResolvedValue(ok(WITHOUT_305));
   expect(screen.getByText('Move Ada Obi to Room 305?')).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
   await waitFor(() => {
     expect(onMoved).toHaveBeenCalledWith(moved);
   });
+  await gone305();
   expect(mockReassign).toHaveBeenCalledTimes(1);
   expect(mockReassign.mock.calls[0]?.slice(1)).toEqual(['b1', 'r305']);
   expect(mockById).toHaveBeenCalledWith(HOTEL, 'b1');
@@ -154,10 +168,11 @@ it('409 means the room was just taken: back to the list with the reason', async 
   mockReassign.mockResolvedValue(fail({ kind: 'conflict', code: 'conflict' }));
   await renderSheet();
   await fireEvent.press(await screen.findByRole('button', { name: 'Room 305 · Deluxe' }));
+  mockRooms.mockResolvedValue(ok(WITHOUT_305));
   await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
   expect(await screen.findByText('Room 305 was just taken. Choose another.')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Room 101 · Standard' })).toBeTruthy();
-  expect(mockRooms).toHaveBeenCalledTimes(2);
+  await gone305();
 });
 
 it('a timeout is uncertain; Check again re-reads and finishes when the move is there', async () => {
@@ -165,6 +180,7 @@ it('a timeout is uncertain; Check again re-reads and finishes when the move is t
   const movedRow = { ...ADA, hotel_rooms: { ...ADA_ROOM, id: 'r305', room_number: 305 } };
   const { onMoved } = await renderSheet();
   await fireEvent.press(await screen.findByRole('button', { name: 'Room 305 · Deluxe' }));
+  mockRooms.mockResolvedValue(ok(WITHOUT_305));
   await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
   expect(await screen.findByText("Couldn't confirm the move.")).toBeTruthy();
   // Not there yet: offer Move again, nothing re-posted by itself.
@@ -180,6 +196,7 @@ it('a timeout is uncertain; Check again re-reads and finishes when the move is t
   await waitFor(() => {
     expect(onMoved).toHaveBeenCalledWith(movedRow);
   });
+  await gone305();
   expect(useShiftLog.getState().entries).toHaveLength(1);
 });
 
@@ -190,4 +207,33 @@ it('403 is a refusal in words', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
   expect(await screen.findByText("You can't change rooms at this hotel.")).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Move' })).toBeNull();
+});
+
+it('two quick presses on Move send one request', async () => {
+  let answer: (v: ReturnType<typeof fail>) => void = () => undefined;
+  mockReassign.mockReturnValue(
+    new Promise((resolve) => {
+      answer = resolve;
+    }),
+  );
+  await renderSheet();
+  await fireEvent.press(await screen.findByRole('button', { name: 'Room 305 · Deluxe' }));
+  const move = screen.getByRole('button', { name: 'Move' });
+  // Same element, before any re-render: both presses see the confirm step.
+  await fireEvent.press(move);
+  await fireEvent.press(move);
+  expect(mockReassign).toHaveBeenCalledTimes(1);
+  answer(fail({ kind: 'forbidden' }));
+  expect(await screen.findByText("You can't change rooms at this hotel.")).toBeTruthy();
+});
+
+it('a 401 after refresh signs out', async () => {
+  mockReassign.mockResolvedValue(fail({ kind: 'auth' }));
+  const { signOut, onMoved } = await renderSheet();
+  await fireEvent.press(await screen.findByRole('button', { name: 'Room 305 · Deluxe' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Move' }));
+  await waitFor(() => {
+    expect(signOut).toHaveBeenCalledTimes(1);
+  });
+  expect(onMoved).not.toHaveBeenCalled();
 });
