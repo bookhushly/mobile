@@ -1,11 +1,14 @@
-import { DeskPlaceholderScreen } from '@/features/receptionist/screens/DeskPlaceholderScreen';
+import { router } from 'expo-router';
+
+import { ActivityScreen } from '@/features/receptionist/screens/ActivityScreen';
 
 export default function ActivityRoute() {
   return (
-    <DeskPlaceholderScreen
-      back
-      title="Shift activity"
-      message="This session's check-ins and room changes arrive next."
+    <ActivityScreen
+      onBack={() => {
+        if (router.canGoBack()) router.back();
+        else router.replace('/today');
+      }}
     />
   );
 }
