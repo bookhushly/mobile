@@ -11,7 +11,10 @@ import { useDesk } from '@/features/receptionist/hooks/DeskContext';
 import { useFreshness } from '@/features/receptionist/hooks/useFreshness';
 import { useGuests } from '@/features/receptionist/hooks/useGuests';
 import type { BookingRow } from '@/features/receptionist/schemas/desk';
-import { BookingDetail, type BookingActionHandlers } from '@/features/receptionist/ui/BookingDetail';
+import {
+  BookingDetail,
+  type BookingActionHandlers,
+} from '@/features/receptionist/ui/BookingDetail';
 import { GuestRow } from '@/features/receptionist/ui/GuestRow';
 import { layout, space } from '@/shared/theme';
 import {
@@ -48,13 +51,7 @@ const EMPTY: Record<GuestTab, string> = {
 const LIST_PANE_WIDTH = 380;
 
 // Spec §3 Guests: segmented tabs with counts, search, rows → booking. Tablet: list | detail (R12).
-export function GuestsScreen({
-  tab,
-  onTabChange,
-  onOpenBooking,
-  onChooseRoom,
-  onCheckOut,
-}: Props) {
+export function GuestsScreen({ tab, onTabChange, onOpenBooking, onChooseRoom, onCheckOut }: Props) {
   const { today, openAccount, openCheckIn } = useDesk();
   const wide = useWide();
   const guests = useGuests();
@@ -104,6 +101,9 @@ export function GuestsScreen({
         style={{ flex: 1 }}
         keyExtractor={(b: BookingRow) => b.id}
         keyboardShouldPersistTaps="handled"
+        // About one screen of rows first, and a smaller render window than the default 21.
+        initialNumToRender={12}
+        windowSize={7}
         renderItem={({ item }) => (
           <GuestRow
             booking={item}
@@ -113,10 +113,7 @@ export function GuestsScreen({
           />
         )}
         ListEmptyComponent={
-          <EmptyState
-            icon={Users}
-            title={q === '' ? EMPTY[tab] : `No guest matches “${q}”`}
-          />
+          <EmptyState icon={Users} title={q === '' ? EMPTY[tab] : `No guest matches “${q}”`} />
         }
       />
     );

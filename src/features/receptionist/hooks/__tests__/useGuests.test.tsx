@@ -80,7 +80,7 @@ it('keeps the rows on screen when a background refetch fails', async () => {
 
   mockGuests.mockResolvedValue({ ok: false, error: { kind: 'unavailable', status: 503 } });
   await act(() => {
-    result.current.refetch();
+    void result.current.refetch();
   });
   await waitFor(() => {
     expect(mockGuests).toHaveBeenCalledTimes(2);

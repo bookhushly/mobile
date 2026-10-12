@@ -63,7 +63,7 @@ export function useCheckOut(booking: BookingRow): CheckOut {
           : `Checked out ${guestName(booking)} · Room ${String(room.room_number)}`,
     });
     feedback.cue('success');
-    void qc.invalidateQueries({ queryKey: deskKeys.all(hotel.id) });
+    void qc.invalidateQueries({ queryKey: deskKeys.all(hotel.id) }, { cancelRefetch: false });
     setState({ step: 'done', booking: b });
   }
 
@@ -79,7 +79,7 @@ export function useCheckOut(booking: BookingRow): CheckOut {
     if (reconciled === 'done') finish(r.value ?? booking);
     else if (reconciled === 'elsewhere' && r.value !== null) {
       feedback.cue('warning');
-      void qc.invalidateQueries({ queryKey: deskKeys.all(hotel.id) });
+      void qc.invalidateQueries({ queryKey: deskKeys.all(hotel.id) }, { cancelRefetch: false });
       setState({ step: 'elsewhere', booking: r.value });
     } else setState({ step: 'confirm', notDone: true });
   }
@@ -143,7 +143,7 @@ export function useCheckOut(booking: BookingRow): CheckOut {
     },
     settle: () => {
       if (state.step === 'uncertain' || state.step === 'rateLimited')
-        void qc.invalidateQueries({ queryKey: deskKeys.all(hotel.id) });
+        void qc.invalidateQueries({ queryKey: deskKeys.all(hotel.id) }, { cancelRefetch: false });
     },
   };
 }

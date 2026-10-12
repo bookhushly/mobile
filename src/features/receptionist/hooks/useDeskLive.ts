@@ -1,14 +1,14 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
 
 import { deskKeys } from '@/features/receptionist/hooks/deskKeys';
-import { trailing } from '@/shared/lib/trailing';
+import { throttle } from '@/shared/lib/throttle';
 import { supabase } from '@/shared/supabase/client';
 
-// A check-in touches a booking and a room within milliseconds: coalesce that burst, and under
-// steady traffic invalidate at most once every LIVE_MAX_WAIT_MS.
-const LIVE_SETTLE_MS = 500;
-const LIVE_MAX_WAIT_MS = 2_000;
+// A busy hotel streams events: refetch at once on the first, then at most once per gap (one
+// trailing run picks up the rest). Lists are capped at hundreds of rows, so this bounds the cost.
+const LIVE_GAP_MS = 5_000;
 const LIVE_TABLES = ['hotel_bookings', 'hotel_rooms'] as const;
 
 /**
@@ -20,13 +20,15 @@ const LIVE_TABLES = ['hotel_bookings', 'hotel_rooms'] as const;
 export function useDeskLive(hotelId: string): void {
   const queryClient = useQueryClient();
   useEffect(() => {
-    const bump = trailing(
-      () => {
-        void queryClient.invalidateQueries({ queryKey: deskKeys.all(hotelId) });
-      },
-      LIVE_SETTLE_MS,
-      { maxWaitMs: LIVE_MAX_WAIT_MS },
-    );
+    const bump = throttle(() => {
+      // Backgrounded: the foreground refetch catches up, so don't spend a refetch now.
+      if (AppState.currentState !== 'active') return;
+      // A refetch already in flight (poll, action) is kept rather than cancelled and restarted.
+      void queryClient.invalidateQueries(
+        { queryKey: deskKeys.all(hotelId) },
+        { cancelRefetch: false },
+      );
+    }, LIVE_GAP_MS);
     // A unique topic per run: `channel(topic)` returns a still-leaving channel of the same name, and
     // a quick remount would attach to it and then lose it with the old one.
     let channel = supabase.channel(`desk:${hotelId}:${String(Date.now())}`);

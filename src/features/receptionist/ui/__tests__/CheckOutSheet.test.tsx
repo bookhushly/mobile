@@ -97,7 +97,7 @@ it('confirm → Check out → done, with the dirty-room note, a log entry and a 
   expect(useShiftLog.getState().entries).toEqual([
     { at: NOW, kind: 'checkOut', text: 'Checked out Ada Obi · Room 204' },
   ]);
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] });
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] }, { cancelRefetch: false });
   expect(mockCue).toHaveBeenCalledWith('success');
   await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
   expect(onClose).toHaveBeenCalledTimes(1);
@@ -142,7 +142,7 @@ it('closing after an uncertain answer refetches the desk (it may have gone throu
   await screen.findByText("Couldn't confirm the check-out. It may have gone through.");
   expect(invalidate).not.toHaveBeenCalled();
   await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] });
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] }, { cancelRefetch: false });
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
@@ -163,7 +163,7 @@ it('409 already_checked_out after our send is re-read: someone else did it earli
   ).toBeTruthy();
   expect(mockById).toHaveBeenCalledTimes(1);
   expect(useShiftLog.getState().entries).toEqual([]);
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] });
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', HOTEL] }, { cancelRefetch: false });
   expect(screen.getByRole('button', { name: 'Done' })).toBeTruthy();
   // Settled: no future-tense room line, no early-leave note.
   expect(screen.queryByText(/will be marked dirty/)).toBeNull();

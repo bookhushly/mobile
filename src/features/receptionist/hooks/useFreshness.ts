@@ -1,3 +1,4 @@
+import { useIsFocused } from 'expo-router';
 import { useEffect, useState } from 'react';
 
 // `updatedAt` is TanStack's `dataUpdatedAt` (wall-clock ms, 0 before the first load), so the age
@@ -16,15 +17,20 @@ export function useFreshness(updatedAt: number): string | null {
   // `now` only moves on the tick. A load newer than the last tick has a negative age, so the line
   // clears at once without a synchronous state write.
   const [now, setNow] = useState(() => Date.now());
-  const loaded = updatedAt !== 0;
+  // Tab screens stay mounted: tick only while this one is on screen, catching up as it returns.
+  const isFocused = useIsFocused();
+  const ticking = updatedAt !== 0 && isFocused;
   useEffect(() => {
-    if (!loaded) return;
-    const t = setInterval(() => {
+    if (!ticking) return;
+    const tick = () => {
       setNow(Date.now());
-    }, TICK_MS);
+    };
+    const first = setTimeout(tick, 0);
+    const t = setInterval(tick, TICK_MS);
     return () => {
+      clearTimeout(first);
       clearInterval(t);
     };
-  }, [loaded]);
+  }, [ticking]);
   return freshnessLabel(updatedAt, now);
 }

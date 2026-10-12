@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
+import { AppState } from 'react-native';
 
 import { useDeskLive } from '@/features/receptionist/hooks/useDeskLive';
 import { supabase } from '@/shared/supabase/client';
@@ -44,12 +45,17 @@ function fakeChannel() {
 
 const HOTEL = 'h1';
 
+const OPTS = { cancelRefetch: false };
+
 beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
+  AppState.currentState = 'active';
 });
 afterEach(() => {
+  jest.restoreAllMocks();
   jest.useRealTimers();
+  AppState.currentState = 'active';
 });
 
 async function run() {
@@ -92,30 +98,42 @@ it('subscribes to bookings and rooms for this hotel and refetches once joined', 
 
   await act(() => {
     fake.status('SUBSCRIBED');
-    jest.advanceTimersByTime(600);
   });
   expect(invalidate).toHaveBeenCalledTimes(1);
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', 'h1'] });
+  // An in-flight refetch is kept, not cancelled and restarted.
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['desk', 'h1'] }, OPTS);
   await done();
 });
 
-it('coalesces a burst of events into one invalidation and bounds steady traffic', async () => {
+it('a burst inside 5 s is at most two invalidations: leading and trailing', async () => {
   const { fake, invalidate, done } = await run();
   await act(() => {
-    fake.fire('hotel_bookings');
-    fake.fire('hotel_rooms');
-    jest.advanceTimersByTime(600);
-  });
-  expect(invalidate).toHaveBeenCalledTimes(1);
-
-  // An event every 300 ms for 2 s: at most one invalidation per 2 s, never starved.
-  await act(() => {
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 10; i++) {
       fake.fire('hotel_bookings');
-      jest.advanceTimersByTime(300);
+      fake.fire('hotel_rooms');
+      jest.advanceTimersByTime(400);
     }
   });
+  expect(invalidate).toHaveBeenCalledTimes(1);
+  await act(() => {
+    jest.advanceTimersByTime(10_000);
+  });
   expect(invalidate).toHaveBeenCalledTimes(2);
+  expect(invalidate.mock.calls.every((c) => c[1]?.cancelRefetch === false)).toBe(true);
+  await done();
+});
+
+it('never invalidates while the app is in the background', async () => {
+  const { fake, invalidate, done } = await run();
+  AppState.currentState = 'background';
+  await act(() => {
+    fake.status('SUBSCRIBED');
+    fake.fire('hotel_bookings');
+    jest.advanceTimersByTime(6_000);
+    fake.fire('hotel_rooms');
+    jest.advanceTimersByTime(6_000);
+  });
+  expect(invalidate).not.toHaveBeenCalled();
   await done();
 });
 
@@ -131,12 +149,14 @@ it('ignores other statuses and removes the channel on unmount', async () => {
 
   await act(() => {
     fake.fire('hotel_rooms');
+    fake.fire('hotel_rooms');
   });
+  expect(invalidate).toHaveBeenCalledTimes(1);
   await done();
   expect(removeChannel).toHaveBeenCalledWith(fake.channel);
   await act(() => {
     jest.advanceTimersByTime(3_000);
   });
-  // A pending bump is cancelled with the channel.
-  expect(invalidate).not.toHaveBeenCalled();
+  // The pending trailing bump is cancelled with the channel.
+  expect(invalidate).toHaveBeenCalledTimes(1);
 });

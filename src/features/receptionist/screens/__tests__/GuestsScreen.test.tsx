@@ -80,7 +80,14 @@ function Harness(props: Props & { initialTab?: GuestTab; deskOver?: Partial<Desk
   );
 }
 
+// Fake timers (as in RoomsScreen.test): FlatList's 50 ms cell-batching timer otherwise fires
+// between act() scopes on a loaded machine (an intermittent "not wrapped in act" warning).
+afterEach(() => {
+  jest.useRealTimers();
+});
+
 beforeEach(() => {
+  jest.useFakeTimers();
   jest.clearAllMocks();
   mockWide.mockReturnValue(false);
   mockFreshness.mockReturnValue(null);
@@ -163,7 +170,14 @@ it('shows skeletons, then an error with Try again when nothing loaded', async ()
   await render(<Harness />);
   expect(screen.getByLabelText('Loading')).toBeTruthy();
   const refetch = jest.fn(() => Promise.resolve());
-  mockGuests.mockReturnValue({ lists: null, rows: [], loading: false, error: true, refetch, updatedAt: 0 });
+  mockGuests.mockReturnValue({
+    lists: null,
+    rows: [],
+    loading: false,
+    error: true,
+    refetch,
+    updatedAt: 0,
+  });
   await render(<Harness />);
   expect(screen.getByText("Couldn't load guests")).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
