@@ -15,7 +15,7 @@ const db: ModeDb = {
   profile: (id) =>
     wrap(supabase.from('users').select('id,role,name,email').eq('id', id).maybeSingle()),
   hotelStaff: (id) =>
-    wrap(supabase.from('hotel_staff').select('hotel_id').eq('user_id', id).maybeSingle()),
+    wrap(supabase.from('hotel_staff').select('hotel_id').eq('user_id', id).limit(1)),
   scannableEvents: (id) => loadScannableEvents(scannerDb, id),
 };
 

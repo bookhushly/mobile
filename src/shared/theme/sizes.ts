@@ -7,5 +7,10 @@ export const layout = {
   phoneGutter: 16,
   tabletGutter: 24,
   tabletBreakpoint: 768,
+  // The desk's left tab rail on tablets (react-navigation's sidebar default, pinned so screens can
+  // size grids from the window without measuring).
+  tabletRailWidth: 360,
   formMaxWidth: 640,
+  // Tablet two-pane screens (DESIGN_SYSTEM §2: ≈960 for tablet panels).
+  panelMaxWidth: 960,
 } as const;

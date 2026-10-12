@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react-native';
 import { AppState, type AppStateStatus } from 'react-native';
 
-import { useCameraAccess } from '@/features/gate/ui/ScannerCamera';
+import { useCameraAccess } from '@/shared/ui/camera';
 
 type Perm = { granted: boolean; canAskAgain: boolean; status: string } | null;
 

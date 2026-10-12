@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react-native';
 import { AppState, type AppStateStatus } from 'react-native';
 
-import { useAppActive } from '@/features/gate/ui/ScannerCamera';
+import { useAppActive } from '@/shared/ui/camera';
 
 jest.mock('expo-camera', () => ({
   CameraView: () => null,

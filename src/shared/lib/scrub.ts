@@ -23,8 +23,12 @@ export function redactText(text: string): string {
 
 type Breadcrumb = { category?: string; message?: string; data?: Record<string, unknown> };
 
+// Dropped whole: console output, and touch breadcrumbs (they carry accessibility labels, which
+// can be guest names on the front desk).
+const DROPPED = new Set(['console', 'touch']);
+
 export function scrubBreadcrumb<T extends Breadcrumb>(b: T): T | null {
-  if (b.category === 'console') return null;
+  if (b.category !== undefined && DROPPED.has(b.category)) return null;
   const out: T = { ...b };
   if (out.message) out.message = redactText(out.message);
   if (out.data) {

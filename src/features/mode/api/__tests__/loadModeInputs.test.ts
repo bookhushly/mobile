@@ -5,7 +5,7 @@ const errRes = (status: number) => Promise.resolve({ data: null, error: { status
 
 const db = (over: Partial<ModeDb> = {}): ModeDb => ({
   profile: () => okRes({ id: 'u', role: 'customer' }),
-  hotelStaff: () => okRes(null),
+  hotelStaff: () => okRes([]),
   scannableEvents: () => Promise.resolve({ ok: true, value: [] }),
   ...over,
 });
@@ -15,7 +15,7 @@ describe('loadModeInputs', () => {
     const r = await loadModeInputs(
       db({
         profile: () => okRes({ id: 'u', role: 'receptionist' }),
-        hotelStaff: () => okRes({ hotel_id: 'h1' }),
+        hotelStaff: () => okRes([{ hotel_id: 'h1' }]),
         scannableEvents: () => Promise.resolve({ ok: true, value: [{ id: 'l1' }] }),
       }),
       'u',
@@ -23,6 +23,26 @@ describe('loadModeInputs', () => {
     expect(r).toEqual({
       ok: true,
       value: { role: 'receptionist', hotelStaff: { hotelId: 'h1' }, activeScannerCount: 1 },
+    });
+  });
+  it('staff at several hotels: the first row is used (no mode error)', async () => {
+    const r = await loadModeInputs(
+      db({
+        profile: () => okRes({ id: 'u', role: 'receptionist' }),
+        hotelStaff: () => okRes([{ hotel_id: 'a' }, { hotel_id: 'b' }]),
+      }),
+      'u',
+    );
+    expect(r).toEqual({
+      ok: true,
+      value: { role: 'receptionist', hotelStaff: { hotelId: 'a' }, activeScannerCount: 0 },
+    });
+  });
+  it('no hotel_staff rows -> hotelStaff is null', async () => {
+    const r = await loadModeInputs(db({ hotelStaff: () => okRes([]) }), 'u');
+    expect(r).toEqual({
+      ok: true,
+      value: { role: 'customer', hotelStaff: null, activeScannerCount: 0 },
     });
   });
   it('a failed profile lookup is an error (never defaults to customer)', async () => {
