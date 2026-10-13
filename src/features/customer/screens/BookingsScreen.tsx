@@ -12,12 +12,13 @@ import { mainAction } from '@/features/customer/ui/mainAction';
 import { savedAtLabel } from '@/features/customer/ui/savedAt';
 import { TodayCard } from '@/features/customer/ui/TodayCard';
 import { clock } from '@/shared/api/instance';
-import { color, space } from '@/shared/theme';
+import { space } from '@/shared/theme';
 import {
   Banner,
   EmptyState,
   ErrorState,
   Header,
+  refreshColors,
   Screen,
   SegmentedControl,
   SkeletonRows,
@@ -60,13 +61,7 @@ export function BookingsScreen({
     onOpenBooking(b.kind, b.id);
   };
   const refreshControl = (
-    <RefreshControl
-      refreshing={refreshing}
-      onRefresh={refresh}
-      tintColor={color.textSecondary}
-      colors={[color.actionFill]}
-      progressBackgroundColor={color.surface}
-    />
+    <RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshColors} />
   );
 
   const lists = my.bookings;
@@ -83,9 +78,12 @@ export function BookingsScreen({
       />
     );
   } else {
+    // C9: the saved copy holds today and upcoming only, so offline it never claims "no bookings"
+    // and never counts the past (spec §5, C17).
+    const saved = my.saved !== null;
     const nothing =
-      lists.today.length === 0 && lists.upcoming.length === 0 && lists.past.length === 0;
-    const rows = segment === 'upcoming' ? lists.upcoming : lists.past;
+      !saved && lists.today.length === 0 && lists.upcoming.length === 0 && lists.past.length === 0;
+    const rows = segment === 'upcoming' ? lists.upcoming : saved ? [] : lists.past;
     const header = (
       <View style={{ gap: space.s4, paddingBottom: space.s3 }}>
         {my.saved !== null ? (
@@ -113,35 +111,51 @@ export function BookingsScreen({
             value={segment}
             options={[
               { value: 'upcoming', label: 'Upcoming', count: lists.upcoming.length },
-              { value: 'past', label: 'Past', count: lists.past.length },
+              saved
+                ? { value: 'past', label: 'Past' }
+                : { value: 'past', label: 'Past', count: lists.past.length },
             ]}
             onChange={setSegment}
           />
         )}
       </View>
     );
-    const empty = nothing ? (
-      <View style={{ gap: space.s4 }}>
+    let empty: ReactNode;
+    if (nothing)
+      empty = (
+        <View style={{ gap: space.s4 }}>
+          <EmptyState
+            icon={Ticket}
+            title="No bookings yet"
+            message="Bookings you make while signed in with this email show up here."
+            action={{
+              label: 'Browse on bookhushly.com',
+              onPress: () => {
+                openWeb(WEB_HOME);
+              },
+            }}
+          />
+          <Text variant="bodySm" tone="textSecondary" align="center">
+            {GUEST_LINE}
+          </Text>
+        </View>
+      );
+    else if (segment === 'past')
+      empty = saved ? (
+        <EmptyState icon={History} title="Past bookings show when you're back online" />
+      ) : (
+        <EmptyState icon={History} title="No past bookings" />
+      );
+    else
+      empty = saved ? (
         <EmptyState
-          icon={Ticket}
-          title="No bookings yet"
-          message="Bookings you make while signed in with this email show up here."
-          action={{
-            label: 'Browse on bookhushly.com',
-            onPress: () => {
-              openWeb(WEB_HOME);
-            },
-          }}
+          icon={CalendarClock}
+          title="No saved upcoming bookings"
+          message="Pull to refresh when you're back online"
         />
-        <Text variant="bodySm" tone="textSecondary" align="center">
-          {GUEST_LINE}
-        </Text>
-      </View>
-    ) : segment === 'upcoming' ? (
-      <EmptyState icon={CalendarClock} title="No upcoming bookings" />
-    ) : (
-      <EmptyState icon={History} title="No past bookings" />
-    );
+      ) : (
+        <EmptyState icon={CalendarClock} title="No upcoming bookings" />
+      );
     body = (
       <FlatList
         data={rows}

@@ -17,7 +17,7 @@ type Props = {
 const LABEL: Record<MainAction, string> = {
   tickets: 'Show tickets',
   checkInCode: 'Show check-in code',
-  open: 'Open',
+  open: 'View booking',
 };
 
 // C3: something happening today leads the list, with the one action that matters at the door.

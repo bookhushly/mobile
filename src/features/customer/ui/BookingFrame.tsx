@@ -7,7 +7,7 @@ import { HIDDEN_LINE } from '@/features/customer/ui/BookingRow';
 import { chipTone } from '@/features/customer/ui/chipTone';
 import { openWeb, WEB_DASHBOARD } from '@/features/customer/ui/links';
 import { space } from '@/shared/theme';
-import { Banner, Header, IconButton, Screen, StatusPill, Text } from '@/shared/ui';
+import { Banner, Header, IconButton, refreshColors, Screen, StatusPill, Text } from '@/shared/ui';
 
 type Props = {
   /** Absent while loading or after a failed load. */
@@ -39,7 +39,7 @@ export function BookingFrame({ booking: b, onBack, onRefresh, notice, footer, ch
       scroll
       refreshControl={
         refresh === undefined ? undefined : (
-          <RefreshControl refreshing={refreshing} onRefresh={refresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshColors} />
         )
       }
       header={

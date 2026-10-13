@@ -29,6 +29,7 @@ export { OutcomeAction, OutcomeScreen } from './OutcomeScreen';
 export type { OutcomeTone } from './OutcomeScreen';
 export { PressableScale } from './PressableScale';
 export { QrCode } from './QrCode';
+export { refreshColors } from './refreshColors';
 export { RuleList } from './RuleList';
 export { Screen } from './Screen';
 export { SearchField } from './SearchField';

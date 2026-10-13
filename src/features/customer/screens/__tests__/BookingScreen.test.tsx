@@ -6,6 +6,7 @@ import { fromEvent } from '@/features/customer/domain/myBookings';
 import { useBooking } from '@/features/customer/hooks/useBooking';
 import type { WalletEntry } from '@/features/customer/offline/wallet';
 import { BookingScreen } from '@/features/customer/screens/BookingScreen';
+import { refreshColors } from '@/shared/ui';
 
 import { ap, ev, ho, TODAY } from '../../hooks/__tests__/customerTestUtils';
 
@@ -190,4 +191,26 @@ it('a failed load with nothing saved is an error with Try again, never "not your
   expect(screen.queryByText("This booking isn't on your account")).toBeNull();
   await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
   expect(refetch).toHaveBeenCalledTimes(1);
+});
+
+// The host tree as text; element-valued props (a header's `left`) carry fiber cycles, so skip them.
+function hostJson(tree: unknown): string {
+  const seen = new WeakSet<object>();
+  return JSON.stringify(tree, (key, value: unknown) => {
+    if (key === '_owner' || key === '_store') return undefined;
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) return undefined;
+      seen.add(value);
+    }
+    return value;
+  });
+}
+
+it('pull to refresh on the details uses the theme colours', async () => {
+  loaded({ row: ho({ id: ID }) });
+  await show('hotel');
+  const json = hostJson(screen.toJSON());
+  expect(json).toContain(`"tintColor":"${refreshColors.tintColor}"`);
+  expect(json).toContain(`"colors":${JSON.stringify(refreshColors.colors)}`);
+  expect(json).toContain(`"progressBackgroundColor":"${refreshColors.progressBackgroundColor}"`);
 });

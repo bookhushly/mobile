@@ -1,14 +1,22 @@
 import { Image } from 'expo-image';
+import { BedDouble, Building2, Ticket, type LucideIcon } from 'lucide-react-native';
 import { View } from 'react-native';
 
-import { kindWord, type MyBooking } from '@/features/customer/domain/myBookings';
+import { kindWord, type BookingKind, type MyBooking } from '@/features/customer/domain/myBookings';
 import { chipTone } from '@/features/customer/ui/chipTone';
 import { dayParts, shortDate } from '@/shared/lib/lagosDay';
 import { radius, space } from '@/shared/theme';
-import { DateTile, ListRow, StatusPill, Text } from '@/shared/ui';
+import { DateTile, Icon, ListRow, StatusPill, Text } from '@/shared/ui';
 
 export const HIDDEN_LINE = "Details aren't available right now";
 const THUMB = 56;
+
+// Decorative: the kind word beside it carries the meaning.
+const KIND_ICON: Record<BookingKind, LucideIcon> = {
+  event: Ticket,
+  hotel: BedDouble,
+  apartment: Building2,
+};
 
 type Props = { booking: MyBooking; onPress: (b: MyBooking) => void };
 
@@ -29,10 +37,15 @@ export function BookingRow({ booking: b, onPress }: Props) {
       }}
       leading={<DateTile tile={dayParts(b.start)} />}
       title={title}
-      subtitle={subtitle}
       accessibilityLabel={spoken}
       note={
-        <View style={{ gap: space.s1, marginTop: space.s1 }}>
+        <View style={{ gap: space.s1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
+            <Icon as={KIND_ICON[b.kind]} size="xs" tone="textSecondary" />
+            <Text variant="bodySm" tone="textSecondary" numberOfLines={1} style={{ flexShrink: 1 }}>
+              {subtitle}
+            </Text>
+          </View>
           {hidden ? (
             <Text variant="caption" tone="textSecondary">
               {HIDDEN_LINE}

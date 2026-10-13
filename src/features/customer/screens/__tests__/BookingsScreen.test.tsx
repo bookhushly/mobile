@@ -12,6 +12,7 @@ import { useMyBookings, type BookingRows } from '@/features/customer/hooks/useMy
 import { useNotifications } from '@/features/customer/hooks/useNotifications';
 import type { WalletEntry } from '@/features/customer/offline/wallet';
 import { BookingsScreen } from '@/features/customer/screens/BookingsScreen';
+import { refreshColors } from '@/shared/ui';
 
 import { ap, ev, ho, TODAY } from '../../hooks/__tests__/customerTestUtils';
 
@@ -137,7 +138,7 @@ it('leads with Today cards whose main action fits the booking', async () => {
   expect(h.onShowTickets).toHaveBeenCalledWith('e-today');
   await fireEvent.press(screen.getByRole('button', { name: 'Show check-in code, Harbour Suites' }));
   expect(h.onShowCheckInCode).toHaveBeenCalledWith('h1');
-  await fireEvent.press(screen.getByRole('button', { name: 'Open, Apartment stay' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'View booking, Apartment stay' }));
   expect(h.onOpenBooking).toHaveBeenCalledWith('apartment', 'a-today');
   await fireEvent.press(screen.getByRole('button', { name: 'Booking details, Harbour Suites' }));
   expect(h.onOpenBooking).toHaveBeenCalledWith('hotel', 'h1');
@@ -210,4 +211,60 @@ it('the bell says how many are unread and opens notifications', async () => {
   await render(<BookingsScreen userId="u1" {...h} />);
   await fireEvent.press(screen.getByRole('button', { name: 'Notifications, 3 unread' }));
   expect(h.onOpenNotifications).toHaveBeenCalledTimes(1);
+});
+
+it('an empty saved copy never claims there are no bookings (C17)', async () => {
+  mockMy.mockReturnValue({
+    bookings: { today: [], upcoming: [], past: [] },
+    rows: null,
+    saved: { savedAt: Date.parse('2026-10-13T09:42:00Z') },
+    loading: false,
+    error: false,
+    refetch: jest.fn(() => Promise.resolve()),
+  });
+  await render(<BookingsScreen userId="u1" {...handlers()} />);
+  expect(screen.getByText('No saved upcoming bookings')).toBeTruthy();
+  expect(screen.getByText("Pull to refresh when you're back online")).toBeTruthy();
+  expect(screen.queryByText('No bookings yet')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Browse on bookhushly.com' })).toBeNull();
+});
+
+it('while saved, Past has no count and says it shows once back online', async () => {
+  const b = fromEvent(upcoming, TODAY);
+  mockMy.mockReturnValue({
+    bookings: { today: [], upcoming: [b], past: [] },
+    rows: null,
+    saved: { savedAt: Date.parse('2026-10-13T09:42:00Z') },
+    loading: false,
+    error: false,
+    refetch: jest.fn(() => Promise.resolve()),
+  });
+  await render(<BookingsScreen userId="u1" {...handlers()} />);
+  expect(screen.getByRole('tab', { name: 'Upcoming (1)' })).toBeTruthy();
+  expect(screen.queryByRole('tab', { name: /^Past \(/ })).toBeNull();
+  await fireEvent.press(screen.getByRole('tab', { name: 'Past' }));
+  expect(screen.getByText("Past bookings show when you're back online")).toBeTruthy();
+  expect(screen.queryByText('No past bookings')).toBeNull();
+});
+
+// The host tree as text; element-valued props (a header's `left`) carry fiber cycles, so skip them.
+function hostJson(tree: unknown): string {
+  const seen = new WeakSet<object>();
+  return JSON.stringify(tree, (key, value: unknown) => {
+    if (key === '_owner' || key === '_store') return undefined;
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) return undefined;
+      seen.add(value);
+    }
+    return value;
+  });
+}
+
+it('pull to refresh uses the theme colours', async () => {
+  ready({ events: [upcoming], hotels: [], apartments: [] });
+  await render(<BookingsScreen userId="u1" {...handlers()} />);
+  const json = hostJson(screen.toJSON());
+  expect(json).toContain(`"tintColor":"${refreshColors.tintColor}"`);
+  expect(json).toContain(`"colors":${JSON.stringify(refreshColors.colors)}`);
+  expect(json).toContain(`"progressBackgroundColor":"${refreshColors.progressBackgroundColor}"`);
 });
