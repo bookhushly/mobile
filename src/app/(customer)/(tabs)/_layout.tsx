@@ -5,11 +5,10 @@ import { useAuth } from '@/features/auth/hooks/useAuth';
 import { useTourSeen } from '@/features/customer/hooks/useTourSeen';
 import { TourScreen } from '@/features/customer/screens/TourScreen';
 import { CUSTOMER_TOUR_ENABLED } from '@/shared/config/features';
-import { color, typeVariants } from '@/shared/theme';
-import { fontFamily } from '@/shared/theme/fonts';
-import { useDensity } from '@/shared/ui';
+import { color } from '@/shared/theme';
+import { Text, useDensity } from '@/shared/ui';
 
-const label = typeVariants.labelSm;
+const LABEL_MAX_SCALE = 1.3;
 
 // C2: Bookings · Account (Explore and Saved join in 4b). A bottom bar on every size.
 export default function CustomerTabsLayout() {
@@ -32,13 +31,17 @@ export default function CustomerTabsLayout() {
         tabBarActiveBackgroundColor: color.selectedWash,
         tabBarStyle: { backgroundColor: color.surface, borderTopColor: color.border },
         tabBarItemStyle: { minHeight: d.controlHeight },
-        // The bar's height is fixed: labels don't grow with Dynamic Type (ruling B6).
-        tabBarAllowFontScaling: false,
-        tabBarLabelStyle: {
-          fontFamily: fontFamily(label.font, label.weight),
-          fontSize: label.size,
-          letterSpacing: label.letterSpacing,
-        },
+        // Labels follow Dynamic Type up to 1.3× so the fixed-height bar never clips (ruling B6).
+        tabBarLabel: ({ color: tint, children }) => (
+          <Text
+            variant="labelSm"
+            maxScale={LABEL_MAX_SCALE}
+            numberOfLines={1}
+            style={{ color: tint }}
+          >
+            {children}
+          </Text>
+        ),
       }}
     >
       <Tabs.Screen

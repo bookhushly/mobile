@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react-native';
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
 import CustomerTabsLayout from '@/app/(customer)/(tabs)/_layout';
 import CustomerLayout, { unstable_settings } from '@/app/(customer)/_layout';
@@ -97,8 +97,13 @@ it('has Bookings and Account tabs with the desk tabs styling and no tour read', 
     tabBarPosition: 'bottom',
     tabBarActiveTintColor: color.linkText,
     tabBarActiveBackgroundColor: color.selectedWash,
-    tabBarAllowFontScaling: false,
   });
+  // B6: labels scale with Dynamic Type, capped at 1.3×.
+  const renderLabel = mockNav.tabs?.tabBarLabel as (p: {
+    color: string;
+    children: string;
+  }) => ReactElement<{ maxScale?: number }>;
+  expect(renderLabel({ color: color.linkText, children: 'Bookings' }).props.maxScale).toBe(1.3);
   // C15: the tour is off, so its marker is never read.
   expect(mockTour).toHaveBeenCalledWith(null);
 });
