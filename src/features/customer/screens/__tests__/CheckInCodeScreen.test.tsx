@@ -54,6 +54,8 @@ it('shows the hotel, dates, QR and the spaced code (not selectable), with the sc
   expect(screen.getByLabelText('Check-in code')).toBeTruthy();
   const code = screen.getByText('AB12 CD34');
   expect(code.props.selectable).not.toBe(true);
+  // The sans tabular numerals, not the serif display face.
+  expect(code).toHaveStyle({ fontFamily: 'RadioCanada-SemiBold' });
   expect(screen.getByText('Show this at the front desk')).toBeTruthy();
   expect(screen.queryByText('Checked in')).toBeNull();
   expect(screen.getByLabelText('Code A B 1 2 C D 3 4')).toBeTruthy();

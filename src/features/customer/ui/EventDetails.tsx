@@ -61,7 +61,7 @@ export function EventDetails({ row, today, onBack, onRefresh, onShowTickets }: P
           { label: 'Packages', value: packagesLine(row.ticket_details) ?? '' },
         ]}
       />
-      {tickets === 'show' ? <TicketList tickets={ticketsOf(row)} /> : null}
+      {tickets === 'show' ? <TicketList tickets={ticketsOf(row)} today={today} /> : null}
     </BookingFrame>
   );
 }

@@ -59,7 +59,7 @@ function SweepRing({ expiresAt, size }: Required<Props>) {
   );
 }
 
-// Reduce Motion (spec §6): no sweep; a still ring with the seconds left as text.
+// Any tier but `full` (Reduce Motion, reduced density): no sweep; a still ring with the seconds.
 function StaticRing({ expiresAt, size }: Required<Props>) {
   const { r, mid } = geometry(size);
   const now = useServerNow();
@@ -95,10 +95,10 @@ export function CountdownRing({ expiresAt, size = iconSize.lg }: Props) {
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      {tier === 'none' ? (
-        <StaticRing expiresAt={expiresAt} size={size} />
-      ) : (
+      {tier === 'full' ? (
         <SweepRing expiresAt={expiresAt} size={size} />
+      ) : (
+        <StaticRing expiresAt={expiresAt} size={size} />
       )}
     </View>
   );

@@ -67,7 +67,8 @@ function Code({ shown }: { shown: Shown }) {
       <QrCode value={shown.code} size={size} accessibilityLabel="Check-in code" />
       {/* Read out one character at a time ("A B 1 2…"), not as numbers, for the desk. */}
       <View accessible accessibilityLabel={`Code ${shown.code.replace(/(.)(?=.)/g, '$1 ')}`}>
-        <Text variant="display" tabular align="center">
+        {/* Sans tabular numerals: 0/O and 1/I read apart, unlike the serif display face. */}
+        <Text variant="numLg" tabular align="center">
           {spacedCode(shown.code)}
         </Text>
       </View>

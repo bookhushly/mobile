@@ -11,12 +11,17 @@ import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
 import { stillUsable, type LiveCodeState } from '@/features/customer/domain/liveCode';
-import { staticTicketUrl, type TicketView } from '@/features/customer/domain/tickets';
+import {
+  admittedLine,
+  staticTicketUrl,
+  ticketMeta,
+  type TicketView,
+} from '@/features/customer/domain/tickets';
 import { useLiveCode } from '@/features/customer/hooks/useLiveCode';
 import { CountdownRing } from '@/features/customer/ui/CountdownRing';
 import { LiveClock } from '@/features/customer/ui/LiveClock';
 import { clock } from '@/shared/api/instance';
-import { lagosWhen12, type IsoDate } from '@/shared/lib/lagosDay';
+import type { IsoDate } from '@/shared/lib/lagosDay';
 import { color, radius, space, type ColorRole, type StatusTone } from '@/shared/theme';
 import { Banner, Icon, QrCode, Skeleton, Text } from '@/shared/ui';
 
@@ -30,6 +35,8 @@ type Props = {
   today: IsoDate;
   /** The session expired: back to sign-in (the route's sign-out). */
   onSignIn: () => void;
+  /** The signed-in customer's name (their own profile), first on the ticket line; null if unknown. */
+  holder: string | null;
 };
 
 const CONNECT = 'Connect to the internet to show this ticket. This event only accepts live codes.';
@@ -84,21 +91,15 @@ function Notice({
   );
 }
 
-function metaLine(t: TicketView): string {
-  return [t.type, `Ticket ${String(t.index)} of ${String(t.total)}`, t.seat && `Seat ${t.seat}`]
-    .filter((p): p is string => typeof p === 'string' && p !== '')
-    .join(' · ');
-}
-
 // One page of the ticket viewer (C7, C8, C11). A known admission needs no poll: it is final.
-export function TicketCard({ ticket, active, liveOnly, qrSize, today, onSignIn }: Props) {
+export function TicketCard({ ticket, active, liveOnly, qrSize, today, onSignIn, holder }: Props) {
   const known = ticket.admittedAt !== null;
   const { state: polled, retry } = useLiveCode(known ? null : ticket.id, active && !known);
   const state: LiveCodeState = known ? { kind: 'admitted', at: ticket.admittedAt } : polled;
   const label = `Ticket ${String(ticket.index)} of ${String(ticket.total)} code`;
   const meta = (
     <Text variant="bodyStrong" align="center">
-      {metaLine(ticket)}
+      {ticketMeta(ticket, holder)}
     </Text>
   );
 
@@ -106,9 +107,6 @@ export function TicketCard({ ticket, active, liveOnly, qrSize, today, onSignIn }
     <>
       <QrCode value={staticTicketUrl(ticket.id)} size={qrSize} accessibilityLabel={label} />
       {meta}
-      <Text variant="label" tone="textSecondary" tabular selectable align="center">
-        {ticket.id.slice(0, 8).toUpperCase()}
-      </Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}>
         <Icon as={WifiOff} size="sm" tone="neutralFg" />
         <Text variant="bodySm" tone="neutralFg">
@@ -223,14 +221,13 @@ export function TicketCard({ ticket, active, liveOnly, qrSize, today, onSignIn }
         body = liveOnly ? signIn : staticCode;
         break;
       case 'admitted': {
-        const when = state.at === null ? '' : lagosWhen12(state.at, today);
         body = (
           <>
             <Notice
               size={qrSize}
               tone="success"
               icon={CircleCheck}
-              text={when === '' ? 'Admitted' : `Admitted ${when}`}
+              text={admittedLine(state.at, today)}
             />
             {meta}
           </>

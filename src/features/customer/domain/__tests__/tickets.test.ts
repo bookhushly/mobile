@@ -1,10 +1,13 @@
 import {
+  admittedLine,
   canShowTickets,
   liveOnly,
   staticTicketUrl,
+  ticketMeta,
   ticketsOf,
 } from '@/features/customer/domain/tickets';
 import type { EventBookingRow } from '@/features/customer/schemas/bookings';
+import type { IsoDate } from '@/shared/lib/lagosDay';
 
 function ev(p: Partial<EventBookingRow> = {}): EventBookingRow {
   return {
@@ -118,5 +121,33 @@ describe('liveOnly', () => {
     const l = ev().listing;
     if (l === null) throw new Error('fixture');
     expect(liveOnly(ev({ listing: { ...l, require_dynamic_ticket: null } }))).toBe(true);
+  });
+});
+
+describe('admittedLine (one wording for the list and the viewer)', () => {
+  const today = '2026-10-13' as IsoDate;
+  it('today: "Admitted at 7:42 pm"', () => {
+    expect(admittedLine('2026-10-13T18:42:00Z', today)).toBe('Admitted at 7:42 pm');
+  });
+  it('another day: "Admitted on Sat 10 Oct at 7:42 pm"', () => {
+    expect(admittedLine('2026-10-10T18:42:00Z', today)).toBe('Admitted on Sat 10 Oct at 7:42 pm');
+  });
+  it('no or unreadable time: "Admitted"', () => {
+    expect(admittedLine(null, today)).toBe('Admitted');
+    expect(admittedLine('nope', today)).toBe('Admitted');
+  });
+});
+
+describe('ticketMeta', () => {
+  const t = { id: 't', index: 2, total: 3, type: 'VIP', seat: null, admittedAt: null };
+  it('leads with the holder, then the ticket, type and seat', () => {
+    expect(ticketMeta(t, 'Ada Obi')).toBe('Ada Obi · Ticket 2 of 3 · VIP');
+    expect(ticketMeta({ ...t, seat: 'A12' }, 'Ada Obi')).toBe(
+      'Ada Obi · Ticket 2 of 3 · VIP · Seat A12',
+    );
+  });
+  it('no name (offline, blank): starts with the ticket', () => {
+    expect(ticketMeta(t, null)).toBe('Ticket 2 of 3 · VIP');
+    expect(ticketMeta(t, '  ')).toBe('Ticket 2 of 3 · VIP');
   });
 });

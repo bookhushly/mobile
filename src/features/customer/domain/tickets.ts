@@ -1,4 +1,5 @@
 import type { EventBookingRow } from '@/features/customer/schemas/bookings';
+import { lagosWhen12, type IsoDate } from '@/shared/lib/lagosDay';
 
 // Printed tickets encode the apex web link; the gate reads the UUID from it (never `www`).
 const TICKET_ORIGIN = 'https://bookhushly.com';
@@ -43,4 +44,22 @@ export function staticTicketUrl(ticketId: string): string {
 /** C8: true unless the listing says printed codes work. Hidden or unknown → never vouch for a static code. */
 export function liveOnly(row: EventBookingRow): boolean {
   return row.listing?.require_dynamic_ticket !== false;
+}
+
+/** "Admitted at 7:42 pm" today, "Admitted on Sat 10 Oct at 7:42 pm" otherwise (list and viewer). */
+export function admittedLine(at: string | null, today: IsoDate): string {
+  const when = at === null ? '' : lagosWhen12(at, today);
+  return when === '' ? 'Admitted' : `Admitted ${when}`;
+}
+
+/** "Ada Obi · Ticket 2 of 3 · VIP · Seat A12": the holder first, when known. */
+export function ticketMeta(t: TicketView, holder: string | null): string {
+  return [
+    holder?.trim(),
+    `Ticket ${String(t.index)} of ${String(t.total)}`,
+    t.type,
+    t.seat === null ? null : `Seat ${t.seat}`,
+  ]
+    .filter((p): p is string => typeof p === 'string' && p !== '')
+    .join(' · ');
 }

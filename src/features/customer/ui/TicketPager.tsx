@@ -32,10 +32,12 @@ type Props = {
   start: number;
   /** The session expired: back to sign-in. */
   onSignIn: () => void;
+  /** The signed-in customer's name for the ticket line; null if unknown. */
+  holder: string | null;
 };
 
 // C11: one ticket per page, swiped or stepped; only the page on screen polls (C7).
-export function TicketPager({ tickets, liveOnly, today, start, onSignIn }: Props) {
+export function TicketPager({ tickets, liveOnly, today, start, onSignIn, holder }: Props) {
   const { width } = useWindowDimensions();
   const gutter = useWide() ? layout.tabletGutter : layout.phoneGutter;
   const tier = useMotionTier();
@@ -89,6 +91,10 @@ export function TicketPager({ tickets, liveOnly, today, start, onSignIn }: Props
         viewabilityConfig={VIEWABILITY}
         onViewableItemsChanged={onViewable}
         extraData={current}
+        // One full-screen page at a time: render it and its neighbours only (a QR each).
+        windowSize={3}
+        initialNumToRender={1}
+        maxToRenderPerBatch={1}
         renderItem={({ item, index: i }) => (
           <ScrollView
             testID={`ticket-page-${String(i)}`}
@@ -105,6 +111,7 @@ export function TicketPager({ tickets, liveOnly, today, start, onSignIn }: Props
               qrSize={qrSize}
               today={today}
               onSignIn={onSignIn}
+              holder={holder}
             />
           </ScrollView>
         )}

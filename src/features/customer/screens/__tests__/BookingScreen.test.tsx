@@ -67,7 +67,7 @@ it('event: date, venue to Maps, packages, tickets and Show tickets', async () =>
   expect(screen.getByText('Tue 20 Oct · 7:00 pm')).toBeTruthy();
   expect(screen.getByText('2 × VIP, 1 × Regular')).toBeTruthy();
   expect(screen.getByLabelText('Ticket 1 · VIP, Seat A12, Valid')).toBeTruthy();
-  expect(screen.getByLabelText('Ticket 2 · VIP, Admitted 7:42 pm')).toBeTruthy();
+  expect(screen.getByLabelText('Ticket 2 · VIP, Admitted on Tue 20 Oct at 7:42 pm')).toBeTruthy();
   expect(screen.getByText('To change or cancel, use bookhushly.com')).toBeTruthy();
 
   await fireEvent.press(screen.getByRole('link', { name: 'Venue, Eko Hotel, Lagos' }));

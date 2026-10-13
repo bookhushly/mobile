@@ -8,6 +8,7 @@ import { openMaps } from '@/features/customer/ui/links';
 import { savedAtLabel } from '@/features/customer/ui/savedAt';
 import { TicketList } from '@/features/customer/ui/TicketList';
 import { clock } from '@/shared/api/instance';
+import { lagosToday } from '@/shared/lib/lagosDay';
 import { Banner, Button } from '@/shared/ui';
 
 type Props = {
@@ -83,7 +84,9 @@ export function SavedDetails({
               },
         ]}
       />
-      {e.kind === 'event' ? <TicketList tickets={tickets} /> : null}
+      {e.kind === 'event' ? (
+        <TicketList tickets={tickets} today={lagosToday(clock.serverNow())} />
+      ) : null}
     </BookingFrame>
   );
 }

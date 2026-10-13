@@ -15,6 +15,12 @@ import { ev, NOON, TODAY } from '../../hooks/__tests__/customerTestUtils';
 
 jest.mock('@/features/customer/hooks/useBooking', () => ({ useBooking: jest.fn() }));
 jest.mock('@/features/customer/hooks/useLiveCode', () => ({ useLiveCode: jest.fn() }));
+const mockProfile: { name: string | null } = { name: 'Ada Obi' };
+jest.mock('@/features/customer/hooks/useProfile', () => ({
+  useProfile: () => ({
+    profile: mockProfile.name === null ? null : { name: mockProfile.name },
+  }),
+}));
 jest.mock('@/shared/platform/useBrightScreen', () => ({ useBrightScreen: jest.fn() }));
 jest.mock('@/shared/platform/usePreventCapture', () => ({ usePreventCapture: jest.fn() }));
 jest.mock('expo-router', () => ({ useIsFocused: () => true }));
@@ -96,6 +102,7 @@ beforeEach(() => {
   jest.useFakeTimers({ now: NOON });
   jest.clearAllMocks();
   states = {};
+  mockProfile.name = 'Ada Obi';
   jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
   mockLive.mockImplementation((id) => ({
     state: (id === null ? undefined : states[id]) ?? { kind: 'loading' },
@@ -106,26 +113,13 @@ beforeEach(() => {
 // The ring and the ticking digits are hidden from screen readers; find them anyway.
 const hidden = { includeHiddenElements: true };
 
-it('polls only the ticket on screen, and swiping moves the poll', async () => {
-  loaded({ row: threeTickets() });
-  await show();
-  expect(polling()).toEqual([T1]);
-  const { width } = Dimensions.get('window');
-  await fireEvent(screen.getByTestId('ticket-pager'), 'momentumScrollEnd', {
-    nativeEvent: { contentOffset: { x: width, y: 0 } },
-  });
-  expect(polling()).toEqual([T2]);
-  await fireEvent.press(screen.getByRole('button', { name: 'Next ticket' }));
-  expect(polling()).toEqual([T3]);
-  expect(screen.getByRole('button', { name: 'Next ticket' })).toBeDisabled();
-});
-
 /** A plain scroll (no momentum event) that leaves page `i` filling the pager. */
 async function scrollTo(i: number) {
   const { width } = Dimensions.get('window');
   const pager = screen.getByTestId('ticket-pager');
   const size = { width, height: 800 };
   await fireEvent(pager, 'layout', { nativeEvent: { layout: { x: 0, y: 0, ...size } } });
+  await fireEvent(pager, 'contentSizeChange', width * 3, 800);
   await fireEvent.scroll(pager, {
     nativeEvent: {
       contentOffset: { x: width * i, y: 0 },
@@ -135,10 +129,39 @@ async function scrollTo(i: number) {
   });
 }
 
+/**
+ * The pager renders one page first and the rest as the window moves (initialNumToRender 1,
+ * windowSize 3). A device scrolls (and so renders) on every step; here: lay out at page `i`
+ * and let the render batches run.
+ */
+async function settle(i: number) {
+  await scrollTo(i);
+  await act(async () => {
+    await jest.runOnlyPendingTimersAsync();
+  });
+}
+
+it('polls only the ticket on screen, and swiping moves the poll', async () => {
+  loaded({ row: threeTickets() });
+  await show();
+  expect(polling()).toEqual([T1]);
+  await settle(0);
+  const { width } = Dimensions.get('window');
+  await fireEvent(screen.getByTestId('ticket-pager'), 'momentumScrollEnd', {
+    nativeEvent: { contentOffset: { x: width, y: 0 } },
+  });
+  expect(polling()).toEqual([T2]);
+  await settle(1);
+  await fireEvent.press(screen.getByRole('button', { name: 'Next ticket' }));
+  expect(polling()).toEqual([T3]);
+  expect(screen.getByRole('button', { name: 'Next ticket' })).toBeDisabled();
+});
+
 it('a page that comes into view without momentum (slow drag, screen reader) goes live', async () => {
   loaded({ row: threeTickets() });
   await show();
-  await scrollTo(2);
+  await settle(2);
+  await scrollTo(2); // the next scroll frame, now that the page is drawn
   expect(polling()).toEqual([T3]);
   await scrollTo(1);
   expect(polling()).toEqual([T2]);
@@ -151,10 +174,15 @@ it('only the page on screen draws a code or reaches screen readers', async () =>
     row: { ...row, listing: row.listing && { ...row.listing, require_dynamic_ticket: false } },
   });
   await show();
+  // First paint: the page on screen only.
+  expect(screen.queryByTestId('ticket-page-1', hidden)).toBeNull();
+  await settle(0);
   expect(screen.getByLabelText('Ticket 1 of 3 code')).toBeTruthy();
   expect(screen.queryByLabelText('Ticket 2 of 3 code', hidden)).toBeNull();
   expect(screen.queryByLabelText('Ticket 3 of 3 code', hidden)).toBeNull();
-  expect(screen.getAllByTestId('ticket-placeholder', hidden)).toHaveLength(2);
+  // Then its neighbour only (windowSize 3), never a code.
+  expect(screen.getAllByTestId('ticket-placeholder', hidden)).toHaveLength(1);
+  expect(screen.queryByTestId('ticket-page-2', hidden)).toBeNull();
   expect(screen.getByTestId('ticket-page-0').props.accessibilityElementsHidden).toBe(false);
   expect(screen.getByTestId('ticket-page-1', hidden).props.importantForAccessibility).toBe(
     'no-hide-descendants',
@@ -173,8 +201,10 @@ it('Previous and Next step pages and say where the user landed', async () => {
   expect(say).not.toHaveBeenCalled();
   expect(screen.getByRole('button', { name: 'Previous ticket' })).toBeDisabled();
   await fireEvent.press(screen.getByRole('button', { name: 'Next ticket' }));
+  await settle(1);
   await fireEvent.press(screen.getByRole('button', { name: 'Next ticket' }));
   expect(say).toHaveBeenLastCalledWith('Ticket 3 of 3');
+  await settle(2);
   await fireEvent.press(screen.getByRole('button', { name: 'Previous ticket' }));
   expect(polling()).toEqual([T2]);
   expect(say).toHaveBeenLastCalledWith('Ticket 2 of 3');
@@ -225,7 +255,7 @@ it('live: the code, its line, a countdown ring and a running server clock', asyn
   loaded({ row: oneTicket({ seat_assignments: [{ seat: 'A12' }] }) });
   await show();
   expect(screen.getByLabelText('Ticket 1 of 1 code')).toBeTruthy();
-  expect(screen.getByText('VIP · Ticket 1 of 1 · Seat A12')).toBeTruthy();
+  expect(screen.getByText('Ada Obi · Ticket 1 of 1 · VIP · Seat A12')).toBeTruthy();
   expect(screen.getByText('Live code · refreshes every 30 s')).toBeTruthy();
   expect(screen.getByTestId('countdown-ring-sweep', hidden)).toBeTruthy();
   expect(screen.getByLabelText('Live ticket')).toBeTruthy();
@@ -262,7 +292,7 @@ it('rate limited with a usable code keeps showing it', async () => {
   expect(screen.getByText('Refreshing shortly')).toBeTruthy();
 });
 
-it('fallback, printed codes allowed: the static code with its reference and a neutral note', async () => {
+it('fallback, printed codes allowed: the static code under the holder line, a neutral note, no id', async () => {
   states = { [T1]: { kind: 'fallback' } };
   const row = oneTicket();
   loaded({
@@ -270,7 +300,8 @@ it('fallback, printed codes allowed: the static code with its reference and a ne
   });
   await show();
   expect(screen.getByLabelText('Ticket 1 of 1 code')).toBeTruthy();
-  expect(screen.getByText('A1B2C3D4')).toBeTruthy();
+  expect(screen.getByText('Ada Obi · Ticket 1 of 1 · VIP')).toBeTruthy();
+  expect(screen.queryByText('A1B2C3D4')).toBeNull();
   expect(screen.getByText('Offline code — it works at the door')).toBeTruthy();
   expect(screen.queryByText(/Connect to the internet/)).toBeNull();
 });
@@ -314,6 +345,21 @@ it('signed out, printed codes allowed: the static code still shows', async () =>
   expect(screen.getByLabelText('Ticket 1 of 1 code')).toBeTruthy();
   expect(screen.getByText('Offline code — it works at the door')).toBeTruthy();
   expect(screen.queryByText('Sign in again to show this ticket')).toBeNull();
+});
+
+it('no profile name (offline): the line starts with the ticket', async () => {
+  mockProfile.name = null;
+  states = { [T1]: LIVE };
+  loaded({ row: oneTicket() });
+  await show();
+  expect(screen.getByText('Ticket 1 of 1 · VIP')).toBeTruthy();
+});
+
+it('admitted on an earlier day says the date', async () => {
+  states = { [T1]: { kind: 'admitted', at: '2026-10-10T18:42:00Z' } };
+  loaded({ row: oneTicket() });
+  await show();
+  expect(screen.getByText('Admitted on Sat 10 Oct at 7:42 pm')).toBeTruthy();
 });
 
 it('admitted: the time, no QR', async () => {

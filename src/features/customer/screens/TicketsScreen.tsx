@@ -13,6 +13,7 @@ import {
   type TicketView,
 } from '@/features/customer/domain/tickets';
 import { useBooking } from '@/features/customer/hooks/useBooking';
+import { useProfile } from '@/features/customer/hooks/useProfile';
 import { CodeSheet } from '@/features/customer/ui/CodeSheet';
 import { savedAtLabel } from '@/features/customer/ui/savedAt';
 import { TicketPager } from '@/features/customer/ui/TicketPager';
@@ -51,6 +52,8 @@ function NotYours({ onClose }: { onClose: () => void }) {
 
 function EventTickets({ userId, id, index, onClose, onSignIn }: Props & { id: string }) {
   const b = useBooking(userId, 'event', id);
+  // The holder's own name (their profile): no extra booking PII. Unknown offline.
+  const { profile } = useProfile(userId);
   const focused = useIsFocused();
   let shown: Shown | null = null;
   let none: 'issuing' | 'none' | null = null;
@@ -100,6 +103,7 @@ function EventTickets({ userId, id, index, onClose, onSignIn }: Props & { id: st
           today={b.today}
           start={pagerIndexParam(index, shown.tickets.length)}
           onSignIn={onSignIn}
+          holder={profile?.name ?? null}
         />
       </CodeSheet>
     );
