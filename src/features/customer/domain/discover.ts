@@ -114,10 +114,9 @@ export function afterThisWeekend(eventDate: string | null, todayLagos: IsoDate):
 export function filterCount(cat: Category, f: Filters): number {
   const on = (b: boolean | undefined) => (b === true ? 1 : 0);
   const set = (v: unknown) => (v === undefined ? 0 : 1);
-  // The price range is one filter (one group in the sheet).
-  const shared =
-    (f.sort === 'newest' ? 0 : 1) +
-    (wholeNaira(f.priceMin) !== null || wholeNaira(f.priceMax) !== null ? 1 : 0);
+  // The sort isn't a filter: the Sort chip shows it, and it never narrows the list. The price
+  // range is one filter (one group in the sheet).
+  const shared = wholeNaira(f.priceMin) !== null || wholeNaira(f.priceMax) !== null ? 1 : 0;
   switch (cat) {
     case 'hotels':
       return shared + set(f.minRating) + on(f.breakfastIncluded) + on(f.generator24h);

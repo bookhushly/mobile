@@ -11,6 +11,7 @@ import { useListings } from '@/features/customer/hooks/useListings';
 import { useMyBookings } from '@/features/customer/hooks/useMyBookings';
 import { useSaved } from '@/features/customer/hooks/useSaved';
 import { useSavedNotices } from '@/features/customer/hooks/useSavedNotices';
+import { ChipButton } from '@/features/customer/ui/ChipButton';
 import { PlaceSheet } from '@/features/customer/ui/PlaceSheet';
 import { Rail, RAIL_MAX } from '@/features/customer/ui/Rail';
 import { SavedBanner, savedBannerShown } from '@/features/customer/ui/SavedBanner';
@@ -55,43 +56,6 @@ const targetOf = (category: Category, p: Place | null): ResultsTarget => ({
   ...(p?.state !== undefined ? { region: p.state } : {}),
   ...(p?.city !== undefined ? { city: p.city } : {}),
 });
-
-function Chip({
-  label,
-  icon,
-  accessibilityLabel,
-  onPress,
-}: {
-  label: string;
-  icon: LucideIcon;
-  accessibilityLabel?: string;
-  onPress: () => void;
-}) {
-  const d = useDensity();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? label}
-      onPress={onPress}
-      style={({ pressed }) => ({
-        minHeight: d.minTarget,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: space.s2,
-        paddingHorizontal: space.s4,
-        borderRadius: radius.r2,
-        borderWidth: borderWidth.hairline,
-        borderColor: color.border,
-        backgroundColor: pressed ? color.wash : color.surface,
-      })}
-    >
-      <Icon as={icon} size="xs" tone="textSecondary" />
-      <Text variant="label" numberOfLines={1} maxScale={1.3}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
 
 // Spec §3 Explore, D1, D6, D9, D14.
 export function ExploreScreen({
@@ -224,7 +188,7 @@ export function ExploreScreen({
       </Pressable>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: d.targetGap }}>
         {CATEGORIES.map((c) => (
-          <Chip
+          <ChipButton
             key={c.cat}
             label={c.label}
             icon={c.icon}
@@ -249,7 +213,7 @@ export function ExploreScreen({
         {...railProps}
       />
       <View style={{ alignSelf: 'flex-start' }}>
-        <Chip
+        <ChipButton
           label={place === null ? 'Where to?' : `Where to? · ${where}`}
           accessibilityLabel={place === null ? 'Where to?' : `Where to? ${where}. Change place`}
           icon={MapPin}

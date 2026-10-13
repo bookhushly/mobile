@@ -162,7 +162,9 @@ it('filters apply only on Show results, and the chip counts them', async () => {
   await fireEvent.press(sheet.getByRole('checkbox', { name: 'Breakfast included' }));
   await fireEvent.press(sheet.getByRole('radio', { name: '4+' }));
   await fireEvent.press(sheet.getByRole('radio', { name: 'Lowest price' }));
-  await fireEvent.changeText(sheet.getByLabelText('Minimum (₦)'), '20,000');
+  await fireEvent.changeText(sheet.getByLabelText('Minimum (₦)'), '20000');
+  // Shown grouped; kept as a whole number.
+  expect(sheet.getByLabelText('Minimum (₦)')).toHaveDisplayValue('20,000');
   // Nothing applies while choosing.
   expect(lastFilters()).toEqual({ sort: 'newest' });
   await fireEvent.press(sheet.getByRole('button', { name: 'Show results' }));
@@ -172,7 +174,8 @@ it('filters apply only on Show results, and the chip counts them', async () => {
     breakfastIncluded: true,
     priceMin: 20000,
   });
-  expect(screen.getByRole('button', { name: 'Filters (4)' })).toBeTruthy();
+  // The sort isn't counted: its own chip shows it.
+  expect(screen.getByRole('button', { name: 'Filters (3)' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Sort: Lowest price' })).toBeTruthy();
 });
 
@@ -235,6 +238,7 @@ it('no matches: says so, and Clear filters resets them', async () => {
   expect(empty.getByText('Try a different place or fewer filters.')).toBeTruthy();
   await fireEvent.press(empty.getByRole('button', { name: 'Clear filters' }));
   expect(lastFilters()).toEqual({ sort: 'newest' });
+  expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Filters' })).toBeTruthy();
 });
 
@@ -245,5 +249,26 @@ it('sort applies from its own sheet', async () => {
     within(screen.getByTestId('sort-sheet')).getByRole('radio', { name: 'Top rated' }),
   );
   expect(lastFilters()).toEqual({ sort: 'top_rated' });
-  expect(screen.getByRole('button', { name: 'Filters (1)' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Filters' })).toBeTruthy();
+});
+
+it('a sort alone never offers Clear filters on an empty list', async () => {
+  current = listings([]);
+  await render(<ResultsScreen {...props()} />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Sort: Newest' }));
+  await fireEvent.press(
+    within(screen.getByTestId('sort-sheet')).getByRole('radio', { name: 'Highest price' }),
+  );
+  expect(screen.getByTestId('results-empty')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
+});
+
+it('pages that held nothing yet say so above Load more', async () => {
+  current = listings([], { hasMore: true });
+  await render(<ResultsScreen {...props({ category: 'events' })} />);
+  expect(screen.queryByTestId('results-empty')).toBeNull();
+  const footer = within(screen.getByTestId('load-more'));
+  expect(footer.getByText('Nothing here yet — load more to keep looking.')).toBeTruthy();
+  await fireEvent.press(footer.getByRole('button', { name: 'Load more' }));
+  expect(current.loadMore).toHaveBeenCalledTimes(1);
 });

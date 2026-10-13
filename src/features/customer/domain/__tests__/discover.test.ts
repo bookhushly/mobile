@@ -218,7 +218,11 @@ describe('filterCount', () => {
     expect(filterCount('hotels', NEWEST)).toBe(0);
   });
 
-  it('counts a non-default sort, the price range once, and the category’s own filters', () => {
+  it('never counts the sort (the Sort chip shows it, and a sort never empties a list)', () => {
+    expect(filterCount('hotels', { sort: 'price_desc' })).toBe(0);
+  });
+
+  it('counts the price range once and the category’s own filters', () => {
     expect(
       filterCount('hotels', {
         sort: 'price_asc',
@@ -229,7 +233,7 @@ describe('filterCount', () => {
         generator24h: false,
         bedrooms: 2,
       }),
-    ).toBe(4);
+    ).toBe(3);
     expect(
       filterCount('serviced_apartments', {
         sort: 'newest',
@@ -239,7 +243,7 @@ describe('filterCount', () => {
       }),
     ).toBe(3);
     expect(filterCount('events', { sort: 'top_rated', eventDate: 'weekend', minRating: 4 })).toBe(
-      2,
+      1,
     );
   });
 });

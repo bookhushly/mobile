@@ -1,12 +1,6 @@
-import {
-  ArrowDownUp,
-  ArrowLeft,
-  SearchX,
-  SlidersHorizontal,
-  type LucideIcon,
-} from 'lucide-react-native';
+import { ArrowLeft, SearchX } from 'lucide-react-native';
 import { useState } from 'react';
-import { FlatList, Pressable, View } from 'react-native';
+import { FlatList } from 'react-native';
 
 import { filterCount, type Filters, type ListingKind } from '@/features/customer/domain/discover';
 import { cardOf, type ListingCardModel } from '@/features/customer/domain/listingCard';
@@ -15,34 +9,17 @@ import type { ListingsWhere } from '@/features/customer/hooks/customerKeys';
 import { useListings } from '@/features/customer/hooks/useListings';
 import { useSaved } from '@/features/customer/hooks/useSaved';
 import { useSavedNotices } from '@/features/customer/hooks/useSavedNotices';
-import {
-  CATEGORY_LABEL,
-  placeLabel,
-  resultCount,
-  SORTS,
-  sortLabel,
-} from '@/features/customer/ui/discoverLabels';
-import { FiltersSheet, NO_FILTERS } from '@/features/customer/ui/FiltersSheet';
+import { CATEGORY_LABEL, placeLabel, sortLabel } from '@/features/customer/ui/discoverLabels';
+import { NO_FILTERS } from '@/features/customer/ui/filterOptions';
+import { FiltersSheet } from '@/features/customer/ui/FiltersSheet';
 import { ListingCard } from '@/features/customer/ui/ListingCard';
+import { BUSY, LoadMoreFooter } from '@/features/customer/ui/LoadMoreFooter';
+import { ResultsBar } from '@/features/customer/ui/ResultsBar';
 import { SavedBanner } from '@/features/customer/ui/SavedBanner';
+import { SortSheet } from '@/features/customer/ui/SortSheet';
 import { clock } from '@/shared/api/instance';
 import { lagosToday } from '@/shared/lib/lagosDay';
-import { borderWidth, color, radius, space } from '@/shared/theme';
-import {
-  Button,
-  EmptyState,
-  ErrorState,
-  Header,
-  Icon,
-  IconButton,
-  ListRow,
-  Screen,
-  Sheet,
-  SkeletonRows,
-  Spinner,
-  Text,
-  useDensity,
-} from '@/shared/ui';
+import { EmptyState, ErrorState, Header, IconButton, Screen, SkeletonRows } from '@/shared/ui';
 
 type Props = {
   userId: string;
@@ -52,38 +29,8 @@ type Props = {
   onSignInAgain: () => void;
 };
 
-const BUSY = 'Lots of searches right now. Try again in a moment.';
-
-function Chip({ label, icon, onPress }: { label: string; icon: LucideIcon; onPress: () => void }) {
-  const d = useDensity();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={({ pressed }) => ({
-        minHeight: d.minTarget,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: space.s2,
-        paddingHorizontal: space.s4,
-        borderRadius: radius.r2,
-        borderWidth: borderWidth.hairline,
-        borderColor: color.border,
-        backgroundColor: pressed ? color.wash : color.surface,
-      })}
-    >
-      <Icon as={icon} size="xs" tone="textSecondary" />
-      <Text variant="label" numberOfLines={1} maxScale={1.3}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 // Spec §3 Results, D2, D8, D16; Mobbin §3 (Booking.com, Tripadvisor, Agoda).
 export function ResultsScreen({ userId, query, onBack, onOpenListing, onSignInAgain }: Props) {
-  const d = useDensity();
   const cat = query.category;
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -167,8 +114,9 @@ export function ResultsScreen({ userId, query, onBack, onOpenListing, onSignInAg
                 ? {
                     action: {
                       label: 'Clear filters',
+                      // The sort stays: it never empties a list.
                       onPress: () => {
-                        setFilters(NO_FILTERS);
+                        setFilters({ sort: filters.sort });
                       },
                     },
                   }
@@ -178,27 +126,14 @@ export function ResultsScreen({ userId, query, onBack, onOpenListing, onSignInAg
           )
         }
         ListFooterComponent={
-          list.loadingMore ? (
-            <View style={{ paddingVertical: space.s5 }}>
-              <Spinner label="Loading more" />
-            </View>
-          ) : offerMore ? (
-            <View style={{ paddingVertical: space.s5, gap: space.s3 }} testID="load-more">
-              {list.error !== null ? (
-                <Text variant="bodySm" tone="textSecondary" align="center">
-                  {list.error.kind === 'rateLimited'
-                    ? BUSY
-                    : 'Couldn’t load more — check your connection.'}
-                </Text>
-              ) : null}
-              <Button
-                variant="secondary"
-                label="Load more"
-                disabled={waiting}
-                onPress={list.loadMore}
-              />
-            </View>
-          ) : null
+          <LoadMoreFooter
+            loadingMore={list.loadingMore}
+            offer={offerMore}
+            error={list.error}
+            waiting={waiting}
+            nothingYet={cards.length === 0}
+            onLoadMore={list.loadMore}
+          />
         }
       />
     );
@@ -220,53 +155,31 @@ export function ResultsScreen({ userId, query, onBack, onOpenListing, onSignInAg
         />
       }
     >
-      <View
-        style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: d.targetGap }}
-      >
-        <Chip
-          label={`Sort: ${sortLabel(cat, filters.sort)}`}
-          icon={ArrowDownUp}
-          onPress={() => {
-            setSortOpen(true);
-          }}
-        />
-        <Chip
-          label={n > 0 ? `Filters (${String(n)})` : 'Filters'}
-          icon={SlidersHorizontal}
-          onPress={() => {
-            setFiltersOpen(true);
-          }}
-        />
-        {list.totalCount !== null && !list.failed ? (
-          <Text variant="bodySm" tone="textSecondary" tabular testID="results-count">
-            {resultCount(list.totalCount)}
-          </Text>
-        ) : null}
-      </View>
+      <ResultsBar
+        sortLabel={sortLabel(cat, filters.sort)}
+        filterCount={n}
+        total={list.failed ? null : list.totalCount}
+        onSort={() => {
+          setSortOpen(true);
+        }}
+        onFilters={() => {
+          setFiltersOpen(true);
+        }}
+      />
       {body}
       {banner}
-      <Sheet
+      <SortSheet
         visible={sortOpen}
-        title="Sort by"
+        category={cat}
+        value={filters.sort}
+        onChoose={(s) => {
+          setFilters({ ...filters, sort: s });
+          setSortOpen(false);
+        }}
         onClose={() => {
           setSortOpen(false);
         }}
-        testID="sort-sheet"
-      >
-        <View accessibilityRole="radiogroup" accessibilityLabel="Sort by">
-          {SORTS.map((s) => (
-            <ListRow
-              key={s}
-              title={sortLabel(cat, s)}
-              checked={filters.sort === s}
-              onPress={() => {
-                setFilters({ ...filters, sort: s });
-                setSortOpen(false);
-              }}
-            />
-          ))}
-        </View>
-      </Sheet>
+      />
       <FiltersSheet
         visible={filtersOpen}
         category={cat}
