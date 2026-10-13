@@ -18,5 +18,5 @@ export const ROUTE_HREF = {
   webOnly: '/web-only',
   gate: '/gate',
   receptionist: '/today',
-  customer: '/home',
+  customer: '/bookings',
 } as const;
