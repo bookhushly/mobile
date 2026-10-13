@@ -187,6 +187,9 @@ export function ProfileFieldSheet({ field, profile, visible, saving, onClose, on
       onClose={onClose}
       closeLabel="Cancel"
       closeDisabled={saving}
+      // Text fields scroll (large Dynamic Type + hint + error + banner under the keyboard). The
+      // state picker has its own FlatList, which must not nest inside the Sheet's ScrollView.
+      scroll={field !== 'state'}
       footer={
         <Button
           label="Save"

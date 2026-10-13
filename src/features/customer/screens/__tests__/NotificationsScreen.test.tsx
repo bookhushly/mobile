@@ -81,6 +81,17 @@ async function open() {
   return h;
 }
 
+// The jest ScrollView mock keeps the RefreshControl element as a prop rather than rendering it.
+async function pullToRefresh() {
+  const list = screen.getByTestId('notifications-list');
+  const control = (list.props as { refreshControl: { props: { onRefresh: () => void } } })
+    .refreshControl;
+  await act(async () => {
+    control.props.onRefresh();
+    await jest.advanceTimersByTimeAsync(0);
+  });
+}
+
 // Fake timers: FlatList's cell-batching timer otherwise fires between act() scopes, and the
 // Undo banner's 5 s runs on them.
 beforeEach(() => {
@@ -243,4 +254,70 @@ it('says so when there are none, with Mark all disabled', async () => {
   await open();
   expect(await screen.findByText('No notifications yet')).toBeTruthy();
   expect(screen.getByRole('link', { name: 'Mark all as read' })).toBeDisabled();
+});
+
+it('a booking notification goes to the Bookings tab while bookings are not loaded', async () => {
+  jest.mocked(useMyBookings).mockReturnValue({
+    bookings: null,
+    rows: null,
+    saved: null,
+    loading: true,
+    error: false,
+    refetch: jest.fn(() => Promise.resolve()),
+  });
+  // Its link would say Account: the booking id wins, even unmatched.
+  show([{ ...booked, link: '/dashboard/customer/profile' }]);
+  const h = await open();
+  await fireEvent.press(await screen.findByRole('button', { name: /^Unread, Booking confirmed/ }));
+  expect(db.markRead).toHaveBeenCalledWith('u1', ['booked']);
+  expect(h.onOpenTab).toHaveBeenCalledWith('bookings');
+  expect(h.onOpenBooking).not.toHaveBeenCalled();
+});
+
+it('a write error can be dismissed, and a clean pull to refresh clears it', async () => {
+  show([booked]);
+  db.markRead.mockResolvedValue(err({ kind: 'network' }));
+  await open();
+  await fireEvent.press(await screen.findByRole('button', { name: /^Unread, Booking confirmed/ }));
+  await screen.findByText("Couldn't update — try again");
+  await fireEvent.press(screen.getByRole('button', { name: 'Dismiss' }));
+  expect(screen.queryByText("Couldn't update — try again")).toBeNull();
+
+  await fireEvent.press(screen.getByRole('button', { name: /^Unread, Booking confirmed/ }));
+  await screen.findByText("Couldn't update — try again");
+  const before = db.notifications.mock.calls.length;
+  await pullToRefresh();
+  expect(db.notifications.mock.calls.length).toBe(before + 1);
+  await waitFor(() => {
+    expect(screen.queryByText("Couldn't update — try again")).toBeNull();
+  });
+});
+
+it('a failed pull to refresh keeps the write error', async () => {
+  show([booked]);
+  db.markRead.mockResolvedValue(err({ kind: 'network' }));
+  await open();
+  await fireEvent.press(await screen.findByRole('button', { name: /^Unread, Booking confirmed/ }));
+  await screen.findByText("Couldn't update — try again");
+  db.notifications.mockResolvedValue(err({ kind: 'network' }));
+  await pullToRefresh();
+  await waitFor(() => {
+    expect(db.notifications.mock.calls.length).toBeGreaterThanOrEqual(3);
+  });
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(0);
+  });
+  expect(screen.getByText("Couldn't update — try again")).toBeTruthy();
+});
+
+it('any other row action ends the Undo', async () => {
+  show([booked, paid]);
+  await open();
+  await screen.findByText('Booking confirmed');
+  await fireEvent.press(screen.getByRole('link', { name: 'Mark all as read' }));
+  expect(screen.getByText('All marked as read')).toBeTruthy();
+  await fireEvent(screen.getByRole('button', { name: /^Payment received/ }), 'longPress');
+  await fireEvent.press(screen.getByRole('button', { name: 'Delete' }));
+  expect(screen.queryByText('All marked as read')).toBeNull();
+  expect(db.markUnread).not.toHaveBeenCalled();
 });

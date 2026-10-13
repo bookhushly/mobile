@@ -45,6 +45,17 @@ async function open(over: { modeSwitcher?: React.ReactNode } = {}) {
   return h;
 }
 
+type Node = { type: unknown; parent: Node | null };
+// Is there a scroll view between this element and its sheet (the Modal)?
+function scrollsInSheet(el: Node): boolean {
+  let n: Node | null = el.parent;
+  for (let i = 0; n !== null && i < 100; i++, n = n.parent) {
+    if (n.type === 'Modal') return false;
+    if (n.type === 'RCTScrollView') return true;
+  }
+  return false;
+}
+
 beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
@@ -212,4 +223,14 @@ it('sign out and delete account call back', async () => {
   expect(h.onSignOut).toHaveBeenCalled();
   await fireEvent.press(screen.getByRole('link', { name: 'Delete account' }));
   expect(h.onDeleteAccount).toHaveBeenCalled();
+});
+
+it('text fields scroll in their sheet; the state list keeps its own list', async () => {
+  withProfile(full);
+  await open();
+  await fireEvent.press(screen.getByRole('button', { name: 'Address, 12 Marina Road, edit' }));
+  expect(scrollsInSheet(screen.getByLabelText('Address') as unknown as Node)).toBe(true);
+  await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'State, Lagos, edit' }));
+  expect(scrollsInSheet(screen.getByLabelText('Search states') as unknown as Node)).toBe(false);
 });

@@ -184,7 +184,7 @@ Hotel-booking JSON route · apartment booking JSON · my-bookings route · scann
   (d) a my-bookings route or SECURITY DEFINER view that keeps listing/hotel/apartment titles and images when the listing is hidden, and includes the room number;
   (e) REQ-11 claim-by-email (guest bookings are invisible to the app and get 403 on live codes);
   (f) the web's ticket modal polls every ticket at once and trips the `ticket` tier (~9+ tickets); ask for a per-booking code endpoint or a higher budget;
-  (g) notifications: store `data.booking_type` + `data.booking_id` on every booking notification; confirm the Realtime publication; preference storage doesn't exist;
+  (g) notifications: store `data.booking_type` + `data.booking_id` on every booking notification; confirm the Realtime publication; preference storage doesn't exist; mark-all can't detect a stale session (0 rows is ambiguous); a server route returning the count would fix it;
   (h) machine `code`s on booking-detail, ticket-code and cancel errors;
   (i) stale "deny-by-default" comment in `app/actions/customers.js`.
 - **Roster `since` misses backdated admissions (found 2026-10-07).** `admit_tickets_batch` backdates `checked_in_at` to the device's `scanned_at`, but roster `since` filters on `checked_in_at > since`, so another phone's offline admissions synced after this phone's mark are missed by deltas until the 30-min full refresh (cross-door double-admit window). Request: filter `since` on a synced/updated-at column.

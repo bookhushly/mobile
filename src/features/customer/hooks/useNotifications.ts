@@ -29,7 +29,8 @@ export function useNotifications(userId: string): {
   unread: number;
   loading: boolean;
   error: boolean;
-  refetch: () => Promise<unknown>;
+  /** Resolves with whether the refetch failed (a clean one clears a stale write error). */
+  refetch: () => Promise<{ isError: boolean }>;
   /** Marks it read (optimistically); the screen then opens its target. */
   open: (n: NotificationRow) => void;
   markUnread: (id: string) => void;
@@ -125,6 +126,9 @@ export function useNotifications(userId: string): {
         rows.map((n) => (set.has(n.id) ? { ...n, read: v } : n));
       // Expected 0: the list can be a minute old, so another device may already have read them
       // (0 rows, not a stale session). The refetch after the write reconciles.
+      // Known limitation (BACKEND_STATUS §9 Customer 4a (g)): 0 rows is ambiguous, so a stale
+      // session can't be detected here. The UI shows "All marked as read" and the next refetch
+      // quietly brings the rows back as unread. A server route returning the count would fix it.
       const done = write(to(true), to(false), () => customerDb.markAllRead(userId), 0);
       lastMarkedAll.current = { ids, done };
     },

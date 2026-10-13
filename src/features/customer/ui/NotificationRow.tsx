@@ -70,6 +70,8 @@ export function NotificationRow({ item: n, when, onPress, onLongPress }: Props) 
       >
         <Icon as={typeIcon(n.type)} size="sm" tone={unread ? 'linkText' : 'textSecondary'} />
       </View>
+      {/* Read rows keep full-contrast text on purpose: Mobbin §5 mutes them, but the contrast
+          rules forbid muted text, so read vs unread is the title weight, the icon tint and the dot. */}
       <View style={{ flex: 1, gap: space.s1 }}>
         <Text variant={unread ? 'bodyStrong' : 'body'} numberOfLines={2}>
           {n.title}

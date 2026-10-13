@@ -9,6 +9,11 @@ export type NotificationTarget =
 const CUSTOMER = '/dashboard/customer';
 const ACCOUNT_PATHS = ['/dashboard/customer/profile', '/dashboard/customer/settings', '/settings'];
 
+/** The booking a notification is about (`data.bookingId` / `data.booking_id`), if any. */
+export function notificationBookingId(n: NotificationRow): string | null {
+  return bookingIdOf(n.data);
+}
+
 function bookingIdOf(data: NotificationRow['data']): string | null {
   const v = data?.bookingId ?? data?.booking_id;
   return typeof v === 'string' && v !== '' ? v : null;

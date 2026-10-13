@@ -3,7 +3,10 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { FlatList, RefreshControl, View } from 'react-native';
 
 import type { BookingKind } from '@/features/customer/domain/myBookings';
-import { notificationTarget } from '@/features/customer/domain/notificationTarget';
+import {
+  notificationBookingId,
+  notificationTarget,
+} from '@/features/customer/domain/notificationTarget';
 import { useMyBookings } from '@/features/customer/hooks/useMyBookings';
 import { useNotifications } from '@/features/customer/hooks/useNotifications';
 import type { NotificationRow as Row } from '@/features/customer/schemas/notifications';
@@ -60,13 +63,33 @@ export function NotificationsScreen({ userId, onBack, onOpenBooking, onOpenTab }
 
   const refresh = () => {
     setRefreshing(true);
-    void notes.refetch().finally(() => {
-      setRefreshing(false);
-    });
+    void notes
+      .refetch()
+      .then((r) => {
+        // A clean refresh shows the server's truth: the last write's error no longer applies.
+        if (!r.isError) notes.clearWriteError();
+      })
+      .finally(() => {
+        setRefreshing(false);
+      });
+  };
+  // Any other row action ends the Undo: undoing the mark-all after it would flip those rows back
+  // regardless of what was done since.
+  const rowAction = (run: () => void) => {
+    setUndoShown(false);
+    run();
   };
   const open = (n: Row) => {
-    notes.open(n);
+    rowAction(() => {
+      notes.open(n);
+    });
     const lists = my.bookings;
+    // Bookings not loaded yet (cold open, or failed with nothing saved): a booking notification
+    // can't be matched, so go to the Bookings tab rather than guess from the link (ruling).
+    if (lists === null && notificationBookingId(n) !== null) {
+      onOpenTab('bookings');
+      return;
+    }
     const mine = lists === null ? [] : [...lists.today, ...lists.upcoming, ...lists.past];
     const target = notificationTarget(n, mine);
     if (target === null) return;
@@ -100,7 +123,11 @@ export function NotificationsScreen({ userId, onBack, onOpenBooking, onOpenTab }
     const now = clock.serverNow();
     const banner =
       notes.writeError !== null ? (
-        <Banner tone="neutral" message={notes.writeError === 'stale' ? STALE : TRANSIENT} />
+        <Banner
+          tone="neutral"
+          message={notes.writeError === 'stale' ? STALE : TRANSIENT}
+          action={{ label: 'Dismiss', onPress: notes.clearWriteError }}
+        />
       ) : undoShown ? (
         <Banner
           tone="neutral"
@@ -116,6 +143,7 @@ export function NotificationsScreen({ userId, onBack, onOpenBooking, onOpenTab }
       ) : null;
     body = (
       <FlatList
+        testID="notifications-list"
         data={notes.items}
         style={{ flex: 1 }}
         keyExtractor={(n: Row) => n.id}
@@ -165,7 +193,9 @@ export function NotificationsScreen({ userId, onBack, onOpenBooking, onOpenTab }
             variant="secondary"
             label="Mark as unread"
             onPress={() => {
-              notes.markUnread(menuFor.id);
+              rowAction(() => {
+                notes.markUnread(menuFor.id);
+              });
               closeMenu();
             }}
           />
@@ -175,7 +205,9 @@ export function NotificationsScreen({ userId, onBack, onOpenBooking, onOpenTab }
             variant="secondary"
             label="Mark as read"
             onPress={() => {
-              notes.open(menuFor);
+              rowAction(() => {
+                notes.open(menuFor);
+              });
               closeMenu();
             }}
           />
@@ -184,7 +216,10 @@ export function NotificationsScreen({ userId, onBack, onOpenBooking, onOpenTab }
           variant="destructive"
           label="Delete"
           onPress={() => {
-            if (menuFor !== null) notes.remove(menuFor.id);
+            if (menuFor !== null)
+              rowAction(() => {
+                notes.remove(menuFor.id);
+              });
             closeMenu();
           }}
         />

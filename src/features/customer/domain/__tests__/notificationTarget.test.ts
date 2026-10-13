@@ -1,5 +1,8 @@
 import type { MyBooking } from '@/features/customer/domain/myBookings';
-import { notificationTarget } from '@/features/customer/domain/notificationTarget';
+import {
+  notificationBookingId,
+  notificationTarget,
+} from '@/features/customer/domain/notificationTarget';
 import type { NotificationRow } from '@/features/customer/schemas/notifications';
 
 function n(p: Partial<NotificationRow> = {}): NotificationRow {
@@ -95,4 +98,11 @@ describe('notificationTarget', () => {
       expect(notificationTarget(n({ link }), bookings)).toBeNull();
     },
   );
+});
+
+it('notificationBookingId reads data.bookingId or data.booking_id, else null', () => {
+  expect(notificationBookingId(n({ data: { bookingId: 'b1' } }))).toBe('b1');
+  expect(notificationBookingId(n({ data: { booking_id: 'b2' } }))).toBe('b2');
+  expect(notificationBookingId(n({ data: { bookingId: '' } }))).toBeNull();
+  expect(notificationBookingId(n())).toBeNull();
 });
