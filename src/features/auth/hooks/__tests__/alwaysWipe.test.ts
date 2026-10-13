@@ -127,3 +127,17 @@ it('a failing wallet wipe never keeps the user signed in', async () => {
   await useAuth.getState().signOut();
   signedOut();
 });
+
+it('a cold start with no session runs the always-wipes once (an interrupted wipe is retried)', () => {
+  useAuth.setState({ state: { status: 'loading' } });
+  useAuth.getState().dispatch({ type: 'INITIAL_SESSION', session: null });
+  expect(walletWipe).toHaveBeenCalledTimes(1);
+  useAuth.getState().dispatch({ type: 'INITIAL_SESSION', session: null });
+  expect(walletWipe).toHaveBeenCalledTimes(1);
+});
+
+it('a cold start with a session wipes nothing', () => {
+  useAuth.setState({ state: { status: 'loading' } });
+  useAuth.getState().dispatch({ type: 'INITIAL_SESSION', session: { userId: 'u1', email: '' } });
+  expect(walletWipe).not.toHaveBeenCalled();
+});

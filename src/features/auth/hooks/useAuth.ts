@@ -8,6 +8,7 @@ import { planSignOut, type SignOutOptions } from '@/features/auth/domain/signOut
 import { mapVerifyError, type VerifyError } from '@/features/auth/domain/verifyErrors';
 import { useAuthNotice } from '@/features/auth/hooks/useAuthNotice';
 import { queryClient } from '@/shared/api/queryClient';
+import { onceGuard } from '@/shared/lib/once';
 import {
   checkSignOut,
   runAlwaysWipes,
@@ -71,6 +72,10 @@ async function signOutLocally(): Promise<void> {
   });
 }
 
+// A sign-out whose always-wipes were cut short (app killed mid-wipe) is finished at the next
+// start: no session at cold start runs them once more. They are idempotent.
+const startupWipe = onceGuard();
+
 export const useAuth = create<Store>((set, get) => ({
   state: { status: 'loading' },
   recovery: false,
@@ -79,6 +84,11 @@ export const useAuth = create<Store>((set, get) => ({
     // The one place every sign-out passes through (ours, an abandoned reset, a deletion, or the
     // server ending the session). A blocked or cancelled sign-out never dispatches SIGNED_OUT.
     if (e.type === 'SIGNED_OUT') void runAlwaysWipes();
+    else if (e.type === 'INITIAL_SESSION' && e.session === null) {
+      startupWipe(() => {
+        void runAlwaysWipes();
+      });
+    }
   },
   async signIn(email, password) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
