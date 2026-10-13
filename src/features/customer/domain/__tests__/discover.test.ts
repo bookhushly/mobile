@@ -86,6 +86,28 @@ describe('buildListingParams', () => {
     });
   });
 
+  it('Abuja (state FCT) for events sends city=Abuja; stays keep state=FCT (K3)', () => {
+    const abuja = { q: '', page: 0, state: 'FCT' };
+    // Events match the place on `location` text, which reads "Abuja", rarely "FCT".
+    expect(buildListingParams('events', abuja, NEWEST, TODAY).params).toEqual({
+      sort: 'newest',
+      page: '0',
+      city: 'Abuja',
+    });
+    expect(buildListingParams('hotels', abuja, NEWEST, TODAY).params).toEqual({
+      sort: 'newest',
+      page: '0',
+      state: 'FCT',
+    });
+    expect(buildListingParams('serviced_apartments', abuja, NEWEST, TODAY).params.state).toBe(
+      'FCT',
+    );
+    // A city already chosen wins.
+    expect(
+      buildListingParams('events', { ...abuja, city: 'Gwarinpa' }, NEWEST, TODAY).params,
+    ).toMatchObject({ city: 'Gwarinpa', state: 'FCT' });
+  });
+
   it('maps price to positive whole naira and ignores zero or negative', () => {
     expect(
       buildListingParams(

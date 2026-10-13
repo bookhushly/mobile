@@ -56,8 +56,14 @@ export function buildListingParams(
     if (value !== null && value !== undefined && value !== '') params[key] = value;
   };
   put('search', sanitizeSearch(query.q));
-  put('state', query.state === undefined ? null : sanitizeSearch(query.state));
-  put('city', query.city === undefined ? null : sanitizeSearch(query.city));
+  // Contract review K3: events match a place on their `location` text, which says "Abuja", not
+  // "FCT", so Abuja is sent as a city for events (stays filter `state` exactly: FCT).
+  const where: { state?: string; city?: string } =
+    cat === 'events' && query.state === 'FCT' && query.city === undefined
+      ? { city: 'Abuja' }
+      : query;
+  put('state', where.state === undefined ? null : sanitizeSearch(where.state));
+  put('city', where.city === undefined ? null : sanitizeSearch(where.city));
   put('price_min', wholeNaira(filters.priceMin));
   put('price_max', wholeNaira(filters.priceMax));
 
