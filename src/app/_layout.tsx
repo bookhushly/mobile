@@ -7,6 +7,8 @@ import { useCallback, useEffect, useRef } from 'react';
 import { startSessionListener } from '@/features/auth/api/session';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import '@/features/gate/offline/signOutGuard';
+// After the gate guard: the wallet has no shift summary, and the first summary wins.
+import '@/features/customer/offline/wallet';
 import { resolveRoute } from '@/features/mode/domain/route';
 import { useModeState } from '@/features/mode/hooks/useModeState';
 import { useRouteStore } from '@/features/mode/hooks/useRouteStore';

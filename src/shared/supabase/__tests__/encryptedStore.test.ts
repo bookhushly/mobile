@@ -71,6 +71,29 @@ describe('encrypted store', () => {
   });
 });
 
+describe('several stores on one device', () => {
+  it('a second store with its own marker does not stop the session store wiping', async () => {
+    const secure = memoryKv();
+    await secure.set('bh-auth.k', 'aa'.repeat(32)); // Keychain leftovers from a previous install
+    await secure.set('bh.wallet.k', 'bb'.repeat(32));
+    const plain = memoryKv();
+    const wallet = createEncryptedStore({
+      secure,
+      plain,
+      randomBytes,
+      storageKey: 'bh.wallet',
+      marker: 'bh.wallet.installed',
+    });
+    expect(await wallet.getItem('bh.wallet')).toBeNull();
+    const session = createEncryptedStore({ secure, plain, randomBytes, storageKey: 'bh-auth' });
+    expect(await session.getItem('bh-auth')).toBeNull();
+    expect(secure.dump()['bh-auth.k']).toBeUndefined();
+    expect(secure.dump()['bh.wallet.k']).toBeUndefined();
+    expect(plain.dump()['bh.installed']).toBe('1');
+    expect(plain.dump()['bh.wallet.installed']).toBe('1');
+  });
+});
+
 describe('encrypted store robustness', () => {
   it('returns null (does not throw) when the secure store read throws', async () => {
     const secure = memoryKv();

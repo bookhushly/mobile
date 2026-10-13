@@ -7,22 +7,26 @@ type Deps = {
   plain: KeyValue;
   randomBytes: (n: number) => Uint8Array;
   storageKey: string;
+  /** Fresh-install marker. Each store needs its own: a shared one lets the first store to run
+   * mark the install and skip every other store's wipe. Defaults to the session store's. */
+  marker?: string;
 };
 
 const MARKER = 'bh.installed';
 
 export function createEncryptedStore(deps: Deps) {
   const keyName = (k: string) => `${k}.k`;
+  const marker = deps.marker ?? MARKER;
 
   // Fresh install: the iOS Keychain can outlive an uninstall while app data does not.
   // Never rejects: if the wipe fails (e.g. a locked Keychain) the marker stays unset and the wipe
   // is retried next launch, but the store keeps working for this session.
   const ready = (async () => {
     try {
-      if ((await deps.plain.get(MARKER)) === null) {
+      if ((await deps.plain.get(marker)) === null) {
         await deps.secure.delete(keyName(deps.storageKey));
         await deps.plain.delete(deps.storageKey);
-        await deps.plain.set(MARKER, '1');
+        await deps.plain.set(marker, '1');
       }
     } catch {
       // intentionally ignored; see above

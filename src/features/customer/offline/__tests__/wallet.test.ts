@@ -1,0 +1,144 @@
+import { createWallet, wallet, type WalletEntry } from '@/features/customer/offline/wallet';
+import type { MyBooking } from '@/features/customer/domain/myBookings';
+import { wipeOnSignOut } from '@/shared/lib/signOutGuard';
+
+// The default instance binds native storage; back it with memory instead.
+jest.mock('@/shared/platform/secureStore', () => ({
+  secureKv: jest.requireActual<typeof import('@/shared/lib/kv')>('@/shared/lib/kv').memoryKv(),
+}));
+jest.mock('@/shared/platform/storage', () => ({
+  plainKv: jest.requireActual<typeof import('@/shared/lib/kv')>('@/shared/lib/kv').memoryKv(),
+}));
+
+// 2026-10-13 12:00 Lagos (11:00 UTC).
+const NOW = Date.UTC(2026, 9, 13, 11, 0, 0);
+
+function store() {
+  const m = new Map<string, string>();
+  return {
+    m,
+    getItem: (k: string) => Promise.resolve(m.get(k) ?? null),
+    setItem: (k: string, v: string) => {
+      m.set(k, v);
+      return Promise.resolve();
+    },
+    removeItem: (k: string) => {
+      m.delete(k);
+      return Promise.resolve();
+    },
+  };
+}
+
+function booking(over: Partial<MyBooking> = {}): MyBooking {
+  return {
+    kind: 'event',
+    id: 'e1',
+    title: 'Afrobeats night',
+    place: 'Eko Hotel',
+    start: '2026-10-18',
+    end: '2026-10-18',
+    time: '19:00',
+    status: 'Confirmed',
+    tone: 'success',
+    paid: true,
+    pending: false,
+    when: 'upcoming',
+    next: 'Sat 18 Oct · 7:00 pm',
+    imageUrl: null,
+    createdAt: '2026-10-01T10:00:00Z',
+    ...over,
+  };
+}
+
+const ticketed: WalletEntry = {
+  ...booking(),
+  liveOnly: false,
+  tickets: [
+    { id: 't1', index: 1, total: 2, type: 'VIP', seat: 'A1', admittedAt: null },
+    { id: 't2', index: 2, total: 2, type: 'VIP', seat: null, admittedAt: null },
+  ],
+};
+const stay: WalletEntry = {
+  ...booking({ kind: 'hotel', id: 'h1', start: '2026-10-12', end: '2026-10-14', when: 'today' }),
+  checkInCode: 'ABCD1234',
+};
+
+it('round-trips the entries for the same user', async () => {
+  const w = createWallet({ store: store() });
+  await w.save('u1', [ticketed, stay], NOW);
+  expect(await w.load('u1')).toEqual({ userId: 'u1', savedAt: NOW, entries: [stay, ticketed] });
+});
+
+it('another user, nothing saved, or bad JSON load as null', async () => {
+  const s = store();
+  const w = createWallet({ store: s });
+  expect(await w.load('u1')).toBeNull();
+  await w.save('u1', [ticketed], NOW);
+  expect(await w.load('u2')).toBeNull();
+  for (const bad of [
+    'not json',
+    '{"userId":"u1"}',
+    JSON.stringify({ userId: 'u1', savedAt: 1, entries: [{ id: 1 }] }),
+  ]) {
+    s.m.set([...s.m.keys()][0] ?? '', bad);
+    expect(await w.load('u1')).toBeNull();
+  }
+});
+
+it('keeps only today and upcoming entries', async () => {
+  const w = createWallet({ store: store() });
+  const past = booking({ id: 'old', start: '2026-10-10', end: '2026-10-10', when: 'past' });
+  // Marked upcoming when listed, but over by the time it is saved.
+  const stale = booking({ id: 'stale', start: '2026-10-12', end: '2026-10-12', when: 'upcoming' });
+  await w.save('u1', [past, stale, ticketed], NOW);
+  expect((await w.load('u1'))?.entries.map((e) => e.id)).toEqual(['e1']);
+});
+
+it('keeps at most 30 entries, soonest first', async () => {
+  const w = createWallet({ store: store() });
+  const day = (i: number) =>
+    new Date(Date.UTC(2026, 10, 1) + i * 86_400_000).toISOString().slice(0, 10);
+  // Latest first, so the cap must sort before cutting.
+  const many = Array.from({ length: 40 }, (_, i) =>
+    booking({ id: `e${String(i)}`, start: day(39 - i), end: day(39 - i) }),
+  );
+  await w.save('u1', many, NOW);
+  const entries = (await w.load('u1'))?.entries ?? [];
+  expect(entries).toHaveLength(30);
+  expect(entries[0]?.start).toBe('2026-11-01');
+  expect(entries[29]?.start).toBe(day(29));
+});
+
+it('never stores email, phone or amounts', async () => {
+  const s = store();
+  const w = createWallet({ store: s });
+  const leaky = {
+    ...ticketed,
+    email: 'ada@example.com',
+    phone: '+2348031234567',
+    amount: 5000,
+    total_amount: 5000,
+  };
+  await w.save('u1', [leaky], NOW);
+  const raw = [...s.m.values()].join('');
+  for (const key of ['email', 'phone', 'amount', 'ada@example.com']) {
+    expect(raw).not.toContain(key);
+  }
+  const entry = (await w.load('u1'))?.entries[0] ?? {};
+  for (const key of ['email', 'phone', 'amount', 'total_amount'])
+    expect(entry).not.toHaveProperty(key);
+});
+
+it('wipe removes the wallet', async () => {
+  const w = createWallet({ store: store() });
+  await w.save('u1', [ticketed], NOW);
+  await w.wipe();
+  expect(await w.load('u1')).toBeNull();
+});
+
+it('the default wallet is encrypted and wiped on sign-out', async () => {
+  await wallet.save('u1', [ticketed], NOW);
+  expect(await wallet.load('u1')).not.toBeNull();
+  await wipeOnSignOut('u1');
+  expect(await wallet.load('u1')).toBeNull();
+});
