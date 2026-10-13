@@ -94,6 +94,28 @@ describe('recent searches', () => {
     expect(RECENT_INDEX_KEY).not.toMatch(/^bh\.recent\./);
   });
 
+  it('a guarded add writes only while the guard still says yes, checked in the write queue', async () => {
+    const kv = memoryKv();
+    const recent = createRecentSearches(kv);
+    await recent.add('u1', text('a'), () => Promise.resolve(true));
+    await recent.add('u1', text('b'), () => Promise.resolve(false));
+    expect(await recent.get('u1')).toEqual([text('a')]);
+    // Signed out between the tap and the write: the clear runs, then the late add is dropped.
+    let signedIn = true;
+    const late = recent.add('u1', text('c'), () => Promise.resolve(signedIn));
+    signedIn = false;
+    const wipe = recent.clear();
+    await Promise.all([late, wipe]);
+    expect(kv.dump()).toEqual({});
+  });
+
+  it('a guard that throws counts as signed out', async () => {
+    const kv = memoryKv();
+    const recent = createRecentSearches(kv);
+    await recent.add('u1', text('a'), () => Promise.reject(new Error('keychain')));
+    expect(kv.dump()).toEqual({});
+  });
+
   it('the default instance is wiped on every sign-out', async () => {
     await recentSearches.add('u1', text('Lekki'));
     expect(Object.keys(mockKv.dump())).not.toHaveLength(0);

@@ -83,10 +83,15 @@ export function createRecentSearches(kv: KeyValue) {
 
   return {
     get,
-    add(userId: string, e: RecentSearch): Promise<void> {
+    /**
+     * `stillSignedIn` runs inside the write queue, right before the write: a sign-out wipe that
+     * ran first must never be undone by a late add (e.g. from a screen that is unmounting).
+     */
+    add(userId: string, e: RecentSearch, stillSignedIn?: () => Promise<boolean>): Promise<void> {
       const c = clean(e);
       if (c === null) return Promise.resolve();
       return enqueue(async () => {
+        if (stillSignedIn !== undefined && !(await stillSignedIn().catch(() => false))) return;
         const rest = (await get(userId)).filter((x) => !same(x, c));
         await write(userId, [c, ...rest].slice(0, RECENT_MAX));
       });

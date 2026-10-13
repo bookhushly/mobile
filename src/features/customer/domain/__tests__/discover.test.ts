@@ -7,8 +7,10 @@ import {
   filterCount,
   hotelPriceLabel,
   inThisWeekend,
+  knownPlace,
   normalizeAmenities,
   packageStock,
+  placeForState,
   POPULAR_PLACES,
   ratingLabel,
   roomTypeFrom,
@@ -245,6 +247,42 @@ describe('POPULAR_PLACES', () => {
       { label: 'Uyo', city: 'Uyo' },
       { label: 'Calabar', city: 'Calabar' },
     ]);
+  });
+});
+
+describe('placeForState', () => {
+  it('maps a profile state to its popular place, else the state itself, else Lagos', () => {
+    expect(placeForState('Lagos')).toEqual({ label: 'Lagos', state: 'Lagos' });
+    expect(placeForState('FCT')).toEqual({ label: 'Abuja', state: 'FCT' });
+    expect(placeForState('Oyo')).toEqual({ label: 'Oyo', state: 'Oyo' });
+    expect(placeForState(' Rivers ')).toEqual({ label: 'Rivers', state: 'Rivers' });
+  });
+
+  it.each([null, '', 'Atlantis', 'lagos'])('%p falls back to Lagos', (s) => {
+    expect(placeForState(s)).toEqual({ label: 'Lagos', state: 'Lagos' });
+  });
+});
+
+describe('knownPlace', () => {
+  it('accepts a popular place or a Nigerian state, as stored', () => {
+    expect(knownPlace({ label: 'Port Harcourt', city: 'Port Harcourt' })).toEqual({
+      label: 'Port Harcourt',
+      city: 'Port Harcourt',
+    });
+    expect(knownPlace({ label: 'Ogun', state: 'Ogun' })).toEqual({ label: 'Ogun', state: 'Ogun' });
+    expect(knownPlace({ label: 'Abuja', state: 'FCT' })).toEqual({ label: 'Abuja', state: 'FCT' });
+  });
+
+  it.each<unknown>([
+    null,
+    'Lagos',
+    { label: 'Lagos' },
+    { label: 'Mars', state: 'Mars' },
+    { label: 'Ikeja', city: 'Ikeja' },
+    { label: 'Lagos', state: 'Lagos', city: 'Ikeja' },
+    { label: 'Hacked', state: 'Lagos' },
+  ])('rejects %p', (v) => {
+    expect(knownPlace(v)).toBeNull();
   });
 });
 

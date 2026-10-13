@@ -1,4 +1,5 @@
 import { isIsoDate, lagosToday, type IsoDate } from '@/shared/lib/lagosDay';
+import { NIGERIAN_STATES } from '@/shared/lib/phone';
 
 // Discover rules (Phase 4b, spec D2–D12). Pure: no React, no I/O, time is passed in.
 
@@ -126,6 +127,31 @@ export const POPULAR_PLACES: readonly Place[] = [
   { label: 'Uyo', city: 'Uyo' },
   { label: 'Calabar', city: 'Calabar' },
 ];
+
+const LAGOS: Place = { label: 'Lagos', state: 'Lagos' };
+
+/** Explore's default place (spec D6): the profile's state as a place, else Lagos. */
+export function placeForState(state: string | null): Place {
+  const s = state?.trim() ?? '';
+  if (!NIGERIAN_STATES.includes(s)) return LAGOS;
+  return (
+    POPULAR_PLACES.find((p) => p.state === s && p.city === undefined) ?? { label: s, state: s }
+  );
+}
+
+/** A stored place, only when it is one the app offers (a popular place or a state); else null. */
+export function knownPlace(value: unknown): Place | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const label: unknown = Reflect.get(value, 'label');
+  const state: unknown = Reflect.get(value, 'state');
+  const city: unknown = Reflect.get(value, 'city');
+  const popular = POPULAR_PLACES.find(
+    (p) => p.label === label && p.state === state && p.city === city,
+  );
+  if (popular !== undefined) return popular;
+  if (city !== undefined || typeof state !== 'string' || label !== state) return null;
+  return NIGERIAN_STATES.includes(state) ? { label: state, state } : null;
+}
 
 // ── Prices (display only; the web recomputes at booking) ────────────────────────────────────────
 
