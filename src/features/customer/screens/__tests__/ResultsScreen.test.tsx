@@ -11,6 +11,7 @@ import type { ApiError } from '@/shared/lib/errors';
 // Factories, not automocks: an automock loads the real module (supabase → native storage).
 jest.mock('@/features/customer/hooks/useSaved', () => ({ useSaved: jest.fn() }));
 jest.mock('@/features/customer/hooks/useListings', () => ({ useListings: jest.fn() }));
+jest.mock('expo-router', () => ({ useIsFocused: () => true }));
 jest.mock('@/shared/api/instance', () => ({ clock: { serverNow: () => mockNow } }));
 const mockNow = Date.parse('2026-10-13T11:00:00Z');
 

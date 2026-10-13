@@ -1,23 +1,27 @@
-import { fireEvent, render, screen, within } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { useState } from 'react';
+import { AccessibilityInfo } from 'react-native';
 
 import type { SavedInput } from '@/features/customer/api/savedDb';
 import type { Category, Place } from '@/features/customer/domain/discover';
-import { fromEvent, splitBookings } from '@/features/customer/domain/myBookings';
+import { fromEvent, fromHotel, splitBookings } from '@/features/customer/domain/myBookings';
 import { useExplorePlace } from '@/features/customer/hooks/useExplorePlace';
 import { useListings, type Listings } from '@/features/customer/hooks/useListings';
 import { useMyBookings } from '@/features/customer/hooks/useMyBookings';
 import { useSaved, type Saved } from '@/features/customer/hooks/useSaved';
+import { NOTICE_MS, NOTICE_READER_MS } from '@/features/customer/hooks/useSavedNotices';
 import type { ApartmentItem, EventItem, HotelItem } from '@/features/customer/schemas/listings';
 import { ExploreScreen } from '@/features/customer/screens/ExploreScreen';
 
-import { ev, TODAY } from '../../hooks/__tests__/customerTestUtils';
+import { ev, ho, TODAY } from '../../hooks/__tests__/customerTestUtils';
 
 // Factories, not automocks: an automock loads the real module (supabase → native storage).
 jest.mock('@/features/customer/hooks/useMyBookings', () => ({ useMyBookings: jest.fn() }));
 jest.mock('@/features/customer/hooks/useSaved', () => ({ useSaved: jest.fn() }));
 jest.mock('@/features/customer/hooks/useExplorePlace', () => ({ useExplorePlace: jest.fn() }));
 jest.mock('@/features/customer/hooks/useListings', () => ({ useListings: jest.fn() }));
+let mockFocused = true;
+jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused }));
 jest.mock('@/shared/api/instance', () => ({ clock: { serverNow: () => mockNow } }));
 const mockNow = Date.parse('2026-10-13T11:00:00Z');
 
@@ -91,9 +95,11 @@ function listings(items: AnyListings['items'], over: Partial<AnyListings> = {}):
 let byCat: Record<Category, AnyListings>;
 
 // A small stand-in for useSaved's optimistic state: saved keys, lastRemoved and undo.
+let mockWriteError: Saved['writeError'] = null;
 function useFakeSaved(): Saved {
   const [keys, setKeys] = useState<string[]>([]);
   const [lastRemoved, setLastRemoved] = useState<SavedInput | null>(null);
+  const [writeError, setWriteError] = useState(mockWriteError);
   const k = (kind: string, id: string) => `${kind}:${id}`;
   return {
     items: [],
@@ -117,9 +123,13 @@ function useFakeSaved(): Saved {
       setLastRemoved(null);
       return Promise.resolve('ok');
     },
-    dismissUndo: jest.fn(),
-    writeError: null,
-    clearWriteError: jest.fn(),
+    dismissUndo: () => {
+      setLastRemoved(null);
+    },
+    writeError,
+    clearWriteError: () => {
+      setWriteError(null);
+    },
   };
 }
 
@@ -142,6 +152,9 @@ beforeEach(() => {
   // Fake timers: FlatList's cell-batching timer otherwise fires between act() scopes.
   jest.useFakeTimers();
   jest.clearAllMocks();
+  mockFocused = true;
+  mockWriteError = null;
+  jest.spyOn(AccessibilityInfo, 'isScreenReaderEnabled').mockResolvedValue(false);
   byCat = {
     hotels: listings([HOTEL]),
     serviced_apartments: listings([APARTMENT]),
@@ -334,4 +347,151 @@ it('the toggle sends the card snapshot', async () => {
     image: null,
     location: 'Lekki, Lagos',
   });
+});
+
+it('Today: a stay opens its check-in code', async () => {
+  const stay = ho({ id: 'h-today' });
+  mockMy.mockReturnValue({
+    bookings: splitBookings([fromHotel(stay, TODAY)]),
+    rows: { events: [], hotels: [stay], apartments: [] },
+    saved: null,
+    loading: false,
+    error: false,
+    refetch: jest.fn(() => Promise.resolve()),
+  });
+  const p = props();
+  await render(<ExploreScreen {...p} />);
+  await fireEvent.press(
+    screen.getByRole('button', {
+      name: 'Today: Check-in today from 2:00 pm, Harbour Suites. Show check-in code',
+    }),
+  );
+  expect(p.onShowCheckInCode).toHaveBeenCalledWith('h-today');
+  expect(p.onShowTickets).not.toHaveBeenCalled();
+});
+
+it('pull to refresh refetches every rail, bookings and saved, and clears old notices', async () => {
+  const refetchMy = jest.fn(() => Promise.resolve());
+  mockMy.mockReturnValue({
+    bookings: { today: [], upcoming: [], past: [] },
+    rows: null,
+    saved: null,
+    loading: false,
+    error: false,
+    refetch: refetchMy,
+  });
+  const refetchSaved = jest.fn(() => Promise.resolve());
+  mockSaved.mockImplementation(() => ({ ...useFakeSaved(), refetch: refetchSaved }));
+  await render(<ExploreScreen {...props()} />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Save Harbour Suites' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Remove Harbour Suites from saved' }));
+  expect(screen.getByTestId('saved-undo')).toBeTruthy();
+  await pullToRefresh();
+  expect(byCat.events.refetch).toHaveBeenCalled();
+  expect(byCat.hotels.refetch).toHaveBeenCalled();
+  expect(byCat.serviced_apartments.refetch).toHaveBeenCalled();
+  expect(refetchMy).toHaveBeenCalled();
+  expect(refetchSaved).toHaveBeenCalled();
+  expect(screen.queryByTestId('saved-undo')).toBeNull();
+});
+
+it('See all from a city-only place sends the city', async () => {
+  mockPlace.mockReturnValue({
+    place: { label: 'Port Harcourt', city: 'Port Harcourt' },
+    setPlace: jest.fn(),
+  });
+  const p = props();
+  await render(<ExploreScreen {...p} />);
+  await fireEvent.press(screen.getByRole('link', { name: 'See all, Apartments in Port Harcourt' }));
+  expect(p.onOpenResults).toHaveBeenCalledWith({
+    category: 'serviced_apartments',
+    city: 'Port Harcourt',
+  });
+});
+
+// The pull gesture: the RefreshControl handed to Explore's scroll view (the host mock renders it
+// without props, so it is read from the nearest ancestor that carries it).
+async function pullToRefresh() {
+  let node = screen.getByRole('button', { name: 'Search hotels, apartments and events' }).parent;
+  while (node !== null && node.props.refreshControl === undefined) node = node.parent;
+  const control: unknown = node?.props.refreshControl;
+  const onRefresh: unknown =
+    typeof control === 'object' && control !== null
+      ? Reflect.get(Reflect.get(control, 'props') ?? {}, 'onRefresh')
+      : undefined;
+  if (typeof onRefresh !== 'function') throw new Error('no RefreshControl');
+  await act(async () => {
+    Reflect.apply(onRefresh, undefined, []);
+    await Promise.resolve();
+  });
+}
+
+async function unsaveHarbour() {
+  await fireEvent.press(screen.getByRole('button', { name: 'Save Harbour Suites' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Remove Harbour Suites from saved' }));
+  expect(screen.getByTestId('saved-undo')).toBeTruthy();
+}
+
+it('the Undo banner goes after a few seconds', async () => {
+  await render(<ExploreScreen {...props()} />);
+  await unsaveHarbour();
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(NOTICE_MS - 1);
+  });
+  expect(screen.getByTestId('saved-undo')).toBeTruthy();
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(1);
+  });
+  expect(screen.queryByTestId('saved-undo')).toBeNull();
+});
+
+it('with a screen reader on, the Undo banner stays longer', async () => {
+  jest.spyOn(AccessibilityInfo, 'isScreenReaderEnabled').mockResolvedValue(true);
+  await render(<ExploreScreen {...props()} />);
+  await unsaveHarbour();
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(NOTICE_MS);
+  });
+  expect(screen.getByTestId('saved-undo')).toBeTruthy();
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(NOTICE_READER_MS - NOTICE_MS);
+  });
+  expect(screen.queryByTestId('saved-undo')).toBeNull();
+});
+
+it('leaving the screen dismisses the Undo banner', async () => {
+  const view = await render(<ExploreScreen {...props()} />);
+  await unsaveHarbour();
+  mockFocused = false;
+  await view.rerender(<ExploreScreen {...props()} />);
+  expect(screen.queryByTestId('saved-undo')).toBeNull();
+});
+
+it('a transient save error goes after a few seconds; a stale one stays', async () => {
+  mockWriteError = 'transient';
+  const view = await render(<ExploreScreen {...props()} />);
+  expect(screen.getByTestId('saved-transient')).toBeTruthy();
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(NOTICE_MS);
+  });
+  expect(screen.queryByTestId('saved-transient')).toBeNull();
+  await view.unmount();
+
+  mockWriteError = 'stale';
+  await render(<ExploreScreen {...props()} />);
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(NOTICE_READER_MS * 2);
+  });
+  expect(screen.getByTestId('saved-stale')).toBeTruthy();
+});
+
+it('a saved list that can’t load says why the hearts are off', async () => {
+  mockSaved.mockImplementation(() => ({ ...useFakeSaved(), ready: false, error: true }));
+  await render(<ExploreScreen {...props()} />);
+  expect(
+    within(screen.getByTestId('saved-load-error')).getByText(
+      'Couldn’t load your saved list — pull to refresh.',
+    ),
+  ).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Save Harbour Suites' })).toBeDisabled();
 });

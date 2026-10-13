@@ -46,7 +46,7 @@ export function TodayBanner({ today, onShowTickets, onShowCheckInCode, testID }:
     >
       <Icon as={today.action === 'tickets' ? Ticket : KeyRound} size="sm" tone="textPrimary" />
       <View style={{ flex: 1, gap: space.s1 }}>
-        <Text variant="bodySm" tone="textSecondary" numberOfLines={1}>
+        <Text variant="bodySm" tone="textPrimary" numberOfLines={1}>
           {`${today.text} · ${title}`}
         </Text>
         <Text variant="label" tone="linkText" numberOfLines={1}>

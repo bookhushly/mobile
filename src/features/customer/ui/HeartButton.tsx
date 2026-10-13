@@ -1,7 +1,7 @@
 import { Heart } from 'lucide-react-native';
 import { View } from 'react-native';
 
-import { borderWidth, color, iconSize } from '@/shared/theme';
+import { borderWidth, color, iconSize, iconStroke } from '@/shared/theme';
 import { PressableScale, useDensity } from '@/shared/ui';
 
 type Props = {
@@ -42,7 +42,7 @@ export function HeartButton({ title, saved, disabled = false, onToggle, testID }
       >
         <Heart
           size={iconSize.sm}
-          strokeWidth={1.75}
+          strokeWidth={iconStroke}
           color={saved ? color.actionFill : color.textPrimary}
           fill={saved ? color.actionFill : 'transparent'}
         />

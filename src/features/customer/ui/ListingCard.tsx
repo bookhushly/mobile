@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { BedDouble, Building2, CalendarDays, Ticket, type LucideIcon } from 'lucide-react-native';
-import { Pressable, View, type ImageStyle, type StyleProp, type ViewStyle } from 'react-native';
+import { memo } from 'react';
+import { View, type ImageStyle, type StyleProp, type ViewStyle } from 'react-native';
 
 import type { ListingKind } from '@/features/customer/domain/discover';
 import type { ListingCardModel } from '@/features/customer/domain/listingCard';
@@ -8,7 +9,7 @@ import { HeartButton } from '@/features/customer/ui/HeartButton';
 import { PriceTag, priceSpoken } from '@/features/customer/ui/PriceTag';
 import { RatingLine, ratingSpoken } from '@/features/customer/ui/RatingLine';
 import { borderWidth, color, radius, space } from '@/shared/theme';
-import { Icon, Text } from '@/shared/ui';
+import { Icon, PressableScale, Text } from '@/shared/ui';
 
 export type CardVariant = 'row' | 'rail' | 'grid';
 
@@ -117,8 +118,9 @@ function Details({ l }: { l: ListingCardModel }) {
 }
 
 // Spec §3: image, title (2 lines), area, rating (or an event's date), price, heart. The heart sits
-// beside the card's pressable, not inside it, so screen readers reach both.
-export function ListingCard({
+// beside the card's pressable, not inside it, so screen readers reach both. Press feedback is the
+// kit's scale (off under Reduce Motion).
+function ListingCardView({
   listing: l,
   variant,
   saved,
@@ -168,15 +170,17 @@ export function ListingCard({
           style,
         ]}
       >
-        <Pressable
+        <PressableScale
           accessibilityRole="button"
           accessibilityLabel={spoken}
           onPress={open}
-          style={{ flex: 1, flexDirection: 'row', gap: space.s4 }}
+          style={{ flex: 1 }}
         >
-          <Photo l={l} square />
-          <Details l={l} />
-        </Pressable>
+          <View style={{ flexDirection: 'row', gap: space.s4 }}>
+            <Photo l={l} square />
+            <Details l={l} />
+          </View>
+        </PressableScale>
         {heart}
       </View>
     );
@@ -185,16 +189,17 @@ export function ListingCard({
       testID={testID}
       style={[variant === 'rail' ? { width: RAIL_CARD_WIDTH } : { flex: 1 }, style]}
     >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={spoken}
-        onPress={open}
-        style={{ gap: space.s3 }}
-      >
-        <Photo l={l} square={false} />
-        <Details l={l} />
-      </Pressable>
+      <PressableScale accessibilityRole="button" accessibilityLabel={spoken} onPress={open}>
+        <View style={{ gap: space.s3 }}>
+          <Photo l={l} square={false} />
+          <Details l={l} />
+        </View>
+      </PressableScale>
       <View style={{ position: 'absolute', top: space.s3, right: space.s3 }}>{heart}</View>
     </View>
   );
 }
+
+// Memoised (low-end list rules): rails and results re-render on refresh and sheet state, and a
+// card only needs to redraw when its model, saved state or callbacks change.
+export const ListingCard = memo(ListingCardView);

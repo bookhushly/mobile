@@ -1,5 +1,7 @@
 export const iconSize = { xs: 16, sm: 20, md: 24, lg: 32, xl: 96, xxl: 128 } as const;
 export type IconSizeKey = keyof typeof iconSize;
+/** The outline icon set's stroke (DESIGN_SYSTEM: 1.5–2 px on a 24 grid). */
+export const iconStroke = 1.75;
 
 export const borderWidth = { hairline: 1, thick: 2 } as const;
 

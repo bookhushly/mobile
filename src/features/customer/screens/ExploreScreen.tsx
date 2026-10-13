@@ -1,5 +1,5 @@
 import { BedDouble, Building2, MapPin, Search, Ticket, type LucideIcon } from 'lucide-react-native';
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, View } from 'react-native';
 
 import type { Category, Filters, ListingKind, Place } from '@/features/customer/domain/discover';
@@ -10,12 +10,14 @@ import { useExplorePlace } from '@/features/customer/hooks/useExplorePlace';
 import { useListings } from '@/features/customer/hooks/useListings';
 import { useMyBookings } from '@/features/customer/hooks/useMyBookings';
 import { useSaved } from '@/features/customer/hooks/useSaved';
+import { useSavedNotices } from '@/features/customer/hooks/useSavedNotices';
 import { PlaceSheet } from '@/features/customer/ui/PlaceSheet';
-import { Rail } from '@/features/customer/ui/Rail';
+import { Rail, RAIL_MAX } from '@/features/customer/ui/Rail';
+import { SavedBanner, savedBannerShown } from '@/features/customer/ui/SavedBanner';
 import { TodayBanner } from '@/features/customer/ui/TodayBanner';
 import { clock } from '@/shared/api/instance';
 import { borderWidth, color, radius, space } from '@/shared/theme';
-import { Banner, Header, Icon, Screen, Text, useDensity } from '@/shared/ui';
+import { Header, Icon, Screen, Text, useDensity } from '@/shared/ui';
 
 export type ResultsTarget = { category: Category; region?: string; city?: string };
 
@@ -40,6 +42,8 @@ const CATEGORIES: readonly { cat: Category; label: string; icon: LucideIcon }[] 
 const SOONEST: Filters = { sort: 'top_rated' };
 const NEWEST: Filters = { sort: 'newest' };
 const ANYWHERE: ListingsWhere = { q: '' };
+const MINUTE_MS = 60_000;
+const SAVED_LOAD_ERROR = 'Couldn’t load your saved list — pull to refresh.';
 
 const whereOf = (p: Place | null): ListingsWhere => ({
   q: '',
@@ -113,11 +117,32 @@ export function ExploreScreen({
     enabled: place !== null,
   });
 
-  const now = clock.serverNow();
+  // Minute steps (early-bird prices turn on the clock): the card models below then stay the same
+  // object across re-renders (refresh state, the place sheet) and the memoised cards skip work.
+  const now = Math.floor(clock.serverNow() / MINUTE_MS) * MINUTE_MS;
   const today = my.bookings === null ? null : todayBanner(my.bookings.today, my.rows);
   const where = place?.label ?? '';
+  useSavedNotices(saved);
+
+  // Review 5 (4): only the first RAIL_MAX of every page become card models, memoised on the
+  // query data (the React Compiler can't see that `now` only steps once a minute).
+  const eventCards = useMemo(
+    () => events.items.slice(0, RAIL_MAX).map((i) => cardOf('events', i, now)),
+    [events.items, now],
+  );
+  const hotelCards = useMemo(
+    () => hotels.items.slice(0, RAIL_MAX).map((i) => cardOf('hotels', i, now)),
+    [hotels.items, now],
+  );
+  const apartmentCards = useMemo(
+    () => apartments.items.slice(0, RAIL_MAX).map((i) => cardOf('serviced_apartments', i, now)),
+    [apartments.items, now],
+  );
 
   const refresh = () => {
+    // A refresh shows the server's truth: an old Undo or error no longer applies.
+    saved.dismissUndo();
+    saved.clearWriteError();
     setRefreshing(true);
     void Promise.allSettled([
       events.refetch(),
@@ -130,14 +155,17 @@ export function ExploreScreen({
     });
   };
 
-  const railProps = {
-    isSaved: (l: ListingCardModel) => saved.isSaved(l.kind, l.id),
-    savedReady: saved.ready,
-    onOpen: (l: ListingCardModel) => {
+  // Stable callbacks so the memoised cards don't all redraw on each render.
+  const { toggle } = saved;
+  const onOpen = useCallback(
+    (l: ListingCardModel) => {
       onOpenListing(l.kind, l.id);
     },
-    onToggleSaved: (l: ListingCardModel) => {
-      void saved.toggle({
+    [onOpenListing],
+  );
+  const onToggleSaved = useCallback(
+    (l: ListingCardModel) => {
+      void toggle({
         listingId: l.id,
         kind: l.kind,
         title: l.title,
@@ -145,46 +173,24 @@ export function ExploreScreen({
         location: l.area,
       });
     },
+    [toggle],
+  );
+  const railProps = {
+    isSaved: (l: ListingCardModel) => saved.isSaved(l.kind, l.id),
+    savedReady: saved.ready,
+    onOpen,
+    onToggleSaved,
   };
 
-  let footer = null;
-  if (saved.writeError === 'stale')
-    footer = (
-      <Banner
-        tone="neutral"
-        message="Couldn’t save. Sign in again if this keeps happening."
-        action={{ label: 'Sign in again', onPress: onSignInAgain }}
-        testID="saved-stale"
-      />
-    );
-  else if (saved.writeError === 'transient')
-    footer = (
-      <Banner
-        tone="neutral"
-        message="Couldn’t save — check your connection and try again."
-        testID="saved-transient"
-      />
-    );
-  else if (saved.lastRemoved !== null)
-    footer = (
-      <Banner
-        tone="neutral"
-        message={`Removed ${saved.lastRemoved.title ?? 'listing'} from saved.`}
-        action={{
-          label: 'Undo',
-          onPress: () => {
-            void saved.undo();
-          },
-        }}
-        testID="saved-undo"
-      />
-    );
+  const footer = savedBannerShown(saved, SAVED_LOAD_ERROR) ? (
+    <SavedBanner saved={saved} onSignInAgain={onSignInAgain} loadErrorMessage={SAVED_LOAD_ERROR} />
+  ) : undefined;
 
   return (
     <Screen
       scroll
       header={<Header title="Explore" />}
-      footer={footer ?? undefined}
+      footer={footer}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
     >
       {today !== null ? (
@@ -231,7 +237,7 @@ export function ExploreScreen({
       <Rail
         title="Happening soon"
         emptyNote="No upcoming events yet."
-        items={events.items.map((i) => cardOf('events', i, now))}
+        items={eventCards}
         loading={events.loading}
         failed={events.failed}
         waiting={events.retryAfterSec !== null}
@@ -255,7 +261,7 @@ export function ExploreScreen({
       <Rail
         title={place === null ? 'Hotels' : `Hotels in ${where}`}
         emptyNote={`No hotels in ${where} yet.`}
-        items={hotels.items.map((i) => cardOf('hotels', i, now))}
+        items={hotelCards}
         loading={place === null || hotels.loading}
         failed={hotels.failed}
         waiting={hotels.retryAfterSec !== null}
@@ -269,7 +275,7 @@ export function ExploreScreen({
       <Rail
         title={place === null ? 'Apartments' : `Apartments in ${where}`}
         emptyNote={`No apartments in ${where} yet.`}
-        items={apartments.items.map((i) => cardOf('serviced_apartments', i, now))}
+        items={apartmentCards}
         loading={place === null || apartments.loading}
         failed={apartments.failed}
         waiting={apartments.retryAfterSec !== null}

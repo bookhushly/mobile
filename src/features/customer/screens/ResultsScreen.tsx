@@ -14,6 +14,7 @@ import type { ResultsQuery } from '@/features/customer/domain/routeParams';
 import type { ListingsWhere } from '@/features/customer/hooks/customerKeys';
 import { useListings } from '@/features/customer/hooks/useListings';
 import { useSaved } from '@/features/customer/hooks/useSaved';
+import { useSavedNotices } from '@/features/customer/hooks/useSavedNotices';
 import {
   CATEGORY_LABEL,
   placeLabel,
@@ -94,6 +95,7 @@ export function ResultsScreen({ userId, query, onBack, onOpenListing, onSignInAg
   };
   const list = useListings(cat, where, filters);
   const saved = useSaved(userId);
+  useSavedNotices(saved);
   const now = clock.serverNow();
   const n = filterCount(cat, filters);
   const title = [
@@ -202,7 +204,13 @@ export function ResultsScreen({ userId, query, onBack, onOpenListing, onSignInAg
     );
   }
 
-  const banner = <SavedBanner saved={saved} onSignInAgain={onSignInAgain} />;
+  const banner = (
+    <SavedBanner
+      saved={saved}
+      onSignInAgain={onSignInAgain}
+      loadErrorMessage="Couldn’t load your saved list — saving is off for now."
+    />
+  );
   return (
     <Screen
       header={

@@ -15,12 +15,15 @@ function words(price: NonNullable<CardPrice>): {
   spoken: string;
 } {
   if ('text' in price) return { shown: price.text, unit: null, spoken: price.text };
-  if ('min' in price)
+  if ('min' in price) {
+    // D5: a 0 tier reads "Free", never "₦0".
+    const free = price.min <= 0;
     return {
-      shown: `${formatNaira(price.min)} – ${formatNaira(price.max)}`,
+      shown: `${free ? 'Free' : formatNaira(price.min)} – ${formatNaira(price.max)}`,
       unit: null,
-      spoken: `${spokenNaira(price.min)} to ${spokenNaira(price.max)}`,
+      spoken: `${free ? 'Free' : spokenNaira(price.min)} to ${spokenNaira(price.max)}`,
     };
+  }
   const prefix = 'prefix' in price && price.prefix !== undefined ? `${price.prefix} ` : '';
   const unit = 'unit' in price ? price.unit : null;
   return {

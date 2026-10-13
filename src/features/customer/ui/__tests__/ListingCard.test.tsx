@@ -77,7 +77,10 @@ it('an event card shows its date chip instead of a rating, and a price range', a
     />,
   );
   expect(screen.getByText('Sat 17 Oct · 7:00 pm')).toBeTruthy();
-  expect(screen.getByText('₦0 – ₦5,000')).toBeTruthy();
+  // D5: a free tier next to paid ones reads "Free", never "₦0".
+  expect(screen.getByText('Free – ₦5,000')).toBeTruthy();
+  expect(screen.queryByText(/₦0/)).toBeNull();
+  expect(screen.getByLabelText('Free to 5,000 naira')).toBeTruthy();
   expect(screen.queryByText(/out of 5/)).toBeNull();
 });
 
