@@ -46,7 +46,7 @@ jest.mock('@/features/auth/hooks/useAuth', () => ({
 }));
 const mockTour = jest.fn(
   (_userId: string | null): { seen: boolean | null; markSeen: () => void } => ({
-    seen: null,
+    seen: true,
     markSeen: jest.fn(),
   }),
 );
@@ -130,6 +130,15 @@ it('shows the tour instead of the tabs to a user who hasn’t seen it', async ()
   await render(<CustomerTabsLayout />);
   expect(mockNav.tabNames).toEqual([]);
   expect(screen.getByText('Find your place')).toBeTruthy();
+});
+
+it('while the tour marker is still being read, shows a neutral view, not the tabs (F2)', async () => {
+  // The tabs (and Explore's fetches) would mount, then unmount if the tour turned out unseen.
+  mockTour.mockReturnValueOnce({ seen: null, markSeen: jest.fn() });
+  await render(<CustomerTabsLayout />);
+  expect(mockNav.tabNames).toEqual([]);
+  expect(screen.getByTestId('tour-gate-pending')).toBeTruthy();
+  expect(screen.queryByText('Find your place')).toBeNull();
 });
 
 it('a listing link with a listing kind and a UUID opens the listing for the signed-in user', async () => {

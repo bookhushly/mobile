@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Compass, Heart, Ticket, UserRound } from 'lucide-react-native';
+import { View } from 'react-native';
 
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { useTourSeen } from '@/features/customer/hooks/useTourSeen';
@@ -17,7 +18,11 @@ export default function CustomerTabsLayout() {
   const userId = state.status === 'signedIn' ? state.userId : null;
   // D15: the tour is on (switched off, the tour marker is never read from the keychain).
   const { seen, markSeen } = useTourSeen(CUSTOMER_TOUR_ENABLED ? userId : null);
-  // Only a resolved "not seen" shows the tour: null (still reading) falls through to the tabs.
+  // Final review F2: while the marker is still being read (a keychain read, a few ms), a plain
+  // view rather than the tabs, so Explore never mounts, starts its loads, and unmounts for the
+  // tour. A failed read resolves as seen, so this never sticks.
+  if (CUSTOMER_TOUR_ENABLED && userId !== null && seen === null)
+    return <View testID="tour-gate-pending" style={{ flex: 1, backgroundColor: color.canvas }} />;
   if (CUSTOMER_TOUR_ENABLED && seen === false) return <TourScreen onDone={markSeen} />;
   return (
     <Tabs
