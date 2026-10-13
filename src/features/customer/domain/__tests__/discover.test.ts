@@ -42,6 +42,16 @@ describe('sanitizeSearch', () => {
     expect(sanitizeSearch('x'.repeat(100))).toHaveLength(60);
   });
 
+  it('caps by code points: an emoji at the limit is kept whole or dropped, never split', () => {
+    const at60 = sanitizeSearch(`${'a'.repeat(59)}😀😀`);
+    expect(at60).toBe(`${'a'.repeat(59)}😀`);
+    expect(Array.from(at60)).toHaveLength(60);
+    for (let n = 55; n <= 62; n += 1) {
+      const out = sanitizeSearch(`${'b'.repeat(n)}😀🏳️‍🌈x`);
+      expect(() => encodeURIComponent(out)).not.toThrow();
+    }
+  });
+
   it("keeps '' as ''", () => {
     expect(sanitizeSearch('')).toBe('');
     expect(sanitizeSearch(' ,() ')).toBe('');
@@ -315,10 +325,13 @@ describe('prices', () => {
     ).toEqual({ amount: 8000, prefix: 'From' });
   });
 
-  it('event: a single tier has no From; a 0 minimum is Free', () => {
+  it('event: a single tier has no From', () => {
     expect(
       eventPriceLabel({ price: null, ticket_packages: [{ name: 'GA', price: 15000 }] }, NOW),
     ).toEqual({ amount: 15000 });
+  });
+
+  it('event: Free only when every tier is 0; a 0 minimum with a paid tier is a range (as the web)', () => {
     expect(
       eventPriceLabel(
         {
@@ -330,13 +343,25 @@ describe('prices', () => {
         },
         NOW,
       ),
+    ).toEqual({ min: 0, max: 5000 });
+    expect(
+      eventPriceLabel(
+        {
+          price: 5000,
+          ticket_packages: [
+            { name: 'A', price: 0 },
+            { name: 'B', price: 0 },
+          ],
+        },
+        NOW,
+      ),
     ).toEqual({ text: 'Free' });
   });
 
-  it('event without packages: price, with null or 0 as Free', () => {
+  it('event without packages: the price, 0 is Free, null is no label', () => {
     expect(eventPriceLabel({ price: 2500, ticket_packages: [] }, NOW)).toEqual({ amount: 2500 });
     expect(eventPriceLabel({ price: 0, ticket_packages: [] }, NOW)).toEqual({ text: 'Free' });
-    expect(eventPriceLabel({ price: null, ticket_packages: [] }, NOW)).toEqual({ text: 'Free' });
+    expect(eventPriceLabel({ price: null, ticket_packages: [] }, NOW)).toBeNull();
   });
 });
 

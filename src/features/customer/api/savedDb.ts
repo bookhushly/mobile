@@ -96,8 +96,8 @@ async function refreshed(refresh: () => Promise<boolean>): Promise<boolean> {
   }
 }
 
-// The C13 zero-row guard, made safe for idempotent writes: 0 rows can mean "already done" or "a
-// session RLS can't see through". A retry after a lost response must never flip the state.
+// The C13 zero-row guard, made safe for idempotent writes. For delete, 0 rows can mean "already
+// gone" or "a session RLS can't see through". A retry after a lost response must never flip state.
 export function createSavedDb(client: SavedClient, refresh: () => Promise<boolean>): SavedDb {
   const match = (userId: string, key: SavedKey) => ({
     user_id: userId,
@@ -140,8 +140,10 @@ export function createSavedDb(client: SavedClient, refresh: () => Promise<boolea
         .select('id'),
     );
     if (!w.ok) return w;
-    // ignoreDuplicates returns no row for an existing save: seeing it proves both the save and
-    // the session (a stale session sees nothing).
+    // A stale or anonymous session never gets here with 0 rows: RLS WITH CHECK runs before the
+    // conflict check, so it fails with 42501 (an `auth`/`forbidden` error; callers treat those as
+    // a stale session). With a live session, 0 rows from ignoreDuplicates means "already saved";
+    // the re-select confirms it, and the refresh branch below is only a defensive fallback.
     return w.value >= 1 ? ok(true) : isSaved(userId, item);
   };
 

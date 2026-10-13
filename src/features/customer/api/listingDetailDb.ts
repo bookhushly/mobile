@@ -90,9 +90,20 @@ export function createListingDetailDb(client: SupabaseLike): ListingDetailDb {
       if (!p.ok) return p;
       return ok({ apartment: a.value, rules: p.value });
     },
-    // `active`/`availability` are read, not filtered: an inactive event shows "Not on sale".
+    // `listings` holds every category, and RLS lets a vendor read their own draft/private rows:
+    // only public events open here. `active`/`availability` are read, not filtered: an inactive
+    // event shows "Not on sale".
     event: (id) =>
-      read(client.from('listings').select(EVENT_COLUMNS).eq('id', id).maybeSingle(), maybeEvent),
+      read(
+        client
+          .from('listings')
+          .select(EVENT_COLUMNS)
+          .eq('id', id)
+          .eq('category', 'events')
+          .eq('visibility', 'public')
+          .maybeSingle(),
+        maybeEvent,
+      ),
   };
 }
 

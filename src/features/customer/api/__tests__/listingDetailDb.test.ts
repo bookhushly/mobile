@@ -144,11 +144,20 @@ describe('listingDetailDb.apartment', () => {
 });
 
 describe('listingDetailDb.event', () => {
-  it('reads one listing with the event columns', async () => {
+  it('reads one public event listing with the event columns (never another category or a draft)', async () => {
     const { db, logs } = fake({ listings: { data: { id: 'e1', title: 'Show' } } });
     const r = await db.event('e1');
     expect(logs).toEqual([
-      { table: 'listings', columns: EVENT_COLUMNS, calls: [['eq', 'id', 'e1'], ['maybeSingle']] },
+      {
+        table: 'listings',
+        columns: EVENT_COLUMNS,
+        calls: [
+          ['eq', 'id', 'e1'],
+          ['eq', 'category', 'events'],
+          ['eq', 'visibility', 'public'],
+          ['maybeSingle'],
+        ],
+      },
     ]);
     expect(r.ok && r.value?.title).toBe('Show');
     expect(r.ok && r.value?.ticket_packages).toEqual([]);

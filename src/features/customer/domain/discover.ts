@@ -33,7 +33,10 @@ const SEARCH_MAX = 60;
 const STRIPPED = /[,()%*\\"'‘’“”]/g;
 
 export function sanitizeSearch(raw: string): string {
-  return raw.replace(STRIPPED, '').replace(/\s+/g, ' ').trim().slice(0, SEARCH_MAX).trim();
+  const collapsed = raw.replace(STRIPPED, '').replace(/\s+/g, ' ').trim();
+  // Cut by code points: slicing UTF-16 units can split an emoji into a lone surrogate, and
+  // encodeURIComponent throws on one.
+  return Array.from(collapsed).slice(0, SEARCH_MAX).join('').trim();
 }
 
 const wholeNaira = (n: number | undefined): string | null =>
@@ -130,7 +133,9 @@ export type TextPrice = { text: string };
 export type HotelPrice = { amount: number; unit: 'night'; prefix: 'From' } | TextPrice;
 export type ApartmentPrice =
   { amount: number; unit: 'night'; week?: number; month?: number; varies: boolean } | TextPrice;
-export type EventPrice = { amount: number; prefix?: 'From' } | TextPrice;
+/** null: nothing to show (no packages, no price). `{min, max}`: a 0 tier next to paid ones. */
+export type EventPrice =
+  { amount: number; prefix?: 'From' } | { min: number; max: number } | TextPrice | null;
 
 const positive = (n: number | null | undefined): n is number =>
   typeof n === 'number' && Number.isFinite(n) && n > 0;
@@ -187,16 +192,22 @@ export function effectivePackagePrice(pkg: PackageLike, nowMs: number): number {
   return typeof eb === 'number' && Number.isFinite(eb) && end > nowMs ? eb : pkg.price;
 }
 
+// The web's rule: "Free" only when every tier is 0; a 0 tier next to paid ones is a range
+// ("₦0 – ₦5,000"); otherwise "From" the lowest (a single tier: just its price).
 export function eventPriceLabel(
   event: { price: number | null; ticket_packages: readonly PackageLike[] },
   nowMs: number,
 ): EventPrice {
   const pkgs = event.ticket_packages;
   if (pkgs.length > 0) {
-    const min = Math.min(...pkgs.map((p) => effectivePackagePrice(p, nowMs)));
-    if (min <= 0) return { text: 'Free' };
+    const prices = pkgs.map((p) => Math.max(0, effectivePackagePrice(p, nowMs)));
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    if (max <= 0) return { text: 'Free' };
+    if (min <= 0) return { min: 0, max };
     return pkgs.length === 1 ? { amount: min } : { amount: min, prefix: 'From' };
   }
+  if (event.price === null) return null;
   return positive(event.price) ? { amount: event.price } : { text: 'Free' };
 }
 

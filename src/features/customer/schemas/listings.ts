@@ -245,8 +245,19 @@ export const eventDetail = z.object({
   event_end_date: text,
   total_tickets: num,
   remaining_tickets: num,
-  // A bad shape (or null) is no packages, never a failed listing.
-  ticket_packages: z.array(ticketPackage).catch([]),
+  // Tier by tier: a malformed tier (the web editor saves a blank price as null) is dropped alone;
+  // anything that isn't an array is no packages. Never a failed listing.
+  ticket_packages: z
+    .unknown()
+    .default(null)
+    .transform((v) =>
+      Array.isArray(v)
+        ? asList(v).flatMap((t) => {
+            const p = ticketPackage.safeParse(t);
+            return p.success ? [p.data] : [];
+          })
+        : [],
+    ),
   category_data: z.record(z.string(), z.unknown()).nullable().catch(null),
   cancellation_policy: text,
 });

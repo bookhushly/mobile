@@ -250,5 +250,20 @@ describe('detail rows', () => {
     expect(
       eventDetail.parse({ id: 'e1', ticket_packages: [{ price: 1 }] }).ticket_packages,
     ).toEqual([]);
+    expect(eventDetail.parse({ id: 'e1', ticket_packages: { name: 'A' } }).ticket_packages).toEqual(
+      [],
+    );
+  });
+
+  it('a malformed tier (e.g. the web editor’s NaN price saved as null) drops only that tier', () => {
+    const e = eventDetail.parse({
+      id: 'e1',
+      ticket_packages: [
+        { name: 'Regular', price: null, remaining: 10 },
+        { name: 'VIP', price: 50000, total: 20, remaining: 0 },
+        'junk',
+      ],
+    });
+    expect(e.ticket_packages).toEqual([{ name: 'VIP', price: 50000, total: 20, remaining: 0 }]);
   });
 });
