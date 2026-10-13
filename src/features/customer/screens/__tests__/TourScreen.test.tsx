@@ -1,6 +1,21 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react-native';
 
 import { TourScreen } from '@/features/customer/screens/TourScreen';
+
+// Fake timers: the pager FlatList's batching timer must never fire after a test (outside act()).
+// Each test unmounts and flushes its pending timers before the next one starts.
+beforeEach(() => {
+  jest.useFakeTimers();
+});
+
+afterEach(async () => {
+  await cleanup();
+  // Flushed inside act() (never cleared: React's scheduler has timers in the queue too).
+  await act(async () => {
+    await jest.runOnlyPendingTimersAsync();
+  });
+  jest.useRealTimers();
+});
 
 it('walks three pages to Get started', async () => {
   const onDone = jest.fn();

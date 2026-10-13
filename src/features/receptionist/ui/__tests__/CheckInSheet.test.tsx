@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import type { QueryClient } from '@tanstack/react-query';
 import { Platform } from 'react-native';
 
 import { deskDb } from '@/features/receptionist/api/deskDb';
@@ -101,6 +102,7 @@ const fail = (e: ApiError) => err(e);
 
 async function renderSheet(code: string | null = null) {
   const qc = makeQueryClient();
+  clients.push(qc);
   const invalidate = jest.spyOn(qc, 'invalidateQueries');
   const onClose = jest.fn();
   const onOpenRooms = jest.fn();
@@ -127,8 +129,18 @@ async function toPreview() {
 
 // Fake timers (as in RoomsScreen.test): the room step's FlatList batching timer otherwise fires
 // between act() scopes on a loaded machine (an intermittent "not wrapped in act" warning).
-// RNTL's waitFor advances them.
-afterEach(() => {
+// RNTL's waitFor advances them. Each test unmounts, clears its query client and flushes pending
+// timers (FlatList batching, TanStack's notify/gc timers) before real timers come back, so none
+// fires after the test.
+const clients: QueryClient[] = [];
+
+afterEach(async () => {
+  await cleanup();
+  for (const qc of clients.splice(0)) qc.clear();
+  // Flushed inside act() (never cleared: React's scheduler has timers in the queue too).
+  await act(async () => {
+    await jest.runOnlyPendingTimersAsync();
+  });
   jest.useRealTimers();
 });
 
