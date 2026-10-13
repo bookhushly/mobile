@@ -163,6 +163,10 @@ export function AccountScreen({ userId, email, modeSwitcher, onSignOut, onDelete
             setSheetOpen(false);
           }}
           onSave={save}
+          onSignIn={() => {
+            setSheetOpen(false);
+            onSignOut();
+          }}
         />
       ) : null}
     </Screen>

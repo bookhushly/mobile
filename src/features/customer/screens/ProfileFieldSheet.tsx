@@ -23,7 +23,7 @@ const TITLE: Record<ProfileField, string> = {
 const NAME_ERROR = `Enter your name (${String(NAME_MIN)} to ${String(NAME_MAX)} characters)`;
 const PHONE_ERROR = 'Enter a Nigerian number, like 0803 123 4567';
 const TRANSIENT = 'Couldn’t save. Check your connection and try again.';
-const STALE = 'Please sign in again';
+const STALE = 'Couldn’t save: your session has expired.';
 
 type Props = {
   field: ProfileField;
@@ -32,6 +32,8 @@ type Props = {
   saving: boolean;
   onClose: () => void;
   onSave: (p: ProfileInput) => Promise<WriteOutcome>;
+  /** A stale session: sign out so the user can sign in again (the route's sign-out). */
+  onSignIn: () => void;
 };
 
 function nameError(v: string): string | undefined {
@@ -47,7 +49,15 @@ function phoneError(v: string): string | undefined {
  * C14: one small edit sheet per detail. The parent keys it per open, so the draft starts from the
  * saved value each time. A failed save keeps what was typed (DESIGN_SYSTEM: preserve input).
  */
-export function ProfileFieldSheet({ field, profile, visible, saving, onClose, onSave }: Props) {
+export function ProfileFieldSheet({
+  field,
+  profile,
+  visible,
+  saving,
+  onClose,
+  onSave,
+  onSignIn,
+}: Props) {
   const [text, setText] = useState(() => {
     if (field === 'name') return profile.name;
     if (field === 'phone') return profile.phone === null ? '' : formatNigerianPhone(profile.phone);
@@ -202,7 +212,15 @@ export function ProfileFieldSheet({ field, profile, visible, saving, onClose, on
       }
     >
       {outcome !== null ? (
-        <Banner tone="neutral" message={outcome === 'stale' ? STALE : TRANSIENT} />
+        outcome === 'stale' ? (
+          <Banner
+            tone="neutral"
+            message={STALE}
+            action={{ label: 'Sign in again', onPress: onSignIn }}
+          />
+        ) : (
+          <Banner tone="neutral" message={TRANSIENT} />
+        )
       ) : null}
       {body}
     </Sheet>

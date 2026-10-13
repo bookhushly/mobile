@@ -121,24 +121,12 @@ export function NotificationsScreen({ userId, onBack, onOpenBooking, onOpenTab }
     );
   } else {
     const now = clock.serverNow();
-    const banner =
+    const writeBanner =
       notes.writeError !== null ? (
         <Banner
           tone="neutral"
           message={notes.writeError === 'stale' ? STALE : TRANSIENT}
           action={{ label: 'Dismiss', onPress: notes.clearWriteError }}
-        />
-      ) : undoShown ? (
-        <Banner
-          tone="neutral"
-          message="All marked as read"
-          action={{
-            label: 'Undo',
-            onPress: () => {
-              notes.undoMarkAll();
-              setUndoShown(false);
-            },
-          }}
         />
       ) : null;
     body = (
@@ -153,7 +141,9 @@ export function NotificationsScreen({ userId, onBack, onOpenBooking, onOpenTab }
           <RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshColors} />
         }
         ListHeaderComponent={
-          banner === null ? null : <View style={{ paddingBottom: space.s3 }}>{banner}</View>
+          writeBanner === null ? null : (
+            <View style={{ paddingBottom: space.s3 }}>{writeBanner}</View>
+          )
         }
         ListEmptyComponent={
           <EmptyState
@@ -187,6 +177,22 @@ export function NotificationsScreen({ userId, onBack, onOpenBooking, onOpenTab }
       }
     >
       {body}
+      {/* Pinned at the bottom (C13): it stays put while the list scrolls, near the thumb. */}
+      {undoShown && !notes.loading && !notes.error && notes.writeError === null ? (
+        <View testID="undo-bar" style={{ paddingVertical: space.s3 }}>
+          <Banner
+            tone="neutral"
+            message="All marked as read"
+            action={{
+              label: 'Undo',
+              onPress: () => {
+                notes.undoMarkAll();
+                setUndoShown(false);
+              },
+            }}
+          />
+        </View>
+      ) : null}
       <Sheet visible={menuOpen} title={menuFor?.title ?? ''} onClose={closeMenu}>
         {menuFor !== null && menuFor.read ? (
           <Button

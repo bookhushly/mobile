@@ -197,13 +197,23 @@ it('a failed save keeps the input and says why', async () => {
   ).toBeTruthy();
   expect(screen.getByDisplayValue('1 New Street')).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Save' }));
-  expect(await screen.findByText('Please sign in again')).toBeTruthy();
+  expect(await screen.findByText('Couldn’t save: your session has expired.')).toBeTruthy();
   expect(save).toHaveBeenLastCalledWith({
     name: 'Ada Lovelace',
     phone: '+2348031234567',
     state: 'Lagos',
     address: '1 New Street',
   });
+});
+
+it('a stale save offers Sign in again, which signs out', async () => {
+  withProfile(full);
+  save.mockResolvedValueOnce('stale');
+  const h = await open();
+  await fireEvent.press(screen.getByRole('button', { name: 'Address, 12 Marina Road, edit' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Save' }));
+  await fireEvent.press(await screen.findByRole('button', { name: 'Sign in again' }));
+  expect(h.onSignOut).toHaveBeenCalledTimes(1);
 });
 
 it('a saved edit closes the sheet', async () => {
