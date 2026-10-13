@@ -80,7 +80,11 @@ export function Gallery({ kind, title, images, onOpen }: Props) {
     setIndex(Math.min(images.length - 1, Math.max(0, i)));
   };
   return (
-    <View onLayout={onLayout} style={[frame, { overflow: 'hidden', backgroundColor: color.wash }]}>
+    <View
+      testID="gallery"
+      onLayout={onLayout}
+      style={[frame, { overflow: 'hidden', backgroundColor: color.wash }]}
+    >
       {width > 0 ? (
         <FlatList
           horizontal

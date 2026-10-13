@@ -1,24 +1,33 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { SearchX } from 'lucide-react-native';
 
+import { useAuth } from '@/features/auth/hooks/useAuth';
+import { useSignOut } from '@/features/auth/hooks/useSignOut';
 import { listingRefParams } from '@/features/customer/domain/routeParams';
-import { NoticeScreen } from '@/features/customer/screens/NoticeScreen';
+import { ListingNotFound } from '@/features/customer/screens/ListingNotFound';
+import { ListingScreen } from '@/features/customer/screens/ListingScreen';
 
-// Placeholder until the listing screen lands (Phase 4b Task 7). Anything but a listing kind and a
-// UUID is "isn't available right now", without a query.
+const back = () => {
+  if (router.canGoBack()) router.back();
+  else router.replace('/explore');
+};
+
+// Anything but a listing kind and a UUID is "isn't available right now", without a query.
 export default function ListingRoute() {
   const params = useLocalSearchParams<{ kind: string; id: string }>();
+  const state = useAuth((s) => s.state);
+  const signOut = useSignOut();
   const listing = listingRefParams(params.kind, params.id);
+  if (listing === null) return <ListingNotFound onBack={back} />;
   return (
-    <NoticeScreen
-      title="Listing"
-      icon={SearchX}
-      heading={
-        listing === null ? 'This listing isn’t available right now' : 'Details are on their way'
-      }
-      onBack={() => {
-        if (router.canGoBack()) router.back();
-        else router.replace('/explore');
+    <ListingScreen
+      // A new listing starts fresh (open sheets, the photo index).
+      key={`${listing.kind}:${listing.id}`}
+      kind={listing.kind}
+      id={listing.id}
+      userId={state.status === 'signedIn' ? state.userId : ''}
+      onBack={back}
+      onSignInAgain={() => {
+        signOut();
       }}
     />
   );

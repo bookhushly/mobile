@@ -63,6 +63,16 @@ jest.mock('@/features/customer/screens/BookingScreen', () => ({
   },
 }));
 
+// The listing screen too: the route only parses the link and passes the account on.
+const mockListing: { props?: unknown } = {};
+jest.mock('@/features/customer/screens/ListingScreen', () => ({
+  ListingScreen: (p: { kind: string; id: string; userId: string }) => {
+    mockListing.props = { kind: p.kind, id: p.id, userId: p.userId };
+    return null;
+  },
+}));
+jest.mock('@/features/auth/hooks/useSignOut', () => ({ useSignOut: () => jest.fn() }));
+
 // The code screens too: the routes only parse the id and pass the raw page index on.
 const mockCodes: { tickets?: unknown; checkIn?: unknown } = {};
 jest.mock('@/features/customer/screens/TicketsScreen', () => ({
@@ -89,6 +99,7 @@ beforeEach(() => {
   mockScreen.booking = undefined;
   mockCodes.tickets = undefined;
   mockCodes.checkIn = undefined;
+  mockListing.props = undefined;
 });
 
 it('customer mode lands on the Explore tab (4b D1)', () => {
@@ -121,14 +132,20 @@ it('shows the tour instead of the tabs to a user who hasn’t seen it', async ()
   expect(screen.getByText('Find your place')).toBeTruthy();
 });
 
-it.each<[string, Record<string, unknown>, string]>([
-  ['a listing kind and a UUID', { kind: 'event', id: ID }, 'Details are on their way'],
-  ['an unknown kind', { kind: 'events', id: ID }, 'This listing isn’t available right now'],
-  ['a non-UUID id', { kind: 'hotel', id: 'h1' }, 'This listing isn’t available right now'],
-])('a listing link with %s is parsed before anything reads it', async (_, params, heading) => {
+it('a listing link with a listing kind and a UUID opens the listing for the signed-in user', async () => {
+  mockNav.params = { kind: 'event', id: ID };
+  await render(<ListingRoute />);
+  expect(mockListing.props).toEqual({ kind: 'event', id: ID, userId: 'u1' });
+});
+
+it.each<[string, Record<string, unknown>]>([
+  ['an unknown kind', { kind: 'events', id: ID }],
+  ['a non-UUID id', { kind: 'hotel', id: 'h1' }],
+])('a listing link with %s is parsed before anything reads it', async (_, params) => {
   mockNav.params = params;
   await render(<ListingRoute />);
-  expect(screen.getByText(heading)).toBeTruthy();
+  expect(screen.getByText('This listing isn’t available right now')).toBeTruthy();
+  expect(mockListing.props).toBeUndefined();
 });
 
 it('shows tickets and the check-in code full screen and drops customer data on leaving', async () => {
