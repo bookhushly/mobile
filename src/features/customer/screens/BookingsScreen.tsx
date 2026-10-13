@@ -4,7 +4,7 @@ import { FlatList, RefreshControl, View } from 'react-native';
 
 import type { BookingKind, MyBooking } from '@/features/customer/domain/myBookings';
 import { useMyBookings } from '@/features/customer/hooks/useMyBookings';
-import { useNotifications } from '@/features/customer/hooks/useNotifications';
+import { useUnreadCount } from '@/features/customer/hooks/useUnreadCount';
 import { BellButton } from '@/features/customer/ui/BellButton';
 import { BookingRow } from '@/features/customer/ui/BookingRow';
 import { openWeb, WEB_HOME } from '@/features/customer/ui/links';
@@ -47,7 +47,7 @@ export function BookingsScreen({
   onOpenNotifications,
 }: Props) {
   const my = useMyBookings(userId);
-  const { unread } = useNotifications(userId);
+  const unread = useUnreadCount(userId);
   const [segment, setSegment] = useState<Segment>('upcoming');
   const [refreshing, setRefreshing] = useState(false);
 

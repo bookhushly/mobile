@@ -19,12 +19,22 @@ import { err, ok, type Result } from '@/shared/lib/result';
 jest.mock('@/shared/supabase/client', () => ({ supabase: {} }));
 
 type Call = [string, ...unknown[]];
-type Res = { data: unknown; error?: { code?: string } | null; status?: number };
+type Res = {
+  data: unknown;
+  error?: { code?: string } | null;
+  status?: number;
+  count?: number | null;
+};
 
 function fake(res: Res) {
   const calls: Call[] = [];
   const state: { table: string; op: string; arg: unknown } = { table: '', op: '', arg: undefined };
-  const row = { data: res.data, error: res.error ?? null, status: res.status ?? 200 };
+  const row = {
+    data: res.data,
+    error: res.error ?? null,
+    status: res.status ?? 200,
+    ...(res.count === undefined ? {} : { count: res.count }),
+  };
   const q: CustomerQuery = Object.assign(Promise.resolve(row), {
     eq: (c: string, v: string | boolean) => {
       calls.push(['eq', c, v]);
@@ -61,9 +71,9 @@ function fake(res: Res) {
     from: (table) => {
       state.table = table;
       return {
-        select: (columns) => {
+        select: (columns, opts) => {
           state.op = 'select';
-          state.arg = columns;
+          state.arg = opts === undefined ? columns : [columns, opts];
           return q;
         },
         update: (values) => {
@@ -238,6 +248,29 @@ describe('notifications', () => {
       ['limit', 60],
     ]);
     expect(r).toEqual({ ok: true, value: [notification] });
+  });
+  it('unreadCount is a head count of own unread rows', async () => {
+    const f = fake({ data: null, count: 7 });
+    const r = await f.db.unreadCount('u1');
+    expect(f.state).toEqual({
+      table: 'notifications',
+      op: 'select',
+      arg: ['id', { count: 'exact', head: true }],
+    });
+    expect(f.calls).toEqual([
+      ['eq', 'user_id', 'u1'],
+      ['eq', 'read', false],
+    ]);
+    expect(r).toEqual({ ok: true, value: 7 });
+  });
+  it('unreadCount maps an error, and a missing count is a validation error', async () => {
+    const failed = fake({ data: null, error: { code: '500' }, status: 503 });
+    expect(await failed.db.unreadCount('u1')).toEqual({
+      ok: false,
+      error: { kind: 'unavailable', status: 503 },
+    });
+    const odd = fake({ data: null, count: null });
+    expect(await odd.db.unreadCount('u1')).toEqual({ ok: false, error: { kind: 'validation' } });
   });
   it('markRead updates the ids with .in and returns the rows touched', async () => {
     const f = fake({ data: [{ id: 'n1' }, { id: 'n2' }] });

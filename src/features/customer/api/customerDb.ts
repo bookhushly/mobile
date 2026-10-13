@@ -23,7 +23,14 @@ import { err, ok, type Result } from '@/shared/lib/result';
 import { supabase } from '@/shared/supabase/client';
 import { wrap } from '@/shared/supabase/wrap';
 
-type DbRow = { data: unknown; error: { code?: string } | null; status: number };
+type DbRow = {
+  data: unknown;
+  error: { code?: string } | null;
+  status: number;
+  /** Only with `{ count: 'exact' }`. */
+  count?: number | null;
+};
+type CountOnly = { count: 'exact'; head: true };
 
 // The slices of the supabase-js builders the customer screens use; tests pass a fake.
 export type CustomerQuery = PromiseLike<DbRow> & {
@@ -40,7 +47,7 @@ export type CustomerWrite = {
 };
 export type SupabaseLike = {
   from(table: string): {
-    select(columns: string): CustomerQuery;
+    select(columns: string, opts?: CountOnly): CustomerQuery;
     update(values: Record<string, unknown>): CustomerWrite;
     delete(): CustomerWrite;
   };
@@ -61,6 +68,7 @@ export type CustomerDb = {
   hotel(userId: string, id: string): Promise<Result<HotelBookingRow | null, ApiError>>;
   apartment(userId: string, id: string): Promise<Result<ApartmentBookingRow | null, ApiError>>;
   notifications(userId: string): Promise<Result<NotificationRow[], ApiError>>;
+  unreadCount(userId: string): Promise<Result<number, ApiError>>;
   markRead(userId: string, ids: readonly string[]): Promise<Result<number, ApiError>>;
   markAllRead(userId: string): Promise<Result<number, ApiError>>;
   markUnread(userId: string, ids: readonly string[]): Promise<Result<number, ApiError>>;
@@ -87,6 +95,13 @@ async function read<T>(q: PromiseLike<DbRow>, schema: z.ZodType<T>): Promise<Res
   if (r.error) return err(dbErrorToApiError(r.error));
   const p = schema.safeParse(r.data);
   return p.success ? ok(p.data) : err({ kind: 'validation' });
+}
+
+// A head request: no rows, just the count the server computed.
+async function count(q: PromiseLike<DbRow>): Promise<Result<number, ApiError>> {
+  const r = await q;
+  if (r.error) return err(dbErrorToApiError({ code: r.error.code, status: r.status }));
+  return typeof r.count === 'number' ? ok(r.count) : err({ kind: 'validation' });
 }
 
 async function write(w: CustomerWrite): Promise<Result<number, ApiError>> {
@@ -126,6 +141,15 @@ export function createCustomerDb(client: SupabaseLike): CustomerDb {
           NOTIFICATIONS_LIMIT,
         ),
         notificationRows,
+      ),
+    // The bell (C13): a count, not the 60 rows.
+    unreadCount: (userId) =>
+      count(
+        client
+          .from('notifications')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('read', false),
       ),
     markRead: (userId, ids) => setRead(userId, ids, true),
     markUnread: (userId, ids) => setRead(userId, ids, false),
@@ -185,7 +209,7 @@ export async function withSessionRetry(
 // type level (TS2589, excessively deep for an untyped client); rows are validated with zod anyway.
 const live: SupabaseLike = {
   from: (table) => ({
-    select: (columns) => supabase.from(table).select<string, unknown>(columns),
+    select: (columns, opts) => supabase.from(table).select<string, unknown>(columns, opts),
     update: (values) => supabase.from(table).update(values),
     delete: () => supabase.from(table).delete(),
   }),

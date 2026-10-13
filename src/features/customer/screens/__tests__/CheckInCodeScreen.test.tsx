@@ -94,7 +94,7 @@ it('offline: the saved code with a note', async () => {
   const entry: WalletEntry = { ...fromHotel(ho({ id: ID }), TODAY), checkInCode: 'AB12CD34' };
   loaded({ fromWallet: entry, savedAt: Date.parse('2026-10-13T09:42:00Z') });
   await show();
-  expect(screen.getByText('Showing your saved code — last updated 10:42.')).toBeTruthy();
+  expect(screen.getByText('Showing your saved code — last updated 10:42 am.')).toBeTruthy();
   expect(screen.getByText('AB12 CD34')).toBeTruthy();
   expect(mockBright).toHaveBeenLastCalledWith(true);
 });

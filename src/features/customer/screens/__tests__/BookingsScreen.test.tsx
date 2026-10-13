@@ -9,7 +9,7 @@ import {
   splitBookings,
 } from '@/features/customer/domain/myBookings';
 import { useMyBookings, type BookingRows } from '@/features/customer/hooks/useMyBookings';
-import { useNotifications } from '@/features/customer/hooks/useNotifications';
+import { useUnreadCount } from '@/features/customer/hooks/useUnreadCount';
 import type { WalletEntry } from '@/features/customer/offline/wallet';
 import { BookingsScreen } from '@/features/customer/screens/BookingsScreen';
 import { refreshColors } from '@/shared/ui';
@@ -18,7 +18,7 @@ import { ap, ev, ho, TODAY } from '../../hooks/__tests__/customerTestUtils';
 
 // Factories, not automocks: an automock loads the real module (supabase → native storage).
 jest.mock('@/features/customer/hooks/useMyBookings', () => ({ useMyBookings: jest.fn() }));
-jest.mock('@/features/customer/hooks/useNotifications', () => ({ useNotifications: jest.fn() }));
+jest.mock('@/features/customer/hooks/useUnreadCount', () => ({ useUnreadCount: jest.fn() }));
 jest.mock('@/shared/api/instance', () => ({ clock: { serverNow: () => mockNow } }));
 jest.mock('expo-web-browser', () => ({
   openBrowserAsync: jest.fn(() => Promise.resolve({ type: 'opened' })),
@@ -26,7 +26,7 @@ jest.mock('expo-web-browser', () => ({
 const mockNow = Date.parse('2026-10-13T11:00:00Z');
 
 const mockMy = jest.mocked(useMyBookings);
-const mockNotes = jest.mocked(useNotifications);
+const mockUnread = jest.mocked(useUnreadCount);
 
 type My = ReturnType<typeof useMyBookings>;
 
@@ -50,20 +50,7 @@ function ready(rows: BookingRows, over: Partial<My> = {}): My {
 }
 
 function unread(n: number) {
-  mockNotes.mockReturnValue({
-    items: [],
-    unread: n,
-    loading: false,
-    error: false,
-    refetch: jest.fn(() => Promise.resolve()),
-    open: jest.fn(),
-    markUnread: jest.fn(),
-    markAllRead: jest.fn(),
-    undoMarkAll: jest.fn(),
-    remove: jest.fn(),
-    writeError: null,
-    clearWriteError: jest.fn(),
-  });
+  mockUnread.mockReturnValue(n);
 }
 
 const tonight = ev({
@@ -162,7 +149,7 @@ it('saved bookings say so, and a saved ticket still shows from the Today card', 
   const h = handlers();
   await render(<BookingsScreen userId="u1" {...h} />);
   expect(
-    screen.getByText('Showing saved bookings — last updated 10:42. Pull to refresh.'),
+    screen.getByText('Showing saved bookings — last updated 10:42 am. Pull to refresh.'),
   ).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Show tickets, Jazz at the lagoon' }));
   expect(h.onShowTickets).toHaveBeenCalledWith('e-today');

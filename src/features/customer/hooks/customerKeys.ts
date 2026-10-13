@@ -8,6 +8,8 @@ export const customerKeys = {
   booking: (u: string, kind: BookingKind, id: string) =>
     ['customer', u, 'booking', kind, id] as const,
   notifications: (u: string) => ['customer', u, 'notifications'] as const,
+  /** The bell's count (head request), apart from the list so the bell never loads 60 rows. */
+  unreadCount: (u: string) => ['customer', u, 'unreadCount'] as const,
   profile: (u: string) => ['customer', u, 'profile'] as const,
   /** The offline wallet as read from disk; only loaded when a network load has failed. */
   wallet: (u: string) => ['customer', u, 'wallet'] as const,

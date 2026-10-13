@@ -325,7 +325,7 @@ it('offline: the saved tickets with a note; an unknown live-only flag shows no s
   loaded({ fromWallet: entry, savedAt: Date.parse('2026-10-13T09:42:00Z') });
   await show();
   expect(screen.getByText('Afrobeats night')).toBeTruthy();
-  expect(screen.getByText('Showing saved tickets — last updated 10:42.')).toBeTruthy();
+  expect(screen.getByText('Showing saved tickets — last updated 10:42 am.')).toBeTruthy();
   expect(screen.queryByLabelText('Ticket 1 of 1 code')).toBeNull();
   expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
 });

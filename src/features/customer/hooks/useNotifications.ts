@@ -82,6 +82,8 @@ export function useNotifications(userId: string): {
         }
         // Cancels a poll that started mid-write: it could carry the rows from before the commit.
         void qc.invalidateQueries({ queryKey: k });
+        // The bell's count is its own query: bring it in line with what was written.
+        void qc.invalidateQueries({ queryKey: customerKeys.unreadCount(userId) });
         return outcome;
       });
     },

@@ -177,7 +177,7 @@ it('offline, the saved copy shows with its tickets and a saved-data banner', asy
   loaded({ fromWallet: entry, savedAt: Date.parse('2026-10-13T09:42:00Z') });
   await show('event');
   expect(
-    screen.getByText('Showing saved details — last updated 10:42. Pull to refresh.'),
+    screen.getByText('Showing saved details — last updated 10:42 am. Pull to refresh.'),
   ).toBeTruthy();
   expect(screen.getByLabelText('Ticket 1 · Regular, Valid')).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Show tickets' }));
