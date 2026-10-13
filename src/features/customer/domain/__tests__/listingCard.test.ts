@@ -50,7 +50,7 @@ const event = (p: Partial<EventItem> = {}): EventItem => ({
   vendor_name: null,
   event_date: '2026-10-17T00:00:00',
   event_time: '2026-10-17T18:00:00+00:00',
-  category_data: null,
+  low_stock_threshold: null,
   ...p,
 });
 

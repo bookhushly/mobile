@@ -55,7 +55,7 @@ describe('detail column constants', () => {
     );
     expect(PRICING_RULE_COLUMNS).toBe('id, label, start_date, end_date, price_per_night');
     expect(EVENT_COLUMNS).toBe(
-      'id, title, description, price, price_unit, location, media_urls, active, availability, vendor_name, event_date, event_time, event_end_date, total_tickets, remaining_tickets, ticket_packages, category_data, cancellation_policy',
+      'id, title, description, price, price_unit, location, media_urls, active, availability, vendor_name, event_date, event_time, event_end_date, total_tickets, remaining_tickets, ticket_packages, low_stock_threshold:category_data->>low_stock_threshold, cancellation_policy',
     );
   });
 });
@@ -125,19 +125,27 @@ describe('list items', () => {
     expect(p.furnished).toBe(true);
   });
 
-  it('an event item has a nullable price and opaque category_data', () => {
+  it('an event item has a nullable price and keeps only the low-stock threshold (S1)', () => {
     const p = eventItem.parse({
       id: 'e1',
       title: 'Afrobeats',
       price: null,
       vendor_name: 'Org',
       event_date: '2026-10-18T00:00:00',
-      category_data: { low_stock_threshold: 10 },
+      category_data: { low_stock_threshold: 10, stream_url: 'https://meet.example/secret' },
       vendor_phone: '0800',
     });
     expect(p.price).toBeNull();
     expect(p).not.toHaveProperty('vendor_phone');
-    expect(p.category_data).toEqual({ low_stock_threshold: 10 });
+    expect(p).not.toHaveProperty('category_data');
+    expect(JSON.stringify(p)).not.toContain('secret');
+    expect(p.low_stock_threshold).toBe(10);
+    expect(eventItem.parse({ id: 'e2', category_data: null }).low_stock_threshold).toBeNull();
+    expect(eventItem.parse({ id: 'e3' }).low_stock_threshold).toBeNull();
+    expect(
+      eventItem.parse({ id: 'e4', category_data: { low_stock_threshold: { x: 1 } } })
+        .low_stock_threshold,
+    ).toBeNull();
   });
 
   it('a page: nextPage absent at the end, totalCount null after a post-filter; a bad row is dropped', () => {
@@ -245,6 +253,10 @@ describe('detail rows', () => {
     ]);
     expect(e).not.toHaveProperty('vendor_phone');
     expect(e).not.toHaveProperty('custom_questions');
+    expect(e.low_stock_threshold).toBeNull();
+    expect(eventDetail.parse({ id: 'e1', low_stock_threshold: '20' }).low_stock_threshold).toBe(
+      '20',
+    );
     expect(eventDetail.parse({ id: 'e1', ticket_packages: 'nope' }).ticket_packages).toEqual([]);
     expect(eventDetail.parse({ id: 'e1', ticket_packages: null }).ticket_packages).toEqual([]);
     expect(

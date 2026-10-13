@@ -425,7 +425,7 @@ describe('eventStock', () => {
     ticket_packages: [],
     remaining_tickets: 500,
     total_tickets: 500,
-    category_data: null,
+    low_stock_threshold: null,
   };
 
   it('ended: the end day (or the start day) is before today in Lagos', () => {
@@ -485,13 +485,14 @@ describe('eventStock', () => {
     expect(eventStock({ ...base, remaining_tickets: 50 }, NOW, TODAY)).toBe('fewLeft');
     expect(eventStock({ ...base, remaining_tickets: 51 }, NOW, TODAY)).toBe('onSale');
     // custom threshold 10 → almost ≤ 3
-    const cd = { low_stock_threshold: 10 };
-    expect(eventStock({ ...base, remaining_tickets: 3, category_data: cd }, NOW, TODAY)).toBe(
+    // Text through the `->>` JSON path, or a number from the route.
+    const cd = '10';
+    expect(eventStock({ ...base, remaining_tickets: 3, low_stock_threshold: cd }, NOW, TODAY)).toBe(
       'almostSoldOut',
     );
-    expect(eventStock({ ...base, remaining_tickets: 11, category_data: cd }, NOW, TODAY)).toBe(
-      'onSale',
-    );
+    expect(
+      eventStock({ ...base, remaining_tickets: 11, low_stock_threshold: 10 }, NOW, TODAY),
+    ).toBe('onSale');
   });
 
   it('packages: low stock counts the tickets left across tiers', () => {

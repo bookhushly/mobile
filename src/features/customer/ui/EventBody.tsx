@@ -29,7 +29,7 @@ const STOCK_BANNER: Partial<Record<EventStock, string>> = {
 // price, early-bird note and stock word, cancellation policy.
 export function EventBody({ event: e, stock, nowMs }: Props) {
   const venue = e.location?.trim() ?? '';
-  const threshold = lowStockThreshold(e.category_data);
+  const threshold = lowStockThreshold(e.low_stock_threshold);
   const banner = STOCK_BANNER[stock];
   const cancellation = plainText(e.cancellation_policy);
   return (

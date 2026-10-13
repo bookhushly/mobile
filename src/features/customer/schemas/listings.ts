@@ -14,8 +14,10 @@ export const ROOM_RATE_COLUMNS = 'id, room_type_id, beds, price_per_night, is_de
 export const APARTMENT_COLUMNS =
   'id, name, description, address, city, state, area, landmark, image_urls, amenities, apartment_type, bedrooms, bathrooms, max_guests, square_meters, price_per_night, price_per_week, price_per_month, minimum_stay, furnished, kitchen_equipped, parking_spaces, utilities_included, electricity_included, generator_available, generator_hours, inverter_available, solar_power, water_supply, internet_included, security_features, check_in_time, check_out_time, cancellation_policy, house_rules, caution_deposit, status, avg_rating, review_count';
 export const PRICING_RULE_COLUMNS = 'id, label, start_date, end_date, price_per_night';
+// Security review S1: only the low-stock threshold out of `category_data` (a JSON path), never
+// the whole object — it also holds `stream_url`, an online event's private link (§9 4b (l)).
 export const EVENT_COLUMNS =
-  'id, title, description, price, price_unit, location, media_urls, active, availability, vendor_name, event_date, event_time, event_end_date, total_tickets, remaining_tickets, ticket_packages, category_data, cancellation_policy';
+  'id, title, description, price, price_unit, location, media_urls, active, availability, vendor_name, event_date, event_time, event_end_date, total_tickets, remaining_tickets, ticket_packages, low_stock_threshold:category_data->>low_stock_threshold, cancellation_policy';
 
 // Display-only data is tolerant: a missing or odd value becomes null, never a failed listing.
 const text = z.string().nullable().catch(null);
@@ -31,6 +33,14 @@ const numeric = z.union([
 const num = numeric.refine(Number.isFinite).nullable().catch(null);
 const urls = z.array(z.string()).nullable().catch(null);
 const amenities = z.unknown().default(null).transform(normalizeAmenities);
+// `category_data.low_stock_threshold`: a number, or text through `->>`; parsed by the domain.
+const threshold = z.union([z.number(), z.string()]).nullable().catch(null);
+
+function thresholdOf(categoryData: unknown): unknown {
+  return typeof categoryData === 'object' && categoryData !== null
+    ? Reflect.get(categoryData, 'low_stock_threshold')
+    : null;
+}
 
 // ── List items (GET /api/listings) — only the fields we use; the rest (agent_phone…) is stripped ──
 
@@ -70,17 +80,24 @@ export const apartmentItem = z.object({
 });
 export type ApartmentItem = z.infer<typeof apartmentItem>;
 
-export const eventItem = z.object({
-  id: z.string(),
-  title: text,
-  location: text,
-  price: num,
-  media_urls: urls,
-  vendor_name: text,
-  event_date: text,
-  event_time: text,
-  category_data: z.unknown().default(null),
-});
+// The route sends the whole `category_data` (incl. `stream_url`); only the threshold is kept, so
+// the link never reaches the query cache (security review S1).
+export const eventItem = z
+  .object({
+    id: z.string(),
+    title: text,
+    location: text,
+    price: num,
+    media_urls: urls,
+    vendor_name: text,
+    event_date: text,
+    event_time: text,
+    category_data: z.unknown().default(null),
+  })
+  .transform(({ category_data: data, ...item }) => ({
+    ...item,
+    low_stock_threshold: threshold.parse(thresholdOf(data)),
+  }));
 export type EventItem = z.infer<typeof eventItem>;
 
 export type ListingsPage<T> = { items: T[]; nextPage?: number; totalCount: number | null };
@@ -258,7 +275,7 @@ export const eventDetail = z.object({
           })
         : [],
     ),
-  category_data: z.record(z.string(), z.unknown()).nullable().catch(null),
+  low_stock_threshold: threshold,
   cancellation_policy: text,
 });
 export type EventDetail = z.infer<typeof eventDetail>;

@@ -262,14 +262,13 @@ export type StockEvent = {
   ticket_packages: readonly PackageLike[];
   remaining_tickets: number | null;
   total_tickets: number | null;
-  category_data: unknown;
+  /** `category_data.low_stock_threshold` (number or text), as read. */
+  low_stock_threshold: unknown;
 };
 
 const DEFAULT_LOW_STOCK = 50;
 
-export function lowStockThreshold(categoryData: unknown): number {
-  if (typeof categoryData !== 'object' || categoryData === null) return DEFAULT_LOW_STOCK;
-  const raw: unknown = Reflect.get(categoryData, 'low_stock_threshold');
+export function lowStockThreshold(raw: unknown): number {
   const n = typeof raw === 'string' ? parseInt(raw, 10) : raw;
   return typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : DEFAULT_LOW_STOCK;
 }
@@ -291,7 +290,7 @@ export function eventStock(
   const lastDay = (event.event_end_date ?? event.event_date)?.slice(0, 10);
   if (lastDay !== undefined && isIsoDate(lastDay) && lastDay < todayLagos) return 'ended';
   if (event.active === false || event.availability !== 'available') return 'notOnSale';
-  const threshold = lowStockThreshold(event.category_data);
+  const threshold = lowStockThreshold(event.low_stock_threshold);
   const pkgs = event.ticket_packages;
   let remaining: number | null;
   if (pkgs.length > 0) {

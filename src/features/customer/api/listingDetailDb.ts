@@ -46,6 +46,8 @@ const ASC = { ascending: true };
 // vendor): "This listing isn't available right now". Child reads run in parallel with the parent.
 export function createListingDetailDb(client: SupabaseLike): ListingDetailDb {
   return {
+    // `hotels` has no status/active column (prod baseline 2026-10-13): what shows is RLS only
+    // (hidden while the vendor is suspended).
     async hotel(id) {
       const [h, t, r] = await Promise.all([
         read(client.from('hotels').select(HOTEL_COLUMNS).eq('id', id).maybeSingle(), maybeHotel),
