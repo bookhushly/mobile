@@ -1,5 +1,5 @@
 import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook, waitFor } from '@testing-library/react-native';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
 import type { ModeInputs } from '@/features/mode/domain/resolveMode';
@@ -44,6 +44,9 @@ function routeOf(r: { current: ReturnType<typeof useModeState> }) {
 }
 
 beforeEach(async () => {
+  // Fake timers: TanStack's batched notify timer only runs inside waitFor()/act(), never between
+  // a test's last assertion and its teardown.
+  jest.useFakeTimers();
   await runAlwaysWipes();
   for (const k of Object.keys(mockKv.dump())) await mockKv.delete(k);
   mockLoad.mockReset();
@@ -51,9 +54,16 @@ beforeEach(async () => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
 });
 
-afterEach(() => {
+// Unmount first, then clear the client and flush pending timers inside act(): nothing may
+// update a hook after its test has ended.
+afterEach(async () => {
+  await cleanup();
   client.clear();
   onlineManager.setOnline(true);
+  await act(async () => {
+    await jest.runOnlyPendingTimersAsync();
+  });
+  jest.useRealTimers();
 });
 
 async function seedCache(userId: string, inputs: ModeInputs) {
