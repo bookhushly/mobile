@@ -30,7 +30,7 @@ it('says who is staying', () => {
 
 it('opens Apple Maps on iOS and Google Maps elsewhere, encoded', () => {
   expect(mapsUrl('Eko Hotel, Lagos', 'ios')).toBe(
-    'http://maps.apple.com/?q=Eko%20Hotel%2C%20Lagos',
+    'https://maps.apple.com/?q=Eko%20Hotel%2C%20Lagos',
   );
   expect(mapsUrl(' 1 Ade & Co St ', 'android')).toBe(
     'https://maps.google.com/?q=1%20Ade%20%26%20Co%20St',

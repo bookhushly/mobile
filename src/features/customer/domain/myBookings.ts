@@ -100,8 +100,9 @@ function joinPlace(parts: readonly (string | null | undefined)[]): string | null
   return s === '' ? null : s;
 }
 
+// Only https images are loaded (no http, file:, data: or other schemes from listing data).
 function firstUrl(urls: readonly string[] | null | undefined): string | null {
-  return urls?.find((u) => u !== '') ?? null;
+  return urls?.find((u) => /^https:\/\/[^/]/i.test(u)) ?? null;
 }
 
 function withTime(head: string, time: string | null, joiner: string): string {

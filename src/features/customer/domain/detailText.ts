@@ -34,7 +34,7 @@ export function nightsLabel(n: number): string {
 /** Apple Maps on iOS, Google Maps elsewhere; the query is the venue or address as written. */
 export function mapsUrl(query: string, os: string): string {
   const q = encodeURIComponent(query.trim());
-  return os === 'ios' ? `http://maps.apple.com/?q=${q}` : `https://maps.google.com/?q=${q}`;
+  return os === 'ios' ? `https://maps.apple.com/?q=${q}` : `https://maps.google.com/?q=${q}`;
 }
 
 /** "Wed 15 Oct · from 2:00 pm" (stays) or "Sun 18 Oct · 7:00 pm" (events); the day alone without a time. */

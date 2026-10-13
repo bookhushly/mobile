@@ -71,7 +71,7 @@ it('event: date, venue to Maps, packages, tickets and Show tickets', async () =>
   expect(screen.getByText('To change or cancel, use bookhushly.com')).toBeTruthy();
 
   await fireEvent.press(screen.getByRole('link', { name: 'Venue, Eko Hotel, Lagos' }));
-  expect(openURL).toHaveBeenCalledWith('http://maps.apple.com/?q=Eko%20Hotel%2C%20Lagos');
+  expect(openURL).toHaveBeenCalledWith('https://maps.apple.com/?q=Eko%20Hotel%2C%20Lagos');
   await fireEvent.press(screen.getByRole('button', { name: 'Show tickets' }));
   expect(h.onShowTickets).toHaveBeenCalledWith(ID);
 });
@@ -111,7 +111,7 @@ it('hotel: dates with the hotel times, room type, guests, payment and the check-
   expect(screen.getByLabelText('Guests, 2 adults, 1 child')).toBeTruthy();
   expect(screen.getByLabelText('Payment, Paid')).toBeTruthy();
   await fireEvent.press(screen.getByRole('link', { name: 'Address, Ikeja, Lagos' }));
-  expect(openURL).toHaveBeenCalledWith('http://maps.apple.com/?q=Ikeja%2C%20Lagos');
+  expect(openURL).toHaveBeenCalledWith('https://maps.apple.com/?q=Ikeja%2C%20Lagos');
   await fireEvent.press(screen.getByRole('button', { name: 'Show check-in code' }));
   expect(h.onShowCheckInCode).toHaveBeenCalledWith(ID);
 });
@@ -156,7 +156,7 @@ it('apartment: area, address, dates and nights, times, guests and payment', asyn
     screen.getByRole('link', { name: 'Address, 5 Admiralty Way, Lekki, Lagos' }),
   );
   expect(openURL).toHaveBeenCalledWith(
-    'http://maps.apple.com/?q=5%20Admiralty%20Way%2C%20Lekki%2C%20Lagos',
+    'https://maps.apple.com/?q=5%20Admiralty%20Way%2C%20Lekki%2C%20Lagos',
   );
 });
 

@@ -232,6 +232,19 @@ describe('fromEvent', () => {
     expect(b.next).toBe('Sat 10 Oct');
   });
 
+  it('images: only https urls are used, others are dropped', () => {
+    const img = (media_urls: string[]) =>
+      fromEvent(ev({ listing: listing({ media_urls }) }), TODAY).imageUrl;
+    expect(img(['http://cdn.example/a.jpg'])).toBeNull();
+    expect(img(['file:///etc/passwd'])).toBeNull();
+    expect(img(['data:image/png;base64,AAAA'])).toBeNull();
+    expect(img(['javascript:alert(1)'])).toBeNull();
+    expect(img(['', 'http://x/a.jpg', 'https://cdn.example/b.jpg'])).toBe(
+      'https://cdn.example/b.jpg',
+    );
+    expect(img(['HTTPS://cdn.example/c.jpg'])).toBe('HTTPS://cdn.example/c.jpg');
+  });
+
   it('hidden listing → no title or place, dates from the booking', () => {
     const b = fromEvent(
       ev({ listing: null, booking_date: '2026-10-20', booking_time: '20:30:00' }),

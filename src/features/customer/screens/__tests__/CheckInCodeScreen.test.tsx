@@ -46,14 +46,14 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-it('shows the hotel, dates, QR and the spaced code, selectable, with the screen bright', async () => {
+it('shows the hotel, dates, QR and the spaced code (not selectable), with the screen bright', async () => {
   loaded({ row: ho({ id: ID }) });
   await show();
   expect(screen.getByText('Harbour Suites')).toBeTruthy();
   expect(screen.getByText('13–15 Oct · check-in from 2:00 pm')).toBeTruthy();
   expect(screen.getByLabelText('Check-in code')).toBeTruthy();
   const code = screen.getByText('AB12 CD34');
-  expect(code.props.selectable).toBe(true);
+  expect(code.props.selectable).not.toBe(true);
   expect(screen.getByText('Show this at the front desk')).toBeTruthy();
   expect(screen.queryByText('Checked in')).toBeNull();
   expect(screen.getByLabelText('Code A B 1 2 C D 3 4')).toBeTruthy();
