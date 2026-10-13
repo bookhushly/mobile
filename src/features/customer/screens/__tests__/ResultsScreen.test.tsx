@@ -183,12 +183,12 @@ it('closing the sheet discards the draft', async () => {
   await render(<ResultsScreen {...props()} />);
   await fireEvent.press(screen.getByRole('button', { name: 'Filters' }));
   const sheet = within(screen.getByTestId('filters-sheet'));
-  await fireEvent.press(sheet.getByRole('checkbox', { name: '24 h generator' }));
+  await fireEvent.press(sheet.getByRole('checkbox', { name: 'Generator' }));
   await fireEvent.press(sheet.getByRole('button', { name: 'Close' }));
   expect(lastFilters()).toEqual({ sort: 'newest' });
   await fireEvent.press(screen.getByRole('button', { name: 'Filters' }));
   expect(
-    within(screen.getByTestId('filters-sheet')).getByRole('checkbox', { name: '24 h generator' }),
+    within(screen.getByTestId('filters-sheet')).getByRole('checkbox', { name: 'Generator' }),
   ).not.toBeChecked();
 });
 

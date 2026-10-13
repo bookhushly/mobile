@@ -141,7 +141,8 @@ export function FiltersSheet({ visible, category, value, today, onApply, onClose
             }}
           />
           <CheckRow
-            label="24 h generator"
+            // The route's `hotel_has_generator` matches 24 h and partial (contract review K2).
+            label="Generator"
             checked={draft.generator24h === true}
             onChange={(b) => {
               set({ generator24h: b || undefined });
