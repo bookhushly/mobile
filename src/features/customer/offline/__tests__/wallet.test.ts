@@ -1,6 +1,6 @@
 import { createWallet, wallet, type WalletEntry } from '@/features/customer/offline/wallet';
 import type { MyBooking } from '@/features/customer/domain/myBookings';
-import { wipeOnSignOut } from '@/shared/lib/signOutGuard';
+import { runAlwaysWipes } from '@/shared/lib/signOutGuard';
 
 // The default instance binds native storage; back it with memory instead.
 jest.mock('@/shared/platform/secureStore', () => ({
@@ -129,6 +129,22 @@ it('never stores email, phone or amounts', async () => {
     expect(entry).not.toHaveProperty(key);
 });
 
+it('keeps at most 20 tickets per entry', async () => {
+  const w = createWallet({ store: store() });
+  const tickets = Array.from({ length: 25 }, (_, i) => ({
+    id: `t${String(i)}`,
+    index: i + 1,
+    total: 25,
+    type: 'Regular',
+    seat: null,
+    admittedAt: null,
+  }));
+  await w.save('u1', [{ ...booking(), tickets }], NOW);
+  const kept = (await w.load('u1'))?.entries[0]?.tickets ?? [];
+  expect(kept).toHaveLength(20);
+  expect(kept[0]?.id).toBe('t0');
+});
+
 it('wipe removes the wallet', async () => {
   const w = createWallet({ store: store() });
   await w.save('u1', [ticketed], NOW);
@@ -136,9 +152,9 @@ it('wipe removes the wallet', async () => {
   expect(await w.load('u1')).toBeNull();
 });
 
-it('the default wallet is encrypted and wiped on sign-out', async () => {
+it('the default wallet is encrypted and registered to be wiped on every sign-out', async () => {
   await wallet.save('u1', [ticketed], NOW);
   expect(await wallet.load('u1')).not.toBeNull();
-  await wipeOnSignOut('u1');
+  await runAlwaysWipes();
   expect(await wallet.load('u1')).toBeNull();
 });

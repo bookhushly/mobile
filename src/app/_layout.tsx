@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { startSessionListener } from '@/features/auth/api/session';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import '@/features/gate/offline/signOutGuard';
-// After the gate guard: the wallet has no shift summary, and the first summary wins.
+// Registers the wallet's always-wipe, so every sign-out clears it (even before the tab opens).
 import '@/features/customer/offline/wallet';
 import { resolveRoute } from '@/features/mode/domain/route';
 import { useModeState } from '@/features/mode/hooks/useModeState';

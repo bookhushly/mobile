@@ -62,3 +62,22 @@ export async function shiftSummary(userId: string): Promise<ShiftSummary | null>
 export async function resetShiftSummary(userId: string): Promise<void> {
   for (const g of guards) await g.resetSummary?.(userId);
 }
+
+// Local data with nothing to sync (e.g. the customer's offline wallet) goes on EVERY sign-out,
+// whatever the gate guards decide (keep offline data, failed check, blocked then signed out,
+// abandoned reset, account deletion). Run by the auth store when the session is actually gone,
+// never while sign-out is only being checked or was cancelled.
+const alwaysWipes: (() => Promise<void>)[] = [];
+
+export function registerAlwaysWipe(wipe: () => Promise<void>): void {
+  if (!alwaysWipes.includes(wipe)) alwaysWipes.push(wipe);
+}
+
+// Every wipe starts at once (synchronously); one failing never stops the others or rejects.
+export async function runAlwaysWipes(): Promise<void> {
+  await Promise.allSettled(
+    alwaysWipes.map(async (w) => {
+      await w();
+    }),
+  );
+}

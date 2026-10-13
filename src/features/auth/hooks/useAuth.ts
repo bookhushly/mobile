@@ -8,7 +8,12 @@ import { planSignOut, type SignOutOptions } from '@/features/auth/domain/signOut
 import { mapVerifyError, type VerifyError } from '@/features/auth/domain/verifyErrors';
 import { useAuthNotice } from '@/features/auth/hooks/useAuthNotice';
 import { queryClient } from '@/shared/api/queryClient';
-import { checkSignOut, wipeOnSignOut, type SignOutCheck } from '@/shared/lib/signOutGuard';
+import {
+  checkSignOut,
+  runAlwaysWipes,
+  wipeOnSignOut,
+  type SignOutCheck,
+} from '@/shared/lib/signOutGuard';
 import { secureKv } from '@/shared/platform/secureStore';
 import { sessionStore, STORAGE_KEY, supabase } from '@/shared/supabase/client';
 
@@ -70,6 +75,9 @@ export const useAuth = create<Store>((set, get) => ({
   recovery: false,
   dispatch: (e) => {
     set({ state: reduceAuth(get().state, e) });
+    // The one place every sign-out passes through (ours, an abandoned reset, a deletion, or the
+    // server ending the session). A blocked or cancelled sign-out never dispatches SIGNED_OUT.
+    if (e.type === 'SIGNED_OUT') void runAlwaysWipes();
   },
   async signIn(email, password) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });

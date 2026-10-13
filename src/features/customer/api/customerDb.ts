@@ -169,7 +169,13 @@ export async function withSessionRetry(
 ): Promise<Result<number, ApiError | StaleSession>> {
   const first = await write();
   if (!first.ok || expected <= 0 || first.value >= 1) return first;
-  if (!(await refresh())) return err({ kind: 'staleSession' });
+  let refreshed = false;
+  try {
+    refreshed = await refresh();
+  } catch {
+    // A refresh that throws (offline, revoked) is the same answer as one that fails.
+  }
+  if (!refreshed) return err({ kind: 'staleSession' });
   const second = await write();
   if (!second.ok || second.value >= 1) return second;
   return err({ kind: 'staleSession' });

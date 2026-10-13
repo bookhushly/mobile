@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import type { MyBooking } from '@/features/customer/domain/myBookings';
 import { daysBetween, isIsoDate, lagosToday } from '@/shared/lib/lagosDay';
-import { registerSignOutGuard } from '@/shared/lib/signOutGuard';
+import { registerAlwaysWipe } from '@/shared/lib/signOutGuard';
 import { plainKv } from '@/shared/platform/storage';
 import { secureKv } from '@/shared/platform/secureStore';
 import { createEncryptedStore } from '@/shared/supabase/encryptedStore';
@@ -29,6 +29,8 @@ type Store = {
 
 export const WALLET_KEY = 'bh.wallet';
 export const WALLET_MAX = 30;
+/** Tickets kept per entry: the most one booking can hold (FR), keeping the blob near C9's 50 KB. */
+export const WALLET_MAX_TICKETS = 20;
 
 const isoDate = z.string().refine(isIsoDate, 'Not a calendar date');
 const nullableString = z.string().nullable();
@@ -90,7 +92,12 @@ export function createWallet(deps: { store: Store }) {
       for (const e of entries) {
         const p = walletEntry.safeParse(e);
         if (p.success && p.data.when !== 'past' && daysBetween(today, p.data.end) >= 0) {
-          kept.push(p.data);
+          const { tickets } = p.data;
+          kept.push(
+            tickets === undefined
+              ? p.data
+              : { ...p.data, tickets: tickets.slice(0, WALLET_MAX_TICKETS) },
+          );
         }
       }
       kept.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
@@ -121,12 +128,6 @@ export const wallet = createWallet({
   }),
 });
 
-// Registered on import; src/app/_layout.tsx imports this after the gate guard, so the gate's
-// shift summary still comes first. Nothing to sync: the wallet is a read-only copy.
-registerSignOutGuard({
-  check: () => Promise.resolve({ unsynced: 0, unsyncable: 0 }),
-  syncNow: () => Promise.resolve(),
-  wipe: async () => {
-    await wallet.wipe();
-  },
-});
+// Wiped on every sign-out, whatever the gate's plan (CLAUDE.md: PII wiped on logout). Registered
+// on import; src/app/_layout.tsx imports this so it is registered before anyone can sign out.
+registerAlwaysWipe(() => wallet.wipe());

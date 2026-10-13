@@ -393,6 +393,15 @@ describe('withSessionRetry', () => {
     });
     expect(write).toHaveBeenCalledTimes(1);
   });
+  it('a refresh that throws is staleSession, never a rejection', async () => {
+    const write = writes(rows(0));
+    const refresh = jest.fn(() => Promise.reject(new Error('offline')));
+    await expect(withSessionRetry(write, 1, refresh)).resolves.toEqual({
+      ok: false,
+      error: { kind: 'staleSession' },
+    });
+    expect(write).toHaveBeenCalledTimes(1);
+  });
   it('a write error is returned as is, never retried', async () => {
     const write = writes(err<ApiError>({ kind: 'unavailable', status: 503 }));
     const refresh = jest.fn(() => Promise.resolve(true));
