@@ -55,6 +55,9 @@ export function Counter({ index, total }: { index: number; total: number }) {
 
 // Spec §3/§6, D14: a 16:10 pager with a counter; a tap opens the full-screen viewer. No photo →
 // a wash block with the kind's icon, never a stock image.
+// D14 wants full-size photos only in the viewer, but there is no resize endpoint yet
+// (BACKEND_STATUS §9 "Booking thumbnails are full-size originals"): the pager loads originals,
+// at most ~3 at a time (`initialNumToRender` 2, `windowSize` 3).
 export function Gallery({ kind, title, images, onOpen }: Props) {
   const [width, setWidth] = useState(0);
   const [index, setIndex] = useState(0);

@@ -292,12 +292,20 @@ describe('defaultBeds', () => {
 });
 
 describe('ticketStockWord', () => {
-  const pkg = { price: 5000, remaining: 10 };
-  it('says Sold out or Few left only while the event is on sale', () => {
+  const pkg = { price: 5000, remaining: 40 };
+  it('uses D12 wording with the web thresholds while the event is on sale', () => {
     expect(ticketStockWord({ ...pkg, remaining: 0 }, 50, 'onSale')).toBe('Sold out');
-    expect(ticketStockWord(pkg, 50, 'fewLeft')).toBe('Few left');
-    expect(ticketStockWord({ ...pkg, remaining: 200 }, 50, 'onSale')).toBeNull();
+    expect(ticketStockWord({ ...pkg, remaining: 15 }, 50, 'almostSoldOut')).toBe('Almost sold out');
+    expect(ticketStockWord({ ...pkg, remaining: 16 }, 50, 'fewLeft')).toBe('Few tickets left');
+    expect(ticketStockWord({ ...pkg, remaining: 50 }, 50, 'fewLeft')).toBe('Few tickets left');
+    expect(ticketStockWord({ ...pkg, remaining: 51 }, 50, 'onSale')).toBeNull();
     expect(ticketStockWord({ ...pkg, remaining: 0 }, 50, 'soldOut')).toBe('Sold out');
+  });
+  it('reads a tier without a count as sold out (the web rule)', () => {
+    expect(ticketStockWord({ price: 5000 }, 50, 'onSale')).toBe('Sold out');
+    expect(ticketStockWord({ price: 5000, remaining: null }, 50, 'onSale')).toBe('Sold out');
+  });
+  it('says nothing per tier once the event is ended or off sale', () => {
     expect(ticketStockWord(pkg, 50, 'ended')).toBeNull();
     expect(ticketStockWord(pkg, 50, 'notOnSale')).toBeNull();
   });

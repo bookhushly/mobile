@@ -2,7 +2,6 @@
 import { eventWhen } from '@/features/customer/domain/detailText';
 import {
   effectivePackagePrice,
-  packageStock,
   roomTypeFrom,
   type EventStock,
   type ListingKind,
@@ -62,15 +61,23 @@ export function defaultBeds(
   return rate === undefined ? null : bedsLine(rate.beds);
 }
 
-/** A ticket type's stock word; none once the whole event is ended or off sale (D12). */
+export type TicketStockWord = 'Sold out' | 'Almost sold out' | 'Few tickets left';
+
+/**
+ * A ticket type's stock word in D12's (the web's) wording: ≤ 30% of the threshold → "Almost sold
+ * out", ≤ the threshold → "Few tickets left". None once the whole event is ended or off sale.
+ */
 export function ticketStockWord(
   pkg: PackageLike,
   threshold: number,
   event: EventStock,
-): 'Sold out' | 'Few left' | null {
+): TicketStockWord | null {
   if (event === 'ended' || event === 'notOnSale') return null;
-  const s = packageStock(pkg, threshold);
-  return s === 'soldOut' ? 'Sold out' : s === 'fewLeft' ? 'Few left' : null;
+  // The web's rule (`parseInt(p.remaining) || 0`): a tier without a count reads as sold out.
+  const left = pkg.remaining ?? 0;
+  if (left <= 0) return 'Sold out';
+  if (left <= Math.ceil(threshold * 0.3)) return 'Almost sold out';
+  return left <= threshold ? 'Few tickets left' : null;
 }
 
 /** "13 Oct 2026" (the Lagos day); null when unreadable. */

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import { openBrowserAsync } from 'expo-web-browser';
-import { Share } from 'react-native';
+import { Platform, Share } from 'react-native';
 
 import type { ApartmentListing, HotelListing } from '@/features/customer/api/listingDetailDb';
 import { useListing } from '@/features/customer/hooks/useListing';
@@ -50,6 +50,7 @@ const mockSaved = jest.mocked(useSaved);
 const mockReviews = jest.mocked(useReviews);
 const ID = '0b6f1f4e-2c1a-4f6e-9a39-6f0e7d2b9c11';
 const PHONE = '08031234567';
+const HOTEL_URL = `https://bookhushly.com/services/hotels/${ID}`;
 
 // Raw rows as the database sends them, private fields included: the schemas must drop them.
 const PRIVATE = {
@@ -122,7 +123,7 @@ const APARTMENT: ApartmentListing = {
     },
   ],
 };
-const PKG = { name: 'Regular', price: 10000, remaining: 100, total: 200 };
+const PKG = { name: 'Regular', price: 10000, remaining: 40, total: 200 };
 function event(over: Record<string, unknown> = {}): EventDetail {
   return eventDetail.parse({
     ...PRIVATE,
@@ -196,6 +197,10 @@ beforeEach(async () => {
   await plainKv.delete(WEB_NOTE_KEY);
 });
 
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
 describe('hotel', () => {
   it('shows rooms, the from-price, plain-text description and the first reviews', async () => {
     show(HOTEL);
@@ -227,17 +232,16 @@ describe('hotel', () => {
     expect(await plainKv.get(WEB_NOTE_KEY)).toBe('1');
   });
 
-  it('shares the title with the web link', async () => {
+  it.each([
+    ['ios', { title: 'Harbour Suites', message: 'Harbour Suites', url: HOTEL_URL }],
+    ['android', { title: 'Harbour Suites', message: `Harbour Suites\n${HOTEL_URL}` }],
+  ])('shares the title with the web link once on %s', async (os, payload) => {
+    jest.replaceProperty(Platform, 'OS', os as typeof Platform.OS);
     const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' });
     show(HOTEL);
     await render(<ListingScreen kind="hotel" {...props} />);
     await fireEvent.press(screen.getByTestId('listing-share'));
-    const url = `https://bookhushly.com/services/hotels/${ID}`;
-    expect(share).toHaveBeenCalledWith({
-      title: 'Harbour Suites',
-      message: `Harbour Suites\n${url}`,
-      url,
-    });
+    expect(share).toHaveBeenCalledWith(payload);
     share.mockRestore();
   });
 
@@ -285,6 +289,46 @@ describe('apartment', () => {
   });
 });
 
+describe('apartment prices and reviews', () => {
+  it('reads every amount as words', async () => {
+    show(APARTMENT);
+    await render(<ListingScreen kind="apartment" {...props} />);
+    const prices = within(screen.getByTestId('prices'));
+    expect(prices.getByLabelText('Per night, 80,000 naira per night')).toBeTruthy();
+    expect(prices.getByLabelText('Per week, 500,000 naira per week')).toBeTruthy();
+    expect(prices.getByLabelText('Caution deposit, 50,000 naira')).toBeTruthy();
+    expect(
+      prices.getByLabelText('Christmas · 20 Dec – 2 Jan, 90,000 naira per night'),
+    ).toBeTruthy();
+  });
+
+  it('has no Prices heading with nothing under it', async () => {
+    show({
+      apartment: {
+        ...APARTMENT.apartment,
+        price_per_night: null,
+        price_per_week: null,
+        minimum_stay: 1,
+        caution_deposit: null,
+      },
+      rules: [],
+    });
+    await render(<ListingScreen kind="apartment" {...props} />);
+    expect(screen.queryByTestId('prices')).toBeNull();
+    expect(screen.queryByText('Prices')).toBeNull();
+  });
+
+  it('offers Try again when the reviews fail to load', async () => {
+    const refetch = jest.fn(() => Promise.resolve());
+    mockReviews.mockReturnValue({ ...REVIEWS, reviews: [], total: 0, failed: true, refetch });
+    show(APARTMENT);
+    await render(<ListingScreen kind="apartment" {...props} />);
+    expect(screen.getByText('Couldn’t load reviews — check your connection.')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Try again'));
+    expect(refetch).toHaveBeenCalled();
+  });
+});
+
 describe('event', () => {
   it('shows date, venue, organizer, tickets with early bird and the from-price', async () => {
     show(event());
@@ -293,7 +337,9 @@ describe('event', () => {
     expect(screen.getByText('Eko Hotel, Lagos')).toBeTruthy();
     expect(screen.getByText('Eko Live')).toBeTruthy();
     expect(screen.getByText('Early bird until Fri 16 Oct')).toBeTruthy();
-    expect(within(screen.getByTestId('ticket-VIP')).getByText('Few left')).toBeTruthy();
+    // D12 wording, the web's thresholds (50 by default; ≤ 15 is almost sold out).
+    expect(within(screen.getByTestId('ticket-VIP')).getByText('Almost sold out')).toBeTruthy();
+    expect(within(screen.getByTestId('ticket-Regular')).getByText('Few tickets left')).toBeTruthy();
     expect(screen.getByLabelText('From 7,000 naira')).toBeTruthy();
     expect(screen.getByText('· Sat 17 Oct')).toBeTruthy();
     await fireEvent.press(screen.getByText('Get tickets on bookhushly.com'));

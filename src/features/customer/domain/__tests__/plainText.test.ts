@@ -1,4 +1,4 @@
-import { plainText } from '@/features/customer/domain/plainText';
+import { MAX_CHARS, plainText } from '@/features/customer/domain/plainText';
 
 describe('plainText', () => {
   it('returns null for nothing to show', () => {
@@ -55,5 +55,42 @@ describe('plainText', () => {
 
   it('collapses runs of spaces and blank lines', () => {
     expect(plainText('One   two\t three\r\n\r\n\r\n\r\nFour')).toBe('One two three\n\nFour');
+  });
+
+  it('keeps <br class> breaks but not words that start with br', () => {
+    expect(plainText('a<br class="x">b <brand>c')).toBe('a\nb c');
+  });
+
+  it('drops an unclosed comment or script to the end, as a browser would', () => {
+    expect(plainText('Hi <!-- never closed <b>x</b>')).toBe('Hi');
+    expect(plainText('Hi <script>alert(1) <b>x</b>')).toBe('Hi');
+    expect(plainText('A<STYLE>p{}</style >B')).toBe('AB');
+  });
+
+  it('cuts very long text by code points, without splitting an emoji', () => {
+    const out = plainText('😀'.repeat(MAX_CHARS + 5)) ?? '';
+    expect(Array.from(out)).toHaveLength(MAX_CHARS + 1);
+    expect(out.endsWith('😀…')).toBe(true);
+    expect(plainText('a'.repeat(MAX_CHARS))).toHaveLength(MAX_CHARS);
+  });
+});
+
+// Review 7 (1): customer reviews and vendor text are untrusted; no input may stall the JS thread.
+describe('plainText on hostile input', () => {
+  const KB100 = 100_000;
+  it.each([
+    ['unclosed tags', '<a'],
+    ['unclosed comments', '<!--'],
+    ['unclosed scripts', '<script'],
+    ['unclosed styles', '<style '],
+    ['unclosed line breaks', '<br'],
+    ['unclosed list items', '<li '],
+    ['entity starts', '&#'],
+    ['long entity names', '&abcdefghijk'],
+  ])('finishes 100 KB of %s in under 50 ms', (_, unit) => {
+    const input = unit.repeat(Math.ceil(KB100 / unit.length));
+    const t0 = performance.now();
+    plainText(input);
+    expect(performance.now() - t0).toBeLessThan(50);
   });
 });

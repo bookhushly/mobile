@@ -9,6 +9,7 @@ import { AmenityList } from '@/features/customer/ui/AmenityList';
 import { DetailRows, type DetailRow } from '@/features/customer/ui/DetailRows';
 import { DetailSection } from '@/features/customer/ui/DetailSection';
 import { FactsGrid } from '@/features/customer/ui/FactsGrid';
+import { spokenNaira } from '@/features/customer/ui/PriceTag';
 import { ReadMoreText } from '@/features/customer/ui/ReadMoreText';
 import { space } from '@/shared/theme';
 import { formatNaira, Text } from '@/shared/ui';
@@ -19,8 +20,11 @@ const at = (word: string, t: string | null) => {
   const c = clockLabel(t);
   return c === null ? '' : `${word} ${c}`;
 };
+// Spec §6: amounts are spoken as words ("80,000 naira per night"), never "₦".
 const priced = (label: string, n: number | null, unit: string): DetailRow | null =>
-  n !== null && n > 0 ? { label, value: unit, amount: n } : null;
+  n !== null && n > 0
+    ? { label, value: unit, amount: n, spoken: `${label}, ${spokenNaira(n)} ${unit}` }
+    : null;
 
 // Spec §3 apartment, D5: key facts, prices (night/week/month, seasonal rules), minimum stay,
 // caution deposit (amount only), amenities, house rules, times, cancellation.
@@ -30,34 +34,44 @@ export function ApartmentBody({ listing, onShowAmenities }: Props) {
   const stay = a.minimum_stay !== null && a.minimum_stay > 1 ? Math.floor(a.minimum_stay) : null;
   const houseRules = plainText(a.house_rules);
   const cancellation = plainText(a.cancellation_policy);
+  const deposit = a.caution_deposit !== null && a.caution_deposit > 0 ? a.caution_deposit : null;
+  const prices = [
+    priced('Per night', a.price_per_night, 'per night'),
+    priced('Per week', a.price_per_week, 'per week'),
+    priced('Per month', a.price_per_month, 'per month'),
+    stay === null ? null : { label: 'Minimum stay', value: nightsLabel(stay) },
+    deposit === null
+      ? null
+      : {
+          label: 'Caution deposit',
+          value: formatNaira(deposit),
+          spoken: `Caution deposit, ${spokenNaira(deposit)}`,
+        },
+  ].filter((r) => r !== null);
   return (
     <>
       <FactsGrid facts={apartmentFacts(a)} testID="facts" />
-      <DetailSection label="Prices" testID="prices">
-        <DetailRows
-          rows={[
-            priced('Per night', a.price_per_night, 'per night'),
-            priced('Per week', a.price_per_week, 'per week'),
-            priced('Per month', a.price_per_month, 'per month'),
-            stay === null ? null : { label: 'Minimum stay', value: nightsLabel(stay) },
-            a.caution_deposit !== null && a.caution_deposit > 0
-              ? { label: 'Caution deposit', value: formatNaira(a.caution_deposit) }
-              : null,
-          ]}
-        />
-        {seasonal.length > 0 ? (
-          <View style={{ gap: space.s2, paddingTop: space.s3 }} testID="pricing-rules">
-            <Text variant="label">Prices vary by date</Text>
-            {seasonal.map((r) => (
-              <Text
-                key={r.id}
-                variant="bodySm"
-                tone="textSecondary"
-              >{`${r.label}: ${formatNaira(r.amount)} per night`}</Text>
-            ))}
-          </View>
-        ) : null}
-      </DetailSection>
+      {prices.length > 0 || seasonal.length > 0 ? (
+        <DetailSection label="Prices" testID="prices">
+          <DetailRows rows={prices} />
+          {seasonal.length > 0 ? (
+            <View style={{ gap: space.s2, paddingTop: space.s3 }} testID="pricing-rules">
+              <Text variant="label">Prices vary by date</Text>
+              {seasonal.map((r) => (
+                <View
+                  key={r.id}
+                  accessible
+                  accessibilityLabel={`${r.label}, ${spokenNaira(r.amount)} per night`}
+                >
+                  <Text variant="bodySm" tone="textSecondary">
+                    {`${r.label}: ${formatNaira(r.amount)} per night`}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </DetailSection>
+      ) : null}
       {a.amenities.length > 0 ? (
         <DetailSection label="Amenities">
           <AmenityList amenities={a.amenities} onShowAll={onShowAmenities} testID="amenities" />

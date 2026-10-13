@@ -1,5 +1,6 @@
 import { View } from 'react-native';
 
+import type { TicketStockWord } from '@/features/customer/domain/listingDetail';
 import { PriceTag } from '@/features/customer/ui/PriceTag';
 import { borderWidth, color, space } from '@/shared/theme';
 import { StatusPill, Text, useDensity } from '@/shared/ui';
@@ -12,7 +13,7 @@ export type TicketTypeModel = {
   /** "Early bird until Fri 16 Oct", or null. */
   earlyBird: string | null;
   /** D12 wording; null while plenty are left or once the event is off sale. */
-  stock: 'Sold out' | 'Few left' | null;
+  stock: TicketStockWord | null;
 };
 
 // Mobbin §5: each ticket type with its price and a stock word (word + colour, never colour alone).

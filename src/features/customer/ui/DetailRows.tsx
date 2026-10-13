@@ -11,6 +11,8 @@ export type DetailRow = {
   onPress?: () => void;
   /** Money shown before the value (the booking total in the Payment row). */
   amount?: number | null;
+  /** What a screen reader says for the row, when the default (label, value) isn't right. */
+  spoken?: string;
 };
 
 type Props = { rows: readonly (DetailRow | null)[]; testID?: string };
@@ -51,9 +53,10 @@ export function DetailRows({ rows, testID }: Props) {
           </View>
         );
         const spoken =
-          typeof r.amount === 'number'
+          r.spoken ??
+          (typeof r.amount === 'number'
             ? `${r.label}, ${formatNaira(r.amount)}, ${r.value}`
-            : `${r.label}, ${r.value}`;
+            : `${r.label}, ${r.value}`);
         if (r.onPress === undefined)
           return (
             <View key={r.label} accessible accessibilityLabel={spoken} style={style}>

@@ -27,9 +27,9 @@ function codePoint(n: number): string | null {
   return valid ? String.fromCodePoint(n) : null;
 }
 
-// One pass, so "&amp;lt;" becomes "&lt;" and never "<".
+// One pass, so "&amp;lt;" becomes "&lt;" and never "<". Bounded entity bodies keep it linear.
 function decode(s: string): string {
-  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, body: string) => {
+  return s.replace(/&(#x[0-9a-f]{1,6}|#\d{1,7}|[a-z]{1,10});/gi, (whole, body: string) => {
     if (body.startsWith('#x') || body.startsWith('#X')) {
       return codePoint(parseInt(body.slice(2), 16)) ?? whole;
     }
@@ -38,23 +38,66 @@ function decode(s: string): string {
   });
 }
 
+/** Longest text cleaned, in code points; anything longer is cut with "…". */
+export const MAX_CHARS = 20_000;
+
+function capped(raw: string): string {
+  // Slicing code units first bounds the work; then cut on a code-point boundary.
+  const points = Array.from(raw.slice(0, MAX_CHARS * 2));
+  return points.length > MAX_CHARS || raw.length > MAX_CHARS * 2
+    ? `${points.slice(0, MAX_CHARS).join('')}…`
+    : raw;
+}
+
+// Comments, scripts and styles are dropped with forward-only scans (never a regex that can
+// rescan the rest of the string from every start): an unclosed one drops the rest, as a browser
+// would. Linear time on any input, so a hostile review or description can't freeze the screen.
+function dropComments(s: string): string {
+  let out = '';
+  let at = 0;
+  for (;;) {
+    const open = s.indexOf('<!--', at);
+    if (open < 0) return out + s.slice(at);
+    out += s.slice(at, open);
+    const close = s.indexOf('-->', open + 4);
+    if (close < 0) return out;
+    at = close + 3;
+  }
+}
+
+function dropScripts(s: string): string {
+  const open = /<(script|style)\b/gi;
+  let out = '';
+  let at = 0;
+  for (;;) {
+    open.lastIndex = at;
+    const m = open.exec(s);
+    if (m === null) return out + s.slice(at);
+    out += s.slice(at, m.index);
+    const close = new RegExp(`</${m[1] ?? ''}\\s*>`, 'gi');
+    close.lastIndex = open.lastIndex;
+    const c = close.exec(s);
+    if (c === null) return out;
+    at = close.lastIndex;
+  }
+}
+
 /** HTML or plain text → plain text with line breaks kept; null when nothing is left. */
 export function plainText(raw: string | null): string | null {
   if (raw === null) return null;
-  const stripped = raw
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<li\b[^>]*>/gi, '\n• ')
+  // `[^<>]*` stops each attempt at the next "<", so a run of unclosed "<a" stays linear.
+  const stripped = dropScripts(dropComments(capped(raw)))
+    .replace(/<br\b[^<>]*>/gi, '\n')
+    .replace(/<li\b[^<>]*>/gi, '\n• ')
     .replace(/<\/li\s*>/gi, '')
     .replace(/<\/(p|div|ul|ol|h[1-6]|tr|blockquote)\s*>/gi, '\n')
     // Only real tags (a letter, / or ! after <): "Rooms < ₦50,000" stays.
-    .replace(/<\/?[a-z!][^>]*>/gi, '');
+    .replace(/<\/?[a-z!][^<>]*>/gi, '');
   // Decoded last: "&lt;b&gt;" is shown as text, never parsed as a tag.
   const text = decode(stripped)
     .replace(/\r\n?/g, '\n')
     .split('\n')
-    .map((line) => line.replace(/[ \t ]+/g, ' ').trim())
+    .map((line) => line.replace(/[ \t\u00a0]+/g, ' ').trim())
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();

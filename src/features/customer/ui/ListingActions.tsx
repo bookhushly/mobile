@@ -1,5 +1,5 @@
 import { Share2 } from 'lucide-react-native';
-import { Share, View } from 'react-native';
+import { Platform, Share, View } from 'react-native';
 
 import type { SavedKind } from '@/features/customer/api/savedDb';
 import type { Saved } from '@/features/customer/hooks/useSaved';
@@ -16,9 +16,14 @@ type Props = {
   saved: Saved;
 };
 
-/** D13: the native share sheet with the title and the web link (Android reads `message`). */
-export function shareListing(title: string, url: string): void {
-  Share.share({ title, message: `${title}\n${url}`, url }).catch(() => undefined);
+/**
+ * D13: the native share sheet with the title and the web link. iOS attaches `url` itself (a URL in
+ * the message too would show twice); Android ignores `url`, so the link goes in the message.
+ */
+export function shareListing(title: string, url: string, os: string = Platform.OS): void {
+  const content =
+    os === 'ios' ? { title, message: title, url } : { title, message: `${title}\n${url}` };
+  Share.share(content).catch(() => undefined);
 }
 
 // Header actions: share and the heart (D9, D13).

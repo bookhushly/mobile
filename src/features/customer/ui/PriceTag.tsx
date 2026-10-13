@@ -7,7 +7,7 @@ import { formatNaira, Text } from '@/shared/ui';
 type Props = { price: CardPrice; testID?: string };
 
 // "45,000 naira": screen readers say the word, not "N 45,000" (spec §6).
-const spokenNaira = (n: number) => `${formatNaira(n).replace('₦', '')} naira`;
+export const spokenNaira = (n: number) => `${formatNaira(n).replace('₦', '')} naira`;
 
 function words(price: NonNullable<CardPrice>): {
   shown: string;
