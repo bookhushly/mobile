@@ -1,4 +1,4 @@
-import type { QueryClient } from '@tanstack/react-query';
+import { focusManager, QueryClient } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import { listingDetailDb } from '@/features/customer/api/listingDetailDb';
@@ -6,12 +6,17 @@ import { fetchListings } from '@/features/customer/api/listingsApi';
 import { fetchReviews } from '@/features/customer/api/reviewsApi';
 import type { Filters } from '@/features/customer/domain/discover';
 import { discoverRetry } from '@/features/customer/hooks/discoverRetry';
-import { CustomerLoadError } from '@/features/customer/hooks/customerKeys';
 import { useListing } from '@/features/customer/hooks/useListing';
-import { useListings, WEEKEND_MAX_PAGES } from '@/features/customer/hooks/useListings';
+import {
+  LISTINGS_STALE_MS,
+  useListings,
+  useListingsRail,
+  WEEKEND_MAX_PAGES,
+} from '@/features/customer/hooks/useListings';
 import { useReviews } from '@/features/customer/hooks/useReviews';
 import type { EventItem, HotelItem } from '@/features/customer/schemas/listings';
 import type { Review } from '@/features/customer/schemas/reviews';
+import { shouldRetryQuery } from '@/shared/api/queryClient';
 import { err, ok } from '@/shared/lib/result';
 
 import { makeQueryClient, NOON, wrapper } from './customerTestUtils';
@@ -276,12 +281,88 @@ describe('useListings', () => {
   });
 });
 
-describe('discoverRetry', () => {
-  it('never retries a 429; other transient errors follow the app policy', () => {
-    expect(discoverRetry(0, new CustomerLoadError({ kind: 'rateLimited' }))).toBe(false);
-    expect(discoverRetry(0, new CustomerLoadError({ kind: 'network' }))).toBe(true);
-    expect(discoverRetry(2, new CustomerLoadError({ kind: 'network' }))).toBe(false);
-    expect(discoverRetry(0, new CustomerLoadError({ kind: 'validation' }))).toBe(false);
+describe('discoverRetry (F1)', () => {
+  it('a failing rail is read once per client call: the query never retries on top', async () => {
+    // The app's own defaults (shouldRetryQuery would retry a network error twice more).
+    const appQc = new QueryClient({
+      defaultOptions: { queries: { retry: shouldRetryQuery, retryDelay: 0, gcTime: Infinity } },
+    });
+    listings.mockResolvedValue(err({ kind: 'network' }));
+    const { result, unmount } = await renderHook(
+      () => useListingsRail('hotels', { q: '' }, NEWEST),
+      { wrapper: wrapper(appQc) },
+    );
+    await waitFor(() => {
+      expect(result.current.failed).toBe(true);
+    });
+    expect(listings).toHaveBeenCalledTimes(1);
+    expect(discoverRetry()).toBe(false);
+    await unmount();
+    appQc.clear();
+  });
+});
+
+describe('useListingsRail (P1)', () => {
+  it('after Results loaded 3 pages, a rail refresh sends one request', async () => {
+    listings.mockImplementation((_c, _cat, p) =>
+      Promise.resolve(
+        ok({
+          items: [hotel(`p${p.page ?? ''}`)],
+          nextPage: Number(p.page) + 1,
+          totalCount: null,
+        }),
+      ),
+    );
+    const where = { q: '', state: 'Lagos' };
+    const results = await renderHook(() => useListings('hotels', where, NEWEST), {
+      wrapper: wrapper(qc),
+    });
+    for (const n of [1, 2, 3]) {
+      await waitFor(() => {
+        expect(results.result.current.items).toHaveLength(n);
+      });
+      if (n < 3)
+        await act(() => {
+          results.result.current.loadMore();
+        });
+    }
+    expect(listings).toHaveBeenCalledTimes(3);
+    const rail = await renderHook(() => useListingsRail('hotels', where, NEWEST), {
+      wrapper: wrapper(qc),
+    });
+    await waitFor(() => {
+      expect(rail.result.current.items.map((i) => i.id)).toEqual(['p0']);
+    });
+    expect(listings).toHaveBeenCalledTimes(4);
+    await act(async () => {
+      await rail.result.current.refetch();
+    });
+    expect(listings).toHaveBeenCalledTimes(5);
+    expect(params(4)?.page).toBe('0');
+    await rail.unmount();
+    await results.unmount();
+  });
+
+  it('is fresh for 5 minutes and coming back to the app never reloads it', async () => {
+    expect(LISTINGS_STALE_MS).toBe(300_000);
+    listings.mockResolvedValue(ok({ items: [hotel('a')], totalCount: null }));
+    const { result, unmount } = await renderHook(
+      () => useListingsRail('hotels', { q: '' }, NEWEST),
+      { wrapper: wrapper(qc) },
+    );
+    await waitFor(() => {
+      expect(result.current.items).toHaveLength(1);
+    });
+    const later = Date.now() + 2 * LISTINGS_STALE_MS;
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(later);
+    await act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    expect(listings).toHaveBeenCalledTimes(1);
+    nowSpy.mockRestore();
+    focusManager.setFocused(undefined);
+    await unmount();
   });
 });
 

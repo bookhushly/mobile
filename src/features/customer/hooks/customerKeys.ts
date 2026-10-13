@@ -28,6 +28,9 @@ export const discoverKeys = {
   all: ['discover'] as const,
   listings: (cat: Category, where: ListingsWhere, filters: Filters) =>
     ['discover', 'listings', cat, where, filters] as const,
+  /** An Explore rail: its first page only, apart from Results' pages (perf review P1). */
+  rail: (cat: Category, where: ListingsWhere, filters: Filters) =>
+    ['discover', 'rail', cat, where, filters] as const,
   listing: (kind: ListingKind, id: string) => ['discover', 'listing', kind, id] as const,
   reviews: (kind: 'hotel' | 'apartment', id: string, pageSize: number) =>
     ['discover', 'reviews', kind, id, pageSize] as const,

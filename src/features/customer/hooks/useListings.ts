@@ -1,4 +1,4 @@
-import { useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, type InfiniteData } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 
 import { fetchListings, type ItemFor } from '@/features/customer/api/listingsApi';
@@ -27,6 +27,12 @@ import { lagosToday } from '@/shared/lib/lagosDay';
  * reads as "No matches" while the 60/min budget is still respected.
  */
 export const WEEKEND_MAX_PAGES = 3;
+
+/**
+ * Perf review P1: public listings change slowly, so a list is fresh for 5 minutes and coming
+ * back to the app doesn't reload it; pull to refresh and "Try again" still do.
+ */
+export const LISTINGS_STALE_MS = 5 * 60_000;
 
 function eventDateOf(item: object): string | null {
   const d: unknown = Reflect.get(item, 'event_date');
@@ -101,6 +107,8 @@ export function useListings<C extends Category>(
     initialPageParam: 0,
     getNextPageParam: (last) => last.nextPage,
     retry: discoverRetry,
+    staleTime: LISTINGS_STALE_MS,
+    refetchOnWindowFocus: false,
     enabled: opts.enabled ?? true,
   });
   const error = apiErrorOf(q.error);
@@ -122,6 +130,42 @@ export function useListings<C extends Category>(
     hasMore: hasNextPage,
     loadingMore: q.isFetchingNextPage,
     loadMore,
+    refetch: q.refetch,
+  };
+}
+
+export type RailListings<T> = Pick<
+  Listings<T>,
+  'items' | 'loading' | 'failed' | 'error' | 'retryAfterSec' | 'refetch'
+>;
+
+/**
+ * An Explore rail (perf review P1): one page under its own key, so a pull to refresh reads one
+ * page per rail, never every page Results has loaded for the same search.
+ */
+export function useListingsRail<C extends Category>(
+  cat: C,
+  where: ListingsWhere,
+  filters: Filters,
+  opts: { enabled?: boolean } = {},
+): RailListings<ItemFor[C]> {
+  const q = useQuery({
+    queryKey: discoverKeys.rail(cat, where, filters),
+    queryFn: ({ signal }) => loadPage(cat, where, filters, 0, signal),
+    retry: discoverRetry,
+    staleTime: LISTINGS_STALE_MS,
+    refetchOnWindowFocus: false,
+    enabled: opts.enabled ?? true,
+  });
+  const error = apiErrorOf(q.error);
+  const retryAfterSec = useRetryAfter(error, q.errorUpdatedAt);
+  const items = useMemo(() => q.data?.items ?? [], [q.data]);
+  return {
+    items,
+    loading: q.isPending && q.fetchStatus === 'fetching',
+    failed: loadFailed(q),
+    error,
+    retryAfterSec,
     refetch: q.refetch,
   };
 }

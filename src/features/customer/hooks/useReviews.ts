@@ -43,6 +43,7 @@ export function useReviews(
     initialPageParam: 1,
     getNextPageParam: (last, all) => (last.hasMore ? all.length + 1 : undefined),
     retry: discoverRetry,
+    refetchOnWindowFocus: false,
     enabled: opts.enabled ?? true,
   });
   const retryAfterSec = useRetryAfter(apiErrorOf(q.error), q.errorUpdatedAt);

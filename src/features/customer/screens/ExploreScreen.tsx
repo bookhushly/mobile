@@ -7,7 +7,7 @@ import { cardOf, type ListingCardModel } from '@/features/customer/domain/listin
 import { todayBanner } from '@/features/customer/domain/todayBanner';
 import type { ListingsWhere } from '@/features/customer/hooks/customerKeys';
 import { useExplorePlace } from '@/features/customer/hooks/useExplorePlace';
-import { useListings } from '@/features/customer/hooks/useListings';
+import { useListingsRail } from '@/features/customer/hooks/useListings';
 import { useMyBookings } from '@/features/customer/hooks/useMyBookings';
 import { useSaved } from '@/features/customer/hooks/useSaved';
 import { useSavedNotices } from '@/features/customer/hooks/useSavedNotices';
@@ -75,9 +75,9 @@ export function ExploreScreen({
   const [refreshing, setRefreshing] = useState(false);
 
   const stays = whereOf(place);
-  const events = useListings('events', ANYWHERE, SOONEST);
-  const hotels = useListings('hotels', stays, NEWEST, { enabled: place !== null });
-  const apartments = useListings('serviced_apartments', stays, NEWEST, {
+  const events = useListingsRail('events', ANYWHERE, SOONEST);
+  const hotels = useListingsRail('hotels', stays, NEWEST, { enabled: place !== null });
+  const apartments = useListingsRail('serviced_apartments', stays, NEWEST, {
     enabled: place !== null,
   });
 

@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react';
 
 import { CustomerLoadError } from '@/features/customer/hooks/customerKeys';
-import { shouldRetryQuery } from '@/shared/api/queryClient';
 import type { ApiError } from '@/shared/lib/errors';
 
 /** When a 429 carries no Retry-After, "Load more" comes back after this long. */
 export const DEFAULT_RETRY_AFTER_SEC = 10;
 
-// D16: a 429 is never retried on its own (the per-IP budget is shared by everyone on the
-// network); the screen offers "Load more" / "Try again" once Retry-After has passed.
-export function discoverRetry(failureCount: number, error: unknown): boolean {
-  if (error instanceof CustomerLoadError && error.kind === 'rateLimited') return false;
-  return shouldRetryQuery(failureCount, error);
+// Final review F1: listings and reviews go through the API client, which already retries a GET
+// (bounded, with jitter); a query-level retry on top multiplied every failure (3 × 3 requests
+// against a 60/min per-IP budget). D16: a 429 is never retried on its own either; the screen
+// offers "Load more" / "Try again" once Retry-After has passed.
+export function discoverRetry(): boolean {
+  return false;
 }
 
 export function apiErrorOf(error: unknown): ApiError | null {

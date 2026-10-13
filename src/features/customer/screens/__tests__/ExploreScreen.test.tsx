@@ -6,7 +6,7 @@ import type { SavedInput } from '@/features/customer/api/savedDb';
 import type { Category, Place } from '@/features/customer/domain/discover';
 import { fromEvent, fromHotel, splitBookings } from '@/features/customer/domain/myBookings';
 import { useExplorePlace } from '@/features/customer/hooks/useExplorePlace';
-import { useListings, type Listings } from '@/features/customer/hooks/useListings';
+import { useListingsRail, type RailListings } from '@/features/customer/hooks/useListings';
 import { useMyBookings } from '@/features/customer/hooks/useMyBookings';
 import { useSaved, type Saved } from '@/features/customer/hooks/useSaved';
 import { NOTICE_MS, NOTICE_READER_MS } from '@/features/customer/hooks/useSavedNotices';
@@ -19,7 +19,7 @@ import { ev, ho, TODAY } from '../../hooks/__tests__/customerTestUtils';
 jest.mock('@/features/customer/hooks/useMyBookings', () => ({ useMyBookings: jest.fn() }));
 jest.mock('@/features/customer/hooks/useSaved', () => ({ useSaved: jest.fn() }));
 jest.mock('@/features/customer/hooks/useExplorePlace', () => ({ useExplorePlace: jest.fn() }));
-jest.mock('@/features/customer/hooks/useListings', () => ({ useListings: jest.fn() }));
+jest.mock('@/features/customer/hooks/useListings', () => ({ useListingsRail: jest.fn() }));
 let mockFocused = true;
 jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused }));
 jest.mock('@/shared/api/instance', () => ({ clock: { serverNow: () => mockNow } }));
@@ -28,7 +28,7 @@ const mockNow = Date.parse('2026-10-13T11:00:00Z');
 const mockMy = jest.mocked(useMyBookings);
 const mockSaved = jest.mocked(useSaved);
 const mockPlace = jest.mocked(useExplorePlace);
-const mockListings = jest.mocked(useListings);
+const mockListings = jest.mocked(useListingsRail);
 
 const LAGOS: Place = { label: 'Lagos', state: 'Lagos' };
 
@@ -75,18 +75,14 @@ const EVENT: EventItem = {
   category_data: null,
 };
 
-type AnyListings = Listings<HotelItem | ApartmentItem | EventItem>;
+type AnyListings = RailListings<HotelItem | ApartmentItem | EventItem>;
 function listings(items: AnyListings['items'], over: Partial<AnyListings> = {}): AnyListings {
   return {
     items,
-    totalCount: null,
     loading: false,
     failed: false,
     error: null,
     retryAfterSec: null,
-    hasMore: false,
-    loadingMore: false,
-    loadMore: jest.fn(),
     refetch: jest.fn(() => Promise.resolve()),
     ...over,
   };
