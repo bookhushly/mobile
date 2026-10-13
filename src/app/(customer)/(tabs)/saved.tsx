@@ -1,15 +1,25 @@
-import { Heart } from 'lucide-react-native';
+import { router } from 'expo-router';
 
-import { NoticeScreen } from '@/features/customer/screens/NoticeScreen';
+import { useAuth } from '@/features/auth/hooks/useAuth';
+import { useSignOut } from '@/features/auth/hooks/useSignOut';
+import { SavedScreen } from '@/features/customer/screens/SavedScreen';
 
-// Placeholder until the Saved screen lands (Phase 4b Task 8).
 export default function SavedRoute() {
+  const state = useAuth((s) => s.state);
+  const signOut = useSignOut();
+  const userId = state.status === 'signedIn' ? state.userId : '';
   return (
-    <NoticeScreen
-      title="Saved"
-      icon={Heart}
-      heading="Nothing saved yet"
-      message="Tap the heart on anything you like to find it here."
+    <SavedScreen
+      userId={userId}
+      onOpenListing={(kind, id) => {
+        router.push({ pathname: '/listing/[kind]/[id]', params: { kind, id } });
+      }}
+      onBrowse={() => {
+        router.navigate('/explore');
+      }}
+      onSignInAgain={() => {
+        signOut();
+      }}
     />
   );
 }
