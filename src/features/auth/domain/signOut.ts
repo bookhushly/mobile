@@ -12,6 +12,11 @@ export async function performSignOut(deps: Deps): Promise<void> {
   } catch {
     failed = true;
   }
-  if (failed) await deps.removeLocal();
-  deps.onSignedOut();
+  try {
+    if (failed) await deps.removeLocal();
+  } catch {
+    // Storage that can't be cleared must not keep the user signed in (or skip the wipes).
+  } finally {
+    deps.onSignedOut();
+  }
 }

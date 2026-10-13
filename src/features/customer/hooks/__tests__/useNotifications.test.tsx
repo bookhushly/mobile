@@ -118,18 +118,18 @@ it('opening an unread one marks it read at once; a read one writes nothing', asy
   await done();
 });
 
-it('mark all read: zero rows → refresh → retry → stale → rolled back', async () => {
+it('marking one read: zero rows → refresh → retry → stale → rolled back', async () => {
   const first = deferred();
-  db.markAllRead.mockReturnValueOnce(first.promise).mockResolvedValueOnce(ok(0));
+  db.markRead.mockReturnValueOnce(first.promise).mockResolvedValueOnce(ok(0));
   const { result, done } = await run();
 
   // The refetch after the write fails: only the rollback can put the rows back.
   db.notifications.mockResolvedValue(err({ kind: 'network' }));
   await act(() => {
-    result.current.markAllRead();
+    result.current.open(ROWS[0] ?? note('x'));
   });
   // Optimistic.
-  expect(result.current.unread).toBe(0);
+  expect(result.current.unread).toBe(1);
 
   await act(async () => {
     first.resolve(ok(0));
@@ -138,7 +138,7 @@ it('mark all read: zero rows → refresh → retry → stale → rolled back', a
   await waitFor(() => {
     expect(result.current.writeError).toBe('stale');
   });
-  expect(db.markAllRead).toHaveBeenCalledTimes(2);
+  expect(db.markRead).toHaveBeenCalledTimes(2);
   expect(refresh).toHaveBeenCalledTimes(1);
   expect(readMap(result.current.items)).toEqual({ a: false, bb: true, ccc: false });
   expect(result.current.unread).toBe(2);
@@ -151,37 +151,109 @@ it('mark all read: zero rows → refresh → retry → stale → rolled back', a
 });
 
 it('a failed session refresh is stale without a retry', async () => {
-  db.markAllRead.mockResolvedValue(ok(0));
+  db.markRead.mockResolvedValue(ok(0));
   refresh.mockRejectedValue(new Error('offline'));
   const { result, done } = await run();
+  db.notifications.mockResolvedValue(err({ kind: 'network' }));
   await act(() => {
-    result.current.markAllRead();
+    result.current.open(ROWS[2] ?? note('x'));
   });
   await waitFor(() => {
     expect(result.current.writeError).toBe('stale');
   });
-  expect(db.markAllRead).toHaveBeenCalledTimes(1);
+  expect(db.markRead).toHaveBeenCalledTimes(1);
   expect(result.current.unread).toBe(2);
   await done();
 });
 
-it('undo after mark all read marks the same ones unread', async () => {
+it('mark all read touching 0 rows (read on another device) is fine, not stale', async () => {
+  db.markAllRead.mockResolvedValue(ok(0));
   const { result, done } = await run();
+  db.notifications.mockResolvedValue(ok(ROWS.map((n) => ({ ...n, read: true }))));
+  await act(() => {
+    result.current.markAllRead();
+  });
+  expect(result.current.unread).toBe(0);
+  await waitFor(() => {
+    expect(db.notifications).toHaveBeenCalledTimes(2);
+  });
+  expect(refresh).not.toHaveBeenCalled();
+  expect(db.markAllRead).toHaveBeenCalledTimes(1);
+  expect(result.current.writeError).toBeNull();
+  expect(result.current.unread).toBe(0);
+  await done();
+});
+
+it('a transient mark-all failure rolls back', async () => {
+  db.markAllRead.mockResolvedValue(err({ kind: 'timeout' }));
+  const { result, done } = await run();
+  db.notifications.mockResolvedValue(err({ kind: 'network' }));
   await act(() => {
     result.current.markAllRead();
   });
   await waitFor(() => {
-    expect(db.markAllRead).toHaveBeenCalledTimes(1);
+    expect(result.current.writeError).toBe('transient');
+  });
+  expect(result.current.unread).toBe(2);
+  await done();
+});
+
+it('undo waits for the mark-all write, then marks the same ones unread', async () => {
+  const d = deferred();
+  db.markAllRead.mockReturnValueOnce(d.promise);
+  const { result, done } = await run();
+  await act(() => {
+    result.current.markAllRead();
   });
   await act(() => {
     result.current.undoMarkAll();
   });
-  expect(db.markUnread).toHaveBeenCalledWith(USER, ['a', 'ccc']);
+  // Still in flight: unread-marking now could commit first and leave the server all read.
+  expect(db.markUnread).not.toHaveBeenCalled();
+  await act(async () => {
+    d.resolve(ok(2));
+    await d.promise;
+  });
+  await waitFor(() => {
+    expect(db.markUnread).toHaveBeenCalledWith(USER, ['a', 'ccc']);
+  });
   // A second undo has nothing to put back.
   await act(() => {
     result.current.undoMarkAll();
   });
   expect(db.markUnread).toHaveBeenCalledTimes(1);
+  await done();
+});
+
+it('undo after a failed mark-all writes nothing', async () => {
+  db.markAllRead.mockResolvedValue(err({ kind: 'network' }));
+  const { result, done } = await run();
+  await act(() => {
+    result.current.markAllRead();
+  });
+  await act(() => {
+    result.current.undoMarkAll();
+  });
+  await waitFor(() => {
+    expect(result.current.writeError).toBe('transient');
+  });
+  expect(db.markUnread).not.toHaveBeenCalled();
+  await done();
+});
+
+it('deleting one already deleted elsewhere (0 rows) is done', async () => {
+  db.remove.mockResolvedValue(ok(0));
+  const { result, done } = await run();
+  db.notifications.mockResolvedValue(ok(ROWS.filter((n) => n.id !== 'bb')));
+  await act(() => {
+    result.current.remove('bb');
+  });
+  await waitFor(() => {
+    expect(db.notifications).toHaveBeenCalledTimes(2);
+  });
+  expect(refresh).not.toHaveBeenCalled();
+  expect(result.current.writeError).toBeNull();
+  expect(result.current.items.map((n) => n.id)).toEqual(['a', 'ccc']);
   await done();
 });
 
@@ -245,6 +317,14 @@ describe('polling', () => {
       await jest.advanceTimersByTimeAsync(NOTIFICATIONS_POLL_MS * 3);
     });
     expect(db.notifications).toHaveBeenCalledTimes(2);
+
+    // Regaining focus with stale data refetches at once.
+    mockFocused = true;
+    await rerender();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(db.notifications).toHaveBeenCalledTimes(3);
     await done();
   });
 });

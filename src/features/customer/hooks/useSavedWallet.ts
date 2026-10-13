@@ -1,7 +1,43 @@
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 
 import { customerKeys } from '@/features/customer/hooks/customerKeys';
 import { wallet, type Wallet } from '@/features/customer/offline/wallet';
+import { clock } from '@/shared/api/instance';
+import { lagosToday, type IsoDate } from '@/shared/lib/lagosDay';
+
+type Loaded = {
+  data: unknown;
+  isError: boolean;
+  fetchStatus: 'fetching' | 'paused' | 'idle';
+  dataUpdatedAt: number;
+  errorUpdatedAt: number;
+};
+
+/**
+ * Nothing to show from the network: the load failed, or it is paused because the device is
+ * offline (TanStack's default networkMode never even starts the fetch then) — C9/C17.
+ */
+export function loadFailed(q: Loaded): boolean {
+  return q.data === undefined && (q.isError || q.fetchStatus === 'paused');
+}
+
+// Changes on every fetch (fetchStatus flips), even one that settles within the same millisecond.
+export function fetchStamp(q: Loaded): string {
+  return `${String(q.dataUpdatedAt)}|${String(q.errorUpdatedAt)}|${q.fetchStatus}`;
+}
+
+// Lagos today, re-read whenever `stamp` changes (a fetch settles: focus, foreground, pull). Held
+// in state rather than read in render: the React Compiler may cache an input-less render read.
+export function useTodayAt(stamp: string): IsoDate {
+  const [held, setHeld] = useState(() => ({ stamp, today: lagosToday(clock.serverNow()) }));
+  if (held.stamp !== stamp) {
+    const next = { stamp, today: lagosToday(clock.serverNow()) };
+    setHeld(next);
+    return next.today;
+  }
+  return held.today;
+}
 
 /**
  * The offline wallet as saved on disk, read only while `enabled` (a network load has failed).
@@ -16,6 +52,8 @@ export function useSavedWallet(
     // A wallet that can't be read (corrupt blob, Keychain error) is the same as no wallet.
     queryFn: () => wallet.load(userId).catch(() => null),
     enabled,
+    // It reads the disk: offline is exactly when it must run.
+    networkMode: 'always',
     // Re-read from disk each time it is needed again: a newer save may have landed.
     staleTime: 0,
     retry: false,

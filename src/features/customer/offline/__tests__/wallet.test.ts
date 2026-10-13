@@ -152,6 +152,61 @@ it('wipe removes the wallet', async () => {
   expect(await w.load('u1')).toBeNull();
 });
 
+describe('save and wipe run one at a time', () => {
+  // Writes land only when released, like a slow encrypted write.
+  function slowStore() {
+    const s = store();
+    const pending: (() => void)[] = [];
+    const setItem = jest.fn(
+      (k: string, v: string) =>
+        new Promise<void>((resolve) => {
+          pending.push(() => {
+            s.m.set(k, v);
+            resolve();
+          });
+        }),
+    );
+    const settle = async (release: boolean) => {
+      for (let i = 0; i < 20; i++) {
+        await Promise.resolve();
+        if (release) for (const r of pending.splice(0)) r();
+      }
+    };
+    return { store: { ...s, setItem }, setItem, pending, settle };
+  }
+
+  it('a save called before a wipe is dropped', async () => {
+    const slow = slowStore();
+    const w = createWallet({ store: slow.store });
+    const saved = w.save('u1', [ticketed], NOW);
+    const wiped = w.wipe();
+    await slow.settle(true);
+    await Promise.all([saved, wiped]);
+    expect(slow.setItem).not.toHaveBeenCalled();
+    expect(await w.load('u1')).toBeNull();
+  });
+
+  it('a write already under way finishes before the wipe removes it', async () => {
+    const slow = slowStore();
+    const w = createWallet({ store: slow.store });
+    const first = w.save('u1', [ticketed], NOW);
+    await slow.settle(false);
+    expect(slow.pending).toHaveLength(1);
+    const second = w.save('u1', [stay], NOW);
+    const wiped = w.wipe();
+    await slow.settle(true);
+    await Promise.all([first, second, wiped]);
+    expect(slow.setItem).toHaveBeenCalledTimes(1);
+    expect(await w.load('u1')).toBeNull();
+
+    // A save after the wipe works as usual.
+    const third = w.save('u1', [stay], NOW);
+    await slow.settle(true);
+    await third;
+    expect(await w.load('u1')).not.toBeNull();
+  });
+});
+
 it('the default wallet is encrypted and registered to be wiped on every sign-out', async () => {
   await wallet.save('u1', [ticketed], NOW);
   expect(await wallet.load('u1')).not.toBeNull();

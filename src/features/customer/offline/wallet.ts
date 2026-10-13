@@ -84,9 +84,19 @@ function parseJson(raw: string): unknown {
 }
 
 export function createWallet(deps: { store: Store }) {
+  // Saves and wipes run one at a time, in call order: a slow save can never land after a wipe.
+  // `generation` moves on every wipe, so a save called before it (still queued) is dropped.
+  let queue: Promise<void> = Promise.resolve();
+  let generation = 0;
+  const enqueue = (op: () => Promise<void>): Promise<void> => {
+    const run = queue.then(op);
+    queue = run.catch(() => undefined);
+    return run;
+  };
   return {
     // Today and upcoming only (re-checked against `now`: `when` may be stale), soonest first.
-    async save(userId: string, entries: WalletEntry[], now: number): Promise<void> {
+    save(userId: string, entries: WalletEntry[], now: number): Promise<void> {
+      const calledAt = generation;
       const today = lagosToday(now);
       const kept: WalletEntry[] = [];
       for (const e of entries) {
@@ -102,7 +112,10 @@ export function createWallet(deps: { store: Store }) {
       }
       kept.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
       const w: Wallet = { userId, savedAt: now, entries: kept.slice(0, WALLET_MAX) };
-      await deps.store.setItem(WALLET_KEY, JSON.stringify(w));
+      return enqueue(async () => {
+        if (calledAt !== generation) return;
+        await deps.store.setItem(WALLET_KEY, JSON.stringify(w));
+      });
     },
     async load(userId: string): Promise<Wallet | null> {
       const raw = await deps.store.getItem(WALLET_KEY);
@@ -110,8 +123,9 @@ export function createWallet(deps: { store: Store }) {
       const p = walletSchema.safeParse(parseJson(raw));
       return p.success && p.data.userId === userId ? p.data : null;
     },
-    async wipe(): Promise<void> {
-      await deps.store.removeItem(WALLET_KEY);
+    wipe(): Promise<void> {
+      generation += 1;
+      return enqueue(() => deps.store.removeItem(WALLET_KEY));
     },
   };
 }

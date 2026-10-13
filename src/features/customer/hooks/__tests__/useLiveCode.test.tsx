@@ -72,13 +72,13 @@ it('fetches, then refreshes 2 s before expiry on the server clock', async () => 
   const { result, unmount } = await run();
   expect(fetchCode).toHaveBeenCalledTimes(1);
   expect(fetchCode).toHaveBeenCalledWith({}, 't1');
-  expect(result.current).toMatchObject({ kind: 'live', token: 'A' });
+  expect(result.current.state).toMatchObject({ kind: 'live', token: 'A' });
 
   await advance(27_999);
   expect(fetchCode).toHaveBeenCalledTimes(1);
   await advance(1);
   expect(fetchCode).toHaveBeenCalledTimes(2);
-  expect(result.current).toMatchObject({ kind: 'live', token: 'B' });
+  expect(result.current.state).toMatchObject({ kind: 'live', token: 'B' });
   await unmount();
 });
 
@@ -87,7 +87,7 @@ it('stops polling once the ticket is admitted', async () => {
     fail({ kind: 'conflict', code: 'conflict', body: { checked_in_at: '2026-10-13T18:42:00Z' } }),
   );
   const { result, unmount } = await run();
-  expect(result.current).toEqual({ kind: 'admitted', at: '2026-10-13T18:42:00Z' });
+  expect(result.current.state).toEqual({ kind: 'admitted', at: '2026-10-13T18:42:00Z' });
   await advance(120_000);
   expect(fetchCode).toHaveBeenCalledTimes(1);
   await unmount();
@@ -101,31 +101,31 @@ it('keeps the last token through a 429 until the server would refuse it', async 
   const { result, unmount } = await run();
   await advance(28_000);
   expect(fetchCode).toHaveBeenCalledTimes(2);
-  expect(result.current).toMatchObject({ kind: 'rateLimited', last: { token: 'A' } });
+  expect(result.current.state).toMatchObject({ kind: 'rateLimited', last: { token: 'A' } });
 
   // Token A expires at 30 s; the server accepts it for one more step (until 60 s).
   await advance(31_999);
-  expect(result.current).toMatchObject({ kind: 'rateLimited', last: { token: 'A' } });
+  expect(result.current.state).toMatchObject({ kind: 'rateLimited', last: { token: 'A' } });
   await advance(1);
-  expect(result.current).toEqual({ kind: 'fallback' });
+  expect(result.current.state).toEqual({ kind: 'fallback' });
 
   // Retry-After 60 s from the 429 at 28 s.
   await advance(27_999);
   expect(fetchCode).toHaveBeenCalledTimes(2);
   await advance(1);
   expect(fetchCode).toHaveBeenCalledTimes(3);
-  expect(result.current).toMatchObject({ kind: 'live', token: 'C' });
+  expect(result.current.state).toMatchObject({ kind: 'live', token: 'C' });
   await unmount();
 });
 
 it('a 429 with no token yet waits 15 s by default and shows the fallback', async () => {
   fetchCode.mockResolvedValueOnce(fail({ kind: 'rateLimited' })).mockImplementationOnce(live('A'));
   const { result, unmount } = await run();
-  expect(result.current).toEqual({ kind: 'fallback' });
+  expect(result.current.state).toEqual({ kind: 'fallback' });
   await advance(14_999);
   expect(fetchCode).toHaveBeenCalledTimes(1);
   await advance(1);
-  expect(result.current).toMatchObject({ kind: 'live', token: 'A' });
+  expect(result.current.state).toMatchObject({ kind: 'live', token: 'A' });
   await unmount();
 });
 
@@ -135,14 +135,14 @@ it('after a transient failure, retries every 15 s', async () => {
     .mockResolvedValueOnce(fail({ kind: 'unavailable', status: 503 }))
     .mockImplementationOnce(live('A'));
   const { result, unmount } = await run();
-  expect(result.current).toEqual({ kind: 'fallback' });
+  expect(result.current.state).toEqual({ kind: 'fallback' });
   await advance(REFRESH_AFTER_ERROR_MS - 1);
   expect(fetchCode).toHaveBeenCalledTimes(1);
   await advance(1);
   expect(fetchCode).toHaveBeenCalledTimes(2);
   await advance(REFRESH_AFTER_ERROR_MS);
   expect(fetchCode).toHaveBeenCalledTimes(3);
-  expect(result.current).toMatchObject({ kind: 'live', token: 'A' });
+  expect(result.current.state).toMatchObject({ kind: 'live', token: 'A' });
   await unmount();
 });
 
@@ -151,8 +151,8 @@ it('never polls while inactive or without a ticket', async () => {
   const b = await run(null, true);
   await advance(60_000);
   expect(fetchCode).not.toHaveBeenCalled();
-  expect(a.result.current).toEqual({ kind: 'loading' });
-  expect(b.result.current).toEqual({ kind: 'loading' });
+  expect(a.result.current.state).toEqual({ kind: 'loading' });
+  expect(b.result.current.state).toEqual({ kind: 'loading' });
   await a.unmount();
   await b.unmount();
 });
@@ -211,15 +211,101 @@ it('a new ticket starts from loading, not the previous ticket’s code', async (
     .mockImplementationOnce(live('A'))
     .mockReturnValueOnce(new Promise((r) => (resolveSecond = r)));
   const hook = await run();
-  expect(hook.result.current).toMatchObject({ token: 'A' });
+  expect(hook.result.current.state).toMatchObject({ token: 'A' });
   await hook.rerender({ id: 't2', on: true });
   await advance(0);
-  expect(hook.result.current).toEqual({ kind: 'loading' });
+  expect(hook.result.current.state).toEqual({ kind: 'loading' });
   expect(fetchCode).toHaveBeenLastCalledWith({}, 't2');
   await act(async () => {
     resolveSecond(code('B'));
     await Promise.resolve();
   });
-  expect(hook.result.current).toMatchObject({ kind: 'live', token: 'B' });
+  expect(hook.result.current.state).toMatchObject({ kind: 'live', token: 'B' });
+  await hook.unmount();
+});
+
+it('a transient failure keeps the last token while it is usable, then falls back', async () => {
+  fetchCode
+    .mockImplementationOnce(live('A'))
+    .mockResolvedValueOnce(fail({ kind: 'network' }))
+    .mockResolvedValueOnce(fail({ kind: 'timeout' }))
+    .mockResolvedValueOnce(fail({ kind: 'network' }));
+  const { result, unmount } = await run();
+  // Refresh at 28 s fails: A (expires at 30 s, usable until 60 s) stays on screen.
+  await advance(28_000);
+  expect(fetchCode).toHaveBeenCalledTimes(2);
+  expect(result.current.state).toMatchObject({ kind: 'live', token: 'A' });
+  // Retry at 43 s fails too; still A.
+  await advance(15_000);
+  expect(fetchCode).toHaveBeenCalledTimes(3);
+  expect(result.current.state).toMatchObject({ kind: 'live', token: 'A' });
+  await advance(16_999);
+  expect(result.current.state).toMatchObject({ kind: 'live', token: 'A' });
+  await advance(1);
+  expect(result.current.state).toEqual({ kind: 'fallback' });
+  await unmount();
+});
+
+it('retry fetches at once, but waits out a pending Retry-After', async () => {
+  fetchCode
+    .mockResolvedValueOnce(fail({ kind: 'network' }))
+    .mockImplementationOnce(live('A'))
+    .mockResolvedValueOnce(fail({ kind: 'rateLimited', retryAfterSec: 40 }))
+    .mockImplementationOnce(live('B'));
+  const { result, unmount } = await run();
+  expect(result.current.state).toEqual({ kind: 'fallback' });
+  // "Try again" doesn't wait for the 15 s back-off.
+  await act(() => {
+    result.current.retry();
+  });
+  await advance(0);
+  expect(fetchCode).toHaveBeenCalledTimes(2);
+  expect(result.current.state).toMatchObject({ kind: 'live', token: 'A' });
+
+  await advance(28_000);
+  expect(fetchCode).toHaveBeenCalledTimes(3);
+  expect(result.current.state).toMatchObject({ kind: 'rateLimited' });
+  await act(() => {
+    result.current.retry();
+  });
+  await advance(39_999);
+  expect(fetchCode).toHaveBeenCalledTimes(3);
+  await advance(1);
+  expect(fetchCode).toHaveBeenCalledTimes(4);
+  await unmount();
+});
+
+it('coming back on screen during a 429 waits out Retry-After', async () => {
+  fetchCode
+    .mockResolvedValueOnce(fail({ kind: 'rateLimited', retryAfterSec: 30 }))
+    .mockImplementationOnce(live('A'));
+  const hook = await run();
+  expect(fetchCode).toHaveBeenCalledTimes(1);
+  await hook.rerender({ id: 't1', on: false });
+  await advance(10_000);
+  await hook.rerender({ id: 't1', on: true });
+  await advance(19_999);
+  expect(fetchCode).toHaveBeenCalledTimes(1);
+  await advance(1);
+  expect(fetchCode).toHaveBeenCalledTimes(2);
+  expect(hook.result.current.state).toMatchObject({ kind: 'live', token: 'A' });
+  await hook.unmount();
+});
+
+it('keeps a code that arrives after the card went off screen', async () => {
+  let resolveFirst: (v: ReturnType<typeof code>) => void = () => undefined;
+  fetchCode.mockReturnValueOnce(new Promise((r) => (resolveFirst = r)));
+  const hook = await run();
+  await hook.rerender({ id: 't1', on: false });
+  await act(async () => {
+    resolveFirst(code('A'));
+    await Promise.resolve();
+  });
+  await advance(5_000);
+  // Back on screen: the code that landed off screen shows, with no new fetch.
+  await hook.rerender({ id: 't1', on: true });
+  await advance(0);
+  expect(fetchCode).toHaveBeenCalledTimes(1);
+  expect(hook.result.current.state).toMatchObject({ kind: 'live', token: 'A' });
   await hook.unmount();
 });

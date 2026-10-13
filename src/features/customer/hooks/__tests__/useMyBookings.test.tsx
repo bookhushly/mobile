@@ -1,3 +1,4 @@
+import { onlineManager } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import { customerDb } from '@/features/customer/api/customerDb';
@@ -10,7 +11,19 @@ import { ap, ev, ho, makeQueryClient, NOON, TODAY, USER, wrapper } from './custo
 
 let mockNow = 0;
 jest.mock('@/shared/api/instance', () => ({ api: {}, clock: { serverNow: () => mockNow } }));
-jest.mock('expo-router', () => ({ useIsFocused: () => true }));
+let mockFocused = true;
+let mockSessionUser: string | null = 'u1';
+jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused }));
+jest.mock('@/shared/supabase/client', () => ({
+  supabase: {
+    auth: {
+      getSession: () =>
+        Promise.resolve({
+          data: { session: mockSessionUser === null ? null : { user: { id: mockSessionUser } } },
+        }),
+    },
+  },
+}));
 jest.mock('@/features/customer/offline/wallet', () => ({
   wallet: { save: jest.fn(), load: jest.fn() },
 }));
@@ -62,6 +75,8 @@ function entry(p: Partial<WalletEntry>): WalletEntry {
 beforeEach(() => {
   jest.clearAllMocks();
   mockNow = NOON;
+  mockFocused = true;
+  mockSessionUser = USER;
   save = jest.spyOn(wallet, 'save').mockResolvedValue(undefined);
   load = jest.spyOn(wallet, 'load').mockResolvedValue(null);
   db = {
@@ -98,7 +113,9 @@ it('loads the three lists, splits them for Lagos today and saves the wallet', as
   expect(result.current.bookings?.upcoming.map((b) => b.id)).toEqual(['e1']);
   expect(result.current.bookings?.past.map((b) => b.id)).toEqual(['a1']);
 
-  expect(save).toHaveBeenCalledTimes(1);
+  await waitFor(() => {
+    expect(save).toHaveBeenCalledTimes(1);
+  });
   const [user, entries, now] = save.mock.calls[0] ?? [];
   expect(user).toBe(USER);
   expect(now).toBe(NOON);
@@ -113,6 +130,9 @@ it('keeps tickets and check-in codes out of the wallet unless they may be shown'
   db.events.mockResolvedValue(ok([ev({ payment_status: 'pending', status: 'pending' })]));
   db.hotels.mockResolvedValue(ok([ho({ payment_status: 'pending' })]));
   const { done } = await run();
+  await waitFor(() => {
+    expect(save).toHaveBeenCalled();
+  });
   const entries = save.mock.calls[0]?.[1] ?? [];
   const event = entries.find((e) => e.id === 'e1');
   expect(event).toBeDefined();
@@ -137,6 +157,66 @@ it('re-dates the lists when a later fetch settles on a new Lagos day', async () 
     expect(hook.result.current.bookings?.today).toEqual([]);
   });
   expect(hook.result.current.bookings?.past.map((b) => b.id)).toContain('h1');
+  await hook.unmount();
+  qc.clear();
+});
+
+it('never saves the wallet once another account (or none) is signed in', async () => {
+  mockSessionUser = null;
+  const { result, done } = await run();
+  expect(result.current.bookings?.today).toHaveLength(1);
+  await act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+  expect(save).not.toHaveBeenCalled();
+  await done();
+});
+
+it('shows the wallet when the device is offline (the fetch is paused, never failed)', async () => {
+  load.mockResolvedValue({
+    userId: USER,
+    savedAt: NOON,
+    entries: [entry({ id: 'h2', start: '2026-10-18', end: '2026-10-19' })],
+  });
+  onlineManager.setOnline(false);
+  try {
+    const { result, done } = await run();
+    expect(db.events).not.toHaveBeenCalled();
+    expect(result.current.saved).toEqual({ savedAt: NOON });
+    expect(result.current.bookings?.upcoming.map((b) => b.id)).toEqual(['h2']);
+    expect(result.current.error).toBe(false);
+    await done();
+  } finally {
+    onlineManager.setOnline(true);
+  }
+});
+
+it('a failed refetch keeps the fresh lists on screen, not the wallet', async () => {
+  const { result, done } = await run();
+  db.events.mockResolvedValue(NETWORK);
+  await act(async () => {
+    await result.current.refetch();
+  });
+  expect(result.current.rows?.events).toHaveLength(1);
+  expect(result.current.saved).toBeNull();
+  expect(result.current.error).toBe(false);
+  expect(load).not.toHaveBeenCalled();
+  await done();
+});
+
+it('refetches stale data when the screen regains focus', async () => {
+  const qc = makeQueryClient();
+  const hook = await renderHook(() => useMyBookings(USER), { wrapper: wrapper(qc) });
+  await waitFor(() => {
+    expect(hook.result.current.loading).toBe(false);
+  });
+  expect(db.events).toHaveBeenCalledTimes(1);
+  mockFocused = false;
+  await hook.rerender(undefined);
+  expect(db.events).toHaveBeenCalledTimes(1);
+  mockFocused = true;
+  await hook.rerender(undefined);
+  await waitFor(() => {
+    expect(db.events).toHaveBeenCalledTimes(2);
+  });
   await hook.unmount();
   qc.clear();
 });
@@ -232,6 +312,50 @@ describe('useBooking', () => {
     expect(result.current.row).toBeUndefined();
     expect(result.current.error).toBe(false);
     await done();
+  });
+
+  it('offline, opens the saved entry', async () => {
+    load.mockResolvedValue({
+      userId: USER,
+      savedAt: NOON,
+      entries: [entry({ kind: 'event', id: 'e1', start: '2026-10-20', end: '2026-10-20' })],
+    });
+    onlineManager.setOnline(false);
+    try {
+      const { result, done } = await runOne('event', 'e1');
+      await waitFor(() => {
+        expect(result.current.fromWallet?.id).toBe('e1');
+      });
+      expect(db.event).not.toHaveBeenCalled();
+      await done();
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('does not vouch for a saved entry that has ended since', async () => {
+    db.hotel.mockResolvedValue(NETWORK);
+    load.mockResolvedValue({
+      userId: USER,
+      savedAt: NOON,
+      entries: [
+        entry({ id: 'h1', start: '2026-10-10', end: '2026-10-12', when: 'today' }),
+        entry({ id: 'h2', start: TODAY, end: '2026-10-15', when: 'upcoming' }),
+      ],
+    });
+    const ended = await runOne('hotel', 'h1');
+    await waitFor(() => {
+      expect(ended.result.current.error).toBe(true);
+    });
+    expect(ended.result.current.fromWallet).toBeNull();
+    await ended.done();
+
+    const today = await runOne('hotel', 'h2');
+    await waitFor(() => {
+      expect(today.result.current.fromWallet).not.toBeNull();
+    });
+    expect(today.result.current.fromWallet?.when).toBe('today');
+    await today.done();
   });
 
   it('is an error when the read fails and the wallet lacks it', async () => {

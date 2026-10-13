@@ -53,7 +53,8 @@ export function useNotifications(userId: string): {
   });
   useFocusRefetch(isFocused, q);
   const [writeError, setWriteError] = useState<WriteError | null>(null);
-  const lastMarkedAll = useRef<string[]>([]);
+  // What the last "Mark all as read" changed, and its write (Undo waits for it).
+  const lastMarkedAll = useRef<{ ids: string[]; done: Promise<WriteOutcome> } | null>(null);
 
   const items = useMemo(() => q.data ?? [], [q.data]);
   const unread = useMemo(() => items.filter((n) => !n.read).length, [items]);
@@ -78,7 +79,8 @@ export function useNotifications(userId: string): {
           qc.setQueryData<NotificationRow[]>(k, (rows) => (rows === undefined ? rows : undo(rows)));
           setWriteError(outcome);
         }
-        void qc.invalidateQueries({ queryKey: k }, { cancelRefetch: false });
+        // Cancels a poll that started mid-write: it could carry the rows from before the commit.
+        void qc.invalidateQueries({ queryKey: k });
         return outcome;
       });
     },
@@ -114,20 +116,22 @@ export function useNotifications(userId: string): {
     },
     markAllRead: () => {
       const ids = items.filter((n) => !n.read).map((n) => n.id);
-      lastMarkedAll.current = ids;
       const set = new Set(ids);
       const to = (v: boolean) => (rows: NotificationRow[]) =>
         rows.map((n) => (set.has(n.id) ? { ...n, read: v } : n));
-      void write(to(true), to(false), () => customerDb.markAllRead(userId), ids.length).then(
-        (outcome) => {
-          if (outcome !== 'ok') lastMarkedAll.current = [];
-        },
-      );
+      // Expected 0: the list can be a minute old, so another device may already have read them
+      // (0 rows, not a stale session). The refetch after the write reconciles.
+      const done = write(to(true), to(false), () => customerDb.markAllRead(userId), 0);
+      lastMarkedAll.current = { ids, done };
     },
     undoMarkAll: () => {
-      const ids = lastMarkedAll.current;
-      lastMarkedAll.current = [];
-      if (ids.length > 0) void setRead(ids, false);
+      const last = lastMarkedAll.current;
+      lastMarkedAll.current = null;
+      if (last === null || last.ids.length === 0) return;
+      // After the mark-all commits (it may be retrying), or the server would end up all read.
+      void last.done.then((outcome) => {
+        if (outcome === 'ok') void setRead(last.ids, false);
+      });
     },
     remove: (id) => {
       const gone = items.find((n) => n.id === id);
@@ -136,7 +140,8 @@ export function useNotifications(userId: string): {
         (rows) => rows.filter((n) => n.id !== id),
         (rows) => (rows.some((n) => n.id === id) ? rows : [...rows, gone].sort(newestFirst)),
         () => customerDb.remove(userId, id),
-        1,
+        // 0 rows = already deleted elsewhere: done. The refetch after the write reconciles.
+        0,
       );
     },
     writeError,

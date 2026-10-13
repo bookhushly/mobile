@@ -34,4 +34,15 @@ describe('performSignOut', () => {
     expect(removeLocal).toHaveBeenCalledTimes(1);
     expect(onSignedOut).toHaveBeenCalledTimes(1);
   });
+  it('still signs out when the local session cannot be removed', async () => {
+    const onSignedOut = jest.fn();
+    await expect(
+      performSignOut({
+        remote: () => Promise.reject(new Error('offline')),
+        removeLocal: () => Promise.reject(new Error('keychain')),
+        onSignedOut,
+      }),
+    ).resolves.toBeUndefined();
+    expect(onSignedOut).toHaveBeenCalledTimes(1);
+  });
 });

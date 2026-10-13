@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useIsFocused } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import { customerDb } from '@/features/customer/api/customerDb';
 import { showCheckInCode } from '@/features/customer/domain/checkInCode';
@@ -15,7 +15,12 @@ import {
 import { canShowTickets, liveOnly, ticketsOf } from '@/features/customer/domain/tickets';
 import { CustomerLoadError, customerKeys } from '@/features/customer/hooks/customerKeys';
 import { useFocusRefetch } from '@/features/customer/hooks/useFocusRefetch';
-import { useSavedWallet } from '@/features/customer/hooks/useSavedWallet';
+import {
+  fetchStamp,
+  loadFailed,
+  useSavedWallet,
+  useTodayAt,
+} from '@/features/customer/hooks/useSavedWallet';
 import { wallet, type WalletEntry } from '@/features/customer/offline/wallet';
 import type {
   ApartmentBookingRow,
@@ -24,6 +29,7 @@ import type {
 } from '@/features/customer/schemas/bookings';
 import { clock } from '@/shared/api/instance';
 import { daysBetween, lagosToday, type IsoDate } from '@/shared/lib/lagosDay';
+import { supabase } from '@/shared/supabase/client';
 
 export type BookingRows = {
   events: EventBookingRow[];
@@ -58,31 +64,23 @@ export function walletEntries(rows: BookingRows, today: IsoDate): WalletEntry[] 
   ];
 }
 
-// Saved entries carry the `when` of the day they were saved; re-derive it for today. Gone ones
-// (and anything the wallet still holds from before) never show: the wallet is today + upcoming.
+// A saved entry carries the `when` of the day it was saved; re-derive it for today. An ended one
+// (or a past one) is null: the wallet only vouches for today and upcoming.
+export function walletEntryToday(e: WalletEntry, today: IsoDate): WalletEntry | null {
+  if (e.when === 'past' || daysBetween(today, e.end) < 0) return null;
+  // An early arrival saved as "today" (checked in before the date) stays today.
+  const when: When = e.when === 'today' || daysBetween(today, e.start) <= 0 ? 'today' : 'upcoming';
+  return { ...e, when };
+}
+
 export function walletLists(entries: readonly WalletEntry[], today: IsoDate): BookingLists {
   const live: WalletEntry[] = [];
   for (const e of entries) {
-    if (e.when === 'past' || daysBetween(today, e.end) < 0) continue;
-    // An early arrival saved as "today" (checked in before the date) stays today.
-    const when: When =
-      e.when === 'today' || daysBetween(today, e.start) <= 0 ? 'today' : 'upcoming';
-    live.push({ ...e, when });
+    const d = walletEntryToday(e, today);
+    if (d !== null) live.push(d);
   }
   const { today: t, upcoming } = splitBookings(live);
   return { today: t, upcoming, past: [] };
-}
-
-// Lagos today, re-read whenever a fetch settles (focus, foreground, pull). Held in state rather
-// than read in render: the React Compiler may cache a render-time read that has no inputs.
-function useTodayAt(stamp: string): IsoDate {
-  const [held, setHeld] = useState(() => ({ stamp, today: lagosToday(clock.serverNow()) }));
-  if (held.stamp !== stamp) {
-    const next = { stamp, today: lagosToday(clock.serverNow()) };
-    setHeld(next);
-    return next.today;
-  }
-  return held.today;
 }
 
 async function loadAll(userId: string): Promise<BookingRows> {
@@ -96,10 +94,22 @@ async function loadAll(userId: string): Promise<BookingRows> {
   if (!hotels.ok) throw new CustomerLoadError(hotels.error);
   if (!apartments.ok) throw new CustomerLoadError(apartments.error);
   const rows = { events: events.value, hotels: hotels.value, apartments: apartments.value };
-  const now = clock.serverNow();
   // Fire-and-forget: a wallet that can't be written only costs the offline copy.
-  wallet.save(userId, walletEntries(rows, lagosToday(now)), now).catch(() => undefined);
+  void saveWallet(userId, rows);
   return rows;
+}
+
+// Only for the account still signed in: a load that lands after sign-out (and its wipe) must
+// not write this account's bookings back to disk.
+async function saveWallet(userId: string, rows: BookingRows): Promise<void> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.user.id !== userId) return;
+    const now = clock.serverNow();
+    await wallet.save(userId, walletEntries(rows, lagosToday(now)), now);
+  } catch {
+    // see above
+  }
 }
 
 export function useMyBookings(userId: string): {
@@ -119,14 +129,11 @@ export function useMyBookings(userId: string): {
     refetchOnWindowFocus: true,
   });
   useFocusRefetch(isFocused, q);
-  const failed = q.isError && q.data === undefined;
+  const failed = loadFailed(q);
   const w = useSavedWallet(userId, failed);
 
   const rows = q.data;
-  // Every fetch flips fetchStatus, even one that settles within the same millisecond.
-  const today = useTodayAt(
-    `${String(q.dataUpdatedAt)}|${String(q.errorUpdatedAt)}|${q.fetchStatus}`,
-  );
+  const today = useTodayAt(fetchStamp(q));
   const fresh = useMemo(
     () => (rows === undefined ? null : splitBookings(mapBookings(rows, today))),
     [rows, today],
@@ -141,7 +148,7 @@ export function useMyBookings(userId: string): {
     bookings: fresh ?? fromWallet,
     rows: rows ?? null,
     saved: saved === null ? null : { savedAt: saved.savedAt },
-    loading: q.isPending || (failed && w.wallet === undefined),
+    loading: failed ? w.wallet === undefined : q.isPending,
     error: failed && w.wallet === null,
     refetch: q.refetch,
   };

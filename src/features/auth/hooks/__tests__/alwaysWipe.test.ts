@@ -57,6 +57,14 @@ it('a plain sign-out wipes the wallet', async () => {
   expect(walletWipe).toHaveBeenCalledTimes(1);
 });
 
+it('a sign-out whose local session removal throws still signs out and wipes', async () => {
+  mockSignOut.mockResolvedValue({ error: new Error('network') });
+  mockRemoveItem.mockRejectedValue(new Error('keychain'));
+  await useAuth.getState().signOut();
+  signedOut();
+  expect(walletWipe).toHaveBeenCalledTimes(1);
+});
+
 it('keeping offline gate data still wipes the wallet', async () => {
   await useAuth.getState().signOut({ keepOfflineData: true });
   expect(gateWipe).not.toHaveBeenCalled();
