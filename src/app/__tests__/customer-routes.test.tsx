@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
 import CustomerTabsLayout from '@/app/(customer)/(tabs)/_layout';
@@ -57,6 +57,21 @@ jest.mock('@/features/customer/screens/BookingScreen', () => ({
   },
 }));
 
+// The code screens too: the routes only parse the id and pass the raw page index on.
+const mockCodes: { tickets?: unknown; checkIn?: unknown } = {};
+jest.mock('@/features/customer/screens/TicketsScreen', () => ({
+  TicketsScreen: (p: { userId: string; bookingId: string | null; index: unknown }) => {
+    mockCodes.tickets = { userId: p.userId, bookingId: p.bookingId, index: p.index };
+    return null;
+  },
+}));
+jest.mock('@/features/customer/screens/CheckInCodeScreen', () => ({
+  CheckInCodeScreen: (p: { userId: string; bookingId: string | null }) => {
+    mockCodes.checkIn = { userId: p.userId, bookingId: p.bookingId };
+    return null;
+  },
+}));
+
 const ID = '0b6f1f4e-2c1a-4f6e-9a39-6f0e7d2b9c11';
 
 beforeEach(() => {
@@ -66,6 +81,8 @@ beforeEach(() => {
   mockNav.params = {};
   mockTour.mockClear();
   mockScreen.booking = undefined;
+  mockCodes.tickets = undefined;
+  mockCodes.checkIn = undefined;
 });
 
 it('customer mode lands on the bookings tab', () => {
@@ -119,14 +136,15 @@ it.each<[string, Record<string, unknown>]>([
   expect(mockScreen.booking).toBeNull();
 });
 
-it.each([TicketsRoute, CheckInCodeRoute])(
-  'a code route with a bad id is not on your account',
-  async (Route) => {
-    mockNav.params = { bookingId: 'nope' };
-    await render(<Route />);
-    expect(screen.getByText("This booking isn't on your account")).toBeTruthy();
-    mockNav.params = { bookingId: ID };
-    await render(<Route />);
-    expect(screen.queryByText("This booking isn't on your account")).toBeNull();
-  },
-);
+it('the code routes hand their screens a parsed id (null when not a UUID)', async () => {
+  mockNav.params = { bookingId: 'nope', index: '2' };
+  await render(<TicketsRoute />);
+  expect(mockCodes.tickets).toEqual({ userId: 'u1', bookingId: null, index: '2' });
+  await render(<CheckInCodeRoute />);
+  expect(mockCodes.checkIn).toEqual({ userId: 'u1', bookingId: null });
+  mockNav.params = { bookingId: ID, index: '1' };
+  await render(<TicketsRoute />);
+  expect(mockCodes.tickets).toEqual({ userId: 'u1', bookingId: ID, index: '1' });
+  await render(<CheckInCodeRoute />);
+  expect(mockCodes.checkIn).toEqual({ userId: 'u1', bookingId: ID });
+});

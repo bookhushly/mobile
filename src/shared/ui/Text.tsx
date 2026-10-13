@@ -15,6 +15,8 @@ type Props = {
   accessibilityLiveRegion?: 'none' | 'polite' | 'assertive';
   /** Overrides the variant's Dynamic Type cap (gate results use 1 so actions never leave the screen). */
   maxScale?: number;
+  /** Lets the user select and copy the text (codes read out or typed at a desk). */
+  selectable?: boolean;
   style?: StyleProp<TextStyle>;
   children: ReactNode;
 };
@@ -29,6 +31,7 @@ export function Text({
   accessibilityRole,
   accessibilityLiveRegion,
   maxScale,
+  selectable,
   style,
   children,
 }: Props) {
@@ -39,6 +42,7 @@ export function Text({
       accessibilityRole={accessibilityRole}
       accessibilityLiveRegion={accessibilityLiveRegion}
       numberOfLines={numberOfLines}
+      selectable={selectable}
       maxFontSizeMultiplier={maxScale ?? v.maxScale}
       style={[
         {

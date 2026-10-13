@@ -1,26 +1,25 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Ticket, SearchX } from 'lucide-react-native';
 
+import { useAuth } from '@/features/auth/hooks/useAuth';
 import { bookingIdParam } from '@/features/customer/domain/routeParams';
-import { NoticeScreen } from '@/features/customer/screens/NoticeScreen';
+import { TicketsScreen } from '@/features/customer/screens/TicketsScreen';
 
-const back = () => {
+const close = () => {
   if (router.canGoBack()) router.back();
   else router.replace('/bookings');
 };
 
 export default function TicketsRoute() {
-  const params = useLocalSearchParams<{ bookingId: string }>();
-  const id = bookingIdParam(params.bookingId);
-  if (id === null)
-    return (
-      <NoticeScreen
-        title="Tickets"
-        icon={SearchX}
-        heading="This booking isn't on your account"
-        onBack={back}
-      />
-    );
-  // Filled in by the ticket viewer and check-in code task.
-  return <NoticeScreen title="Tickets" icon={Ticket} heading="Your tickets" onBack={back} />;
+  const params = useLocalSearchParams<{ bookingId: string; index?: string }>();
+  const state = useAuth((s) => s.state);
+  const userId = state.status === 'signedIn' ? state.userId : '';
+  return (
+    <TicketsScreen
+      userId={userId}
+      // Anything but a UUID is "isn't on your account", without a query.
+      bookingId={bookingIdParam(params.bookingId)}
+      index={params.index}
+      onClose={close}
+    />
+  );
 }

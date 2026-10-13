@@ -79,6 +79,14 @@ export function lagosTime(iso: string): string {
   return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
 }
 
+/** "10:42:07": a server instant (epoch ms) as the Lagos wall clock; '' if unreadable. */
+export function lagosClock(ms: number): string {
+  if (!Number.isFinite(ms)) return '';
+  const d = new Date(ms + LAGOS_OFFSET_MS);
+  const two = (n: number) => String(n).padStart(2, '0');
+  return `${two(d.getUTCHours())}:${two(d.getUTCMinutes())}:${two(d.getUTCSeconds())}`;
+}
+
 /** "at 10:42" for an instant on `today` (Lagos), else "on Sat 10 Oct at 10:42"; '' if unreadable. */
 export function lagosWhen(iso: string, today: IsoDate): string {
   const ms = Date.parse(iso);

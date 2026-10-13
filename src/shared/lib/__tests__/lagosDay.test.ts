@@ -2,6 +2,7 @@ import {
   dayParts,
   daysBetween,
   isIsoDate,
+  lagosClock,
   lagosTime,
   lagosToday,
   lagosWhen,
@@ -48,4 +49,10 @@ it('validates ISO dates', () => {
 it('splits a date into tile parts', () => {
   expect(dayParts('2026-10-18')).toEqual({ month: 'Oct', day: '18', weekday: 'Sun' });
   expect(dayParts('2027-01-01')).toEqual({ month: 'Jan', day: '1', weekday: 'Fri' });
+});
+
+it('reads a server instant as a Lagos wall clock with seconds', () => {
+  expect(lagosClock(Date.parse('2026-10-11T09:42:07Z'))).toBe('10:42:07');
+  expect(lagosClock(Date.parse('2026-10-11T23:05:59.999Z'))).toBe('00:05:59');
+  expect(lagosClock(Number.NaN)).toBe('');
 });
