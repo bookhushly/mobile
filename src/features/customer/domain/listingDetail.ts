@@ -2,6 +2,7 @@
 import { eventWhen } from '@/features/customer/domain/detailText';
 import {
   effectivePackagePrice,
+  packageStock,
   roomTypeFrom,
   type EventStock,
   type ListingKind,
@@ -47,6 +48,37 @@ export function bedsLine(
     return `${String(n)} ${word}`;
   });
   return parts.length > 0 ? parts.join(', ') : null;
+}
+
+type Bed = { type: string | null; count: number | null };
+
+/** The beds of a room type's default rate (else its first rate), as words; null without any. */
+export function defaultBeds(
+  roomTypeId: string,
+  rates: readonly { room_type_id: string; is_default: boolean | null; beds: readonly Bed[] }[],
+): string | null {
+  const own = rates.filter((r) => r.room_type_id === roomTypeId);
+  const rate = own.find((r) => r.is_default === true) ?? own[0];
+  return rate === undefined ? null : bedsLine(rate.beds);
+}
+
+/** A ticket type's stock word; none once the whole event is ended or off sale (D12). */
+export function ticketStockWord(
+  pkg: PackageLike,
+  threshold: number,
+  event: EventStock,
+): 'Sold out' | 'Few left' | null {
+  if (event === 'ended' || event === 'notOnSale') return null;
+  const s = packageStock(pkg, threshold);
+  return s === 'soldOut' ? 'Sold out' : s === 'fewLeft' ? 'Few left' : null;
+}
+
+/** "13 Oct 2026" (the Lagos day); null when unreadable. */
+export function reviewDate(iso: string | null): string | null {
+  const ms = iso === null ? NaN : Date.parse(iso);
+  if (!Number.isFinite(ms)) return null;
+  const d = lagosToday(ms);
+  return `${shortDate(d).split(' ').slice(1).join(' ')} ${d.slice(0, 4)}`;
 }
 
 type EventTimes = {

@@ -1,6 +1,7 @@
 import {
   apartmentFacts,
   bedsLine,
+  defaultBeds,
   earlyBirdNote,
   eventDateLine,
   eventDay,
@@ -9,6 +10,8 @@ import {
   hotelFromPrice,
   httpsImages,
   pricingRuleLine,
+  reviewDate,
+  ticketStockWord,
 } from '@/features/customer/domain/listingDetail';
 import type { ApartmentDetail, HotelDetail } from '@/features/customer/schemas/listings';
 
@@ -272,5 +275,38 @@ describe('apartmentFacts', () => {
     expect(apartmentFacts({ ...APT, furnished: false })).toEqual([
       { label: 'Furnished', value: 'No' },
     ]);
+  });
+});
+
+describe('defaultBeds', () => {
+  const rates = [
+    { room_type_id: 'a', is_default: false, beds: [{ type: 'twin', count: 2 }] },
+    { room_type_id: 'a', is_default: true, beds: [{ type: 'king', count: 1 }] },
+    { room_type_id: 'b', is_default: null, beds: [{ type: 'queen', count: 1 }] },
+  ];
+  it('reads the default rate’s beds, else the first rate’s', () => {
+    expect(defaultBeds('a', rates)).toBe('1 king bed');
+    expect(defaultBeds('b', rates)).toBe('1 queen bed');
+    expect(defaultBeds('c', rates)).toBeNull();
+  });
+});
+
+describe('ticketStockWord', () => {
+  const pkg = { price: 5000, remaining: 10 };
+  it('says Sold out or Few left only while the event is on sale', () => {
+    expect(ticketStockWord({ ...pkg, remaining: 0 }, 50, 'onSale')).toBe('Sold out');
+    expect(ticketStockWord(pkg, 50, 'fewLeft')).toBe('Few left');
+    expect(ticketStockWord({ ...pkg, remaining: 200 }, 50, 'onSale')).toBeNull();
+    expect(ticketStockWord({ ...pkg, remaining: 0 }, 50, 'soldOut')).toBe('Sold out');
+    expect(ticketStockWord(pkg, 50, 'ended')).toBeNull();
+    expect(ticketStockWord(pkg, 50, 'notOnSale')).toBeNull();
+  });
+});
+
+describe('reviewDate', () => {
+  it('is the Lagos day with its year', () => {
+    expect(reviewDate('2026-10-12T23:30:00Z')).toBe('13 Oct 2026');
+    expect(reviewDate('later')).toBeNull();
+    expect(reviewDate(null)).toBeNull();
   });
 });
