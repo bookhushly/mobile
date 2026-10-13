@@ -23,7 +23,7 @@ import { err, ok, type Result } from '@/shared/lib/result';
 import { supabase } from '@/shared/supabase/client';
 import { wrap } from '@/shared/supabase/wrap';
 
-type DbRow = {
+export type DbRow = {
   data: unknown;
   error: { code?: string } | null;
   status: number;
@@ -90,7 +90,10 @@ const maybeApartment = apartmentBookingRow.nullable();
 const maybeProfile = profileRow.nullable();
 const touched = z.array(z.object({ id: z.string() }));
 
-async function read<T>(q: PromiseLike<DbRow>, schema: z.ZodType<T>): Promise<Result<T, ApiError>> {
+export async function read<T>(
+  q: PromiseLike<DbRow>,
+  schema: z.ZodType<T>,
+): Promise<Result<T, ApiError>> {
   const r = await wrap(q);
   if (r.error) return err(dbErrorToApiError(r.error));
   const p = schema.safeParse(r.data);
@@ -207,11 +210,11 @@ export async function withSessionRetry(
 
 // Pinning the select result type to `unknown` stops supabase-js parsing the column string at the
 // type level (TS2589, excessively deep for an untyped client); rows are validated with zod anyway.
-const live: SupabaseLike = {
+export const liveClient: SupabaseLike = {
   from: (table) => ({
     select: (columns, opts) => supabase.from(table).select<string, unknown>(columns, opts),
     update: (values) => supabase.from(table).update(values),
     delete: () => supabase.from(table).delete(),
   }),
 };
-export const customerDb: CustomerDb = createCustomerDb(live);
+export const customerDb: CustomerDb = createCustomerDb(liveClient);

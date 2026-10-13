@@ -268,3 +268,34 @@ describe('reach reporting', () => {
     expect(onReach).not.toHaveBeenCalled();
   });
 });
+
+describe('auth: false (public routes)', () => {
+  it('sends no Authorization and never reads the token', async () => {
+    const getAccessToken = jest.fn(() => Promise.resolve('tok1'));
+    const { client, calls } = make([res(200, { ok: true })], { getAccessToken });
+    const r = await client.request('/api/listings?category=hotels', { schema, auth: false });
+    expect(r.ok).toBe(true);
+    expect(headersOf(calls[0])).not.toHaveProperty('Authorization');
+    expect(headersOf(calls[0])['X-App-Version']).toBe('1.0.0 (7)');
+    expect(getAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('a 401 is returned as auth without refreshing or retrying', async () => {
+    const refreshSession = jest.fn(() => Promise.resolve({ token: 'tok2' }));
+    const { client, calls } = make([res(401, {})], { refreshSession });
+    expect(await client.request('/api/x', { schema, auth: false })).toEqual({
+      ok: false,
+      error: { kind: 'auth' },
+    });
+    expect(refreshSession).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(1);
+  });
+
+  it('retries a transient failure without ever adding a token', async () => {
+    const { client, calls } = make([res(503, {}), res(200, { ok: true })]);
+    const r = await client.request('/api/x', { schema, auth: false });
+    expect(r.ok).toBe(true);
+    expect(calls).toHaveLength(2);
+    for (const c of calls) expect(headersOf(c)).not.toHaveProperty('Authorization');
+  });
+});

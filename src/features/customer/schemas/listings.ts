@@ -79,7 +79,7 @@ export const eventItem = z.object({
   vendor_name: text,
   event_date: text,
   event_time: text,
-  category_data: z.unknown(),
+  category_data: z.unknown().default(null),
 });
 export type EventItem = z.infer<typeof eventItem>;
 
