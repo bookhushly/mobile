@@ -1,29 +1,37 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Search } from 'lucide-react-native';
 
+import { useAuth } from '@/features/auth/hooks/useAuth';
+import { useSignOut } from '@/features/auth/hooks/useSignOut';
 import { resultsParams } from '@/features/customer/domain/routeParams';
-import { NoticeScreen } from '@/features/customer/screens/NoticeScreen';
+import { ResultsScreen } from '@/features/customer/screens/ResultsScreen';
 
-const TITLE = { hotels: 'Hotels', serviced_apartments: 'Apartments', events: 'Events' } as const;
-
-// Placeholder until the Results screen lands (Phase 4b Task 6). Params are untrusted: parsed and
-// sanitised before anything reads them.
+// Params are untrusted: parsed and sanitised before anything reads them.
 export default function ResultsRoute() {
+  const state = useAuth((s) => s.state);
+  const signOut = useSignOut();
   const raw = useLocalSearchParams<{
     category?: string;
     q?: string;
     region?: string;
     city?: string;
   }>();
+  const userId = state.status === 'signedIn' ? state.userId : '';
   const query = resultsParams(raw);
   return (
-    <NoticeScreen
-      title={TITLE[query.category]}
-      icon={Search}
-      heading="Results are on their way"
+    <ResultsScreen
+      // A new search starts with no filters.
+      key={`${query.category}|${query.q}|${query.state ?? ''}|${query.city ?? ''}`}
+      userId={userId}
+      query={query}
       onBack={() => {
         if (router.canGoBack()) router.back();
         else router.replace('/explore');
+      }}
+      onOpenListing={(kind, id) => {
+        router.push({ pathname: '/listing/[kind]/[id]', params: { kind, id } });
+      }}
+      onSignInAgain={() => {
+        signOut();
       }}
     />
   );

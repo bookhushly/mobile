@@ -12,6 +12,8 @@ type Props = {
   placeholder?: string;
   autoFocus?: boolean;
   autoCapitalize?: 'none' | 'words';
+  /** The keyboard's search key (searches that run on submit, never per keystroke). */
+  onSubmit?: () => void;
   testID?: string;
 };
 
@@ -25,6 +27,7 @@ export function SearchField({
   placeholder,
   autoFocus,
   autoCapitalize = 'none',
+  onSubmit,
   testID,
 }: Props) {
   const d = useDensity();
@@ -41,6 +44,7 @@ export function SearchField({
       autoComplete="off"
       autoCapitalize={autoCapitalize}
       returnKeyType="search"
+      onSubmitEditing={onSubmit}
       left={<Icon as={Search} size="sm" tone="textMuted" />}
       right={
         value !== '' ? (

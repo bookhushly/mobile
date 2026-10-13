@@ -1,18 +1,23 @@
-import { router } from 'expo-router';
-import { Search } from 'lucide-react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 
-import { NoticeScreen } from '@/features/customer/screens/NoticeScreen';
+import { useAuth } from '@/features/auth/hooks/useAuth';
+import { categoryParam } from '@/features/customer/domain/routeParams';
+import { SearchScreen } from '@/features/customer/screens/SearchScreen';
 
-// Placeholder until the Search screen lands (Phase 4b Task 6).
 export default function SearchRoute() {
+  const state = useAuth((s) => s.state);
+  const { category } = useLocalSearchParams<{ category?: string }>();
+  const userId = state.status === 'signedIn' ? state.userId : '';
   return (
-    <NoticeScreen
-      title="Search"
-      icon={Search}
-      heading="Search is on its way"
+    <SearchScreen
+      userId={userId}
+      initialCategory={categoryParam(category) ?? 'hotels'}
       onBack={() => {
         if (router.canGoBack()) router.back();
         else router.replace('/explore');
+      }}
+      onSearch={(t) => {
+        router.push({ pathname: '/results', params: t });
       }}
     />
   );
