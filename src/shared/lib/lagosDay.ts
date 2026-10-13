@@ -79,12 +79,41 @@ export function lagosTime(iso: string): string {
   return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
 }
 
-/** "10:42:07": a server instant (epoch ms) as the Lagos wall clock; '' if unreadable. */
-export function lagosClock(ms: number): string {
-  if (!Number.isFinite(ms)) return '';
+/** Customer-facing clock: hour 0–23 → "7:42 pm" (with seconds: "7:42:07 pm"). */
+export function hour12(h: number, minutes: string, seconds?: string): string {
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  const rest = seconds === undefined ? minutes : `${minutes}:${seconds}`;
+  return `${String(h12)}:${rest} ${h < 12 ? 'am' : 'pm'}`;
+}
+
+function lagosParts(ms: number): { h: number; m: string; s: string } {
   const d = new Date(ms + LAGOS_OFFSET_MS);
   const two = (n: number) => String(n).padStart(2, '0');
-  return `${two(d.getUTCHours())}:${two(d.getUTCMinutes())}:${two(d.getUTCSeconds())}`;
+  return { h: d.getUTCHours(), m: two(d.getUTCMinutes()), s: two(d.getUTCSeconds()) };
+}
+
+/** "7:42 pm": an instant as the 12-hour Lagos clock (customer screens); '' if unreadable. */
+export function lagosClock12(iso: string): string {
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return '';
+  const p = lagosParts(ms);
+  return hour12(p.h, p.m);
+}
+
+/** "7:42:07 pm": a server instant (epoch ms) as the 12-hour Lagos clock; '' if unreadable. */
+export function lagosSeconds12(ms: number): string {
+  if (!Number.isFinite(ms)) return '';
+  const p = lagosParts(ms);
+  return hour12(p.h, p.m, p.s);
+}
+
+/** lagosWhen in 12-hour time: "at 7:42 pm", or "on Sat 10 Oct at 7:42 pm". */
+export function lagosWhen12(iso: string, today: IsoDate): string {
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return '';
+  const day = lagosToday(ms);
+  const time = lagosClock12(iso);
+  return day === today ? `at ${time}` : `on ${shortDate(day)} at ${time}`;
 }
 
 /** "at 10:42" for an instant on `today` (Lagos), else "on Sat 10 Oct at 10:42"; '' if unreadable. */

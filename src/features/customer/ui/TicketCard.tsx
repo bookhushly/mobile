@@ -1,13 +1,14 @@
-import { CircleCheck, Info, SearchX, WifiOff, type LucideIcon } from 'lucide-react-native';
+import { CircleCheck, Info, SearchX, Ticket, WifiOff, type LucideIcon } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
-import type { LiveCodeState } from '@/features/customer/domain/liveCode';
+import { stillUsable, type LiveCodeState } from '@/features/customer/domain/liveCode';
 import { staticTicketUrl, type TicketView } from '@/features/customer/domain/tickets';
 import { useLiveCode } from '@/features/customer/hooks/useLiveCode';
 import { CountdownRing } from '@/features/customer/ui/CountdownRing';
 import { LiveClock } from '@/features/customer/ui/LiveClock';
-import { lagosWhen, type IsoDate } from '@/shared/lib/lagosDay';
+import { clock } from '@/shared/api/instance';
+import { lagosWhen12, type IsoDate } from '@/shared/lib/lagosDay';
 import { color, radius, space, type ColorRole, type StatusTone } from '@/shared/theme';
 import { Banner, Icon, QrCode, Skeleton, Text } from '@/shared/ui';
 
@@ -65,6 +66,7 @@ function Notice({
       }}
     >
       <Icon as={icon} size="lg" tone={FG[tone]} />
+      {/* Only the page on screen renders a Notice, so one region at a time. */}
       <Text variant="headline" tone={FG[tone]} align="center" accessibilityLiveRegion="polite">
         {text}
       </Text>
@@ -105,109 +107,133 @@ export function TicketCard({ ticket, active, liveOnly, qrSize, today }: Props) {
       </View>
     </>
   );
-  // Announced (Banner) only on the card on screen, not by every page at once.
   const connect = (
     <>
-      {active ? (
-        <Panel size={qrSize}>
-          <Banner
-            tone="neutral"
-            icon={WifiOff}
-            message={CONNECT}
-            action={{ label: 'Try again', onPress: retry }}
-          />
-        </Panel>
-      ) : (
-        <Notice size={qrSize} tone="neutral" icon={WifiOff} text={CONNECT} />
-      )}
+      <Panel size={qrSize}>
+        <Banner
+          tone="neutral"
+          icon={WifiOff}
+          message={CONNECT}
+          action={{ label: 'Try again', onPress: retry }}
+        />
+      </Panel>
+      {meta}
+    </>
+  );
+  const loading = (
+    <>
+      <View accessible accessibilityLabel="Loading ticket">
+        <Skeleton width={qrSize} height={qrSize} radius="r3" />
+      </View>
       {meta}
     </>
   );
 
   let body: ReactNode;
-  switch (state.kind) {
-    case 'loading':
-      body = (
-        <>
-          <View accessible accessibilityLabel="Loading ticket">
-            <Skeleton width={qrSize} height={qrSize} radius="r3" />
-          </View>
-          {meta}
-        </>
-      );
-      break;
-    case 'live':
-      body = (
-        <>
-          <QrCode value={state.token} size={qrSize} accessibilityLabel={label} />
-          {meta}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}>
-            {active ? <CountdownRing expiresAt={state.expiresAt} /> : null}
-            <Text variant="bodySm" tone="textSecondary">
-              Live code · refreshes every 30 s
-            </Text>
-          </View>
-          {active ? <LiveClock /> : null}
-        </>
-      );
-      break;
-    case 'rateLimited':
-      // A 429 keeps a still-usable code on screen (C7); without one it is the fallback.
-      if (state.last !== null)
+  if (!active)
+    // Off screen (or mid-swipe): the ticket without a code. A code here would not be refreshing,
+    // so it could be stale by the time anyone looked at it.
+    body = (
+      <>
+        <View
+          testID="ticket-placeholder"
+          style={{
+            width: qrSize,
+            height: qrSize,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: radius.r3,
+            backgroundColor: color.wash,
+          }}
+        >
+          <Icon as={Ticket} size="lg" tone="textMuted" />
+        </View>
+        {meta}
+      </>
+    );
+  else
+    switch (state.kind) {
+      case 'loading':
+        body = loading;
+        break;
+      case 'live':
+        // Held from an earlier visit and past use: the hook swaps it out in its effect; never
+        // draw it meanwhile.
+        if (!stillUsable(state.expiresAt, clock.serverNow())) {
+          body = loading;
+          break;
+        }
         body = (
           <>
-            <QrCode value={state.last.token} size={qrSize} accessibilityLabel={label} />
+            <QrCode value={state.token} size={qrSize} accessibilityLabel={label} />
             {meta}
-            <Text variant="bodySm" tone="textSecondary" align="center">
-              Refreshing shortly
-            </Text>
-            {active ? <LiveClock /> : null}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}>
+              <CountdownRing expiresAt={state.expiresAt} />
+              <Text variant="bodySm" tone="textSecondary">
+                Live code · refreshes every 30 s
+              </Text>
+            </View>
+            <LiveClock />
           </>
         );
-      else body = liveOnly ? connect : staticCode;
-      break;
-    case 'fallback':
-      body = liveOnly ? connect : staticCode;
-      break;
-    case 'admitted': {
-      const when = state.at === null ? '' : lagosWhen(state.at, today);
-      body = (
-        <>
-          <Notice
-            size={qrSize}
-            tone="success"
-            icon={CircleCheck}
-            text={when === '' ? 'Admitted' : `Admitted ${when}`}
-          />
-          {meta}
-        </>
-      );
-      break;
-    }
-    case 'notConfirmed':
-      body = (
-        <>
+        break;
+      case 'rateLimited':
+        // A 429 keeps a still-usable code on screen (C7); without one it is the fallback.
+        if (state.last !== null && stillUsable(state.last.expiresAt, clock.serverNow()))
+          body = (
+            <>
+              <QrCode value={state.last.token} size={qrSize} accessibilityLabel={label} />
+              {meta}
+              <Text variant="bodySm" tone="textSecondary" align="center">
+                Refreshing shortly
+              </Text>
+              <LiveClock />
+            </>
+          );
+        else body = liveOnly ? connect : staticCode;
+        break;
+      case 'fallback':
+        body = liveOnly ? connect : staticCode;
+        break;
+      case 'admitted': {
+        const when = state.at === null ? '' : lagosWhen12(state.at, today);
+        body = (
+          <>
+            <Notice
+              size={qrSize}
+              tone="success"
+              icon={CircleCheck}
+              text={when === '' ? 'Admitted' : `Admitted ${when}`}
+            />
+            {meta}
+          </>
+        );
+        break;
+      }
+      case 'notConfirmed':
+        body = (
+          <>
+            <Notice
+              size={qrSize}
+              tone="neutral"
+              icon={Info}
+              text="This booking isn't confirmed yet"
+            />
+            {meta}
+          </>
+        );
+        break;
+      case 'notYours':
+        body = (
           <Notice
             size={qrSize}
             tone="neutral"
-            icon={Info}
-            text="This booking isn't confirmed yet"
+            icon={SearchX}
+            text="This ticket isn't on your account"
           />
-          {meta}
-        </>
-      );
-      break;
-    case 'notYours':
-      body = (
-        <Notice
-          size={qrSize}
-          tone="neutral"
-          icon={SearchX}
-          text="This ticket isn't on your account"
-        />
-      );
-      break;
-  }
+        );
+        break;
+    }
   return (
     <View testID={`ticket-${ticket.id}`} style={{ alignItems: 'center', gap: space.s4 }}>
       {body}

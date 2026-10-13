@@ -3,7 +3,14 @@ import type {
   EventBookingRow,
   HotelBookingRow,
 } from '@/features/customer/schemas/bookings';
-import { daysBetween, lagosTime, shortDate, stayRange, type IsoDate } from '@/shared/lib/lagosDay';
+import {
+  daysBetween,
+  hour12,
+  lagosTime,
+  shortDate,
+  stayRange,
+  type IsoDate,
+} from '@/shared/lib/lagosDay';
 
 export type BookingKind = 'event' | 'hotel' | 'apartment';
 export type ChipTone = 'success' | 'warning' | 'danger' | 'neutral' | 'info';
@@ -74,9 +81,7 @@ function hhmm(t: string | null): string | null {
 export function clockLabel(t: string | null): string | null {
   const v = hhmm(t);
   if (v === null) return null;
-  const h = Number(v.slice(0, 2));
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${String(h12)}:${v.slice(3, 5)} ${h < 12 ? 'am' : 'pm'}`;
+  return hour12(Number(v.slice(0, 2)), v.slice(3, 5));
 }
 
 export function kindWord(k: BookingKind): string {

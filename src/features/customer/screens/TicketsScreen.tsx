@@ -18,6 +18,7 @@ import { savedAtLabel } from '@/features/customer/ui/savedAt';
 import { TicketPager } from '@/features/customer/ui/TicketPager';
 import { clock } from '@/shared/api/instance';
 import { useBrightScreen } from '@/shared/platform/useBrightScreen';
+import { usePreventCapture } from '@/shared/platform/usePreventCapture';
 import { space } from '@/shared/theme';
 import { Banner, EmptyState, ErrorState, SkeletonRows } from '@/shared/ui';
 
@@ -130,6 +131,8 @@ function EventTickets({ userId, id, index, onClose }: Props & { id: string }) {
 
 // C7/C8/C11: the event's tickets, full screen, for the door.
 export function TicketsScreen(props: Props) {
+  // With the live clock, the second anti-screenshot measure (C11): no captures while open.
+  usePreventCapture('ticket-qr');
   if (props.bookingId === null) return <NotYours onClose={props.onClose} />;
   return <EventTickets key={props.bookingId} {...props} id={props.bookingId} />;
 }

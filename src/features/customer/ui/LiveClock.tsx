@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 
 import { useServerNow } from '@/features/customer/hooks/useServerNow';
-import { lagosClock } from '@/shared/lib/lagosDay';
+import { lagosSeconds12 } from '@/shared/lib/lagosDay';
 import { space } from '@/shared/theme';
 import { Text } from '@/shared/ui';
 
@@ -19,7 +19,7 @@ export function LiveClock() {
     >
       <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <Text variant="titleLg" tabular align="center" maxScale={1}>
-          {lagosClock(now)}
+          {lagosSeconds12(now)}
         </Text>
       </View>
     </View>

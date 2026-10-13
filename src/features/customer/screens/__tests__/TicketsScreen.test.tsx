@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { AccessibilityInfo, Dimensions } from 'react-native';
+import { AccessibilityInfo, Dimensions, FlatList } from 'react-native';
 
 import type { LiveCodeState } from '@/features/customer/domain/liveCode';
 import { fromEvent } from '@/features/customer/domain/myBookings';
@@ -9,12 +9,14 @@ import type { WalletEntry } from '@/features/customer/offline/wallet';
 import type { EventBookingRow } from '@/features/customer/schemas/bookings';
 import { TicketsScreen } from '@/features/customer/screens/TicketsScreen';
 import { useBrightScreen } from '@/shared/platform/useBrightScreen';
+import { usePreventCapture } from '@/shared/platform/usePreventCapture';
 
 import { ev, NOON, TODAY } from '../../hooks/__tests__/customerTestUtils';
 
 jest.mock('@/features/customer/hooks/useBooking', () => ({ useBooking: jest.fn() }));
 jest.mock('@/features/customer/hooks/useLiveCode', () => ({ useLiveCode: jest.fn() }));
 jest.mock('@/shared/platform/useBrightScreen', () => ({ useBrightScreen: jest.fn() }));
+jest.mock('@/shared/platform/usePreventCapture', () => ({ usePreventCapture: jest.fn() }));
 jest.mock('expo-router', () => ({ useIsFocused: () => true }));
 // Fake timers move Date.now(); the server clock follows it.
 jest.mock('@/shared/api/instance', () => ({ clock: { serverNow: () => Date.now() } }));
@@ -22,6 +24,7 @@ jest.mock('@/shared/api/instance', () => ({ clock: { serverNow: () => Date.now()
 const mockBooking = jest.mocked(useBooking);
 const mockLive = jest.mocked(useLiveCode);
 const mockBright = jest.mocked(useBrightScreen);
+const mockCapture = jest.mocked(usePreventCapture);
 
 const ID = '0b6f1f4e-2c1a-4f6e-9a39-6f0e7d2b9c11';
 const T1 = 'a1b2c3d4-0000-4000-8000-000000000001';
@@ -107,6 +110,97 @@ it('polls only the ticket on screen, and swiping moves the poll', async () => {
   expect(screen.getByRole('button', { name: 'Next ticket' })).toBeDisabled();
 });
 
+/** A plain scroll (no momentum event) that leaves page `i` filling the pager. */
+async function scrollTo(i: number) {
+  const { width } = Dimensions.get('window');
+  const pager = screen.getByTestId('ticket-pager');
+  const size = { width, height: 800 };
+  await fireEvent(pager, 'layout', { nativeEvent: { layout: { x: 0, y: 0, ...size } } });
+  await fireEvent.scroll(pager, {
+    nativeEvent: {
+      contentOffset: { x: width * i, y: 0 },
+      contentSize: { width: width * 3, height: 800 },
+      layoutMeasurement: size,
+    },
+  });
+}
+
+it('a page that comes into view without momentum (slow drag, screen reader) goes live', async () => {
+  loaded({ row: threeTickets() });
+  await show();
+  await scrollTo(2);
+  expect(polling()).toEqual([T3]);
+  await scrollTo(1);
+  expect(polling()).toEqual([T2]);
+});
+
+it('only the page on screen draws a code or reaches screen readers', async () => {
+  states = { [T1]: LIVE, [T2]: LIVE, [T3]: { kind: 'fallback' } };
+  const row = threeTickets();
+  loaded({
+    row: { ...row, listing: row.listing && { ...row.listing, require_dynamic_ticket: false } },
+  });
+  await show();
+  expect(screen.getByLabelText('Ticket 1 of 3 code')).toBeTruthy();
+  expect(screen.queryByLabelText('Ticket 2 of 3 code', hidden)).toBeNull();
+  expect(screen.queryByLabelText('Ticket 3 of 3 code', hidden)).toBeNull();
+  expect(screen.getAllByTestId('ticket-placeholder', hidden)).toHaveLength(2);
+  expect(screen.getByTestId('ticket-page-0').props.accessibilityElementsHidden).toBe(false);
+  expect(screen.getByTestId('ticket-page-1', hidden).props.importantForAccessibility).toBe(
+    'no-hide-descendants',
+  );
+  await scrollTo(1);
+  expect(screen.getByLabelText('Ticket 2 of 3 code')).toBeTruthy();
+  expect(screen.queryByLabelText('Ticket 1 of 3 code', hidden)).toBeNull();
+});
+
+it('Previous and Next step pages and say where the user landed', async () => {
+  const say = jest
+    .spyOn(AccessibilityInfo, 'announceForAccessibility')
+    .mockImplementation(() => {});
+  loaded({ row: threeTickets() });
+  await show();
+  expect(say).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: 'Previous ticket' })).toBeDisabled();
+  await fireEvent.press(screen.getByRole('button', { name: 'Next ticket' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Next ticket' }));
+  expect(say).toHaveBeenLastCalledWith('Ticket 3 of 3');
+  await fireEvent.press(screen.getByRole('button', { name: 'Previous ticket' }));
+  expect(polling()).toEqual([T2]);
+  expect(say).toHaveBeenLastCalledWith('Ticket 2 of 3');
+  await fireEvent.press(screen.getByRole('button', { name: 'Previous ticket' }));
+  expect(polling()).toEqual([T1]);
+  expect(screen.getByRole('button', { name: 'Previous ticket' })).toBeDisabled();
+});
+
+it.each<[boolean, boolean]>([
+  [false, true],
+  [true, false],
+])('stepping animates unless Reduce Motion is on (reduce %s)', async (reduce, animated) => {
+  jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(reduce);
+  const scroll = jest.spyOn(FlatList.prototype, 'scrollToOffset');
+  loaded({ row: threeTickets() });
+  await show();
+  await fireEvent.press(screen.getByRole('button', { name: 'Next ticket' }));
+  const { width } = Dimensions.get('window');
+  expect(scroll).toHaveBeenLastCalledWith({ offset: width, animated });
+  scroll.mockRestore();
+});
+
+it('a held live code past its use is never drawn', async () => {
+  states = { [T1]: { kind: 'live', token: 'old', expiresAt: NOON - 31_000 } };
+  loaded({ row: oneTicket() });
+  await show();
+  expect(screen.queryByLabelText('Ticket 1 of 1 code')).toBeNull();
+  expect(screen.getByLabelText('Loading ticket')).toBeTruthy();
+});
+
+it('blocks screenshots under the ticket key', async () => {
+  loaded({ row: oneTicket() });
+  await show();
+  expect(mockCapture).toHaveBeenCalledWith('ticket-qr');
+});
+
 it('opens on the page in the index param, and ignores a bad one', async () => {
   loaded({ row: threeTickets() });
   await show('1');
@@ -125,11 +219,11 @@ it('live: the code, its line, a countdown ring and a running server clock', asyn
   expect(screen.getByText('Live code · refreshes every 30 s')).toBeTruthy();
   expect(screen.getByTestId('countdown-ring-sweep', hidden)).toBeTruthy();
   expect(screen.getByLabelText('Live ticket')).toBeTruthy();
-  expect(screen.getByText('12:00:00', hidden)).toBeTruthy();
+  expect(screen.getByText('12:00:00 pm', hidden)).toBeTruthy();
   await act(() => {
     jest.advanceTimersByTime(1000);
   });
-  expect(screen.getByText('12:00:01', hidden)).toBeTruthy();
+  expect(screen.getByText('12:00:01 pm', hidden)).toBeTruthy();
   // No reference text under a live code (the token is long).
   expect(screen.queryByText('A1B2C3D4')).toBeNull();
   expect(mockBright).toHaveBeenLastCalledWith(true);
@@ -193,7 +287,7 @@ it('admitted: the time, no QR', async () => {
   states = { [T1]: { kind: 'admitted', at: '2026-10-13T18:42:00Z' } };
   loaded({ row: oneTicket() });
   await show();
-  expect(screen.getByText('Admitted at 19:42')).toBeTruthy();
+  expect(screen.getByText('Admitted at 7:42 pm')).toBeTruthy();
   expect(screen.queryByLabelText('Ticket 1 of 1 code')).toBeNull();
 });
 
@@ -208,7 +302,7 @@ it('a ticket already admitted on the booking never polls', async () => {
   });
   await show();
   expect(mockLive).toHaveBeenLastCalledWith(null, false);
-  expect(screen.getByText('Admitted at 19:42')).toBeTruthy();
+  expect(screen.getByText('Admitted at 7:42 pm')).toBeTruthy();
 });
 
 it.each<[LiveCodeState, string]>([

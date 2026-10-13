@@ -4,13 +4,19 @@ import type { ReactNode } from 'react';
 import { ScrollView, useWindowDimensions, View } from 'react-native';
 
 import { showCheckInCode, spacedCode } from '@/features/customer/domain/checkInCode';
-import { fromHotel, kindWord, type MyBooking } from '@/features/customer/domain/myBookings';
+import {
+  clockLabel,
+  fromHotel,
+  kindWord,
+  type MyBooking,
+} from '@/features/customer/domain/myBookings';
 import { useBooking } from '@/features/customer/hooks/useBooking';
 import { CodeSheet } from '@/features/customer/ui/CodeSheet';
 import { savedAtLabel } from '@/features/customer/ui/savedAt';
 import { clock } from '@/shared/api/instance';
 import { stayRange } from '@/shared/lib/lagosDay';
 import { useBrightScreen } from '@/shared/platform/useBrightScreen';
+import { usePreventCapture } from '@/shared/platform/usePreventCapture';
 import { layout, space } from '@/shared/theme';
 import {
   Banner,
@@ -30,9 +36,14 @@ type Props = {
   onClose: () => void;
 };
 
-const QR_MAX = 400;
-
 type Shown = { booking: MyBooking; code: string; saved: boolean };
+
+/** "13–15 Oct · check-in from 2:00 pm" (the time when the hotel gives one). */
+function stayLine(e: MyBooking): string {
+  const from = clockLabel(e.time);
+  const range = stayRange(e.start, e.end);
+  return from === null ? range : `${range} · check-in from ${from}`;
+}
 
 function Body({ children }: { children: ReactNode }) {
   return <View style={{ flex: 1, paddingHorizontal: space.s5 }}>{children}</View>;
@@ -41,7 +52,7 @@ function Body({ children }: { children: ReactNode }) {
 function Code({ shown }: { shown: Shown }) {
   const { width } = useWindowDimensions();
   const gutter = useWide() ? layout.tabletGutter : layout.phoneGutter;
-  const size = Math.min(width - gutter * 2, QR_MAX);
+  const size = Math.min(width - gutter * 2, layout.qrMax);
   const checkedIn = shown.booking.status === 'Checked in';
   return (
     <ScrollView
@@ -54,9 +65,12 @@ function Code({ shown }: { shown: Shown }) {
     >
       {checkedIn ? <StatusPill tone="success" icon={CircleCheck} label="Checked in" /> : null}
       <QrCode value={shown.code} size={size} accessibilityLabel="Check-in code" />
-      <Text variant="display" tabular selectable align="center">
-        {spacedCode(shown.code)}
-      </Text>
+      {/* Read out one character at a time ("A B 1 2…"), not as numbers, for the desk. */}
+      <View accessible accessibilityLabel={`Code ${shown.code.replace(/(.)(?=.)/g, '$1 ')}`}>
+        <Text variant="display" tabular selectable align="center">
+          {spacedCode(shown.code)}
+        </Text>
+      </View>
       <Text variant="body" tone="textSecondary" align="center">
         Show this at the front desk
       </Text>
@@ -93,7 +107,7 @@ function HotelCode({ userId, id, onClose }: { userId: string; id: string; onClos
     return (
       <CodeSheet
         title={e.title ?? kindWord('hotel')}
-        subtitle={stayRange(e.start, e.end)}
+        subtitle={stayLine(e)}
         onClose={onClose}
         notice={note === undefined ? undefined : <Banner tone="neutral" message={note} />}
       >
@@ -125,6 +139,8 @@ function HotelCode({ userId, id, onClose }: { userId: string; id: string; onClos
 
 // C10: the hotel check-in code, full screen, for the front desk.
 export function CheckInCodeScreen({ userId, bookingId, onClose }: Props) {
+  // The code admits a guest at the desk: no screenshots or recordings while it is open.
+  usePreventCapture('checkin-code');
   if (bookingId === null)
     return (
       <CodeSheet title="Check-in code" onClose={onClose}>

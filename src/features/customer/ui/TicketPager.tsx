@@ -1,12 +1,14 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   FlatList,
   ScrollView,
   useWindowDimensions,
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type ViewToken,
 } from 'react-native';
 
 import type { TicketView } from '@/features/customer/domain/tickets';
@@ -15,8 +17,9 @@ import type { IsoDate } from '@/shared/lib/lagosDay';
 import { color, layout, radius, space } from '@/shared/theme';
 import { IconButton, useMotionTier, useWide } from '@/shared/ui';
 
-// DESIGN_SYSTEM ticket rules: as large as the width allows, within reason on tablets.
-const QR_MAX = 360;
+// A page counts as the one on screen once most of it is: whatever moved it (swipe with or without
+// momentum, buttons, a screen reader scrolling focus into view).
+const VIEWABILITY = { itemVisiblePercentThreshold: 60 };
 // Beyond this many, dots stop being countable; "Ticket n of m" on the card still says where.
 const MAX_DOTS = 10;
 const DOT = space.s3;
@@ -38,7 +41,25 @@ export function TicketPager({ tickets, liveOnly, today, start }: Props) {
   const [index, setIndex] = useState(start);
   const last = tickets.length - 1;
   const current = Math.max(0, Math.min(index, last));
-  const qrSize = Math.min(width - gutter * 2, QR_MAX);
+  const qrSize = Math.min(width - gutter * 2, layout.qrMax);
+  // useCallback: FlatList refuses a new onViewableItemsChanged after mount; setIndex is stable.
+  const onViewable = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken<TicketView>[] }) => {
+      const seen = viewableItems.find((v) => v.isViewable && v.index !== null);
+      if (seen?.index != null) setIndex(seen.index);
+    },
+    [],
+  );
+
+  // Says where the user landed (focus stays on Next/Previous otherwise); not on first open.
+  const shownIndex = useRef(current);
+  useEffect(() => {
+    if (shownIndex.current === current) return;
+    shownIndex.current = current;
+    AccessibilityInfo.announceForAccessibility(
+      `Ticket ${String(current + 1)} of ${String(tickets.length)}`,
+    );
+  }, [current, tickets.length]);
 
   const onSettle = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const i = Math.round(e.nativeEvent.contentOffset.x / width);
@@ -63,9 +84,15 @@ export function TicketPager({ tickets, liveOnly, today, start }: Props) {
         getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
         initialScrollIndex={start > 0 && start <= last ? start : undefined}
         onMomentumScrollEnd={onSettle}
+        viewabilityConfig={VIEWABILITY}
+        onViewableItemsChanged={onViewable}
         extraData={current}
         renderItem={({ item, index: i }) => (
           <ScrollView
+            testID={`ticket-page-${String(i)}`}
+            // Screen readers get the page on screen only, never a neighbour's code or notices.
+            accessibilityElementsHidden={i !== current}
+            importantForAccessibility={i === current ? 'auto' : 'no-hide-descendants'}
             style={{ width }}
             contentContainerStyle={{ paddingHorizontal: gutter, paddingVertical: space.s5 }}
           >

@@ -13,4 +13,6 @@ export const layout = {
   formMaxWidth: 640,
   // Tablet two-pane screens (DESIGN_SYSTEM §2: ≈960 for tablet panels).
   panelMaxWidth: 960,
+  // Ticket and check-in QR codes: as wide as the screen allows, capped on tablets.
+  qrMax: 360,
 } as const;
