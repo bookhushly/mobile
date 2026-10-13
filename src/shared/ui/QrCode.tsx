@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
@@ -19,7 +18,8 @@ type Props = {
 // single shape there are no anti-aliasing seams between them. (react-native-svg 15 has no
 // shapeRendering prop.)
 export function QrCode({ value, size, accessibilityLabel = 'QR code', testID }: Props) {
-  const qr = useMemo(() => qrPath(value), [value]);
+  // No useMemo: the React Compiler memoises this on `value` already.
+  const qr = qrPath(value);
   const box = qr.size + QUIET_ZONE * 2;
   return (
     <View

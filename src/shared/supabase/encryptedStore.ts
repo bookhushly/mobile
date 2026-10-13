@@ -21,20 +21,24 @@ export function createEncryptedStore(deps: Deps) {
   // Fresh install: the iOS Keychain can outlive an uninstall while app data does not.
   // Never rejects: if the wipe fails (e.g. a locked Keychain) the marker stays unset and the wipe
   // is retried next launch, but the store keeps working for this session.
-  const ready = (async () => {
-    try {
-      if ((await deps.plain.get(marker)) === null) {
-        await deps.secure.delete(keyName(deps.storageKey));
-        await deps.plain.delete(deps.storageKey);
-        await deps.plain.set(marker, '1');
+  // Lazy (P6): runs once, on the first get/set/remove, so creating a store at import costs no
+  // storage reads at startup. Every operation still waits for it, so nothing reads leftovers.
+  let started: Promise<void> | null = null;
+  const ready = (): Promise<void> =>
+    (started ??= (async () => {
+      try {
+        if ((await deps.plain.get(marker)) === null) {
+          await deps.secure.delete(keyName(deps.storageKey));
+          await deps.plain.delete(deps.storageKey);
+          await deps.plain.set(marker, '1');
+        }
+      } catch {
+        // intentionally ignored; see above
       }
-    } catch {
-      // intentionally ignored; see above
-    }
-  })();
+    })());
 
   async function getItem(k: string): Promise<string | null> {
-    await ready;
+    await ready();
     try {
       const [keyHex, cipherHex] = await Promise.all([
         deps.secure.get(keyName(k)),
@@ -52,7 +56,7 @@ export function createEncryptedStore(deps: Deps) {
   }
 
   async function setItem(k: string, value: string): Promise<void> {
-    await ready;
+    await ready();
     const key = deps.randomBytes(32);
     const ctr = new aes.ModeOfOperation.ctr(key, new aes.Counter(1));
     const cipher = ctr.encrypt(aes.utils.utf8.toBytes(value));
@@ -61,7 +65,7 @@ export function createEncryptedStore(deps: Deps) {
   }
 
   async function removeItem(k: string): Promise<void> {
-    await ready;
+    await ready();
     await deps.secure.delete(keyName(k));
     await deps.plain.delete(k);
   }
