@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 
 import { knownPlace, placeForState, type Place } from '@/features/customer/domain/discover';
 import { customerKeys } from '@/features/customer/hooks/customerKeys';
@@ -20,7 +20,8 @@ async function readPlace(userId: string): Promise<Place | null> {
 }
 
 // Spec D6: the "Where to?" chip remembers the choice on this device. With none, the profile's
-// state (users.state), else Lagos. `place` is null until that is known, so the rails fetch once.
+// state (users.state), else Lagos. `place` is null until that is known, and the default, once
+// chosen, stays for the session (a profile that loads late never flips it), so the rails fetch once.
 export function useExplorePlace(userId: string): {
   place: Place | null;
   setPlace: (p: Place) => void;
@@ -43,10 +44,23 @@ export function useExplorePlace(userId: string): {
     },
     [qc, userId],
   );
-  let place: Place | null = null;
+  const [chosen, setChosen] = useState<{ userId: string; place: Place } | null>(null);
   const storedDone = stored.data !== undefined || stored.isError;
+  let place: Place | null = null;
   if (stored.data != null) place = stored.data;
-  else if (storedDone && profile !== null) place = placeForState(profile.state);
-  else if (storedDone && (error || !loading)) place = placeForState(null);
+  else if (chosen !== null && chosen.userId === userId) place = chosen.place;
+  else if (storedDone) {
+    const fallback =
+      profile !== null
+        ? placeForState(profile.state)
+        : error || !loading
+          ? placeForState(null)
+          : null;
+    if (fallback !== null) {
+      // Latched (render-time update, as in loadState): later profile loads don't move the rails.
+      setChosen({ userId, place: fallback });
+      place = fallback;
+    }
+  }
   return { place, setPlace };
 }

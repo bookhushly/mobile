@@ -6,6 +6,7 @@ import {
   eventStock,
   filterCount,
   hotelPriceLabel,
+  afterThisWeekend,
   inThisWeekend,
   knownPlace,
   normalizeAmenities,
@@ -196,6 +197,14 @@ describe('inThisWeekend', () => {
     expect(inThisWeekend('2026-10-15T23:00:00', TODAY)).toBe(false); // Thu
     expect(inThisWeekend('2026-10-19', TODAY)).toBe(false); // next Mon
     expect(inThisWeekend(null, TODAY)).toBe(false);
+  });
+
+  it('afterThisWeekend: only dates after this Sunday', () => {
+    expect(afterThisWeekend('2026-10-19T00:00:00', TODAY)).toBe(true); // next Mon
+    expect(afterThisWeekend('2026-10-18', TODAY)).toBe(false); // Sun
+    expect(afterThisWeekend('2026-10-14', TODAY)).toBe(false);
+    expect(afterThisWeekend(null, TODAY)).toBe(false);
+    expect(afterThisWeekend('soon', TODAY)).toBe(false);
   });
 
   it('on a Sunday, this weekend is the one ending today', () => {

@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import {
   savedDb,
@@ -50,9 +50,23 @@ export type Saved = {
   clearWriteError: () => void;
 };
 
-// Spec D9: saved_listings under RLS, keyed by user. Writes for one listing run one at a time in
-// tap order (a quick save → unsave can never land the other way round); the list refetches once
-// every write has settled, so a refetch can't overwrite a heart that is still being written.
+// One write queue per account, shared by every useSaved on screen (Explore rails, Saved tab,
+// listing detail all mount at once and tabs stay mounted): writes for one listing run one at a
+// time in tap order, whichever screen they came from, and the list refetches only once every
+// write for the account has settled, so a refetch never overwrites a heart still being written.
+type Queue = { chains: Map<string, Promise<WriteOutcome>>; pending: number };
+const queues = new Map<string, Queue>();
+function queueFor(userId: string): Queue {
+  let q = queues.get(userId);
+  if (q === undefined) {
+    q = { chains: new Map(), pending: 0 };
+    queues.set(userId, q);
+  }
+  return q;
+}
+
+// Spec D9: saved_listings under RLS, keyed by user. A quick save → unsave can never land the
+// other way round (see the queue above).
 export function useSaved(userId: string): Saved {
   const qc = useQueryClient();
   const k = customerKeys.saved(userId);
@@ -63,11 +77,10 @@ export function useSaved(userId: string): Saved {
       if (!r.ok) throw new CustomerLoadError(r.error);
       return r.value;
     },
+    enabled: userId !== '',
   });
   const [lastRemoved, setLastRemoved] = useState<SavedInput | null>(null);
   const [writeError, setWriteError] = useState<WriteError | null>(null);
-  const chains = useRef(new Map<string, Promise<unknown>>());
-  const pending = useRef(0);
 
   const items = useMemo(() => q.data ?? [], [q.data]);
   const savedKeys = useMemo(() => new Set(items.map(keyOf)), [items]);
@@ -101,9 +114,10 @@ export function useSaved(userId: string): Saved {
       });
       if (!want) setLastRemoved(snapshot);
       setWriteError(null);
-      pending.current += 1;
+      const queue = queueFor(userId);
+      queue.pending += 1;
       const send = () => (want ? savedDb.save(userId, snapshot) : savedDb.unsave(userId, snapshot));
-      const prev = chains.current.get(id) ?? Promise.resolve();
+      const prev = queue.chains.get(id) ?? Promise.resolve();
       const run = prev.then(send, send).then((r) => {
         const outcome = savedOutcome(r);
         if (outcome !== 'ok') {
@@ -120,11 +134,14 @@ export function useSaved(userId: string): Saved {
         return outcome;
       });
       const settled = run.catch((): WriteOutcome => 'transient');
-      chains.current.set(id, settled);
+      queue.chains.set(id, settled);
       return settled.then((outcome) => {
-        if (chains.current.get(id) === settled) chains.current.delete(id);
-        pending.current -= 1;
-        if (pending.current === 0) void qc.invalidateQueries({ queryKey: key });
+        if (queue.chains.get(id) === settled) queue.chains.delete(id);
+        queue.pending -= 1;
+        if (queue.pending === 0) {
+          if (queues.get(userId) === queue) queues.delete(userId);
+          void qc.invalidateQueries({ queryKey: key });
+        }
         return outcome;
       });
     },

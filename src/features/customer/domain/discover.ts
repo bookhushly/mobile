@@ -86,16 +86,29 @@ export function buildListingParams(
 const DAY_MS = 86_400_000;
 const dayMs = (d: IsoDate) => Date.parse(`${d}T00:00:00Z`);
 
-/** True when the event's date falls on Friday–Sunday of the current week (Lagos dates). */
-export function inThisWeekend(eventDate: string | null, todayLagos: IsoDate): boolean {
-  if (eventDate === null) return false;
+// The event's day and this week's Friday (Lagos dates), or null when either date is unreadable.
+function weekendOf(
+  eventDate: string | null,
+  todayLagos: IsoDate,
+): { t: number; friday: number } | null {
+  if (eventDate === null) return null;
   const day = eventDate.slice(0, 10);
-  if (!isIsoDate(day) || !isIsoDate(todayLagos)) return false;
+  if (!isIsoDate(day) || !isIsoDate(todayLagos)) return null;
   const today = dayMs(todayLagos);
   const weekday = new Date(today).getUTCDay(); // 0 Sun … 6 Sat
-  const friday = today + (weekday === 0 ? -2 : 5 - weekday) * DAY_MS;
-  const t = dayMs(day);
-  return t >= friday && t <= friday + 2 * DAY_MS;
+  return { t: dayMs(day), friday: today + (weekday === 0 ? -2 : 5 - weekday) * DAY_MS };
+}
+
+/** True when the event's date falls on Friday–Sunday of the current week (Lagos dates). */
+export function inThisWeekend(eventDate: string | null, todayLagos: IsoDate): boolean {
+  const w = weekendOf(eventDate, todayLagos);
+  return w !== null && w.t >= w.friday && w.t <= w.friday + 2 * DAY_MS;
+}
+
+/** True when the event's date is after this week's Sunday (Lagos dates). */
+export function afterThisWeekend(eventDate: string | null, todayLagos: IsoDate): boolean {
+  const w = weekendOf(eventDate, todayLagos);
+  return w !== null && w.t > w.friday + 2 * DAY_MS;
 }
 
 export function filterCount(cat: Category, f: Filters): number {

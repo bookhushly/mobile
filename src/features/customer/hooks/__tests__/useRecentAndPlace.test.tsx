@@ -108,6 +108,22 @@ describe('useExplorePlace', () => {
     await unmount();
   });
 
+  it('the default, once chosen, doesn’t flip when the profile loads later', async () => {
+    profile.mockResolvedValueOnce(err({ kind: 'validation' }));
+    const { result, unmount } = await renderHook(() => useExplorePlace(USER), {
+      wrapper: wrapper(qc),
+    });
+    await waitFor(() => {
+      expect(result.current.place).toEqual({ label: 'Lagos', state: 'Lagos' });
+    });
+    await act(async () => {
+      await qc.refetchQueries({ queryKey: ['customer', USER, 'profile'] });
+    });
+    expect(profile).toHaveBeenCalledTimes(2);
+    expect(result.current.place).toEqual({ label: 'Lagos', state: 'Lagos' });
+    await unmount();
+  });
+
   it('a remembered place wins, and a new choice is remembered per user', async () => {
     await mockKv.set(explorePlaceKey(USER), JSON.stringify({ label: 'Ibadan', city: 'Ibadan' }));
     const { result, unmount } = await renderHook(() => useExplorePlace(USER), {

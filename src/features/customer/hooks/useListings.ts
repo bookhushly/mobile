@@ -3,6 +3,7 @@ import { useCallback, useMemo } from 'react';
 
 import { fetchListings, type ItemFor } from '@/features/customer/api/listingsApi';
 import {
+  afterThisWeekend,
   buildListingParams,
   inThisWeekend,
   type Category,
@@ -47,7 +48,14 @@ async function loadPage<C extends Category>(
     if (!r.ok) throw new CustomerLoadError(r.error);
     if (clientFilter !== 'weekend') return r.value;
     const items = r.value.items.filter((i) => inThisWeekend(eventDateOf(i), today));
-    const next = r.value.nextPage;
+    // Soonest first (events' `top_rated`): once a page reaches past Sunday, no later page can
+    // match, so the list ends there instead of reading on.
+    const last = r.value.items.at(-1);
+    const passed =
+      filters.sort === 'top_rated' &&
+      last !== undefined &&
+      afterThisWeekend(eventDateOf(last), today);
+    const next = passed ? undefined : r.value.nextPage;
     // The route's count is for every date, so it isn't shown for a client-filtered list.
     if (items.length > 0 || next === undefined || read >= WEEKEND_MAX_PAGES)
       return { items, nextPage: next, totalCount: null };

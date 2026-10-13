@@ -180,7 +180,7 @@ describe('useListings', () => {
     // Tue 13 Oct: the weekend is Fri 16 – Sun 18.
     listings
       .mockResolvedValueOnce(
-        ok({ items: [event('mon', '2026-10-19')], nextPage: 1, totalCount: 40 }),
+        ok({ items: [event('thu', '2026-10-15')], nextPage: 1, totalCount: 40 }),
       )
       .mockResolvedValueOnce(
         ok({
@@ -203,7 +203,45 @@ describe('useListings', () => {
     await unmount();
   });
 
+  it('"This weekend", soonest first: the list ends once a page reaches past Sunday', async () => {
+    listings.mockResolvedValueOnce(
+      ok({
+        items: [event('sat', '2026-10-17'), event('mon', '2026-10-19')],
+        nextPage: 1,
+        totalCount: null,
+      }),
+    );
+    const { result, unmount } = await renderHook(
+      () => useListings('events', { q: '' }, { sort: 'top_rated', eventDate: 'weekend' }),
+      { wrapper: wrapper(qc) },
+    );
+    await waitFor(() => {
+      expect(result.current.items.map((i) => i.id)).toEqual(['sat']);
+    });
+    expect(result.current.hasMore).toBe(false);
+    expect(listings).toHaveBeenCalledTimes(1);
+    await unmount();
+  });
+
+  it('"This weekend", soonest first: an empty page past Sunday ends at once (no read-on)', async () => {
+    listings.mockResolvedValueOnce(
+      ok({ items: [event('mon', '2026-10-19')], nextPage: 1, totalCount: null }),
+    );
+    const { result, unmount } = await renderHook(
+      () => useListings('events', { q: '' }, { sort: 'top_rated', eventDate: 'weekend' }),
+      { wrapper: wrapper(qc) },
+    );
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+    expect(result.current.items).toEqual([]);
+    expect(result.current.hasMore).toBe(false);
+    expect(listings).toHaveBeenCalledTimes(1);
+    await unmount();
+  });
+
   it('"This weekend" stops after a bounded number of empty server pages', async () => {
+    // Another sort: dates aren't in order, so a later page can still match.
     listings.mockImplementation((_c, _cat, p) =>
       Promise.resolve(
         ok({
@@ -214,7 +252,7 @@ describe('useListings', () => {
       ),
     );
     const { result, unmount } = await renderHook(
-      () => useListings('events', { q: '' }, { sort: 'top_rated', eventDate: 'weekend' }),
+      () => useListings('events', { q: '' }, { sort: 'newest', eventDate: 'weekend' }),
       { wrapper: wrapper(qc) },
     );
     await waitFor(() => {

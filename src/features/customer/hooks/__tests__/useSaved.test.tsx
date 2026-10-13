@@ -215,3 +215,93 @@ describe('useSaved', () => {
     await unmount();
   });
 });
+
+describe('useSaved across screens', () => {
+  it('two instances (e.g. Explore and detail) share one write queue and one settle-then-refetch', async () => {
+    const first = deferred<Awaited<ReturnType<Db['save']>>>();
+    save.mockReturnValueOnce(first.promise);
+    const a = await run();
+    const b = await run();
+    const outcomes: Promise<string>[] = [];
+    await act(() => {
+      outcomes.push(a.result.current.toggle(HOTEL));
+    });
+    // The other screen sees the optimistic heart and unsaves it before the save has replied.
+    await waitFor(() => {
+      expect(b.result.current.isSaved('hotel', 'h1')).toBe(true);
+    });
+    await act(() => {
+      outcomes.push(b.result.current.toggle(HOTEL));
+    });
+    await waitFor(() => {
+      expect(a.result.current.isSaved('hotel', 'h1')).toBe(false);
+    });
+    // Tap order across instances: the unsave waits for the save.
+    expect(unsave).not.toHaveBeenCalled();
+    const listCalls = list.mock.calls.length;
+    await act(async () => {
+      first.resolve(ok(undefined));
+      await Promise.all(outcomes);
+    });
+    expect(unsave).toHaveBeenCalledWith(USER, HOTEL);
+    expect(save.mock.invocationCallOrder[0]).toBeLessThan(unsave.mock.invocationCallOrder[0] ?? 0);
+    // One refetch once both settled, not one per instance write mid-flight.
+    await waitFor(() => {
+      expect(list.mock.calls.length).toBe(listCalls + 1);
+    });
+    await a.unmount();
+    await b.unmount();
+  });
+
+  it('a settle on one screen never refetches over a write still in flight from another', async () => {
+    const slow = deferred<Awaited<ReturnType<Db['unsave']>>>();
+    unsave.mockReturnValueOnce(slow.promise);
+    const a = await run();
+    const b = await run();
+    const listCalls = list.mock.calls.length;
+    let slowDone: Promise<string> = Promise.resolve('');
+    await act(() => {
+      slowDone = b.result.current.toggle(EVENT);
+    });
+    await act(async () => {
+      expect(await a.result.current.toggle(HOTEL)).toBe('ok');
+    });
+    expect(list.mock.calls.length).toBe(listCalls);
+    await waitFor(() => {
+      expect(b.result.current.isSaved('event', 'e1')).toBe(false);
+    });
+    await act(async () => {
+      slow.resolve(ok(undefined));
+      await slowDone;
+    });
+    await waitFor(() => {
+      expect(list.mock.calls.length).toBe(listCalls + 1);
+    });
+    await a.unmount();
+    await b.unmount();
+  });
+});
+
+describe('Review Focus 4: saved after a lost response', () => {
+  it('a save whose reply is lost rolls back, and tapping again saves (never unsaves)', async () => {
+    save.mockResolvedValueOnce(err({ kind: 'network' }));
+    const { result, unmount } = await run();
+    await act(async () => {
+      expect(await result.current.toggle(HOTEL)).toBe('transient');
+    });
+    expect(result.current.isSaved('hotel', 'h1')).toBe(false);
+    await act(async () => {
+      expect(await result.current.toggle(HOTEL)).toBe('ok');
+    });
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(unsave).not.toHaveBeenCalled();
+    await unmount();
+  });
+});
+
+it('no user: no list query', async () => {
+  const { result, unmount } = await renderHook(() => useSaved(''), { wrapper: wrapper(qc) });
+  expect(list).not.toHaveBeenCalled();
+  expect(result.current.ready).toBe(false);
+  await unmount();
+});
