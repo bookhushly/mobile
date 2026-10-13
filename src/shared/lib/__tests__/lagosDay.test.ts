@@ -1,6 +1,11 @@
 import {
+  dayParts,
   daysBetween,
   isIsoDate,
+  hour12,
+  lagosClock12,
+  lagosSeconds12,
+  lagosWhen12,
   lagosTime,
   lagosToday,
   lagosWhen,
@@ -42,4 +47,31 @@ it('validates ISO dates', () => {
   expect(isIsoDate('2026-02-29')).toBe(false);
   expect(isIsoDate('2028-02-29')).toBe(true);
   expect(isIsoDate('2026-1-01')).toBe(false);
+});
+
+it('splits a date into tile parts', () => {
+  expect(dayParts('2026-10-18')).toEqual({ month: 'Oct', day: '18', weekday: 'Sun' });
+  expect(dayParts('2027-01-01')).toEqual({ month: 'Jan', day: '1', weekday: 'Fri' });
+});
+
+it('formats a 24-hour clock as 12-hour with am/pm', () => {
+  expect(hour12(0, '05')).toBe('12:05 am');
+  expect(hour12(9, '42')).toBe('9:42 am');
+  expect(hour12(12, '00')).toBe('12:00 pm');
+  expect(hour12(19, '42', '07')).toBe('7:42:07 pm');
+  expect(hour12(23, '59')).toBe('11:59 pm');
+});
+it('reads instants as the 12-hour Lagos clock', () => {
+  expect(lagosClock12('2026-10-11T18:42:00Z')).toBe('7:42 pm');
+  expect(lagosClock12('2026-10-11T23:05:00Z')).toBe('12:05 am');
+  expect(lagosClock12('nonsense')).toBe('');
+  expect(lagosSeconds12(Date.parse('2026-10-11T09:42:07Z'))).toBe('10:42:07 am');
+  expect(lagosSeconds12(Date.parse('2026-10-11T23:05:59.999Z'))).toBe('12:05:59 am');
+  expect(lagosSeconds12(Number.NaN)).toBe('');
+});
+it('says when in 12-hour time for today and adds the date otherwise', () => {
+  expect(lagosWhen12('2026-10-11T18:42:00Z', '2026-10-11')).toBe('at 7:42 pm');
+  expect(lagosWhen12('2026-10-10T09:42:00Z', '2026-10-11')).toBe('on Sat 10 Oct at 10:42 am');
+  expect(lagosWhen12('2026-10-10T23:30:00Z', '2026-10-11')).toBe('at 12:30 am');
+  expect(lagosWhen12('nonsense', '2026-10-11')).toBe('');
 });

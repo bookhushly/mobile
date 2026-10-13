@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/react-native';
 
 import { env } from '@/shared/config/env';
-import { scrubBreadcrumb, scrubEvent } from '@/shared/lib/scrub';
+import { scrubBreadcrumb, scrubEvent, scrubTransaction } from '@/shared/lib/scrub';
 
 export function initMonitoring(release: string): void {
   if (!env.sentryDsn) return;
@@ -11,7 +11,7 @@ export function initMonitoring(release: string): void {
     tracesSampleRate: 0.1,
     sendDefaultPii: false,
     beforeSend: (event) => scrubEvent(event),
-    beforeSendTransaction: (event) => scrubEvent(event),
+    beforeSendTransaction: (event) => scrubTransaction(event),
     beforeBreadcrumb: (b) => scrubBreadcrumb(b),
   });
 }

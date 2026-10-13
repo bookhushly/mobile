@@ -71,6 +71,70 @@ describe('encrypted store', () => {
   });
 });
 
+describe('lazy start (P6)', () => {
+  it('touches no storage until first used', async () => {
+    const secure = memoryKv();
+    const plain = memoryKv();
+    const spies = [
+      jest.spyOn(secure, 'get'),
+      jest.spyOn(secure, 'delete'),
+      jest.spyOn(plain, 'get'),
+      jest.spyOn(plain, 'set'),
+      jest.spyOn(plain, 'delete'),
+    ];
+    createEncryptedStore({ secure, plain, randomBytes, storageKey: 'bh.wallet', marker: 'm' });
+    await Promise.resolve();
+    for (const s of spies) expect(s).not.toHaveBeenCalled();
+  });
+
+  it('the first use runs the fresh-install wipe once, even with calls at the same time', async () => {
+    const secure = memoryKv();
+    await secure.set('bh-auth.k', 'aa'.repeat(32));
+    const plain = memoryKv();
+    const markerReads = jest.spyOn(plain, 'get');
+    const { store } = make({ secure, plain });
+    const [a, b] = await Promise.all([store.getItem('bh-auth'), store.getItem('bh-auth')]);
+    expect([a, b]).toEqual([null, null]);
+    expect(secure.dump()['bh-auth.k']).toBeUndefined();
+    expect(markerReads.mock.calls.filter(([k]) => k === 'bh.installed')).toHaveLength(1);
+    await store.setItem('bh-auth', 'kept');
+    expect(await store.getItem('bh-auth')).toBe('kept'); // no second wipe
+  });
+
+  it('the wipe also runs before a first write or remove', async () => {
+    const secure = memoryKv();
+    await secure.set('bh-auth.k', 'aa'.repeat(32));
+    const plain = memoryKv();
+    const { store } = make({ secure, plain });
+    await store.removeItem('other');
+    expect(secure.dump()['bh-auth.k']).toBeUndefined();
+    expect(plain.dump()['bh.installed']).toBe('1');
+  });
+});
+
+describe('several stores on one device', () => {
+  it('a second store with its own marker does not stop the session store wiping', async () => {
+    const secure = memoryKv();
+    await secure.set('bh-auth.k', 'aa'.repeat(32)); // Keychain leftovers from a previous install
+    await secure.set('bh.wallet.k', 'bb'.repeat(32));
+    const plain = memoryKv();
+    const wallet = createEncryptedStore({
+      secure,
+      plain,
+      randomBytes,
+      storageKey: 'bh.wallet',
+      marker: 'bh.wallet.installed',
+    });
+    expect(await wallet.getItem('bh.wallet')).toBeNull();
+    const session = createEncryptedStore({ secure, plain, randomBytes, storageKey: 'bh-auth' });
+    expect(await session.getItem('bh-auth')).toBeNull();
+    expect(secure.dump()['bh-auth.k']).toBeUndefined();
+    expect(secure.dump()['bh.wallet.k']).toBeUndefined();
+    expect(plain.dump()['bh.installed']).toBe('1');
+    expect(plain.dump()['bh.wallet.installed']).toBe('1');
+  });
+});
+
 describe('encrypted store robustness', () => {
   it('returns null (does not throw) when the secure store read throws', async () => {
     const secure = memoryKv();

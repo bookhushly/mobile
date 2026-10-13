@@ -12,6 +12,9 @@ export function stripQuery(url: string): string {
   return cut === -1 ? url : url.slice(0, cut);
 }
 
+// A whole path segment of 8 hex chars is a front-desk check-in code ([0-9A-F]{8} superset).
+const CHECK_IN_SEGMENT = /\/[0-9A-F]{8}(?=\/|$)/gi;
+
 export function redactText(text: string): string {
   return text
     .replace(TICKET_CODE, '[code]')
@@ -19,6 +22,11 @@ export function redactText(text: string): string {
     .replace(BEARER, 'Bearer [token]')
     .replace(EMAIL, '[email]')
     .replace(UUID, '[id]');
+}
+
+/** For urls and paths: no query or fragment; ids, ticket codes and check-in codes masked. */
+export function redactUrl(url: string): string {
+  return redactText(stripQuery(url)).replace(CHECK_IN_SEGMENT, '/[code]');
 }
 
 type Breadcrumb = { category?: string; message?: string; data?: Record<string, unknown> };
@@ -35,7 +43,7 @@ export function scrubBreadcrumb<T extends Breadcrumb>(b: T): T | null {
     const data: Record<string, unknown> = { ...out.data };
     for (const k of ['url', 'to', 'from']) {
       const v = data[k];
-      if (typeof v === 'string') data[k] = stripQuery(v);
+      if (typeof v === 'string') data[k] = redactUrl(v);
     }
     out.data = data;
   }
@@ -65,12 +73,41 @@ export function scrubEvent<T extends EventLike>(event: T): T {
   if (out.request) {
     const { cookies: _cookies, query_string: _query, ...rest } = out.request;
     out.request = rest;
-    if (typeof out.request.url === 'string') out.request.url = stripQuery(out.request.url);
+    if (typeof out.request.url === 'string') out.request.url = redactUrl(out.request.url);
   }
   if (out.breadcrumbs) {
     out.breadcrumbs = out.breadcrumbs
       .map((b) => scrubBreadcrumb(b))
       .filter((b): b is Breadcrumb => b !== null);
   }
+  return out;
+}
+
+type Span = { description?: string; data?: Record<string, unknown> };
+type TransactionLike = EventLike & { transaction?: string; spans?: Span[] };
+
+const SPAN_URL_KEYS = ['url', 'http.url', 'url.full'];
+const SPAN_DROPPED_KEYS = ['http.query', 'http.fragment', 'url.query'];
+
+// Performance data carries request urls in span descriptions and data (e.g. a ticket's id in
+// /api/tickets/<id>/code): the same masking as breadcrumbs.
+function scrubSpan<S extends Span>(span: S): S {
+  const out: S = { ...span };
+  if (typeof out.description === 'string') out.description = redactUrl(out.description);
+  if (out.data) {
+    const data: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(out.data)) {
+      if (SPAN_DROPPED_KEYS.includes(k)) continue;
+      data[k] = SPAN_URL_KEYS.includes(k) && typeof v === 'string' ? redactUrl(v) : v;
+    }
+    out.data = data;
+  }
+  return out;
+}
+
+export function scrubTransaction<T extends TransactionLike>(event: T): T {
+  const out: T = scrubEvent(event);
+  if (typeof out.transaction === 'string') out.transaction = redactUrl(out.transaction);
+  if (out.spans) out.spans = out.spans.map((s) => scrubSpan(s));
   return out;
 }

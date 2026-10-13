@@ -3,12 +3,18 @@ import { create } from 'zustand';
 import { reduceAuth, type AuthState, type SessionEvent } from '@/features/auth/domain/authState';
 import { createRecovery } from '@/features/auth/domain/recovery';
 import { mapSignInError, type SignInError } from '@/features/auth/domain/signInErrors';
-import { performSignOut } from '@/features/auth/domain/signOut';
+import { performSignOut, SignOutIncomplete } from '@/features/auth/domain/signOut';
 import { planSignOut, type SignOutOptions } from '@/features/auth/domain/signOutPlan';
 import { mapVerifyError, type VerifyError } from '@/features/auth/domain/verifyErrors';
 import { useAuthNotice } from '@/features/auth/hooks/useAuthNotice';
 import { queryClient } from '@/shared/api/queryClient';
-import { checkSignOut, wipeOnSignOut, type SignOutCheck } from '@/shared/lib/signOutGuard';
+import { onceGuard } from '@/shared/lib/once';
+import {
+  checkSignOut,
+  runAlwaysWipes,
+  wipeOnSignOut,
+  type SignOutCheck,
+} from '@/shared/lib/signOutGuard';
 import { secureKv } from '@/shared/platform/secureStore';
 import { sessionStore, STORAGE_KEY, supabase } from '@/shared/supabase/client';
 
@@ -27,7 +33,8 @@ type Store = {
   recovery: boolean;
   dispatch: (e: SessionEvent) => void;
   signIn: (email: string, password: string) => Promise<SignInError | null>;
-  signOut: (opts?: SignOutOptions) => Promise<{ blocked: SignOutCheck | null }>;
+  /** `incomplete`: the local session couldn't be removed; still signed in (try again). */
+  signOut: (opts?: SignOutOptions) => Promise<{ blocked: SignOutCheck | null; incomplete?: true }>;
   verifyCode: (
     email: string,
     code: string,
@@ -65,11 +72,23 @@ async function signOutLocally(): Promise<void> {
   });
 }
 
+// A sign-out whose always-wipes were cut short (app killed mid-wipe) is finished at the next
+// start: no session at cold start runs them once more. They are idempotent.
+const startupWipe = onceGuard();
+
 export const useAuth = create<Store>((set, get) => ({
   state: { status: 'loading' },
   recovery: false,
   dispatch: (e) => {
     set({ state: reduceAuth(get().state, e) });
+    // The one place every sign-out passes through (ours, an abandoned reset, a deletion, or the
+    // server ending the session). A blocked or cancelled sign-out never dispatches SIGNED_OUT.
+    if (e.type === 'SIGNED_OUT') void runAlwaysWipes();
+    else if (e.type === 'INITIAL_SESSION' && e.session === null) {
+      startupWipe(() => {
+        void runAlwaysWipes();
+      });
+    }
   },
   async signIn(email, password) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -89,14 +108,19 @@ export const useAuth = create<Store>((set, get) => ({
       if (typeof plan === 'object') return { blocked: plan.blocked };
       if (plan === 'wipe') await wipeOnSignOut(userId);
     }
-    await performSignOut({
-      remote: () => supabase.auth.signOut(),
-      removeLocal: () => sessionStore.removeItem(STORAGE_KEY),
-      onSignedOut: () => {
-        queryClient.clear();
-        get().dispatch({ type: 'SIGNED_OUT' });
-      },
-    });
+    try {
+      await performSignOut({
+        remote: () => supabase.auth.signOut(),
+        removeLocal: () => sessionStore.removeItem(STORAGE_KEY),
+        onSignedOut: () => {
+          queryClient.clear();
+          get().dispatch({ type: 'SIGNED_OUT' });
+        },
+      });
+    } catch (e) {
+      if (e instanceof SignOutIncomplete) return { blocked: null, incomplete: true };
+      throw e;
+    }
     return { blocked: null };
   },
   async verifyCode(email, code, type) {

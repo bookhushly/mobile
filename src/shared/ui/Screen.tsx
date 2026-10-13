@@ -4,6 +4,7 @@ import { SafeAreaInsetsContext, SafeAreaView } from 'react-native-safe-area-cont
 
 import { color, layout, space } from '@/shared/theme';
 
+import { refreshColors } from './refreshColors';
 import { useWide } from './useWide';
 
 type Props = {
@@ -31,14 +32,14 @@ export function Screen({
   const insets = useContext(SafeAreaInsetsContext) ?? { bottom: 0 };
   // DESIGN_SYSTEM §2: 16 pt side gutters on phones, 24 on tablets.
   const gutter = useWide() ? layout.tabletGutter : layout.phoneGutter;
-  // Theme colours for the pull-to-refresh spinner (Android would otherwise show its default blue).
   const refresh =
     refreshControl === undefined
       ? undefined
       : cloneElement(refreshControl, {
-          tintColor: refreshControl.props.tintColor ?? color.textSecondary,
-          colors: refreshControl.props.colors ?? [color.actionFill],
-          progressBackgroundColor: refreshControl.props.progressBackgroundColor ?? color.surface,
+          tintColor: refreshControl.props.tintColor ?? refreshColors.tintColor,
+          colors: refreshControl.props.colors ?? refreshColors.colors,
+          progressBackgroundColor:
+            refreshControl.props.progressBackgroundColor ?? refreshColors.progressBackgroundColor,
         });
   const body = {
     paddingHorizontal: gutter,

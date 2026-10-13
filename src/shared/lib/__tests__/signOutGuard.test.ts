@@ -1,7 +1,9 @@
 import {
   checkSignOut,
   registerSignOutGuard,
+  registerAlwaysWipe,
   resetShiftSummary,
+  runAlwaysWipes,
   shiftSummary,
   wipeOnSignOut,
 } from '@/shared/lib/signOutGuard';
@@ -46,5 +48,24 @@ describe('shift summary', () => {
       summary: (uid) => (uid === 'u2' ? Promise.reject(new Error('db')) : Promise.resolve(null)),
     });
     expect(await shiftSummary('u2')).toBeNull();
+  });
+});
+
+describe('always-wipes', () => {
+  it('runs every one, even when another rejects, and never rejects itself', async () => {
+    const order: string[] = [];
+    registerAlwaysWipe(() => Promise.reject(new Error('locked')));
+    registerAlwaysWipe(() => {
+      order.push('second');
+      return Promise.resolve();
+    });
+    await expect(runAlwaysWipes()).resolves.toBeUndefined();
+    expect(order).toEqual(['second']);
+  });
+  it('are not part of the gate wipe plan', async () => {
+    const always = jest.fn(() => Promise.resolve());
+    registerAlwaysWipe(always);
+    await wipeOnSignOut('u1');
+    expect(always).not.toHaveBeenCalled();
   });
 });

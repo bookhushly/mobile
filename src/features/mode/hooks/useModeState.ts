@@ -1,12 +1,14 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 
 import { loadModeInputs, type ModeDb } from '@/features/mode/api/loadModeInputs';
+import { modeCache } from '@/features/mode/api/modeCache';
+import { withCachedMode } from '@/features/mode/domain/modeCache';
 import { useChosenMode } from '@/features/mode/hooks/useChosenMode';
 import { resolveMode, type Mode } from '@/features/mode/domain/resolveMode';
 import type { ModeState } from '@/features/mode/domain/route';
 import { loadScannableEvents } from '@/shared/api/scannableEvents';
-import type { ApiError } from '@/shared/lib/errors';
+import { isRetryable, type ApiError } from '@/shared/lib/errors';
 import { supabase } from '@/shared/supabase/client';
 import { scannerDb } from '@/shared/supabase/scannerDb';
 import { wrap } from '@/shared/supabase/wrap';
@@ -53,11 +55,42 @@ export function useModeState(userId: string | null): {
     },
   });
 
+  // The last good resolution on disk: an offline cold start must still reach saved data (A1).
+  const cache = useQuery({
+    queryKey: ['modeCache', userId],
+    enabled: userId !== null,
+    networkMode: 'always',
+    staleTime: Infinity,
+    retry: false,
+    queryFn: () => modeCache.load(userId ?? ''),
+  });
+
+  const queryClient = useQueryClient();
+  const data = q.data;
+  useEffect(() => {
+    if (userId === null || data === undefined) return;
+    const r = resolveMode(data);
+    queryClient.setQueryData(['modeCache', userId], r.kind === 'modes' ? r : null);
+    void modeCache.save(userId, r).catch(() => undefined);
+  }, [userId, data, queryClient]);
+
   let state: ModeState = { status: 'idle' };
   if (userId !== null) {
     if (q.isPending || !loaded) state = { status: 'loading' };
     else if (q.isError) state = { status: 'error' };
     else state = { status: 'ready', resolution: resolveMode(q.data, chosen) };
+    if (loaded) {
+      const failure = q.isError ? q.error : q.failureReason;
+      state = withCachedMode(
+        state,
+        {
+          offline: q.isPending && q.fetchStatus === 'paused',
+          transientError: failure instanceof ModeLoadError && isRetryable(failure.apiError),
+        },
+        cache.data ?? null,
+        chosen,
+      );
+    }
   }
 
   return {
