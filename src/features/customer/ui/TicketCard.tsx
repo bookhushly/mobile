@@ -1,4 +1,12 @@
-import { CircleCheck, Info, SearchX, Ticket, WifiOff, type LucideIcon } from 'lucide-react-native';
+import {
+  CircleCheck,
+  Info,
+  LogIn,
+  SearchX,
+  Ticket,
+  WifiOff,
+  type LucideIcon,
+} from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
@@ -20,6 +28,8 @@ type Props = {
   liveOnly: boolean;
   qrSize: number;
   today: IsoDate;
+  /** The session expired: back to sign-in (the route's sign-out). */
+  onSignIn: () => void;
 };
 
 const CONNECT = 'Connect to the internet to show this ticket. This event only accepts live codes.';
@@ -81,7 +91,7 @@ function metaLine(t: TicketView): string {
 }
 
 // One page of the ticket viewer (C7, C8, C11). A known admission needs no poll: it is final.
-export function TicketCard({ ticket, active, liveOnly, qrSize, today }: Props) {
+export function TicketCard({ ticket, active, liveOnly, qrSize, today, onSignIn }: Props) {
   const known = ticket.admittedAt !== null;
   const { state: polled, retry } = useLiveCode(known ? null : ticket.id, active && !known);
   const state: LiveCodeState = known ? { kind: 'admitted', at: ticket.admittedAt } : polled;
@@ -115,6 +125,19 @@ export function TicketCard({ ticket, active, liveOnly, qrSize, today }: Props) {
           icon={WifiOff}
           message={CONNECT}
           action={{ label: 'Try again', onPress: retry }}
+        />
+      </Panel>
+      {meta}
+    </>
+  );
+  const signIn = (
+    <>
+      <Panel size={qrSize}>
+        <Banner
+          tone="neutral"
+          icon={LogIn}
+          message="Sign in again to show this ticket"
+          action={{ label: 'Sign in', onPress: onSignIn }}
         />
       </Panel>
       {meta}
@@ -194,6 +217,10 @@ export function TicketCard({ ticket, active, liveOnly, qrSize, today }: Props) {
         break;
       case 'fallback':
         body = liveOnly ? connect : staticCode;
+        break;
+      case 'signedOut':
+        // A printed code still works at the door without a session (C8).
+        body = liveOnly ? signIn : staticCode;
         break;
       case 'admitted': {
         const when = state.at === null ? '' : lagosWhen12(state.at, today);

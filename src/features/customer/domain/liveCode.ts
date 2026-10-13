@@ -10,8 +10,10 @@ export type LiveCodeState =
   | { kind: 'admitted'; at: string | null }
   | { kind: 'notConfirmed' }
   | { kind: 'notYours' }
-  /** Transient (network, timeout, 5xx, bad body, signed out): show the C8 fallback, never a refusal. */
+  /** Transient (network, timeout, 5xx, bad body): show the C8 fallback, never a refusal. */
   | { kind: 'fallback' }
+  /** The session has expired (401): signing in again fixes it, not the connection. */
+  | { kind: 'signedOut' }
   | { kind: 'rateLimited'; retryAfterSec: number | null; last: Token | null };
 
 export const REFRESH_AFTER_ERROR_MS = 15_000;
@@ -44,6 +46,7 @@ export function liveCodeFromResult(
     case 'rateLimited':
       return { kind: 'rateLimited', retryAfterSec: e.retryAfterSec ?? null, last };
     case 'auth':
+      return { kind: 'signedOut' };
     case 'network':
     case 'timeout':
     case 'unavailable':

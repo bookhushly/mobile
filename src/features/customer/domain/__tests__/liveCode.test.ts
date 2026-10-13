@@ -69,8 +69,11 @@ describe('liveCodeFromResult', () => {
     });
   });
 
+  it('an expired session (auth) is its own state, not "connect to the internet"', () => {
+    expect(liveCodeFromResult(err({ kind: 'auth' }), last)).toEqual({ kind: 'signedOut' });
+  });
+
   it.each<ApiError>([
-    { kind: 'auth' },
     { kind: 'network' },
     { kind: 'timeout' },
     { kind: 'unavailable', status: 503 },

@@ -30,10 +30,12 @@ type Props = {
   today: IsoDate;
   /** First page shown (already validated). */
   start: number;
+  /** The session expired: back to sign-in. */
+  onSignIn: () => void;
 };
 
 // C11: one ticket per page, swiped or stepped; only the page on screen polls (C7).
-export function TicketPager({ tickets, liveOnly, today, start }: Props) {
+export function TicketPager({ tickets, liveOnly, today, start, onSignIn }: Props) {
   const { width } = useWindowDimensions();
   const gutter = useWide() ? layout.tabletGutter : layout.phoneGutter;
   const tier = useMotionTier();
@@ -102,6 +104,7 @@ export function TicketPager({ tickets, liveOnly, today, start }: Props) {
               liveOnly={liveOnly}
               qrSize={qrSize}
               today={today}
+              onSignIn={onSignIn}
             />
           </ScrollView>
         )}

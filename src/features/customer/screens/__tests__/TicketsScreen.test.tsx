@@ -66,8 +66,18 @@ function loaded(over: Partial<ReturnType<typeof useBooking>>) {
   });
 }
 
+const signIn = jest.fn();
+
 async function show(index?: string) {
-  await render(<TicketsScreen userId="u1" bookingId={ID} index={index} onClose={jest.fn()} />);
+  await render(
+    <TicketsScreen
+      userId="u1"
+      bookingId={ID}
+      index={index}
+      onClose={jest.fn()}
+      onSignIn={signIn}
+    />,
+  );
 }
 
 /** Ticket ids whose latest useLiveCode call was active. */
@@ -283,6 +293,29 @@ it.each<[string, Partial<EventBookingRow>]>([
   expect(retry).toHaveBeenCalledTimes(1);
 });
 
+it('signed out, live-only: no QR, "sign in again" and a Sign in action', async () => {
+  states = { [T1]: { kind: 'signedOut' } };
+  loaded({ row: oneTicket() });
+  await show();
+  expect(screen.queryByLabelText('Ticket 1 of 1 code')).toBeNull();
+  expect(screen.getByText('Sign in again to show this ticket')).toBeTruthy();
+  expect(screen.queryByText(/Connect to the internet/)).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+  expect(signIn).toHaveBeenCalledTimes(1);
+});
+
+it('signed out, printed codes allowed: the static code still shows', async () => {
+  states = { [T1]: { kind: 'signedOut' } };
+  const row = oneTicket();
+  loaded({
+    row: { ...row, listing: row.listing && { ...row.listing, require_dynamic_ticket: false } },
+  });
+  await show();
+  expect(screen.getByLabelText('Ticket 1 of 1 code')).toBeTruthy();
+  expect(screen.getByText('Offline code — it works at the door')).toBeTruthy();
+  expect(screen.queryByText('Sign in again to show this ticket')).toBeNull();
+});
+
 it('admitted: the time, no QR', async () => {
   states = { [T1]: { kind: 'admitted', at: '2026-10-13T18:42:00Z' } };
   loaded({ row: oneTicket() });
@@ -344,7 +377,13 @@ it('no tickets yet, not yours, failed and bad ids never brighten the screen', as
   expect(mockBright).not.toHaveBeenCalledWith(true);
   mockBooking.mockClear();
   await render(
-    <TicketsScreen userId="u1" bookingId={null} index={undefined} onClose={jest.fn()} />,
+    <TicketsScreen
+      userId="u1"
+      bookingId={null}
+      index={undefined}
+      onClose={jest.fn()}
+      onSignIn={jest.fn()}
+    />,
   );
   expect(screen.getByText("This booking isn't on your account")).toBeTruthy();
   expect(mockBooking).not.toHaveBeenCalled();

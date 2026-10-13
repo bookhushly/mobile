@@ -157,7 +157,9 @@ export function useLiveCode(ticketId: string | null, active: boolean): LiveCode 
         } else {
           show(s);
           if (s.kind === 'live') schedule(nextRefreshMs(s.expiresAt, now));
-          else scheduleAt(null); // admitted, not confirmed, not yours: stop.
+          // Admitted, not confirmed, not yours, signed out: stop. Signed out isn't final:
+          // coming back on screen or Try again asks again.
+          else scheduleAt(null);
         }
         if (foreground()) armExpiry();
       });

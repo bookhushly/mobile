@@ -29,6 +29,8 @@ type Props = {
   /** The raw `index` route param (0-based page). */
   index: unknown;
   onClose: () => void;
+  /** A live code came back 401 (session expired): sign out so the user can sign in again. */
+  onSignIn: () => void;
 };
 
 type Shown = { booking: MyBooking; tickets: TicketView[]; liveOnly: boolean; saved: boolean };
@@ -47,7 +49,7 @@ function NotYours({ onClose }: { onClose: () => void }) {
   );
 }
 
-function EventTickets({ userId, id, index, onClose }: Props & { id: string }) {
+function EventTickets({ userId, id, index, onClose, onSignIn }: Props & { id: string }) {
   const b = useBooking(userId, 'event', id);
   const focused = useIsFocused();
   let shown: Shown | null = null;
@@ -97,6 +99,7 @@ function EventTickets({ userId, id, index, onClose }: Props & { id: string }) {
           liveOnly={shown.liveOnly}
           today={b.today}
           start={pagerIndexParam(index, shown.tickets.length)}
+          onSignIn={onSignIn}
         />
       </CodeSheet>
     );

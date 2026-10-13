@@ -93,6 +93,17 @@ it('stops polling once the ticket is admitted', async () => {
   await unmount();
 });
 
+it('an expired session (401) shows signed out and stops polling', async () => {
+  fetchCode.mockImplementationOnce(live('A')).mockResolvedValueOnce(fail({ kind: 'auth' }));
+  const { result, unmount } = await run();
+  expect(result.current.state).toMatchObject({ kind: 'live', token: 'A' });
+  await advance(28_000);
+  expect(result.current.state).toEqual({ kind: 'signedOut' });
+  await advance(120_000);
+  expect(fetchCode).toHaveBeenCalledTimes(2);
+  await unmount();
+});
+
 it('keeps the last token through a 429 until the server would refuse it', async () => {
   fetchCode
     .mockImplementationOnce(live('A'))
