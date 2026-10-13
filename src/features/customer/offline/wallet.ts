@@ -89,6 +89,8 @@ export function createWallet(deps: { store: Store }) {
   // (still queued, or loaded before a wipe and saved after it) is dropped when its turn comes.
   let queue: Promise<void> = Promise.resolve();
   let generation = 0;
+  // The entries last written (one wallet on disk, so one user), to skip identical rewrites.
+  const lastWritten = new Map<string, string>();
   const enqueue = (op: () => Promise<void>): Promise<void> => {
     const run = queue.then(op);
     queue = run.catch(() => undefined);
@@ -104,23 +106,28 @@ export function createWallet(deps: { store: Store }) {
     save(userId: string, entries: WalletEntry[], now: number, gen = generation): Promise<void> {
       const calledAt = gen;
       const today = lagosToday(now);
+      // Cheap filter and sort first; zod only runs on candidates, in order, until the cap fills
+      // (an invalid entry never takes a slot).
+      const candidates = entries
+        .filter((e) => e.when !== 'past' && isIsoDate(e.end) && daysBetween(today, e.end) >= 0)
+        .sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
       const kept: WalletEntry[] = [];
-      for (const e of entries) {
-        const p = walletEntry.safeParse(e);
-        if (p.success && p.data.when !== 'past' && daysBetween(today, p.data.end) >= 0) {
-          const { tickets } = p.data;
-          kept.push(
-            tickets === undefined
-              ? p.data
-              : { ...p.data, tickets: tickets.slice(0, WALLET_MAX_TICKETS) },
-          );
-        }
+      for (const e of candidates) {
+        if (kept.length >= WALLET_MAX) break;
+        const capped =
+          e.tickets === undefined ? e : { ...e, tickets: e.tickets.slice(0, WALLET_MAX_TICKETS) };
+        const p = walletEntry.safeParse(capped);
+        if (p.success) kept.push(p.data);
       }
-      kept.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
-      const w: Wallet = { userId, savedAt: now, entries: kept.slice(0, WALLET_MAX) };
+      const serialised = JSON.stringify(kept);
       return enqueue(async () => {
         if (calledAt !== generation) return;
+        // Same entries as the last write for this user: nothing to do (P2).
+        if (lastWritten.get(userId) === serialised) return;
+        const w: Wallet = { userId, savedAt: now, entries: kept };
         await deps.store.setItem(WALLET_KEY, JSON.stringify(w));
+        lastWritten.clear();
+        lastWritten.set(userId, serialised);
       });
     },
     async load(userId: string): Promise<Wallet | null> {
@@ -131,6 +138,7 @@ export function createWallet(deps: { store: Store }) {
     },
     wipe(): Promise<void> {
       generation += 1;
+      lastWritten.clear();
       return enqueue(() => deps.store.removeItem(WALLET_KEY));
     },
   };

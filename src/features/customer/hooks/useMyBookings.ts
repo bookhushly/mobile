@@ -97,10 +97,26 @@ async function loadAll(userId: string): Promise<BookingRows> {
   return rows;
 }
 
+// The wallet write (encrypt + disk) waits until the JS thread is idle, so it never competes with
+// the list's first render or a scroll (P2). Bounded: it still runs within 2 s.
+function whenIdle(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestIdleCallback === 'function')
+      requestIdleCallback(
+        () => {
+          resolve();
+        },
+        { timeout: 2000 },
+      );
+    else setTimeout(resolve, 0);
+  });
+}
+
 // Only for the account still signed in: a load that lands after sign-out (and its wipe) must
 // not write this account's bookings back to disk.
 async function saveWallet(userId: string, rows: BookingRows, gen: number): Promise<void> {
   try {
+    await whenIdle();
     const { data } = await supabase.auth.getSession();
     if (data.session?.user.id !== userId) return;
     const now = clock.serverNow();

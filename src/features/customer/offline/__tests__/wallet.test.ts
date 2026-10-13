@@ -152,6 +152,61 @@ it('keeps at most 20 tickets per entry', async () => {
   expect(kept[0]?.id).toBe('t0');
 });
 
+describe('skips a write that would change nothing', () => {
+  function counting() {
+    const s = store();
+    const setItem = jest.fn(s.setItem);
+    return { s: { ...s, setItem }, setItem };
+  }
+
+  it('the same entries again (a later refresh) are not rewritten', async () => {
+    const { s, setItem } = counting();
+    const w = createWallet({ store: s });
+    await w.save('u1', [ticketed, stay], NOW);
+    await w.save('u1', [stay, ticketed], NOW + 60_000);
+    expect(setItem).toHaveBeenCalledTimes(1);
+  });
+
+  it('a change, another user, or a save after a wipe writes', async () => {
+    const { s, setItem } = counting();
+    const w = createWallet({ store: s });
+    await w.save('u1', [ticketed], NOW);
+    await w.save('u1', [ticketed, stay], NOW);
+    expect(setItem).toHaveBeenCalledTimes(2);
+    await w.save('u2', [ticketed, stay], NOW);
+    expect(setItem).toHaveBeenCalledTimes(3);
+    await w.wipe();
+    await w.save('u2', [ticketed, stay], NOW);
+    expect(setItem).toHaveBeenCalledTimes(4);
+    expect((await w.load('u2'))?.entries).toEqual([stay, ticketed]);
+  });
+
+  it('a failed write is retried by the next save', async () => {
+    const { s, setItem } = counting();
+    setItem.mockRejectedValueOnce(new Error('disk full'));
+    const w = createWallet({ store: s });
+    await expect(w.save('u1', [ticketed], NOW)).rejects.toThrow('disk full');
+    await w.save('u1', [ticketed], NOW);
+    expect(setItem).toHaveBeenCalledTimes(2);
+    expect((await w.load('u1'))?.entries).toEqual([ticketed]);
+  });
+});
+
+it('invalid entries never take a slot under the cap', async () => {
+  const w = createWallet({ store: store() });
+  const day = (i: number) =>
+    new Date(Date.UTC(2026, 10, 1) + i * 86_400_000).toISOString().slice(0, 10);
+  const bad = { ...booking({ id: 'bad', start: day(0), end: day(0) }), tone: 'nope' };
+  const many = Array.from({ length: 30 }, (_, i) =>
+    booking({ id: `e${String(i)}`, start: day(i + 1), end: day(i + 1) }),
+  );
+  // A malformed entry (an older shape) is dropped and the next valid one takes its place.
+  await w.save('u1', [bad as unknown as WalletEntry, ...many], NOW);
+  const ids = (await w.load('u1'))?.entries.map((e) => e.id) ?? [];
+  expect(ids).toHaveLength(30);
+  expect(ids).not.toContain('bad');
+});
+
 it('wipe removes the wallet', async () => {
   const w = createWallet({ store: store() });
   await w.save('u1', [ticketed], NOW);
