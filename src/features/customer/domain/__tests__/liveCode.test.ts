@@ -3,6 +3,7 @@ import {
   liveCodeFromResult,
   nextRefreshMs,
   stillUsable,
+  usableUntil,
 } from '@/features/customer/domain/liveCode';
 import type { TicketCodeBody } from '@/features/customer/schemas/ticketCode';
 import type { ApiError } from '@/shared/lib/errors';
@@ -94,6 +95,7 @@ describe('timing', () => {
   it('keeps the last token usable until 30 s past expiry', () => {
     expect(stillUsable(100_000, 129_999)).toBe(true);
     expect(stillUsable(100_000, 130_000)).toBe(false);
+    expect(usableUntil(100_000)).toBe(130_000);
   });
 
   it('retries 15 s after an error', () => {

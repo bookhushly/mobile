@@ -58,6 +58,11 @@ export function nextRefreshMs(expiresAt: number, serverNow: number): number {
   return Math.max(MIN_REFRESH_MS, expiresAt - serverNow - REFRESH_LEAD_MS);
 }
 
+/** Server time from which a token is refused (the step after it has also passed). */
+export function usableUntil(expiresAt: number): number {
+  return expiresAt + GRACE_MS;
+}
+
 export function stillUsable(expiresAt: number, serverNow: number): boolean {
-  return serverNow < expiresAt + GRACE_MS;
+  return serverNow < usableUntil(expiresAt);
 }
