@@ -1,3 +1,4 @@
+import { onlineManager } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import { customerDb, type ProfileInput } from '@/features/customer/api/customerDb';
@@ -75,6 +76,23 @@ it('reads the profile', async () => {
   expect(db.profile).toHaveBeenCalledWith(USER);
   expect(result.current.p.profile).toEqual(PROFILE);
   await done();
+});
+
+it('offline, says it could not load instead of spinning', async () => {
+  onlineManager.setOnline(false);
+  try {
+    const qc = makeQueryClient();
+    const hook = await renderHook(() => useProfile(USER), { wrapper: wrapper(qc) });
+    await waitFor(() => {
+      expect(hook.result.current.error).toBe(true);
+    });
+    expect(hook.result.current.loading).toBe(false);
+    expect(hook.result.current.profile).toBeNull();
+    await hook.unmount();
+    qc.clear();
+  } finally {
+    onlineManager.setOnline(true);
+  }
 });
 
 it('saves only the four fields, then mirrors the name into the auth metadata', async () => {

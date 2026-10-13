@@ -15,6 +15,7 @@ import {
   type WriteOutcome,
 } from '@/features/customer/hooks/sessionWrite';
 import { useFocusRefetch } from '@/features/customer/hooks/useFocusRefetch';
+import { loadFailed } from '@/features/customer/hooks/loadState';
 import type { NotificationRow } from '@/features/customer/schemas/notifications';
 import type { ApiError } from '@/shared/lib/errors';
 import type { Result } from '@/shared/lib/result';
@@ -105,8 +106,9 @@ export function useNotifications(userId: string): {
   return {
     items,
     unread,
-    loading: q.isPending,
-    error: q.isError && q.data === undefined,
+    // Offline the query pauses rather than fails: that is "couldn't load", not a spinner.
+    loading: q.isPending && !loadFailed(q),
+    error: loadFailed(q),
     refetch: q.refetch,
     open: (n) => {
       if (!n.read) void setRead([n.id], true);

@@ -85,7 +85,8 @@ function parseJson(raw: string): unknown {
 
 export function createWallet(deps: { store: Store }) {
   // Saves and wipes run one at a time, in call order: a slow save can never land after a wipe.
-  // `generation` moves on every wipe, so a save called before it (still queued) is dropped.
+  // `generation` moves on every wipe; a save whose data was loaded under an older generation
+  // (still queued, or loaded before a wipe and saved after it) is dropped when its turn comes.
   let queue: Promise<void> = Promise.resolve();
   let generation = 0;
   const enqueue = (op: () => Promise<void>): Promise<void> => {
@@ -95,8 +96,13 @@ export function createWallet(deps: { store: Store }) {
   };
   return {
     // Today and upcoming only (re-checked against `now`: `when` may be stale), soonest first.
-    save(userId: string, entries: WalletEntry[], now: number): Promise<void> {
-      const calledAt = generation;
+    /** Bumped by every wipe; capture it when the data to save starts loading. */
+    generation(): number {
+      return generation;
+    },
+    // `gen`: the generation the data was loaded under (default: now). A wipe since then drops it.
+    save(userId: string, entries: WalletEntry[], now: number, gen = generation): Promise<void> {
+      const calledAt = gen;
       const today = lagosToday(now);
       const kept: WalletEntry[] = [];
       for (const e of entries) {

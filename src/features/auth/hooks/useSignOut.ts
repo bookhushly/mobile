@@ -15,7 +15,13 @@ import { captureException } from '@/shared/monitoring';
 
 const plural = (n: number, one: string, many: string) => `${String(n)} ${n === 1 ? one : many}`;
 
-type SignOut = (opts?: SignOutOptions) => Promise<{ blocked: SignOutCheck | null }>;
+type SignOutResult = { blocked: SignOutCheck | null; incomplete?: true };
+type SignOut = (opts?: SignOutOptions) => Promise<SignOutResult>;
+
+/** The session couldn't be removed from this phone: say so neutrally; the user is still in. */
+export function alertIfIncomplete(r: SignOutResult): void {
+  if (r.incomplete === true) Alert.alert('Couldn’t finish signing out — try again');
+}
 
 function confirmDiscard(unsyncable: number, signOut: SignOut): void {
   Alert.alert(
@@ -102,6 +108,11 @@ export function useSignOut(): () => void {
   const signOut = useAuth((s) => s.signOut);
   const userId = useAuth((s) => (s.state.status === 'signedIn' ? s.state.userId : null));
   return useCallback(() => {
-    void startSignOut(userId, signOut);
+    const reporting: SignOut = async (opts) => {
+      const r = await signOut(opts);
+      alertIfIncomplete(r);
+      return r;
+    };
+    void startSignOut(userId, reporting);
   }, [signOut, userId]);
 }

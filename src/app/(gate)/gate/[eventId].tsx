@@ -5,6 +5,7 @@ import { Linking } from 'react-native';
 import { z } from 'zod';
 
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import { alertIfIncomplete } from '@/features/auth/hooks/useSignOut';
 import { gateKeys } from '@/features/gate/api/keys';
 import { eventLabel } from '@/features/gate/domain/eventList';
 import type { LookupQuery } from '@/features/gate/domain/lookupQuery';
@@ -136,7 +137,7 @@ function Scanner({ eventId }: { eventId: string }) {
       onToggleMute={toggleMute}
       session={session}
       onSignIn={() => {
-        void signOut({ keepOfflineData: true });
+        void signOut({ keepOfflineData: true }).then(alertIfIncomplete);
       }}
       onChangeEvent={leave}
       onLostAssignment={leaveLostAssignment}

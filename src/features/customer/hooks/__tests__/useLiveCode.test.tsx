@@ -309,3 +309,21 @@ it('keeps a code that arrives after the card went off screen', async () => {
   expect(hook.result.current.state).toMatchObject({ kind: 'live', token: 'A' });
   await hook.unmount();
 });
+
+it('retry() while off screen does not force a fetch later', async () => {
+  fetchCode.mockResolvedValue(
+    fail({ kind: 'conflict', code: 'conflict', body: { checked_in_at: '2026-10-13T18:42:00Z' } }),
+  );
+  const hook = await run();
+  expect(hook.result.current.state).toMatchObject({ kind: 'admitted' });
+  await hook.rerender({ id: 't1', on: false });
+  await act(() => {
+    hook.result.current.retry();
+  });
+  await advance(0);
+  await hook.rerender({ id: 't1', on: true });
+  await advance(60_000);
+  // Admitted stays put: no stale force flag.
+  expect(fetchCode).toHaveBeenCalledTimes(1);
+  await hook.unmount();
+});

@@ -25,7 +25,7 @@ jest.mock('@/shared/supabase/client', () => ({
   },
 }));
 jest.mock('@/features/customer/offline/wallet', () => ({
-  wallet: { save: jest.fn(), load: jest.fn() },
+  wallet: { save: jest.fn(), load: jest.fn(), generation: jest.fn() },
 }));
 jest.mock('@/features/customer/api/customerDb', () => ({
   customerDb: {
@@ -49,6 +49,7 @@ let db: {
 };
 let save: jest.SpiedFunction<typeof wallet.save>;
 let load: jest.SpiedFunction<typeof wallet.load>;
+let mockGen = 0;
 const NETWORK = { ok: false as const, error: { kind: 'network' as const } };
 
 function entry(p: Partial<WalletEntry>): WalletEntry {
@@ -79,6 +80,8 @@ beforeEach(() => {
   mockSessionUser = USER;
   save = jest.spyOn(wallet, 'save').mockResolvedValue(undefined);
   load = jest.spyOn(wallet, 'load').mockResolvedValue(null);
+  mockGen = 4;
+  jest.spyOn(wallet, 'generation').mockImplementation(() => mockGen);
   db = {
     events: jest.spyOn(customerDb, 'events').mockResolvedValue(ok([ev()])),
     hotels: jest.spyOn(customerDb, 'hotels').mockResolvedValue(ok([ho()])),
@@ -161,6 +164,20 @@ it('re-dates the lists when a later fetch settles on a new Lagos day', async () 
   qc.clear();
 });
 
+it('saves under the wallet generation from when the fetch started', async () => {
+  // A wipe (sign-out) lands while the lists are loading.
+  db.events.mockImplementation(() => {
+    mockGen = 5;
+    return Promise.resolve(ok([ev()]));
+  });
+  const { done } = await run();
+  await waitFor(() => {
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+  expect(save.mock.calls[0]?.[3]).toBe(4);
+  await done();
+});
+
 it('never saves the wallet once another account (or none) is signed in', async () => {
   mockSessionUser = null;
   const { result, done } = await run();
@@ -183,6 +200,45 @@ it('shows the wallet when the device is offline (the fetch is paused, never fail
     expect(result.current.saved).toEqual({ savedAt: NOON });
     expect(result.current.bookings?.upcoming.map((b) => b.id)).toEqual(['h2']);
     expect(result.current.error).toBe(false);
+    await done();
+  } finally {
+    onlineManager.setOnline(true);
+  }
+});
+
+it('keeps the wallet on screen while the fetch resumes on reconnect', async () => {
+  load.mockResolvedValue({
+    userId: USER,
+    savedAt: NOON,
+    entries: [entry({ id: 'h2', start: '2026-10-18', end: '2026-10-19' })],
+  });
+  let resolveEvents: (v: Awaited<ReturnType<typeof customerDb.events>>) => void = () => undefined;
+  db.events.mockReturnValue(new Promise((r) => (resolveEvents = r)));
+  onlineManager.setOnline(false);
+  try {
+    const { result, done } = await run();
+    expect(result.current.saved).toEqual({ savedAt: NOON });
+    // Back online: the paused fetch resumes and hangs on a slow link.
+    await act(() => {
+      onlineManager.setOnline(true);
+    });
+    await waitFor(() => {
+      expect(db.events).toHaveBeenCalled();
+    });
+    // Let the resumed fetch's state reach the hook.
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 20)));
+    expect(result.current.loading).toBe(false);
+    expect(result.current.saved).toEqual({ savedAt: NOON });
+    expect(result.current.bookings?.upcoming.map((b) => b.id)).toEqual(['h2']);
+    // Real data replaces the wallet.
+    await act(async () => {
+      resolveEvents(ok([ev()]));
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(result.current.saved).toBeNull();
+    });
+    expect(result.current.rows?.events).toHaveLength(1);
     await done();
   } finally {
     onlineManager.setOnline(true);

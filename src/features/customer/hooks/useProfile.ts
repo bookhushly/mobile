@@ -12,6 +12,7 @@ import {
   writeOutcome,
   type WriteOutcome,
 } from '@/features/customer/hooks/sessionWrite';
+import { loadFailed } from '@/features/customer/hooks/loadState';
 import type { ProfileRow } from '@/features/customer/schemas/profile';
 import { supabase } from '@/shared/supabase/client';
 
@@ -31,8 +32,9 @@ export function useProfile(userId: string): {
   });
   return {
     profile: q.data ?? null,
-    loading: q.isPending,
-    error: q.isError && q.data === undefined,
+    // Offline the query pauses rather than fails: that is "couldn't load", not a spinner.
+    loading: q.isPending && !loadFailed(q),
+    error: loadFailed(q),
     refetch: q.refetch,
   };
 }

@@ -61,6 +61,9 @@ export function useLiveCode(ticketId: string | null, active: boolean): LiveCode 
   }, []);
 
   useEffect(() => {
+    // Read and cleared on every run, so a retry() while off screen can't force a later fetch.
+    const force = forced.current;
+    forced.current = false;
     if (!active || ticketId === null) return;
     const id = ticketId;
     let live = true;
@@ -71,8 +74,6 @@ export function useLiveCode(ticketId: string | null, active: boolean): LiveCode 
     let current = m?.state ?? LOADING;
     // Server time the next fetch is due; null = stopped for good.
     let dueAt: number | null = null;
-    const force = forced.current;
-    forced.current = false;
 
     const remember = () => {
       memo.current = { ticketId: id, state: current, dueAt };

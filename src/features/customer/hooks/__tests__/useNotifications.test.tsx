@@ -1,3 +1,4 @@
+import { onlineManager } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import { customerDb } from '@/features/customer/api/customerDb';
@@ -94,6 +95,23 @@ it('reports an error when the first load fails', async () => {
   expect(result.current.error).toBe(true);
   expect(result.current.items).toEqual([]);
   await done();
+});
+
+it('offline, says it could not load instead of spinning', async () => {
+  onlineManager.setOnline(false);
+  try {
+    const qc = makeQueryClient();
+    const hook = await renderHook(() => useNotifications(USER), { wrapper: wrapper(qc) });
+    await waitFor(() => {
+      expect(hook.result.current.error).toBe(true);
+    });
+    expect(hook.result.current.loading).toBe(false);
+    expect(db.notifications).not.toHaveBeenCalled();
+    await hook.unmount();
+    qc.clear();
+  } finally {
+    onlineManager.setOnline(true);
+  }
 });
 
 it('opening an unread one marks it read at once; a read one writes nothing', async () => {

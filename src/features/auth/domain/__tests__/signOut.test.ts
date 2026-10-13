@@ -1,4 +1,4 @@
-import { performSignOut } from '@/features/auth/domain/signOut';
+import { performSignOut, SignOutIncomplete } from '@/features/auth/domain/signOut';
 
 describe('performSignOut', () => {
   it('does nothing extra when the remote sign-out succeeds', async () => {
@@ -34,15 +34,31 @@ describe('performSignOut', () => {
     expect(removeLocal).toHaveBeenCalledTimes(1);
     expect(onSignedOut).toHaveBeenCalledTimes(1);
   });
-  it('still signs out when the local session cannot be removed', async () => {
+  it('retries removing the local session once, then signs out', async () => {
+    const removeLocal = jest
+      .fn<Promise<void>, []>()
+      .mockRejectedValueOnce(new Error('keychain'))
+      .mockResolvedValueOnce(undefined);
+    const onSignedOut = jest.fn();
+    await performSignOut({
+      remote: () => Promise.reject(new Error('offline')),
+      removeLocal,
+      onSignedOut,
+    });
+    expect(removeLocal).toHaveBeenCalledTimes(2);
+    expect(onSignedOut).toHaveBeenCalledTimes(1);
+  });
+  it('never reports signed out while the local session is still there', async () => {
+    const removeLocal = jest.fn(() => Promise.reject(new Error('keychain')));
     const onSignedOut = jest.fn();
     await expect(
       performSignOut({
         remote: () => Promise.reject(new Error('offline')),
-        removeLocal: () => Promise.reject(new Error('keychain')),
+        removeLocal,
         onSignedOut,
       }),
-    ).resolves.toBeUndefined();
-    expect(onSignedOut).toHaveBeenCalledTimes(1);
+    ).rejects.toBeInstanceOf(SignOutIncomplete);
+    expect(removeLocal).toHaveBeenCalledTimes(2);
+    expect(onSignedOut).not.toHaveBeenCalled();
   });
 });

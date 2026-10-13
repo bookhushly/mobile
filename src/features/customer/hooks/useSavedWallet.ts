@@ -6,27 +6,6 @@ import { wallet, type Wallet } from '@/features/customer/offline/wallet';
 import { clock } from '@/shared/api/instance';
 import { lagosToday, type IsoDate } from '@/shared/lib/lagosDay';
 
-type Loaded = {
-  data: unknown;
-  isError: boolean;
-  fetchStatus: 'fetching' | 'paused' | 'idle';
-  dataUpdatedAt: number;
-  errorUpdatedAt: number;
-};
-
-/**
- * Nothing to show from the network: the load failed, or it is paused because the device is
- * offline (TanStack's default networkMode never even starts the fetch then) — C9/C17.
- */
-export function loadFailed(q: Loaded): boolean {
-  return q.data === undefined && (q.isError || q.fetchStatus === 'paused');
-}
-
-// Changes on every fetch (fetchStatus flips), even one that settles within the same millisecond.
-export function fetchStamp(q: Loaded): string {
-  return `${String(q.dataUpdatedAt)}|${String(q.errorUpdatedAt)}|${q.fetchStatus}`;
-}
-
 // Lagos today, re-read whenever `stamp` changes (a fetch settles: focus, foreground, pull). Held
 // in state rather than read in render: the React Compiler may cache an input-less render read.
 export function useTodayAt(stamp: string): IsoDate {

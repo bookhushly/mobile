@@ -4,12 +4,8 @@ import { customerDb } from '@/features/customer/api/customerDb';
 import type { BookingKind } from '@/features/customer/domain/myBookings';
 import { CustomerLoadError, customerKeys } from '@/features/customer/hooks/customerKeys';
 import { walletEntryToday, type BookingRows } from '@/features/customer/hooks/useMyBookings';
-import {
-  fetchStamp,
-  loadFailed,
-  useSavedWallet,
-  useTodayAt,
-} from '@/features/customer/hooks/useSavedWallet';
+import { fetchStamp, useLoadFailed } from '@/features/customer/hooks/loadState';
+import { useSavedWallet, useTodayAt } from '@/features/customer/hooks/useSavedWallet';
 import type { WalletEntry } from '@/features/customer/offline/wallet';
 import type {
   ApartmentBookingRow,
@@ -81,7 +77,7 @@ export function useBooking<K extends BookingKind>(
       return row === undefined ? undefined : { row };
     },
   });
-  const failed = loadFailed(q);
+  const failed = useLoadFailed(q, userId);
   const { wallet } = useSavedWallet(userId, failed);
   const today = useTodayAt(fetchStamp(q));
   const saved = wallet?.entries.find((e) => e.kind === kind && e.id === id);

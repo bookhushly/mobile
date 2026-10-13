@@ -186,6 +186,17 @@ describe('save and wipe run one at a time', () => {
     expect(await w.load('u1')).toBeNull();
   });
 
+  it('data loaded before a wipe is never written after it', async () => {
+    const w = createWallet({ store: store() });
+    const gen = w.generation();
+    await w.wipe();
+    await w.save('u1', [ticketed], NOW, gen);
+    expect(await w.load('u1')).toBeNull();
+    // Loaded after the wipe: saved.
+    await w.save('u1', [ticketed], NOW, w.generation());
+    expect(await w.load('u1')).not.toBeNull();
+  });
+
   it('a write already under way finishes before the wipe removes it', async () => {
     const slow = slowStore();
     const w = createWallet({ store: slow.store });

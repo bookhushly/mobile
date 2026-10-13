@@ -15,12 +15,8 @@ import {
 import { canShowTickets, liveOnly, ticketsOf } from '@/features/customer/domain/tickets';
 import { CustomerLoadError, customerKeys } from '@/features/customer/hooks/customerKeys';
 import { useFocusRefetch } from '@/features/customer/hooks/useFocusRefetch';
-import {
-  fetchStamp,
-  loadFailed,
-  useSavedWallet,
-  useTodayAt,
-} from '@/features/customer/hooks/useSavedWallet';
+import { fetchStamp, useLoadFailed } from '@/features/customer/hooks/loadState';
+import { useSavedWallet, useTodayAt } from '@/features/customer/hooks/useSavedWallet';
 import { wallet, type WalletEntry } from '@/features/customer/offline/wallet';
 import type {
   ApartmentBookingRow,
@@ -84,6 +80,8 @@ export function walletLists(entries: readonly WalletEntry[], today: IsoDate): Bo
 }
 
 async function loadAll(userId: string): Promise<BookingRows> {
+  // Before any await: a sign-out (and its wipe) during the load must stop this save.
+  const gen = wallet.generation();
   const [events, hotels, apartments] = await Promise.all([
     customerDb.events(userId),
     customerDb.hotels(userId),
@@ -95,18 +93,18 @@ async function loadAll(userId: string): Promise<BookingRows> {
   if (!apartments.ok) throw new CustomerLoadError(apartments.error);
   const rows = { events: events.value, hotels: hotels.value, apartments: apartments.value };
   // Fire-and-forget: a wallet that can't be written only costs the offline copy.
-  void saveWallet(userId, rows);
+  void saveWallet(userId, rows, gen);
   return rows;
 }
 
 // Only for the account still signed in: a load that lands after sign-out (and its wipe) must
 // not write this account's bookings back to disk.
-async function saveWallet(userId: string, rows: BookingRows): Promise<void> {
+async function saveWallet(userId: string, rows: BookingRows, gen: number): Promise<void> {
   try {
     const { data } = await supabase.auth.getSession();
     if (data.session?.user.id !== userId) return;
     const now = clock.serverNow();
-    await wallet.save(userId, walletEntries(rows, lagosToday(now)), now);
+    await wallet.save(userId, walletEntries(rows, lagosToday(now)), now, gen);
   } catch {
     // see above
   }
@@ -129,7 +127,7 @@ export function useMyBookings(userId: string): {
     refetchOnWindowFocus: true,
   });
   useFocusRefetch(isFocused, q);
-  const failed = loadFailed(q);
+  const failed = useLoadFailed(q, userId);
   const w = useSavedWallet(userId, failed);
 
   const rows = q.data;
