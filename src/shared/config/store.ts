@@ -8,3 +8,4 @@ export function storeUrl(): string {
 export const WEB_URL = 'https://bookhushly.com';
 export const TERMS_URL = `${WEB_URL}/terms`;
 export const PRIVACY_URL = `${WEB_URL}/privacy`;
+export const HELP_URL = `${WEB_URL}/help`;
