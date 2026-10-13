@@ -1,12 +1,26 @@
-import { Ticket } from 'lucide-react-native';
+import { router } from 'expo-router';
 
-import { EmptyState, Header, Screen } from '@/shared/ui';
+import { useAuth } from '@/features/auth/hooks/useAuth';
+import { BookingsScreen } from '@/features/customer/screens/BookingsScreen';
 
-// Filled in by the bookings task.
 export default function BookingsRoute() {
+  const state = useAuth((s) => s.state);
+  const userId = state.status === 'signedIn' ? state.userId : '';
   return (
-    <Screen header={<Header title="Bookings" />}>
-      <EmptyState icon={Ticket} title="Your bookings show here" />
-    </Screen>
+    <BookingsScreen
+      userId={userId}
+      onOpenBooking={(kind, id) => {
+        router.push({ pathname: '/my-booking/[kind]/[id]', params: { kind, id } });
+      }}
+      onShowTickets={(bookingId) => {
+        router.push({ pathname: '/tickets/[bookingId]', params: { bookingId } });
+      }}
+      onShowCheckInCode={(bookingId) => {
+        router.push({ pathname: '/check-in-code/[bookingId]', params: { bookingId } });
+      }}
+      onOpenNotifications={() => {
+        router.push('/notifications');
+      }}
+    />
   );
 }

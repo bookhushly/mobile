@@ -48,6 +48,15 @@ jest.mock('@/features/customer/hooks/useTourSeen', () => ({
   useTourSeen: (userId: string | null) => mockTour(userId),
 }));
 
+// The details screen is stubbed: this test is about the booking the route hands it.
+const mockScreen: { booking?: unknown } = {};
+jest.mock('@/features/customer/screens/BookingScreen', () => ({
+  BookingScreen: ({ booking }: { booking: unknown }) => {
+    mockScreen.booking = booking;
+    return null;
+  },
+}));
+
 const ID = '0b6f1f4e-2c1a-4f6e-9a39-6f0e7d2b9c11';
 
 beforeEach(() => {
@@ -56,6 +65,7 @@ beforeEach(() => {
   mockNav.stack = {};
   mockNav.params = {};
   mockTour.mockClear();
+  mockScreen.booking = undefined;
 });
 
 it('customer mode lands on the bookings tab', () => {
@@ -93,14 +103,20 @@ it('shows tickets and the check-in code full screen and drops customer data on l
   qc.clear();
 });
 
+it('hands the details screen a parsed booking', async () => {
+  mockNav.params = { kind: 'hotel', id: ID };
+  await render(<MyBookingRoute />);
+  expect(mockScreen.booking).toEqual({ kind: 'hotel', id: ID });
+});
+
 it.each<[string, Record<string, unknown>]>([
   ['an unknown kind', { kind: 'flight', id: ID }],
   ['a non-UUID id', { kind: 'event', id: 'e1' }],
   ['no params', {}],
-])('a booking link with %s is not on your account', async (_, params) => {
+])('a booking link with %s is no booking (null, no query)', async (_, params) => {
   mockNav.params = params;
   await render(<MyBookingRoute />);
-  expect(screen.getByText("This booking isn't on your account")).toBeTruthy();
+  expect(mockScreen.booking).toBeNull();
 });
 
 it.each([TicketsRoute, CheckInCodeRoute])(

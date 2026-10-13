@@ -87,3 +87,13 @@ export function lagosWhen(iso: string, today: IsoDate): string {
   const time = lagosTime(iso);
   return day === today ? `at ${time}` : `on ${shortDate(day)} at ${time}`;
 }
+
+/** The parts of a date tile: { month: 'Oct', day: '18', weekday: 'Sun' }. */
+export function dayParts(d: IsoDate): { month: string; day: string; weekday: string } {
+  const [, m, day] = parts(d);
+  return {
+    month: MONTHS[m - 1] ?? '',
+    day: String(day),
+    weekday: WEEKDAYS[new Date(utcMs(d)).getUTCDay()] ?? '',
+  };
+}

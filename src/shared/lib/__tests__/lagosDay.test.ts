@@ -1,4 +1,5 @@
 import {
+  dayParts,
   daysBetween,
   isIsoDate,
   lagosTime,
@@ -42,4 +43,9 @@ it('validates ISO dates', () => {
   expect(isIsoDate('2026-02-29')).toBe(false);
   expect(isIsoDate('2028-02-29')).toBe(true);
   expect(isIsoDate('2026-1-01')).toBe(false);
+});
+
+it('splits a date into tile parts', () => {
+  expect(dayParts('2026-10-18')).toEqual({ month: 'Oct', day: '18', weekday: 'Sun' });
+  expect(dayParts('2027-01-01')).toEqual({ month: 'Jan', day: '1', weekday: 'Fri' });
 });

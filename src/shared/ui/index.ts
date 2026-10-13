@@ -6,6 +6,8 @@ export { Button } from './Button';
 export type { ButtonVariant } from './Button';
 export { Card } from './Card';
 export { CodeField } from './CodeField';
+export { DateTile } from './DateTile';
+export type { DateTileParts } from './DateTile';
 export { DensityProvider, useDensity, useDensityName } from './DensityProvider';
 export { Divider } from './Divider';
 export { EmptyState } from './EmptyState';

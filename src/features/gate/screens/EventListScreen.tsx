@@ -11,8 +11,9 @@ import {
   type EventStatus,
 } from '@/features/gate/domain/eventList';
 import type { ScannableEvent } from '@/shared/api/scannableEvents';
-import { borderWidth, color, radius, space } from '@/shared/theme';
+import { space } from '@/shared/theme';
 import {
+  DateTile,
   EmptyState,
   ErrorState,
   Header,
@@ -22,7 +23,6 @@ import {
   SectionHeader,
   SkeletonRows,
   StatusPill,
-  Text,
 } from '@/shared/ui';
 
 type State =
@@ -41,8 +41,6 @@ type Props = {
   onOpenAccount: () => void;
 };
 
-const TILE = 56;
-
 function when(iso: string | null): string {
   if (iso === null) return 'Date to be confirmed';
   const t = Date.parse(iso);
@@ -60,42 +58,6 @@ function timeOf(e: ScannableEvent): string {
   const t = e.startsAt === null ? NaN : Date.parse(e.startsAt);
   if (!Number.isFinite(t)) return 'Time to be confirmed';
   return new Date(t).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' });
-}
-
-function DateTile({ e }: { e: ScannableEvent }) {
-  const tile = dateTile(e);
-  return (
-    <View
-      style={{
-        width: TILE,
-        height: TILE,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: radius.r3,
-        borderWidth: borderWidth.hairline,
-        borderColor: color.border,
-        backgroundColor: color.surface,
-      }}
-    >
-      {tile === null ? (
-        <Text variant="labelSm" tone="textSecondary">
-          TBC
-        </Text>
-      ) : (
-        <>
-          <Text variant="labelSm" tone="linkText">
-            {tile.month}
-          </Text>
-          <Text variant="title" maxScale={1}>
-            {tile.day}
-          </Text>
-          <Text variant="caption" tone="textSecondary">
-            {tile.weekday}
-          </Text>
-        </>
-      )}
-    </View>
-  );
 }
 
 const STATUS_TEXT: Record<EventStatus, string | null> = {
@@ -157,7 +119,7 @@ function EventRow({
       onPress={() => {
         onOpen(e.id);
       }}
-      leading={<DateTile e={e} />}
+      leading={<DateTile tile={dateTile(e)} />}
       title={label}
       subtitle={[timeOf(e), e.location].filter(Boolean).join(' · ')}
       note={note}

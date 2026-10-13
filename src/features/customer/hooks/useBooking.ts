@@ -17,6 +17,7 @@ import type {
   HotelBookingRow,
 } from '@/features/customer/schemas/bookings';
 import type { ApiError } from '@/shared/lib/errors';
+import type { IsoDate } from '@/shared/lib/lagosDay';
 import type { Result } from '@/shared/lib/result';
 
 export type BookingRowOf = {
@@ -55,6 +56,10 @@ export function useBooking<K extends BookingKind>(
   row: BookingRowOf[K] | null | undefined;
   /** The saved copy, only when the network load failed. */
   fromWallet: WalletEntry | null;
+  /** When the saved copy was written (server clock), with `fromWallet`. */
+  savedAt: number | null;
+  /** Lagos today, re-read whenever a fetch settles: for status words and "today". */
+  today: IsoDate;
   error: boolean;
   refetch: () => Promise<unknown>;
 } {
@@ -85,6 +90,8 @@ export function useBooking<K extends BookingKind>(
   return {
     row: q.data?.row,
     fromWallet,
+    savedAt: fromWallet === null ? null : (wallet?.savedAt ?? null),
+    today,
     error: failed && wallet !== undefined && fromWallet === null,
     refetch: q.refetch,
   };

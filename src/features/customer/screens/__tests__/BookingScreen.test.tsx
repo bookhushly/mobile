@@ -1,0 +1,193 @@
+import { fireEvent, render, screen } from '@testing-library/react-native';
+import { openBrowserAsync } from 'expo-web-browser';
+import { Linking } from 'react-native';
+
+import { fromEvent } from '@/features/customer/domain/myBookings';
+import { useBooking } from '@/features/customer/hooks/useBooking';
+import type { WalletEntry } from '@/features/customer/offline/wallet';
+import { BookingScreen } from '@/features/customer/screens/BookingScreen';
+
+import { ap, ev, ho, TODAY } from '../../hooks/__tests__/customerTestUtils';
+
+jest.mock('@/features/customer/hooks/useBooking', () => ({ useBooking: jest.fn() }));
+jest.mock('@/shared/api/instance', () => ({
+  clock: { serverNow: () => Date.parse('2026-10-13T11:00:00Z') },
+}));
+jest.mock('expo-web-browser', () => ({
+  openBrowserAsync: jest.fn(() => Promise.resolve({ type: 'opened' })),
+}));
+
+const mockBooking = jest.mocked(useBooking);
+const ID = '0b6f1f4e-2c1a-4f6e-9a39-6f0e7d2b9c11';
+
+function loaded(over: Partial<ReturnType<typeof useBooking>>) {
+  const refetch = jest.fn(() => Promise.resolve());
+  mockBooking.mockReturnValue({
+    row: undefined,
+    fromWallet: null,
+    savedAt: null,
+    today: TODAY,
+    error: false,
+    refetch,
+    ...over,
+  });
+  return refetch;
+}
+
+const h = {
+  onBack: jest.fn(),
+  onShowTickets: jest.fn(),
+  onShowCheckInCode: jest.fn(),
+};
+async function show(kind: 'event' | 'hotel' | 'apartment') {
+  await render(<BookingScreen userId="u1" booking={{ kind, id: ID }} {...h} />);
+}
+
+let openURL: jest.SpyInstance;
+beforeEach(() => {
+  jest.clearAllMocks();
+  openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+});
+
+it('event: date, venue to Maps, packages, tickets and Show tickets', async () => {
+  loaded({
+    row: ev({
+      id: ID,
+      ticket_details: { VIP: 2, Regular: 1 },
+      seat_assignments: [{ seat: 'A12' }],
+      tickets: [
+        { id: 't1', ticket_type: 'VIP', ticket_index: 1, checked_in_at: null },
+        { id: 't2', ticket_type: 'VIP', ticket_index: 2, checked_in_at: '2026-10-20T18:42:00Z' },
+      ],
+    }),
+  });
+  await show('event');
+  expect(screen.getByRole('header', { name: 'Afrobeats night' })).toBeTruthy();
+  expect(screen.getByText('Tue 20 Oct · 7:00 pm')).toBeTruthy();
+  expect(screen.getByText('2 × VIP, 1 × Regular')).toBeTruthy();
+  expect(screen.getByLabelText('Ticket 1 · VIP, Seat A12, Valid')).toBeTruthy();
+  expect(screen.getByLabelText('Ticket 2 · VIP, Admitted 7:42 pm')).toBeTruthy();
+  expect(screen.getByText('To change or cancel, use bookhushly.com')).toBeTruthy();
+
+  await fireEvent.press(screen.getByRole('link', { name: 'Venue, Eko Hotel, Lagos' }));
+  expect(openURL).toHaveBeenCalledWith('http://maps.apple.com/?q=Eko%20Hotel%2C%20Lagos');
+  await fireEvent.press(screen.getByRole('button', { name: 'Show tickets' }));
+  expect(h.onShowTickets).toHaveBeenCalledWith(ID);
+});
+
+it('event: tickets still being issued says so, with no Show tickets', async () => {
+  loaded({ row: ev({ id: ID, tickets: [] }) });
+  await show('event');
+  expect(screen.getByText('Your tickets are being issued — pull to refresh')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Show tickets' })).toBeNull();
+});
+
+it('a hidden listing shows the kind word and still opens (C4)', async () => {
+  loaded({ row: ev({ id: ID, listing: null, booking_date: '2026-10-20' }) });
+  await show('event');
+  expect(screen.getByRole('header', { name: 'Event' })).toBeTruthy();
+  expect(screen.getByRole('header', { name: 'Booking' })).toBeTruthy();
+  expect(screen.getByText("Details aren't available right now")).toBeTruthy();
+  expect(screen.getByText('Tue 20 Oct · 10:00 am')).toBeTruthy();
+});
+
+it('a pending booking points to the website to finish paying', async () => {
+  loaded({ row: ev({ id: ID, payment_status: 'pending', status: 'pending' }) });
+  await show('event');
+  expect(screen.getByText('Finish paying on bookhushly.com')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Show tickets' })).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Open bookhushly.com' }));
+  expect(openBrowserAsync).toHaveBeenCalledWith('https://bookhushly.com/dashboard/customer');
+});
+
+it('hotel: dates with the hotel times, room type, guests, payment and the check-in code', async () => {
+  loaded({ row: ho({ id: ID, children: 1 }) });
+  await show('hotel');
+  expect(screen.getByRole('header', { name: 'Harbour Suites' })).toBeTruthy();
+  expect(screen.getByLabelText('Check-in, Tue 13 Oct · from 2:00 pm')).toBeTruthy();
+  expect(screen.getByLabelText('Check-out, Thu 15 Oct · by 12:00 pm')).toBeTruthy();
+  expect(screen.getByLabelText('Room type, Deluxe')).toBeTruthy();
+  expect(screen.getByLabelText('Guests, 2 adults, 1 child')).toBeTruthy();
+  expect(screen.getByLabelText('Payment, Paid')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('link', { name: 'Address, Ikeja, Lagos' }));
+  expect(openURL).toHaveBeenCalledWith('http://maps.apple.com/?q=Ikeja%2C%20Lagos');
+  await fireEvent.press(screen.getByRole('button', { name: 'Show check-in code' }));
+  expect(h.onShowCheckInCode).toHaveBeenCalledWith(ID);
+});
+
+it('hotel: no check-in code once checked out', async () => {
+  loaded({ row: ho({ id: ID, booking_status: 'checked_out' }) });
+  await show('hotel');
+  expect(screen.queryByRole('button', { name: 'Show check-in code' })).toBeNull();
+});
+
+it('apartment: area, address, dates and nights, times, guests and payment', async () => {
+  loaded({
+    row: ap({
+      id: ID,
+      booking_status: 'confirmed',
+      payment_status: 'pending',
+      check_in_date: '2026-10-20',
+      check_out_date: '2026-10-22',
+      apartment: {
+        id: 'ap1',
+        name: 'Lekki Loft',
+        city: 'Lagos',
+        state: 'Lagos',
+        area: 'Lekki',
+        address: '5 Admiralty Way',
+        image_urls: null,
+        check_in_time: '15:00',
+        check_out_time: '11:00',
+      },
+    }),
+  });
+  await show('apartment');
+  expect(screen.getByRole('header', { name: 'Lekki Loft' })).toBeTruthy();
+  expect(screen.getByLabelText('Area, Lekki, Lagos')).toBeTruthy();
+  expect(screen.getByLabelText('Dates, 20–22 Oct · 2 nights')).toBeTruthy();
+  expect(screen.getByLabelText('Check-in, Tue 20 Oct · from 3:00 pm')).toBeTruthy();
+  expect(screen.getByLabelText('Check-out, Thu 22 Oct · by 11:00 am')).toBeTruthy();
+  expect(screen.getByLabelText('Guests, 2 guests')).toBeTruthy();
+  expect(screen.getByLabelText('Payment, Not paid')).toBeTruthy();
+  expect(screen.getByText('Finish paying on bookhushly.com')).toBeTruthy();
+  await fireEvent.press(
+    screen.getByRole('link', { name: 'Address, 5 Admiralty Way, Lekki, Lagos' }),
+  );
+  expect(openURL).toHaveBeenCalledWith(
+    'http://maps.apple.com/?q=5%20Admiralty%20Way%2C%20Lekki%2C%20Lagos',
+  );
+});
+
+it('a booking RLS does not return, or bad params, is not on your account', async () => {
+  loaded({ row: null });
+  await show('hotel');
+  expect(screen.getByText("This booking isn't on your account")).toBeTruthy();
+  await render(<BookingScreen userId="u1" booking={null} {...h} />);
+  expect(screen.getByText("This booking isn't on your account")).toBeTruthy();
+});
+
+it('offline, the saved copy shows with its tickets and a saved-data banner', async () => {
+  const entry: WalletEntry = {
+    ...fromEvent(ev({ id: ID }), TODAY),
+    tickets: [{ id: 't1', index: 1, total: 1, type: 'Regular', seat: null, admittedAt: null }],
+    liveOnly: true,
+  };
+  loaded({ fromWallet: entry, savedAt: Date.parse('2026-10-13T09:42:00Z') });
+  await show('event');
+  expect(
+    screen.getByText('Showing saved details — last updated 10:42. Pull to refresh.'),
+  ).toBeTruthy();
+  expect(screen.getByLabelText('Ticket 1 · Regular, Valid')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Show tickets' }));
+  expect(h.onShowTickets).toHaveBeenCalledWith(ID);
+});
+
+it('a failed load with nothing saved is an error with Try again, never "not yours"', async () => {
+  const refetch = loaded({ error: true });
+  await show('event');
+  expect(screen.getByText("Couldn't load this booking")).toBeTruthy();
+  expect(screen.queryByText("This booking isn't on your account")).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+  expect(refetch).toHaveBeenCalledTimes(1);
+});
