@@ -614,6 +614,18 @@ describe('splitBookings', () => {
     expect(s.past.map((b) => b.id)).toEqual(['pb', 'pa']);
   });
 
+  it('a missing createdAt sorts last on a tie, ahead and behind', () => {
+    const s = splitBookings([
+      mk('un', 'upcoming', '2026-10-15', { createdAt: null }),
+      mk('ua', 'upcoming', '2026-10-15', { createdAt: '2026-10-01T00:00:00Z' }),
+      mk('pn', 'past', '2026-10-01', { createdAt: null }),
+      mk('pa', 'past', '2026-10-01', { createdAt: '2026-09-01T00:00:00Z' }),
+      mk('pb', 'past', '2026-10-01', { createdAt: '2026-09-02T00:00:00Z' }),
+    ]);
+    expect(s.upcoming.map((b) => b.id)).toEqual(['ua', 'un']);
+    expect(s.past.map((b) => b.id)).toEqual(['pb', 'pa', 'pn']);
+  });
+
   it('does not mutate its input', () => {
     const all = [mk('b', 'past', '2026-10-01'), mk('a', 'past', '2026-10-05')];
     splitBookings(all);

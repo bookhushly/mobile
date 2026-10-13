@@ -69,6 +69,13 @@ it('round-trips the entries for the same user', async () => {
   expect(await w.load('u1')).toEqual({ userId: 'u1', savedAt: NOW, entries: [stay, ticketed] });
 });
 
+it('keeps a booking whose created_at is missing', async () => {
+  const w = createWallet({ store: store() });
+  const undated = booking({ createdAt: null });
+  await w.save('u1', [undated], NOW);
+  expect((await w.load('u1'))?.entries).toEqual([undated]);
+});
+
 it('another user, nothing saved, or bad JSON load as null', async () => {
   const s = store();
   const w = createWallet({ store: s });

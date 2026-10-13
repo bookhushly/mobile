@@ -175,7 +175,7 @@ export function createCustomerDb(client: SupabaseLike): CustomerDb {
             phone: p.phone,
             state: p.state,
             address: p.address,
-            updated_at: new Date().toISOString(),
+            // No updated_at: a trigger on users sets it.
           })
           .eq('id', userId),
       ),

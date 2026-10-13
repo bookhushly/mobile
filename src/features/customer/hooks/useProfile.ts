@@ -48,7 +48,7 @@ export function useSaveProfile(userId: string): {
   const [saving, setSaving] = useState(false);
   const save = useCallback(
     async (p: ProfileInput): Promise<WriteOutcome> => {
-      // C14: only these four (plus updated_at in the db layer); never `role`.
+      // C14: only these four (a trigger sets updated_at); never `role`.
       const input: ProfileInput = {
         name: p.name,
         phone: p.phone,

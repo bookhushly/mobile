@@ -52,7 +52,7 @@ const walletEntry = z.object({
   when: z.enum(['today', 'upcoming', 'past']),
   next: z.string(),
   imageUrl: nullableString,
-  createdAt: z.string(),
+  createdAt: nullableString,
   tickets: z
     .array(
       z.object({

@@ -41,7 +41,7 @@ export const eventBookingRow = z.object({
     .array(z.looseObject({ seat: z.string().nullish() }))
     .nullable()
     .catch(null),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   listing: z
     .object({
       id: z.string(),
@@ -72,7 +72,7 @@ export const hotelBookingRow = z.object({
   checked_in_at: z.string().nullable(),
   checked_out_at: z.string().nullable(),
   check_in_code: z.string().nullable(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   hotel: z
     .object({
       id: z.string(),
@@ -103,7 +103,7 @@ export const apartmentBookingRow = z.object({
     .nullable(),
   checked_in_at: z.string().nullable(),
   checked_out_at: z.string().nullable(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   apartment: z
     .object({
       id: z.string(),

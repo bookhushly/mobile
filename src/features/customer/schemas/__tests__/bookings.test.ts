@@ -97,6 +97,14 @@ describe('column lists', () => {
   });
 });
 
+describe('created_at', () => {
+  it('may be null on all three rows (the column is nullable)', () => {
+    expect(eventBookingRow.safeParse({ ...event, created_at: null }).success).toBe(true);
+    expect(hotelBookingRow.safeParse({ ...hotel, created_at: null }).success).toBe(true);
+    expect(apartmentBookingRow.safeParse({ ...apartment, created_at: null }).success).toBe(true);
+  });
+});
+
 describe('eventBookingRow', () => {
   it('parses a date-only or timestamp event_end_date', () => {
     for (const end of ['2026-10-19', '2026-10-19T00:00:00']) {

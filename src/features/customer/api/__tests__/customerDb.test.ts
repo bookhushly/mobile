@@ -346,7 +346,7 @@ describe('profile', () => {
     expect(f.calls).toEqual([['eq', 'id', 'u1'], ['maybeSingle']]);
     expect(r).toEqual({ ok: true, value: profile });
   });
-  it('saves exactly name, phone, state, address and updated_at', async () => {
+  it('saves exactly name, phone, state and address (a trigger sets updated_at)', async () => {
     const f = fake({ data: [{ id: 'u1' }] });
     const input = {
       name: 'Ada Obi',
@@ -360,7 +360,7 @@ describe('profile', () => {
     expect(f.state.table).toBe('users');
     expect(f.state.op).toBe('update');
     const sent = f.state.arg as Record<string, unknown>;
-    expect(Object.keys(sent).sort()).toEqual(['address', 'name', 'phone', 'state', 'updated_at']);
+    expect(Object.keys(sent).sort()).toEqual(['address', 'name', 'phone', 'state']);
     expect(sent).toEqual(
       expect.objectContaining({
         name: 'Ada Obi',
@@ -369,7 +369,6 @@ describe('profile', () => {
         address: null,
       }),
     );
-    expect(typeof sent.updated_at).toBe('string');
     expect(f.calls).toEqual([
       ['eq', 'id', 'u1'],
       ['select', 'id'],

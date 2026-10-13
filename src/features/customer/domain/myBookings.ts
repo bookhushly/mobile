@@ -34,7 +34,7 @@ export type MyBooking = {
   when: When;
   next: string;
   imageUrl: string | null;
-  createdAt: string;
+  createdAt: string | null;
 };
 
 const PAY_NEXT = 'Finish paying on bookhushly.com';
@@ -187,7 +187,7 @@ type Stay = {
   end: IsoDate;
   checkInTime: string | null;
   imageUrl: string | null;
-  createdAt: string;
+  createdAt: string | null;
   paid: boolean;
   /** Booking-level word before the payment rule; null = confirmed-like. */
   terminal: 'Cancelled' | 'Checked out' | 'No-show' | 'Refunded' | null;
@@ -304,12 +304,18 @@ function cmp(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
+// Order of creation, either way; a missing created_at always sorts last.
+function byCreated(a: string | null, b: string | null, dir: 1 | -1): number {
+  if (a === null || b === null) return a === b ? 0 : a === null ? 1 : -1;
+  return dir * cmp(a, b);
+}
+
 function ascending(a: MyBooking, b: MyBooking): number {
   return (
     cmp(a.start, b.start) ||
     // Untimed sorts after timed on the same day.
     cmp(a.time ?? '99:99', b.time ?? '99:99') ||
-    cmp(a.createdAt, b.createdAt)
+    byCreated(a.createdAt, b.createdAt, 1)
   );
 }
 
@@ -322,6 +328,6 @@ export function splitBookings(all: readonly MyBooking[]): {
   const upcoming = all.filter((b) => b.when === 'upcoming').sort(ascending);
   const past = all
     .filter((b) => b.when === 'past')
-    .sort((a, b) => cmp(b.start, a.start) || cmp(b.createdAt, a.createdAt));
+    .sort((a, b) => cmp(b.start, a.start) || byCreated(a.createdAt, b.createdAt, -1));
   return { today, upcoming, past };
 }

@@ -1,6 +1,9 @@
 import type { HotelBookingRow } from '@/features/customer/schemas/bookings';
 
-/** C10 (web rule): paid, not cancelled or checked out, and a code exists. */
+/**
+ * C10: paid, not cancelled, and a code exists. Stricter than the web: hidden after check-out
+ * too (the web still shows it).
+ */
 export function showCheckInCode(
   row: Pick<HotelBookingRow, 'payment_status' | 'booking_status' | 'check_in_code'>,
 ): boolean {
