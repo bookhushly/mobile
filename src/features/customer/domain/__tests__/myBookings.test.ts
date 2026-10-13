@@ -26,6 +26,7 @@ function listing(p: Partial<Listing> = {}): Listing {
     media_urls: ['https://cdn.example/a.jpg'],
     event_date: `${TODAY}T00:00:00`,
     event_time: `${TODAY}T18:00:00+00:00`,
+    event_end_date: null,
     require_dynamic_ticket: false,
     ...p,
   };
@@ -261,6 +262,73 @@ describe('fromEvent', () => {
     expect(fromEvent(late, lagosToday(Date.UTC(2026, 9, 13, 22, 59))).when).toBe('today');
     expect(fromEvent(late, lagosToday(Date.UTC(2026, 9, 13, 23, 0))).when).toBe('past');
   });
+
+  it.each(['pending', null] as const)(
+    'status %p with payment completed → Processing, tickets on the way',
+    (status) => {
+      const b = fromEvent(
+        ev({ status, listing: listing({ event_date: '2026-10-18T00:00:00' }) }),
+        TODAY,
+      );
+      expect(b.status).toBe('Processing');
+      expect(b.tone).toBe('info');
+      expect(b.paid).toBe(true);
+      expect(b.pending).toBe(false);
+      expect(b.when).toBe('upcoming');
+      expect(b.next).toBe('Payment received — your tickets are on the way');
+    },
+  );
+
+  it('a past event never paid → Not paid, neutral, no request to pay', () => {
+    const b = fromEvent(
+      ev({
+        status: 'pending',
+        payment_status: 'pending',
+        listing: listing({ event_date: '2026-10-10T00:00:00' }),
+      }),
+      TODAY,
+    );
+    expect(b.when).toBe('past');
+    expect(b.status).toBe('Not paid');
+    expect(b.tone).toBe('neutral');
+    expect(b.pending).toBe(false);
+    expect(b.next).toBe('Sat 10 Oct');
+  });
+
+  describe('multi-day events', () => {
+    const multi = (end: string | null) =>
+      ev({
+        listing: listing({ event_date: '2026-10-11T00:00:00', event_end_date: end }),
+      });
+
+    it('ends on event_end_date', () => {
+      const b = fromEvent(multi('2026-10-14'), TODAY);
+      expect(b.start).toBe('2026-10-11');
+      expect(b.end).toBe('2026-10-14');
+    });
+
+    it('is today while running, past after the last day, upcoming before the first', () => {
+      expect(fromEvent(multi('2026-10-14'), TODAY).when).toBe('today');
+      expect(fromEvent(multi('2026-10-14'), TODAY).next).toBe('Today · 7:00 pm');
+      expect(fromEvent(multi('2026-10-14'), '2026-10-15').when).toBe('past');
+      expect(fromEvent(multi('2026-10-14'), '2026-10-10').when).toBe('upcoming');
+    });
+
+    it('accepts a timestamp-shaped end date', () => {
+      expect(fromEvent(multi('2026-10-14T00:00:00'), TODAY).end).toBe('2026-10-14');
+    });
+
+    it('ends on the start day without an end date (or one before the start)', () => {
+      expect(fromEvent(multi(null), TODAY).end).toBe('2026-10-11');
+      expect(fromEvent(multi(null), TODAY).when).toBe('past');
+      expect(fromEvent(multi('2026-10-09'), TODAY).end).toBe('2026-10-11');
+    });
+
+    it('a hidden listing has no end date: one day from the booking', () => {
+      const b = fromEvent(ev({ listing: null, booking_date: TODAY }), TODAY);
+      expect(b.end).toBe(TODAY);
+    });
+  });
 });
 
 describe('fromHotel', () => {
@@ -369,9 +437,67 @@ describe('fromHotel', () => {
     );
     expect(b.status).toBe('Checked in');
   });
+
+  it('still checked in after the check-out date → past, word unchanged', () => {
+    const b = fromHotel(
+      ho({
+        booking_status: 'checked_in',
+        checked_in: true,
+        check_in_date: '2026-10-09',
+        check_out_date: '2026-10-12',
+      }),
+      TODAY,
+    );
+    expect(b.when).toBe('past');
+    expect(b.status).toBe('Checked in');
+    expect(b.next).toBe('9–12 Oct');
+  });
+
+  it('an early arrival checked in before its check-in date is today', () => {
+    const b = fromHotel(ho({ booking_status: 'checked_in', checked_in: true }), TODAY);
+    expect(b.when).toBe('today');
+    expect(b.next).toBe('Check-out Sat 17 Oct');
+  });
+
+  it('checked in with check-out today stays today', () => {
+    const b = fromHotel(
+      ho({ booking_status: 'checked_in', check_in_date: '2026-10-11', check_out_date: TODAY }),
+      TODAY,
+    );
+    expect(b.when).toBe('today');
+    expect(b.next).toBe('Check-out today');
+  });
+
+  it('a past stay never paid → Not paid, neutral, no request to pay', () => {
+    const b = fromHotel(
+      ho({ payment_status: 'pending', check_in_date: '2026-10-08', check_out_date: '2026-10-10' }),
+      TODAY,
+    );
+    expect(b.when).toBe('past');
+    expect(b.status).toBe('Not paid');
+    expect(b.tone).toBe('neutral');
+    expect(b.pending).toBe(false);
+    expect(b.next).toBe('8–10 Oct');
+  });
 });
 
 describe('fromApartment', () => {
+  it('a past stay never paid → Not paid', () => {
+    const b = fromApartment(
+      ap({
+        booking_status: 'pending',
+        payment_status: 'pending',
+        check_in_date: '2026-10-08',
+        check_out_date: '2026-10-10',
+      }),
+      TODAY,
+    );
+    expect(b.when).toBe('past');
+    expect(b.status).toBe('Not paid');
+    expect(b.tone).toBe('neutral');
+    expect(b.pending).toBe(false);
+  });
+
   it('counts only paid as paid', () => {
     expect(fromApartment(ap(), TODAY).paid).toBe(true);
     expect(fromApartment(ap({ payment_status: 'pending' }), TODAY).paid).toBe(false);

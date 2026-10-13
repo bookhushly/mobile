@@ -25,6 +25,7 @@ const event = {
     media_urls: ['https://cdn.example/a.jpg'],
     event_date: '2026-10-18T00:00:00',
     event_time: '2026-10-18T18:00:00+00:00',
+    event_end_date: null,
     require_dynamic_ticket: false,
   },
   tickets: [{ id: 't1', ticket_type: 'Regular', ticket_index: 1, checked_in_at: null }],
@@ -90,9 +91,20 @@ describe('column lists', () => {
       expect(cols).not.toContain(banned);
     }
   });
+
+  it('reads the event end date for multi-day events', () => {
+    expect(EVENT_BOOKING_COLUMNS).toContain('event_date, event_end_date, event_time');
+  });
 });
 
 describe('eventBookingRow', () => {
+  it('parses a date-only or timestamp event_end_date', () => {
+    for (const end of ['2026-10-19', '2026-10-19T00:00:00']) {
+      const listingEnd = { ...event.listing, event_end_date: end };
+      expect(eventBookingRow.safeParse({ ...event, listing: listingEnd }).success).toBe(true);
+    }
+  });
+
   it('parses a full row', () => {
     const r = eventBookingRow.safeParse(event);
     expect(r.success).toBe(true);

@@ -4,7 +4,7 @@ import { isIsoDate } from '@/shared/lib/lagosDay';
 
 // Explicit columns only: no contact details, money or `users.*` (C2, R19).
 export const EVENT_BOOKING_COLUMNS =
-  'id, status, payment_status, booking_date, booking_time, guests, ticket_details, seat_assignments, created_at, listing:listing_id ( id, title, location, media_urls, event_date, event_time, require_dynamic_ticket ), tickets:event_tickets ( id, ticket_type, ticket_index, checked_in_at )';
+  'id, status, payment_status, booking_date, booking_time, guests, ticket_details, seat_assignments, created_at, listing:listing_id ( id, title, location, media_urls, event_date, event_end_date, event_time, require_dynamic_ticket ), tickets:event_tickets ( id, ticket_type, ticket_index, checked_in_at )';
 export const HOTEL_BOOKING_COLUMNS =
   'id, check_in_date, check_out_date, adults, children, payment_status, booking_status, checked_in, checked_in_at, checked_out_at, check_in_code, created_at, hotel:hotel_id ( id, name, city, state, address, image_urls, check_in_time, check_out_time ), room_type:room_type_id ( id, name )';
 export const APARTMENT_BOOKING_COLUMNS =
@@ -49,6 +49,8 @@ export const eventBookingRow = z.object({
       location: z.string().nullable(),
       media_urls: urls,
       event_date: dateLike.nullable(),
+      // `date` (multi-day events); same calendar-date handling as `event_date`.
+      event_end_date: dateLike.nullable(),
       // `timestamptz` instant of the start, e.g. "2026-10-18T18:00:00+00:00".
       event_time: z.string().nullable(),
       require_dynamic_ticket: z.boolean().nullable(),

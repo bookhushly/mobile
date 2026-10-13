@@ -36,6 +36,25 @@ describe('notificationRow', () => {
     expect(r.success).toBe(true);
   });
 
+  it.each([
+    ['an array', [1, 2]],
+    ['a string', 'legacy'],
+    ['a number', 7],
+  ])('reads data holding %s as null instead of failing the row', (_label, data) => {
+    const r = notificationRow.safeParse({
+      id: 'n1',
+      type: 'system',
+      title: 'Hello',
+      message: 'Hi',
+      data,
+      link: null,
+      read: true,
+      created_at: '2026-10-13T10:00:00Z',
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.data).toBeNull();
+  });
+
   it('reads only the listed columns', () => {
     expect(NOTIFICATION_COLUMNS).toBe('id, type, title, message, data, link, read, created_at');
   });

@@ -29,7 +29,10 @@ export function ticketsOf(row: EventBookingRow): TicketView[] {
 
 /** C6: tickets only for paid, confirmed bookings; "issuing" until the rows exist. */
 export function canShowTickets(row: EventBookingRow): 'show' | 'issuing' | 'none' {
-  if (row.status !== 'confirmed' || row.payment_status !== 'completed') return 'none';
+  if (row.payment_status !== 'completed') return 'none';
+  // Paid but still `pending`/null: the webhook hasn't confirmed it yet, so tickets are on the way.
+  if (row.status === 'pending' || row.status === null) return 'issuing';
+  if (row.status !== 'confirmed') return 'none';
   return (row.tickets ?? []).length > 0 ? 'show' : 'issuing';
 }
 

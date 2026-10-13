@@ -24,6 +24,7 @@ function ev(p: Partial<EventBookingRow> = {}): EventBookingRow {
       media_urls: null,
       event_date: '2026-10-18T00:00:00',
       event_time: null,
+      event_end_date: null,
       require_dynamic_ticket: false,
     },
     tickets: [
@@ -75,8 +76,19 @@ describe('canShowTickets', () => {
     expect(canShowTickets(ev({ tickets: null }))).toBe('issuing');
   });
 
+  it.each([[{ status: 'pending' as const }], [{ status: null }]])(
+    'says issuing while a paid booking is still processing (%o)',
+    (p) => {
+      expect(canShowTickets(ev({ ...p, tickets: [] }))).toBe('issuing');
+      expect(canShowTickets(ev(p))).toBe('issuing');
+    },
+  );
+
+  it('shows nothing for an unpaid pending booking', () => {
+    expect(canShowTickets(ev({ status: 'pending', payment_status: 'pending' }))).toBe('none');
+  });
+
   it.each([
-    [{ status: 'pending' as const }],
     [{ status: 'cancelled' as const }],
     [{ status: 'completed' as const }],
     [{ payment_status: 'pending' as const }],
