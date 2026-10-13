@@ -28,8 +28,8 @@ beforeEach(() => {
   mockKv.get = (k) => Promise.resolve(mockKv.map.get(k) ?? null);
 });
 
-it('ships switched off', () => {
-  expect(CUSTOMER_TOUR_ENABLED).toBe(false);
+it('ships switched on (4b, D15)', () => {
+  expect(CUSTOMER_TOUR_ENABLED).toBe(true);
 });
 
 it('is null while loading, then false for a new user', async () => {

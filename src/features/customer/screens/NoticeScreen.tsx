@@ -8,7 +8,8 @@ type Props = {
   icon: LucideIcon;
   heading: string;
   message?: string;
-  onBack: () => void;
+  /** Omitted on a tab (nothing to go back to). */
+  onBack?: () => void;
 };
 
 // A whole-screen notice with a way back: a booking that isn't on this account (bad or foreign
@@ -19,7 +20,11 @@ export function NoticeScreen({ title, icon, heading, message, onBack }: Props) {
       header={
         <Header
           title={title}
-          left={<IconButton icon={ArrowLeft} accessibilityLabel="Back" onPress={onBack} />}
+          left={
+            onBack === undefined ? undefined : (
+              <IconButton icon={ArrowLeft} accessibilityLabel="Back" onPress={onBack} />
+            )
+          }
         />
       }
     >

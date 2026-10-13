@@ -63,3 +63,9 @@ it('shows the three scenes with serif headlines', async () => {
   for (const h of ['Find your place', 'Pay in naira', 'Show up'])
     expect(screen.getByRole('header', { name: h })).toBeTruthy();
 });
+
+it('says payment happens on bookhushly.com for now (D15)', async () => {
+  await render(<TourScreen onDone={jest.fn()} />);
+  expect(screen.getByText(/book and pay on bookhushly\.com/)).toBeTruthy();
+  expect(screen.queryByText(/crypto/)).toBeNull();
+});

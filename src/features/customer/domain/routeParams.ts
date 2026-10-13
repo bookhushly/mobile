@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+import {
+  sanitizeSearch,
+  type Category,
+  type ListingKind,
+} from '@/features/customer/domain/discover';
 import type { BookingKind } from '@/features/customer/domain/myBookings';
 
 // Route params are untrusted strings (or arrays): anything off-shape is "not on your account",
@@ -28,4 +33,44 @@ export function pagerIndexParam(raw: unknown, total: number): number {
   if (typeof raw !== 'string' || !INDEX_RE.test(raw)) return 0;
   const i = Number(raw);
   return i < total ? i : 0;
+}
+
+const listingKindParam = z.enum(['hotel', 'apartment', 'event']);
+const categoryEnum = z.enum(['hotels', 'serviced_apartments', 'events']);
+
+/** A listing link (`/listing/[kind]/[id]`); anything off-shape is "isn't available", no query. */
+export function listingRefParams(
+  kind: unknown,
+  id: unknown,
+): { kind: ListingKind; id: string } | null {
+  const k = listingKindParam.safeParse(kind);
+  const i = idParam.safeParse(id);
+  return k.success && i.success ? { kind: k.data, id: i.data } : null;
+}
+
+export function categoryParam(raw: unknown): Category | null {
+  const c = categoryEnum.safeParse(raw);
+  return c.success ? c.data : null;
+}
+
+export type ResultsQuery = { category: Category; q: string; state?: string; city?: string };
+
+const textParam = (raw: unknown): string => (typeof raw === 'string' ? sanitizeSearch(raw) : '');
+
+/**
+ * `/results?category=&q=&region=&city=`: untrusted strings, sanitised like typed search text. The
+ * state travels as `region`: React Navigation reserves a `state` param for nested navigators.
+ */
+export function resultsParams(p: {
+  category?: unknown;
+  q?: unknown;
+  region?: unknown;
+  city?: unknown;
+}): ResultsQuery {
+  const out: ResultsQuery = { category: categoryParam(p.category) ?? 'hotels', q: textParam(p.q) };
+  const state = textParam(p.region);
+  const city = textParam(p.city);
+  if (state !== '') out.state = state;
+  if (city !== '') out.city = city;
+  return out;
 }
