@@ -65,14 +65,14 @@ export type TicketStockWord = 'Sold out' | 'Almost sold out' | 'Few tickets left
 
 /**
  * A ticket type's stock word in D12's (the web's) wording: ≤ 30% of the threshold → "Almost sold
- * out", ≤ the threshold → "Few tickets left". None once the whole event is ended or off sale.
+ * out", ≤ the threshold → "Few tickets left". None once the whole event has started or is off sale.
  */
 export function ticketStockWord(
   pkg: PackageLike,
   threshold: number,
   event: EventStock,
 ): TicketStockWord | null {
-  if (event === 'ended' || event === 'notOnSale') return null;
+  if (event === 'started' || event === 'notOnSale') return null;
   // The web's rule (`parseInt(p.remaining) || 0`): a tier without a count reads as sold out.
   const left = pkg.remaining ?? 0;
   if (left <= 0) return 'Sold out';
@@ -118,14 +118,14 @@ export function eventDateLine(e: EventTimes): string | null {
 /** "Early bird until Fri 16 Oct" while the early-bird price applies; else null. */
 export function earlyBirdNote(pkg: PackageLike, nowMs: number): string | null {
   const eb = pkg.early_bird_price;
-  if (typeof eb !== 'number' || pkg.early_bird_end == null) return null;
+  if (typeof eb !== 'number' || eb <= 0 || pkg.early_bird_end == null) return null;
   if (effectivePackagePrice(pkg, nowMs) !== eb) return null;
   return `Early bird until ${shortDate(lagosToday(Date.parse(pkg.early_bird_end)))}`;
 }
 
 const BLOCKED: Partial<Record<EventStock, string>> = {
   soldOut: 'Sold out',
-  ended: 'This event has ended',
+  started: 'This event has started',
   notOnSale: 'Not on sale',
 };
 

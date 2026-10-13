@@ -127,6 +127,16 @@ describe('cardOf', () => {
     expect(cardOf('events', event({ price: null }), NOW).price).toBeNull();
   });
 
+  it('an event whose start has passed reads "Started" instead of its date (K4)', () => {
+    const started = cardOf(
+      'events',
+      event({ event_date: '2026-10-13T00:00:00', event_time: '2026-10-13T08:00:00+00:00' }),
+      NOW,
+    );
+    expect(started.when).toBe('Started');
+    expect(cardOf('events', event(), NOW).when).not.toBe('Started');
+  });
+
   it('a blank title is null (the card shows its kind word)', () => {
     expect(cardOf('hotels', hotel({ title: '  ' }), NOW).title).toBeNull();
   });

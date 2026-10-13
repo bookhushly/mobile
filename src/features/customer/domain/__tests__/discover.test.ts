@@ -3,6 +3,7 @@ import {
   buildListingParams,
   effectivePackagePrice,
   eventPriceLabel,
+  eventStarted,
   eventStock,
   filterCount,
   hotelPriceLabel,
@@ -16,6 +17,7 @@ import {
   ratingLabel,
   roomTypeFrom,
   sanitizeSearch,
+  ticketTiers,
   webListingUrl,
   type Filters,
   type StockEvent,
@@ -376,9 +378,11 @@ describe('prices', () => {
     );
     expect(effectivePackagePrice({ ...pkg, early_bird_end: null }, NOW)).toBe(10000);
     expect(effectivePackagePrice({ ...pkg, early_bird_price: null }, NOW)).toBe(10000);
+    // K4: an early bird of 0 (a blank in the web editor) is no early bird.
+    expect(effectivePackagePrice({ ...pkg, early_bird_price: 0 }, NOW)).toBe(10000);
   });
 
-  it('event: From the lowest effective package price', () => {
+  it('event: paid tiers are a range of effective prices, lowest to highest (K4)', () => {
     expect(
       eventPriceLabel(
         {
@@ -395,7 +399,38 @@ describe('prices', () => {
         },
         NOW,
       ),
-    ).toEqual({ amount: 8000, prefix: 'From' });
+    ).toEqual({ min: 8000, max: 50000 });
+    // Every tier at one price: just that price.
+    expect(
+      eventPriceLabel(
+        {
+          price: null,
+          ticket_packages: [
+            { name: 'A', price: 9000 },
+            { name: 'B', price: 9000 },
+          ],
+        },
+        NOW,
+      ),
+    ).toEqual({ amount: 9000 });
+  });
+
+  it('event: a single-tier event (is_single_tier) shows the plain listing price (K4)', () => {
+    expect(
+      eventPriceLabel(
+        {
+          price: 12000,
+          ticket_packages: [{ name: 'General', price: 12000, is_single_tier: true }],
+        },
+        NOW,
+      ),
+    ).toEqual({ amount: 12000 });
+    expect(
+      eventPriceLabel(
+        { price: 0, ticket_packages: [{ name: 'General', price: 0, is_single_tier: true }] },
+        NOW,
+      ),
+    ).toEqual({ text: 'Free' });
   });
 
   it('event: a single tier has no From', () => {
@@ -442,6 +477,7 @@ describe('eventStock', () => {
   const base: StockEvent = {
     event_date: '2026-10-18T00:00:00',
     event_end_date: null,
+    event_time: null,
     active: true,
     availability: 'available',
     ticket_packages: [],
@@ -450,26 +486,53 @@ describe('eventStock', () => {
     low_stock_threshold: null,
   };
 
-  it('ended: the end day (or the start day) is before today in Lagos', () => {
-    expect(eventStock({ ...base, event_date: '2026-10-12T20:00:00' }, NOW, TODAY)).toBe('ended');
+  it('started: the start (event_time, else event_date as Lagos time) is past, as the web (K4)', () => {
+    // NOW is 12:00 Lagos on Tue 13 Oct.
+    const at = (event_date: string, event_time: string | null = null) =>
+      eventStock({ ...base, event_date, event_time }, NOW);
+    expect(at('2026-10-13T00:00:00', '2026-10-13T10:59:00+00:00')).toBe('started');
+    expect(at('2026-10-13T00:00:00', '2026-10-13T11:01:00+00:00')).toBe('onSale');
+    // No time: the date's midnight in Lagos.
+    expect(at('2026-10-13T00:00:00')).toBe('started');
+    expect(at('2026-10-14T00:00:00')).toBe('onSale');
+    // A multi-day event that began yesterday has started too.
     expect(
-      eventStock(
-        { ...base, event_date: '2026-10-10T20:00:00', event_end_date: '2026-10-13' },
-        NOW,
-        TODAY,
-      ),
-    ).toBe('onSale');
-    expect(eventStock({ ...base, event_date: '2026-10-13T08:00:00' }, NOW, TODAY)).toBe('onSale');
+      eventStock({ ...base, event_date: '2026-10-12T00:00:00', event_end_date: '2026-10-15' }, NOW),
+    ).toBe('started');
+    // An unreadable start never blocks.
+    expect(at('soon')).toBe('onSale');
+    expect(eventStarted({ event_date: null, event_time: null }, NOW)).toBe(false);
   });
 
-  it('defaults today from now', () => {
-    expect(eventStock({ ...base, event_date: '2026-10-12T20:00:00' }, NOW)).toBe('ended');
+  it('started wins over sold out and off sale', () => {
+    expect(eventStock({ ...base, event_date: '2026-10-12T00:00:00', active: false }, NOW)).toBe(
+      'started',
+    );
+  });
+
+  it('a single-tier event takes its stock from the listing counts, not the implicit tier', () => {
+    const single = [{ name: 'General', price: 5000, remaining: 0, is_single_tier: true }];
+    expect(
+      eventStock(
+        { ...base, ticket_packages: single, remaining_tickets: 10, total_tickets: 100 },
+        NOW,
+      ),
+    ).toBe('almostSoldOut');
+    expect(
+      eventStock(
+        { ...base, ticket_packages: single, remaining_tickets: 0, total_tickets: 100 },
+        NOW,
+      ),
+    ).toBe('soldOut');
+    expect(ticketTiers(single)).toEqual([]);
+    const two = [...single, { name: 'VIP', price: 9000 }];
+    expect(ticketTiers(two)).toBe(two);
   });
 
   it('not on sale when inactive or not available', () => {
-    expect(eventStock({ ...base, active: false }, NOW, TODAY)).toBe('notOnSale');
-    expect(eventStock({ ...base, availability: 'unavailable' }, NOW, TODAY)).toBe('notOnSale');
-    expect(eventStock({ ...base, availability: null }, NOW, TODAY)).toBe('notOnSale');
+    expect(eventStock({ ...base, active: false }, NOW)).toBe('notOnSale');
+    expect(eventStock({ ...base, availability: 'unavailable' }, NOW)).toBe('notOnSale');
+    expect(eventStock({ ...base, availability: null }, NOW)).toBe('notOnSale');
   });
 
   it('sold out: every package at 0, or no packages and 0 of a positive total', () => {
@@ -483,38 +546,33 @@ describe('eventStock', () => {
           ],
         },
         NOW,
-        TODAY,
       ),
     ).toBe('soldOut');
-    expect(eventStock({ ...base, remaining_tickets: 0, total_tickets: 100 }, NOW, TODAY)).toBe(
-      'soldOut',
-    );
-    expect(eventStock({ ...base, remaining_tickets: 0, total_tickets: 0 }, NOW, TODAY)).toBe(
-      'onSale',
-    );
+    expect(eventStock({ ...base, remaining_tickets: 0, total_tickets: 100 }, NOW)).toBe('soldOut');
+    expect(eventStock({ ...base, remaining_tickets: 0, total_tickets: 0 }, NOW)).toBe('onSale');
   });
 
   it('a package with no remaining count is treated as 0, as the web does', () => {
-    expect(eventStock({ ...base, ticket_packages: [{ name: 'A', price: 1 }] }, NOW, TODAY)).toBe(
+    expect(eventStock({ ...base, ticket_packages: [{ name: 'A', price: 1 }] }, NOW)).toBe(
       'soldOut',
     );
   });
 
   it('low stock follows the web: ≤ 30% of the threshold is almost sold out, ≤ threshold is few left', () => {
     // threshold 50 → almost ≤ 15, few ≤ 50
-    expect(eventStock({ ...base, remaining_tickets: 15 }, NOW, TODAY)).toBe('almostSoldOut');
-    expect(eventStock({ ...base, remaining_tickets: 16 }, NOW, TODAY)).toBe('fewLeft');
-    expect(eventStock({ ...base, remaining_tickets: 50 }, NOW, TODAY)).toBe('fewLeft');
-    expect(eventStock({ ...base, remaining_tickets: 51 }, NOW, TODAY)).toBe('onSale');
+    expect(eventStock({ ...base, remaining_tickets: 15 }, NOW)).toBe('almostSoldOut');
+    expect(eventStock({ ...base, remaining_tickets: 16 }, NOW)).toBe('fewLeft');
+    expect(eventStock({ ...base, remaining_tickets: 50 }, NOW)).toBe('fewLeft');
+    expect(eventStock({ ...base, remaining_tickets: 51 }, NOW)).toBe('onSale');
     // custom threshold 10 → almost ≤ 3
     // Text through the `->>` JSON path, or a number from the route.
     const cd = '10';
-    expect(eventStock({ ...base, remaining_tickets: 3, low_stock_threshold: cd }, NOW, TODAY)).toBe(
+    expect(eventStock({ ...base, remaining_tickets: 3, low_stock_threshold: cd }, NOW)).toBe(
       'almostSoldOut',
     );
-    expect(
-      eventStock({ ...base, remaining_tickets: 11, low_stock_threshold: 10 }, NOW, TODAY),
-    ).toBe('onSale');
+    expect(eventStock({ ...base, remaining_tickets: 11, low_stock_threshold: 10 }, NOW)).toBe(
+      'onSale',
+    );
   });
 
   it('packages: low stock counts the tickets left across tiers', () => {
@@ -528,7 +586,6 @@ describe('eventStock', () => {
           ],
         },
         NOW,
-        TODAY,
       ),
     ).toBe('almostSoldOut');
   });

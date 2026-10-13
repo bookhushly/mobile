@@ -1,4 +1,4 @@
-import { isIsoDate, lagosToday, type IsoDate } from '@/shared/lib/lagosDay';
+import { isIsoDate, type IsoDate } from '@/shared/lib/lagosDay';
 import { NIGERIAN_STATES } from '@/shared/lib/phone';
 
 // Discover rules (Phase 4b, spec D2–D12). Pure: no React, no I/O, time is passed in.
@@ -177,9 +177,8 @@ export type TextPrice = { text: string };
 export type HotelPrice = { amount: number; unit: 'night'; prefix: 'From' } | TextPrice;
 export type ApartmentPrice =
   { amount: number; unit: 'night'; week?: number; month?: number; varies: boolean } | TextPrice;
-/** null: nothing to show (no packages, no price). `{min, max}`: a 0 tier next to paid ones. */
-export type EventPrice =
-  { amount: number; prefix?: 'From' } | { min: number; max: number } | TextPrice | null;
+/** null: nothing to show (no packages, no price). `{min, max}`: tiers at different prices. */
+export type EventPrice = { amount: number } | { min: number; max: number } | TextPrice | null;
 
 const positive = (n: number | null | undefined): n is number =>
   typeof n === 'number' && Number.isFinite(n) && n > 0;
@@ -228,28 +227,37 @@ export type PackageLike = {
   remaining?: number | null;
   early_bird_price?: number | null;
   early_bird_end?: string | null;
+  is_single_tier?: boolean | null;
 };
 
-export function effectivePackagePrice(pkg: PackageLike, nowMs: number): number {
-  const eb = pkg.early_bird_price;
-  const end = pkg.early_bird_end == null ? NaN : Date.parse(pkg.early_bird_end);
-  return typeof eb === 'number' && Number.isFinite(eb) && end > nowMs ? eb : pkg.price;
+/**
+ * The ticket types to show. A "Single Price" event carries one implicit tier only for data
+ * consistency (`is_single_tier`); the web shows it as a plain price, so it has no tiers here.
+ */
+export function ticketTiers<P extends PackageLike>(pkgs: readonly P[]): readonly P[] {
+  return pkgs.length === 1 && pkgs[0]?.is_single_tier === true ? [] : pkgs;
 }
 
-// The web's rule: "Free" only when every tier is 0; a 0 tier next to paid ones is a range
-// ("₦0 – ₦5,000"); otherwise "From" the lowest (a single tier: just its price).
+// K4: an early bird applies only with a price above 0 (the web's `&& pkg.early_bird_price`).
+export function effectivePackagePrice(pkg: PackageLike, nowMs: number): number {
+  const end = pkg.early_bird_end == null ? NaN : Date.parse(pkg.early_bird_end);
+  return positive(pkg.early_bird_price) && end > nowMs ? pkg.early_bird_price : pkg.price;
+}
+
+// The web's rule: "Free" only when every tier is 0; otherwise the range of effective prices
+// ("₦5,000 – ₦25,000", a 0 tier reading "Free – ₦5,000"); one price when they are all the same.
+// A single-tier event shows the listing's price.
 export function eventPriceLabel(
   event: { price: number | null; ticket_packages: readonly PackageLike[] },
   nowMs: number,
 ): EventPrice {
-  const pkgs = event.ticket_packages;
+  const pkgs = ticketTiers(event.ticket_packages);
   if (pkgs.length > 0) {
     const prices = pkgs.map((p) => Math.max(0, effectivePackagePrice(p, nowMs)));
     const min = Math.min(...prices);
     const max = Math.max(...prices);
     if (max <= 0) return { text: 'Free' };
-    if (min <= 0) return { min: 0, max };
-    return pkgs.length === 1 ? { amount: min } : { amount: min, prefix: 'From' };
+    return min === max ? { amount: min } : { min, max };
   }
   if (event.price === null) return null;
   return positive(event.price) ? { amount: event.price } : { text: 'Free' };
@@ -257,12 +265,14 @@ export function eventPriceLabel(
 
 // ── Event stock (D12, the web's wording) ─────────────────────────────────────────────────────────
 
-export type EventStock = 'ended' | 'notOnSale' | 'soldOut' | 'almostSoldOut' | 'fewLeft' | 'onSale';
+export type EventStock =
+  'started' | 'notOnSale' | 'soldOut' | 'almostSoldOut' | 'fewLeft' | 'onSale';
 export type PackageStock = 'soldOut' | 'fewLeft' | 'onSale';
 
 export type StockEvent = {
   event_date: string | null;
   event_end_date: string | null;
+  event_time: string | null;
   active: boolean | null;
   availability: string | null;
   ticket_packages: readonly PackageLike[];
@@ -288,16 +298,33 @@ function lowStock(remaining: number, threshold: number): 'almostSoldOut' | 'fewL
   return null;
 }
 
-export function eventStock(
-  event: StockEvent,
+// A timestamp without a zone (`event_date` is "2026-10-17T00:00:00") is Lagos time (UTC+1, no DST).
+const ZONED = /(Z|[+-]\d{2}:?\d{2})$/i;
+function instantMs(s: string): number {
+  const t = s.trim();
+  return Date.parse(t.length > 10 && !ZONED.test(t) ? `${t}+01:00` : t);
+}
+
+/**
+ * The web's rule (contract review K4): once the start (`event_time`, else `event_date`) has
+ * passed, the event has started and tickets aren't sold. An unreadable start never blocks.
+ */
+export function eventStarted(
+  event: { event_date: string | null; event_time: string | null },
   nowMs: number,
-  todayLagos: IsoDate = lagosToday(nowMs),
-): EventStock {
-  const lastDay = (event.event_end_date ?? event.event_date)?.slice(0, 10);
-  if (lastDay !== undefined && isIsoDate(lastDay) && lastDay < todayLagos) return 'ended';
+): boolean {
+  const src = event.event_time ?? event.event_date;
+  if (src === null) return false;
+  const start = instantMs(src);
+  return Number.isFinite(start) && start <= nowMs;
+}
+
+export function eventStock(event: StockEvent, nowMs: number): EventStock {
+  if (eventStarted(event, nowMs)) return 'started';
   if (event.active === false || event.availability !== 'available') return 'notOnSale';
   const threshold = lowStockThreshold(event.low_stock_threshold);
-  const pkgs = event.ticket_packages;
+  // A single-tier event's stock is the listing's counts (its tier is only for data consistency).
+  const pkgs = ticketTiers(event.ticket_packages);
   let remaining: number | null;
   if (pkgs.length > 0) {
     if (pkgs.every((p) => left(p) === 0)) return 'soldOut';

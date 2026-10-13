@@ -2,6 +2,7 @@ import { dayAt } from '@/features/customer/domain/detailText';
 import {
   apartmentPriceLabel,
   eventPriceLabel,
+  eventStarted,
   hotelPriceLabel,
   ratingLabel,
   type ApartmentPrice,
@@ -29,7 +30,10 @@ export type ListingCardModel = {
   /** "4.6 (23)" only when there are reviews (D10); events never have one in 4b. */
   rating: { avg: number; count: number } | null;
   price: CardPrice;
-  /** Events only: "Sat 18 Oct · 7:00 pm" (Lagos, 12-hour); null when the date is unknown. */
+  /**
+   * Events only: "Sat 18 Oct · 7:00 pm" (Lagos, 12-hour), "Started" once the start has passed;
+   * null when the date is unknown.
+   */
   when: string | null;
 };
 
@@ -109,6 +113,7 @@ export function cardOf(cat: Category, item: ItemFor[Category], nowMs: number): L
     area: placeLine([item.location]),
     rating: null,
     price: eventPriceLabel({ price: item.price, ticket_packages: [] }, nowMs),
-    when: eventWhenLabel(item.event_date, item.event_time),
+    // K4 (the web's rule): once the start has passed, tickets aren't sold.
+    when: eventStarted(item, nowMs) ? 'Started' : eventWhenLabel(item.event_date, item.event_time),
   };
 }

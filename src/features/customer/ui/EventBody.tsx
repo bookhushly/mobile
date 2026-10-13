@@ -1,7 +1,11 @@
 import { View } from 'react-native';
 
 import type { EventStock } from '@/features/customer/domain/discover';
-import { effectivePackagePrice, lowStockThreshold } from '@/features/customer/domain/discover';
+import {
+  effectivePackagePrice,
+  lowStockThreshold,
+  ticketTiers,
+} from '@/features/customer/domain/discover';
 import {
   earlyBirdNote,
   eventDateLine,
@@ -21,7 +25,7 @@ type Props = { event: EventDetail; stock: EventStock; nowMs: number };
 // D12: why tickets can't be had; nothing while they can.
 const STOCK_BANNER: Partial<Record<EventStock, string>> = {
   soldOut: 'Sold out. Every ticket type is gone.',
-  ended: 'This event has ended.',
+  started: 'This event has started.',
   notOnSale: 'Tickets aren’t on sale right now.',
 };
 
@@ -32,6 +36,8 @@ export function EventBody({ event: e, stock, nowMs }: Props) {
   const threshold = lowStockThreshold(e.low_stock_threshold);
   const banner = STOCK_BANNER[stock];
   const cancellation = plainText(e.cancellation_policy);
+  // A single-tier event's implicit tier isn't a ticket type: its price is in the footer.
+  const tiers = ticketTiers(e.ticket_packages);
   return (
     <>
       {banner !== undefined ? (
@@ -52,10 +58,10 @@ export function EventBody({ event: e, stock, nowMs }: Props) {
           { label: 'Organizer', value: e.vendor_name?.trim() ?? '' },
         ]}
       />
-      {e.ticket_packages.length > 0 ? (
+      {tiers.length > 0 ? (
         <DetailSection label="Tickets" testID="tickets">
           <View>
-            {e.ticket_packages.map((p, i) => (
+            {tiers.map((p, i) => (
               <TicketTypeRow
                 key={`${String(i)}:${p.name}`}
                 ticket={{

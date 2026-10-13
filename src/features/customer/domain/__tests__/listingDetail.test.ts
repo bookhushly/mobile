@@ -96,6 +96,8 @@ describe('earlyBirdNote', () => {
     expect(earlyBirdNote({ ...pkg, early_bird_end: '2026-10-12T10:00:00Z' }, NOW)).toBeNull();
     expect(earlyBirdNote({ ...pkg, early_bird_price: null }, NOW)).toBeNull();
     expect(earlyBirdNote({ price: 10000 }, NOW)).toBeNull();
+    // K4: an early bird of 0 is none, even on a free tier.
+    expect(earlyBirdNote({ ...pkg, price: 0, early_bird_price: 0 }, NOW)).toBeNull();
   });
 });
 
@@ -104,9 +106,9 @@ describe('handoff', () => {
     expect(handoff('hotel', null)).toEqual({ label: 'Book on bookhushly.com', blocked: null });
     expect(handoff('apartment', null)).toEqual({ label: 'Book on bookhushly.com', blocked: null });
   });
-  it('never offers tickets for sold-out, ended or not-on-sale events', () => {
+  it('never offers tickets for sold-out, started or not-on-sale events', () => {
     expect(handoff('event', 'soldOut').blocked).toBe('Sold out');
-    expect(handoff('event', 'ended').blocked).toBe('This event has ended');
+    expect(handoff('event', 'started').blocked).toBe('This event has started');
     expect(handoff('event', 'notOnSale').blocked).toBe('Not on sale');
   });
   it('offers tickets while on sale, including low stock', () => {
@@ -306,7 +308,7 @@ describe('ticketStockWord', () => {
     expect(ticketStockWord({ price: 5000, remaining: null }, 50, 'onSale')).toBe('Sold out');
   });
   it('says nothing per tier once the event is ended or off sale', () => {
-    expect(ticketStockWord(pkg, 50, 'ended')).toBeNull();
+    expect(ticketStockWord(pkg, 50, 'started')).toBeNull();
     expect(ticketStockWord(pkg, 50, 'notOnSale')).toBeNull();
   });
 });

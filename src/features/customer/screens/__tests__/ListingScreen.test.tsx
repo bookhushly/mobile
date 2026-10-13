@@ -330,7 +330,7 @@ describe('apartment prices and reviews', () => {
 });
 
 describe('event', () => {
-  it('shows date, venue, organizer, tickets with early bird and the from-price', async () => {
+  it('shows date, venue, organizer, tickets with early bird and the price range', async () => {
     show(event());
     await render(<ListingScreen kind="event" {...props} />);
     expect(screen.getByText('Sat 17 Oct · 7:00 pm')).toBeTruthy();
@@ -340,7 +340,8 @@ describe('event', () => {
     // D12 wording, the web's thresholds (50 by default; ≤ 15 is almost sold out).
     expect(within(screen.getByTestId('ticket-VIP')).getByText('Almost sold out')).toBeTruthy();
     expect(within(screen.getByTestId('ticket-Regular')).getByText('Few tickets left')).toBeTruthy();
-    expect(screen.getByLabelText('From 7,000 naira')).toBeTruthy();
+    // K4: tiers at different prices read as a range.
+    expect(screen.getByLabelText('7,000 naira to 25,000 naira')).toBeTruthy();
     expect(screen.getByText('· Sat 17 Oct')).toBeTruthy();
     await fireEvent.press(screen.getByText('Get tickets on bookhushly.com'));
     expect(openBrowserAsync).toHaveBeenCalledWith(`https://bookhushly.com/services/${ID}`);
@@ -357,10 +358,11 @@ describe('event', () => {
       'Sold out. Every ticket type is gone.',
     ],
     [
-      'ended',
-      { event_date: '2026-10-10T00:00:00' },
-      'This event has ended',
-      'This event has ended.',
+      'started',
+      // K4: the start (event_time) passed an hour ago, today.
+      { event_date: '2026-10-13T00:00:00', event_time: '2026-10-13T10:00:00+00:00' },
+      'This event has started',
+      'This event has started.',
     ],
     ['not on sale', { active: false }, 'Not on sale', 'Tickets aren’t on sale right now.'],
   ])('never offers tickets when %s', async (_, over, button, banner) => {
@@ -378,6 +380,25 @@ describe('event', () => {
 });
 
 describe('states', () => {
+  it('a single-tier event shows a plain price, no ticket types, stock from the listing (K4)', async () => {
+    show(
+      event({
+        price: 12000,
+        remaining_tickets: 10,
+        total_tickets: 100,
+        ticket_packages: [
+          { name: 'General', price: 12000, remaining: 0, total: 0, is_single_tier: true },
+        ],
+      }),
+    );
+    await render(<ListingScreen kind="event" {...props} />);
+    expect(screen.queryByTestId('tickets')).toBeNull();
+    expect(screen.getByLabelText('12,000 naira')).toBeTruthy();
+    // Not "sold out" from the implicit tier's 0.
+    expect(screen.queryByTestId('stock-banner')).toBeNull();
+    expect(screen.getByText('Get tickets on bookhushly.com')).toBeTruthy();
+  });
+
   it('a hidden or missing listing is not available', async () => {
     show(null);
     await render(<ListingScreen kind="hotel" {...props} />);
