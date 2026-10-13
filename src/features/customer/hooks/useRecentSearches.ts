@@ -35,7 +35,7 @@ export function useRecentSearches(userId: string): {
   const remove = useCallback(
     async (e: RecentSearch) => {
       if (userId === '') return;
-      await recentSearches.remove(userId, e);
+      await recentSearches.remove(userId, e, () => isSignedInAs(userId));
       await reload();
     },
     [userId, reload],

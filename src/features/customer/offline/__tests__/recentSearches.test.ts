@@ -109,6 +109,23 @@ describe('recent searches', () => {
     expect(kv.dump()).toEqual({});
   });
 
+  it('a guarded remove (S2) is dropped after sign-out, so the wipe isn’t undone', async () => {
+    const kv = memoryKv();
+    const recent = createRecentSearches(kv);
+    await recent.add('u1', text('a'));
+    await recent.add('u1', text('b'));
+    await recent.remove('u1', text('a'), () => Promise.resolve(true));
+    expect(await recent.get('u1')).toEqual([text('b')]);
+    let signedIn = true;
+    const wipe = recent.clear();
+    const late = recent.remove('u1', text('b'), () => Promise.resolve(signedIn));
+    signedIn = false;
+    await Promise.all([wipe, late]);
+    expect(kv.dump()).toEqual({});
+    await recent.remove('u1', text('b'), () => Promise.reject(new Error('keychain')));
+    expect(kv.dump()).toEqual({});
+  });
+
   it('a guard that throws counts as signed out', async () => {
     const kv = memoryKv();
     const recent = createRecentSearches(kv);

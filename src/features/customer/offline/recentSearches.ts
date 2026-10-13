@@ -96,9 +96,11 @@ export function createRecentSearches(kv: KeyValue) {
         await write(userId, [c, ...rest].slice(0, RECENT_MAX));
       });
     },
-    remove(userId: string, e: RecentSearch): Promise<void> {
+    /** Same guard as `add` (security review S2): a late remove never re-creates a wiped list. */
+    remove(userId: string, e: RecentSearch, stillSignedIn?: () => Promise<boolean>): Promise<void> {
       const c = clean(e) ?? e;
       return enqueue(async () => {
+        if (stillSignedIn !== undefined && !(await stillSignedIn().catch(() => false))) return;
         await write(
           userId,
           (await get(userId)).filter((x) => !same(x, c)),

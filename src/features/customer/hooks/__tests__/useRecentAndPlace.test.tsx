@@ -84,6 +84,18 @@ describe('useRecentSearches', () => {
     expect(result.current.items).toEqual([]);
     await unmount();
   });
+
+  it('a remove after sign-out writes nothing either (S2)', async () => {
+    const { result, unmount } = await renderHook(() => useRecentSearches(USER), {
+      wrapper: wrapper(qc),
+    });
+    mockSessionUser = null;
+    await act(async () => {
+      await result.current.remove(LEKKI);
+    });
+    expect(mockKv.dump()).toEqual({});
+    await unmount();
+  });
 });
 
 describe('useExplorePlace', () => {
