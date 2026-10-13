@@ -118,13 +118,13 @@ function HotelCode({ userId, id, onClose }: { userId: string; id: string; onClos
   }
   let body: ReactNode;
   if (b.row === null)
-    body = <EmptyState icon={SearchX} title="This booking isn't on your account" />;
+    body = <EmptyState icon={SearchX} title="This booking isn’t on your account" />;
   else if (!allowed) body = <EmptyState icon={QrIcon} title="No check-in code for this booking" />;
   else if (b.error)
     body = (
       <ErrorState
-        title="Couldn't load your check-in code"
-        message="Check the connection and try again."
+        title="Couldn’t load your check-in code"
+        message="Check your connection and try again."
         onRetry={() => {
           void b.refetch();
         }}
@@ -146,7 +146,7 @@ export function CheckInCodeScreen({ userId, bookingId, onClose }: Props) {
     return (
       <CodeSheet title="Check-in code" onClose={onClose}>
         <Body>
-          <EmptyState icon={SearchX} title="This booking isn't on your account" />
+          <EmptyState icon={SearchX} title="This booking isn’t on your account" />
         </Body>
       </CodeSheet>
     );

@@ -22,7 +22,7 @@ const TITLE: Record<ProfileField, string> = {
 };
 const NAME_ERROR = `Enter your name (${String(NAME_MIN)} to ${String(NAME_MAX)} characters)`;
 const PHONE_ERROR = 'Enter a Nigerian number, like 0803 123 4567';
-const TRANSIENT = "Couldn't save. Check the connection and try again.";
+const TRANSIENT = 'Couldn’t save. Check your connection and try again.';
 const STALE = 'Please sign in again';
 
 type Props = {

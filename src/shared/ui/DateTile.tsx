@@ -15,7 +15,9 @@ type Props = {
 const TILE = 56;
 
 // The leading month / day / weekday tile of the gate's event rows and the customer's bookings.
-// Decorative for screen readers: the row's label carries the date.
+// Decorative for screen readers: the row's label carries the date. Fixed size, so its three
+// lines don't scale with Dynamic Type (the row's own text does). The month is ink, not violet:
+// the tile isn't an action.
 export function DateTile({ tile, testID }: Props) {
   return (
     <View
@@ -32,18 +34,18 @@ export function DateTile({ tile, testID }: Props) {
       }}
     >
       {tile === null ? (
-        <Text variant="labelSm" tone="textSecondary">
+        <Text variant="labelSm" tone="textSecondary" maxScale={1}>
           TBC
         </Text>
       ) : (
         <>
-          <Text variant="labelSm" tone="linkText">
+          <Text variant="labelSm" tone="textPrimary" maxScale={1}>
             {tile.month}
           </Text>
           <Text variant="title" maxScale={1}>
             {tile.day}
           </Text>
-          <Text variant="caption" tone="textSecondary">
+          <Text variant="caption" tone="textSecondary" maxScale={1}>
             {tile.weekday}
           </Text>
         </>

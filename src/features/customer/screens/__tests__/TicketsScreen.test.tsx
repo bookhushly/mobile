@@ -385,8 +385,8 @@ it('a ticket already admitted on the booking never polls', async () => {
 });
 
 it.each<[LiveCodeState, string]>([
-  [{ kind: 'notConfirmed' }, "This booking isn't confirmed yet"],
-  [{ kind: 'notYours' }, "This ticket isn't on your account"],
+  [{ kind: 'notConfirmed' }, 'This booking isn’t confirmed yet'],
+  [{ kind: 'notYours' }, 'This ticket isn’t on your account'],
 ])('refusals say so without a QR (%j)', async (state, text) => {
   states = { [T1]: state };
   loaded({ row: oneTicket() });
@@ -416,10 +416,10 @@ it('no tickets yet, not yours, failed and bad ids never brighten the screen', as
   expect(mockBright).toHaveBeenLastCalledWith(false);
   loaded({ row: null });
   await show();
-  expect(screen.getByText("This booking isn't on your account")).toBeTruthy();
+  expect(screen.getByText('This booking isn’t on your account')).toBeTruthy();
   loaded({ error: true });
   await show();
-  expect(screen.getByText("Couldn't load your tickets")).toBeTruthy();
+  expect(screen.getByText('Couldn’t load your tickets')).toBeTruthy();
   expect(mockBright).not.toHaveBeenCalledWith(true);
   mockBooking.mockClear();
   await render(
@@ -431,6 +431,6 @@ it('no tickets yet, not yours, failed and bad ids never brighten the screen', as
       onSignIn={jest.fn()}
     />,
   );
-  expect(screen.getByText("This booking isn't on your account")).toBeTruthy();
+  expect(screen.getByText('This booking isn’t on your account')).toBeTruthy();
   expect(mockBooking).not.toHaveBeenCalled();
 });

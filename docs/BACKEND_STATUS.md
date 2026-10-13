@@ -188,6 +188,7 @@ Hotel-booking JSON route · apartment booking JSON · my-bookings route · scann
   (h) machine `code`s on booking-detail, ticket-code and cancel errors;
   (i) stale "deny-by-default" comment in `app/actions/customers.js`.
 - **Roster `since` misses backdated admissions (found 2026-10-07).** `admit_tickets_batch` backdates `checked_in_at` to the device's `scanned_at`, but roster `since` filters on `checked_in_at > since`, so another phone's offline admissions synced after this phone's mark are missed by deltas until the 30-min full refresh (cross-door double-admit window). Request: filter `since` on a synced/updated-at column.
+- **Booking thumbnails are full-size originals (found 2026-10-13, Phase 4a).** Listing, hotel and apartment images are public Supabase Storage objects (`listing-images`, `hotel-images`, `apartment-images` buckets, `getPublicUrl`). The app shows them as 56 pt thumbnails, but there is no verified resize endpoint. Supabase `/storage/v1/render/image/` depends on the project's plan and setting (unverified), and the web resizes only through Next's `/_next/image` optimiser, whose quota the app shouldn't spend unasked. Request one of: (a) confirm Supabase image transformations are enabled, so the app can ask for `width=112&height=112&resize=cover`; (b) store a thumbnail URL next to each image; or (c) approve the app using `/_next/image?w=128`. Until then the app loads the originals (cached by expo-image, recycled per row).
 
 ## 10. Verified during Phase 0 (2026-10-04)
 

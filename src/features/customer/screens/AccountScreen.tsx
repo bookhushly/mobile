@@ -84,8 +84,8 @@ export function AccountScreen({ userId, email, modeSwitcher, onSignOut, onDelete
   } else {
     details = (
       <ErrorState
-        title="Couldn't load your details"
-        message="Check the connection and try again."
+        title="Couldn’t load your details"
+        message="Check your connection and try again."
         onRetry={() => {
           void refetch();
         }}

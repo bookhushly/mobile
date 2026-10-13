@@ -59,7 +59,7 @@ export function HotelDetails({ row, today, onBack, onRefresh, onShowCheckInCode 
           },
           { label: 'Room type', value: row.room_type?.name ?? '' },
           { label: 'Guests', value: guestsLine(row.adults, row.children) ?? '' },
-          { label: 'Payment', value: b.paid ? 'Paid' : 'Not paid' },
+          { label: 'Payment', value: b.paid ? 'Paid' : 'Not paid', amount: row.total_amount },
         ]}
       />
     </BookingFrame>

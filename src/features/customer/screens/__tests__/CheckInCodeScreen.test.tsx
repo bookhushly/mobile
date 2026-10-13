@@ -110,13 +110,13 @@ it('offline without a saved code says there is none', async () => {
 it('not yours, failed and bad ids', async () => {
   loaded({ row: null });
   await show();
-  expect(screen.getByText("This booking isn't on your account")).toBeTruthy();
+  expect(screen.getByText('This booking isn’t on your account')).toBeTruthy();
   loaded({ error: true });
   await show();
-  expect(screen.getByText("Couldn't load your check-in code")).toBeTruthy();
+  expect(screen.getByText('Couldn’t load your check-in code')).toBeTruthy();
   mockBooking.mockClear();
   await show(null);
-  expect(screen.getByText("This booking isn't on your account")).toBeTruthy();
+  expect(screen.getByText('This booking isn’t on your account')).toBeTruthy();
   expect(mockBooking).not.toHaveBeenCalled();
   expect(mockBright).not.toHaveBeenCalledWith(true);
 });

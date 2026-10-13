@@ -19,7 +19,7 @@ type Props = {
   onShowTickets: (bookingId: string) => void;
 };
 
-// C12 event: date and time, venue (→ Maps), packages, tickets, Show tickets.
+// C12 event: date and time, venue (→ Maps), packages, payment, tickets, Show tickets.
 export function EventDetails({ row, today, onBack, onRefresh, onShowTickets }: Props) {
   const b = fromEvent(row, today);
   const tickets = canShowTickets(row);
@@ -59,6 +59,7 @@ export function EventDetails({ row, today, onBack, onRefresh, onShowTickets }: P
                 },
               },
           { label: 'Packages', value: packagesLine(row.ticket_details) ?? '' },
+          { label: 'Payment', value: b.paid ? 'Paid' : 'Not paid', amount: row.total_amount },
         ]}
       />
       {tickets === 'show' ? <TicketList tickets={ticketsOf(row)} today={today} /> : null}

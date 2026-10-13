@@ -86,10 +86,24 @@ describe('column lists', () => {
     ['event', EVENT_BOOKING_COLUMNS],
     ['hotel', HOTEL_BOOKING_COLUMNS],
     ['apartment', APARTMENT_BOOKING_COLUMNS],
-  ])('%s columns read no contact, money or password fields', (_k, cols) => {
-    for (const banned of ['email', 'phone', 'total', 'amount', 'password']) {
-      expect(cols).not.toContain(banned);
+  ])('%s columns read no contact or password fields, and only the total as money', (_k, cols) => {
+    expect(cols).toContain(', total_amount,');
+    const rest = cols.replace(', total_amount,', ',');
+    for (const banned of ['email', 'phone', 'total', 'amount', 'price', 'password']) {
+      expect(rest).not.toContain(banned);
     }
+  });
+
+  it('total_amount: a number, a numeric string, or null; unreadable is null', () => {
+    const total = (v: unknown) => {
+      const r = eventBookingRow.safeParse({ ...event, total_amount: v });
+      return r.success ? r.data.total_amount : 'failed';
+    };
+    expect(total(45000)).toBe(45000);
+    expect(total('45000.50')).toBe(45000.5);
+    expect(total(null)).toBeNull();
+    expect(total('abc')).toBeNull();
+    expect(total(undefined)).toBeNull();
   });
 
   it('reads the event end date for multi-day events', () => {

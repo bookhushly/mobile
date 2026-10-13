@@ -106,7 +106,7 @@ it('says so when the details could not load', async () => {
   const refetch = jest.fn(() => Promise.resolve());
   withProfile(null, { error: true, refetch });
   await open();
-  expect(screen.getByText("Couldn't load your details")).toBeTruthy();
+  expect(screen.getByText('Couldn’t load your details')).toBeTruthy();
 });
 
 it('validates the phone on blur and saves it as E.164 with only the four fields', async () => {
@@ -193,7 +193,7 @@ it('a failed save keeps the input and says why', async () => {
   await fireEvent.changeText(input, '1 New Street');
   await fireEvent.press(screen.getByRole('button', { name: 'Save' }));
   expect(
-    await screen.findByText("Couldn't save. Check the connection and try again."),
+    await screen.findByText('Couldn’t save. Check your connection and try again.'),
   ).toBeTruthy();
   expect(screen.getByDisplayValue('1 New Street')).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Save' }));

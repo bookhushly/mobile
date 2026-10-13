@@ -97,6 +97,7 @@ it('has Bookings and Account tabs with the desk tabs styling and no tour read', 
     tabBarPosition: 'bottom',
     tabBarActiveTintColor: color.linkText,
     tabBarActiveBackgroundColor: color.selectedWash,
+    tabBarAllowFontScaling: false,
   });
   // C15: the tour is off, so its marker is never read.
   expect(mockTour).toHaveBeenCalledWith(null);

@@ -46,7 +46,7 @@ export function ApartmentDetails({ row, today, onBack, onRefresh }: Props) {
             value: dayAt(row.check_out_date, a?.check_out_time ?? null, 'by'),
           },
           { label: 'Guests', value: guestsCount(row.number_of_guests) ?? '' },
-          { label: 'Payment', value: b.paid ? 'Paid' : 'Not paid' },
+          { label: 'Payment', value: b.paid ? 'Paid' : 'Not paid', amount: row.total_amount },
         ]}
       />
     </BookingFrame>

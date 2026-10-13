@@ -241,7 +241,7 @@ export function TicketCard({ ticket, active, liveOnly, qrSize, today, onSignIn, 
               size={qrSize}
               tone="neutral"
               icon={Info}
-              text="This booking isn't confirmed yet"
+              text="This booking isn’t confirmed yet"
             />
             {meta}
           </>
@@ -253,7 +253,7 @@ export function TicketCard({ ticket, active, liveOnly, qrSize, today, onSignIn, 
             size={qrSize}
             tone="neutral"
             icon={SearchX}
-            text="This ticket isn't on your account"
+            text="This ticket isn’t on your account"
           />
         );
         break;

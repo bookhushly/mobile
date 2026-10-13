@@ -12,6 +12,8 @@ type Props = {
   onOpen: (b: MyBooking) => void;
   onShowTickets: (b: MyBooking) => void;
   onShowCheckInCode: (b: MyBooking) => void;
+  /** Only the first Today card carries the screen's one primary action; later ones are secondary. */
+  primary: boolean;
 };
 
 const LABEL: Record<MainAction, string> = {
@@ -21,7 +23,14 @@ const LABEL: Record<MainAction, string> = {
 };
 
 // C3: something happening today leads the list, with the one action that matters at the door.
-export function TodayCard({ booking: b, action, onOpen, onShowTickets, onShowCheckInCode }: Props) {
+export function TodayCard({
+  booking: b,
+  action,
+  onOpen,
+  onShowTickets,
+  onShowCheckInCode,
+  primary,
+}: Props) {
   const title = b.title ?? kindWord(b.kind);
   const run = () => {
     if (action === 'tickets') onShowTickets(b);
@@ -43,7 +52,7 @@ export function TodayCard({ booking: b, action, onOpen, onShowTickets, onShowChe
         <StatusPill tone={chipTone(b.tone)} label={b.status} size="sm" />
         <View style={{ gap: space.s2 }}>
           <Button
-            variant={action === 'open' ? 'secondary' : 'primary'}
+            variant={primary && action !== 'open' ? 'primary' : 'secondary'}
             label={LABEL[action]}
             accessibilityLabel={`${LABEL[action]}, ${title}`}
             onPress={run}

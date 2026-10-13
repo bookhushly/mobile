@@ -14,6 +14,7 @@ function ev(p: Partial<EventBookingRow> = {}): EventBookingRow {
     id: 'e1',
     status: 'confirmed',
     payment_status: 'completed',
+    total_amount: 45000,
     booking_date: '2026-10-18',
     booking_time: null,
     guests: 3,

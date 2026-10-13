@@ -100,6 +100,7 @@ const event = {
   id: 'e1',
   status: 'confirmed',
   payment_status: 'completed',
+  total_amount: 45000,
   booking_date: '2026-10-18',
   booking_time: null,
   guests: 1,
@@ -163,10 +164,12 @@ describe('select strings', () => {
     for (const banned of ['role', 'password']) expect(PROFILE_COLUMNS).not.toContain(banned);
   });
   it.each([EVENT_BOOKING_COLUMNS, HOTEL_BOOKING_COLUMNS, APARTMENT_BOOKING_COLUMNS])(
-    'booking lists read no contact details or money: %s',
+    'booking lists read no contact details, and no money but the booking total: %s',
     (s) => {
+      expect(s).toContain(', total_amount,');
+      const rest = s.replace(', total_amount,', ',');
       for (const banned of ['email', 'phone', 'amount', 'total', 'price']) {
-        expect(s).not.toContain(banned);
+        expect(rest).not.toContain(banned);
       }
     },
   );

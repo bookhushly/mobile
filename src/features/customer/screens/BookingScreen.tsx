@@ -27,7 +27,7 @@ function NotYours({ onBack }: { onBack: () => void }) {
     <NoticeScreen
       title="Booking"
       icon={SearchX}
-      heading="This booking isn't on your account"
+      heading="This booking isn’t on your account"
       onBack={onBack}
     />
   );
@@ -55,8 +55,8 @@ function settle<R>(b: Loaded<R>, h: Handlers, details: (row: R) => ReactNode): R
     <BookingFrame onBack={h.onBack} onRefresh={b.refetch}>
       {b.error ? (
         <ErrorState
-          title="Couldn't load this booking"
-          message="Check the connection and try again."
+          title="Couldn’t load this booking"
+          message="Check your connection and try again."
           onRetry={() => {
             void b.refetch();
           }}

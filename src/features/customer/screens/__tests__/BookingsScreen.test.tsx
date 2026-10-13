@@ -11,6 +11,7 @@ import {
 import { useMyBookings, type BookingRows } from '@/features/customer/hooks/useMyBookings';
 import { useUnreadCount } from '@/features/customer/hooks/useUnreadCount';
 import type { WalletEntry } from '@/features/customer/offline/wallet';
+import { color } from '@/shared/theme';
 import { BookingsScreen } from '@/features/customer/screens/BookingsScreen';
 import { refreshColors } from '@/shared/ui';
 
@@ -110,10 +111,25 @@ it('splits upcoming and past with counts, and a row opens its booking', async ()
   expect(screen.queryByText('Afrobeats night')).toBeNull();
   // C4: a hidden listing lists as its kind word, with its dates and status.
   const row = screen.getByRole('button', { name: /^Apartment stay, Thu 1 Oct/ });
-  expect(screen.getByText("Details aren't available right now")).toBeTruthy();
+  expect(screen.getByText('Details aren’t available right now')).toBeTruthy();
   expect(screen.getByText('Checked out')).toBeTruthy();
   await fireEvent.press(row);
   expect(h.onOpenBooking).toHaveBeenCalledWith('apartment', 'a1');
+});
+
+it('a row thumbnail sits on a wash while it loads and recycles per booking', async () => {
+  const base = ev();
+  const withImage = ev({
+    listing: base.listing && {
+      ...base.listing,
+      media_urls: ['https://x.supabase.co/storage/v1/object/public/a.jpg'],
+    },
+  });
+  ready({ events: [withImage], hotels: [], apartments: [] });
+  await render(<BookingsScreen userId="u1" {...handlers()} />);
+  const thumb = screen.getByTestId(`booking-thumb-${withImage.id}`);
+  expect(thumb).toHaveStyle({ backgroundColor: color.wash });
+  expect(thumb.props.recyclingKey).toBe(withImage.id);
 });
 
 it('leads with Today cards whose main action fits the booking', async () => {
@@ -121,6 +137,12 @@ it('leads with Today cards whose main action fits the booking', async () => {
   const h = handlers();
   await render(<BookingsScreen userId="u1" {...h} />);
   expect(screen.getByRole('tab', { name: 'Upcoming (1)' })).toBeTruthy();
+  // One primary action on screen: the first Today card's (the 2 pm check-in); later ones are
+  // secondary.
+  const hotel = screen.getByRole('button', { name: 'Show check-in code, Harbour Suites' });
+  const event = screen.getByRole('button', { name: 'Show tickets, Jazz at the lagoon' });
+  expect(hotel).toHaveStyle({ backgroundColor: color.actionFill });
+  expect(event).toHaveStyle({ backgroundColor: color.surface });
   await fireEvent.press(screen.getByRole('button', { name: 'Show tickets, Jazz at the lagoon' }));
   expect(h.onShowTickets).toHaveBeenCalledWith('e-today');
   await fireEvent.press(screen.getByRole('button', { name: 'Show check-in code, Harbour Suites' }));
@@ -183,7 +205,7 @@ it('shows skeletons, then an error with Try again when nothing loaded and nothin
   expect(screen.getByLabelText('Loading')).toBeTruthy();
   mockMy.mockReturnValue({ ...base, loading: false, error: true });
   await render(<BookingsScreen userId="u1" {...handlers()} />);
-  expect(screen.getByText("Couldn't load your bookings")).toBeTruthy();
+  expect(screen.getByText('Couldn’t load your bookings')).toBeTruthy();
   expect(screen.queryByText('No bookings yet')).toBeNull();
   await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
   expect(refetch).toHaveBeenCalledTimes(1);
@@ -211,7 +233,7 @@ it('an empty saved copy never claims there are no bookings (C17)', async () => {
   });
   await render(<BookingsScreen userId="u1" {...handlers()} />);
   expect(screen.getByText('No saved upcoming bookings')).toBeTruthy();
-  expect(screen.getByText("Pull to refresh when you're back online")).toBeTruthy();
+  expect(screen.getByText('Pull to refresh when you’re back online')).toBeTruthy();
   expect(screen.queryByText('No bookings yet')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Browse on bookhushly.com' })).toBeNull();
 });
@@ -230,7 +252,7 @@ it('while saved, Past has no count and says it shows once back online', async ()
   expect(screen.getByRole('tab', { name: 'Upcoming (1)' })).toBeTruthy();
   expect(screen.queryByRole('tab', { name: /^Past \(/ })).toBeNull();
   await fireEvent.press(screen.getByRole('tab', { name: 'Past' }));
-  expect(screen.getByText("Past bookings show when you're back online")).toBeTruthy();
+  expect(screen.getByText('Past bookings show when you’re back online')).toBeTruthy();
   expect(screen.queryByText('No past bookings')).toBeNull();
 });
 

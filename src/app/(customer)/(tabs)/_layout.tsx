@@ -32,6 +32,8 @@ export default function CustomerTabsLayout() {
         tabBarActiveBackgroundColor: color.selectedWash,
         tabBarStyle: { backgroundColor: color.surface, borderTopColor: color.border },
         tabBarItemStyle: { minHeight: d.controlHeight },
+        // The bar's height is fixed: labels don't grow with Dynamic Type (ruling B6).
+        tabBarAllowFontScaling: false,
         tabBarLabelStyle: {
           fontFamily: fontFamily(label.font, label.weight),
           fontSize: label.size,

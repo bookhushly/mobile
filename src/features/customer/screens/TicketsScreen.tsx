@@ -44,7 +44,7 @@ function NotYours({ onClose }: { onClose: () => void }) {
   return (
     <CodeSheet title="Tickets" onClose={onClose}>
       <Body>
-        <EmptyState icon={SearchX} title="This booking isn't on your account" />
+        <EmptyState icon={SearchX} title="This booking isn’t on your account" />
       </Body>
     </CodeSheet>
   );
@@ -114,15 +114,15 @@ function EventTickets({ userId, id, index, onClose, onSignIn }: Props & { id: st
       <EmptyState
         icon={Ticket}
         title="Your tickets are being issued"
-        message="They'll show here in a moment."
+        message="They’ll show here in a moment."
       />
     );
   else if (none === 'none') body = <EmptyState icon={Ticket} title="No tickets for this booking" />;
   else if (b.error)
     body = (
       <ErrorState
-        title="Couldn't load your tickets"
-        message="Check the connection and try again."
+        title="Couldn’t load your tickets"
+        message="Check your connection and try again."
         onRetry={() => {
           void b.refetch();
         }}

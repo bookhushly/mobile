@@ -5,10 +5,10 @@ import { View } from 'react-native';
 import { kindWord, type BookingKind, type MyBooking } from '@/features/customer/domain/myBookings';
 import { chipTone } from '@/features/customer/ui/chipTone';
 import { dayParts, shortDate } from '@/shared/lib/lagosDay';
-import { radius, space } from '@/shared/theme';
+import { color, radius, space } from '@/shared/theme';
 import { DateTile, Icon, ListRow, StatusPill, Text } from '@/shared/ui';
 
-export const HIDDEN_LINE = "Details aren't available right now";
+export const HIDDEN_LINE = 'Details aren’t available right now';
 const THUMB = 56;
 
 // Decorative: the kind word beside it carries the meaning.
@@ -58,7 +58,14 @@ export function BookingRow({ booking: b, onPress }: Props) {
         b.imageUrl !== null ? (
           <Image
             source={{ uri: b.imageUrl }}
-            style={{ width: THUMB, height: THUMB, borderRadius: radius.r2 }}
+            // A wash while it loads (originals: no thumbnail endpoint yet, BACKEND_STATUS §9).
+            style={{
+              width: THUMB,
+              height: THUMB,
+              borderRadius: radius.r2,
+              backgroundColor: color.wash,
+            }}
+            testID={`booking-thumb-${b.id}`}
             contentFit="cover"
             recyclingKey={b.id}
             transition={0}

@@ -2,13 +2,14 @@ import { z } from 'zod';
 
 import { isIsoDate } from '@/shared/lib/lagosDay';
 
-// Explicit columns only: no contact details, money or `users.*` (C2, R19).
+// Explicit columns only: no contact details or `users.*` (C2, R19). The one money column is the
+// booking's own `total_amount`, shown on its details screen; it is never saved to the wallet.
 export const EVENT_BOOKING_COLUMNS =
-  'id, status, payment_status, booking_date, booking_time, guests, ticket_details, seat_assignments, created_at, listing:listing_id ( id, title, location, media_urls, event_date, event_end_date, event_time, require_dynamic_ticket ), tickets:event_tickets ( id, ticket_type, ticket_index, checked_in_at )';
+  'id, status, payment_status, total_amount, booking_date, booking_time, guests, ticket_details, seat_assignments, created_at, listing:listing_id ( id, title, location, media_urls, event_date, event_end_date, event_time, require_dynamic_ticket ), tickets:event_tickets ( id, ticket_type, ticket_index, checked_in_at )';
 export const HOTEL_BOOKING_COLUMNS =
-  'id, check_in_date, check_out_date, adults, children, payment_status, booking_status, checked_in, checked_in_at, checked_out_at, check_in_code, created_at, hotel:hotel_id ( id, name, city, state, address, image_urls, check_in_time, check_out_time ), room_type:room_type_id ( id, name )';
+  'id, check_in_date, check_out_date, adults, children, payment_status, total_amount, booking_status, checked_in, checked_in_at, checked_out_at, check_in_code, created_at, hotel:hotel_id ( id, name, city, state, address, image_urls, check_in_time, check_out_time ), room_type:room_type_id ( id, name )';
 export const APARTMENT_BOOKING_COLUMNS =
-  'id, check_in_date, check_out_date, number_of_nights, number_of_guests, payment_status, booking_status, checked_in_at, checked_out_at, created_at, apartment:apartment_id ( id, name, city, state, area, address, image_urls, check_in_time, check_out_time )';
+  'id, check_in_date, check_out_date, number_of_nights, number_of_guests, payment_status, total_amount, booking_status, checked_in_at, checked_out_at, created_at, apartment:apartment_id ( id, name, city, state, area, address, image_urls, check_in_time, check_out_time )';
 
 const isoDate = z
   .string()
@@ -19,6 +20,19 @@ const dateLike = z.string().refine((s) => isIsoDate(s.slice(0, 10)), 'Not a cale
 // Postgres `time`: "19:00:00" (or "19:00").
 const clock = z.string().nullable();
 const urls = z.array(z.string()).nullable();
+// `numeric`: PostgREST sends a number (a string is tolerated). Display only: anything unreadable
+// is null rather than failing the booking (hotel_bookings.total_amount is itself nullable).
+const money = z
+  .union([
+    z.number(),
+    z
+      .string()
+      .regex(/^-?\d+(\.\d+)?$/)
+      .transform(Number),
+  ])
+  .refine(Number.isFinite)
+  .nullable()
+  .catch(null);
 
 export const eventTicket = z.object({
   id: z.string(),
@@ -32,6 +46,7 @@ export const eventBookingRow = z.object({
   id: z.string(),
   status: z.enum(['pending', 'confirmed', 'completed', 'cancelled']).nullable(),
   payment_status: z.enum(['pending', 'completed', 'failed', 'refunded']).nullable(),
+  total_amount: money,
   booking_date: isoDate,
   booking_time: clock,
   guests: z.number().int().nullable(),
@@ -67,6 +82,7 @@ export const hotelBookingRow = z.object({
   adults: z.number().int().nullable(),
   children: z.number().int().nullable(),
   payment_status: z.enum(['pending', 'completed', 'refunded', 'failed']).nullable(),
+  total_amount: money,
   booking_status: z.enum(['confirmed', 'checked_in', 'checked_out', 'cancelled']).nullable(),
   checked_in: z.boolean().nullable(),
   checked_in_at: z.string().nullable(),
@@ -98,6 +114,7 @@ export const apartmentBookingRow = z.object({
   payment_status: z
     .enum(['pending', 'paid', 'failed', 'refunded', 'partially_refunded'])
     .nullable(),
+  total_amount: money,
   booking_status: z
     .enum(['pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled', 'no_show'])
     .nullable(),

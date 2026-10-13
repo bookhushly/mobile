@@ -66,6 +66,7 @@ it('event: date, venue to Maps, packages, tickets and Show tickets', async () =>
   expect(screen.getByRole('header', { name: 'Afrobeats night' })).toBeTruthy();
   expect(screen.getByText('Tue 20 Oct · 7:00 pm')).toBeTruthy();
   expect(screen.getByText('2 × VIP, 1 × Regular')).toBeTruthy();
+  expect(screen.getByLabelText('Payment, ₦45,000, Paid')).toBeTruthy();
   expect(screen.getByLabelText('Ticket 1 · VIP, Seat A12, Valid')).toBeTruthy();
   expect(screen.getByLabelText('Ticket 2 · VIP, Admitted on Tue 20 Oct at 7:42 pm')).toBeTruthy();
   expect(screen.getByText('To change or cancel, use bookhushly.com')).toBeTruthy();
@@ -88,7 +89,7 @@ it('a hidden listing shows the kind word and still opens (C4)', async () => {
   await show('event');
   expect(screen.getByRole('header', { name: 'Event' })).toBeTruthy();
   expect(screen.getByRole('header', { name: 'Booking' })).toBeTruthy();
-  expect(screen.getByText("Details aren't available right now")).toBeTruthy();
+  expect(screen.getByText('Details aren’t available right now')).toBeTruthy();
   expect(screen.getByText('Tue 20 Oct · 10:00 am')).toBeTruthy();
 });
 
@@ -97,8 +98,16 @@ it('a pending booking points to the website to finish paying', async () => {
   await show('event');
   expect(screen.getByText('Finish paying on bookhushly.com')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Show tickets' })).toBeNull();
-  await fireEvent.press(screen.getByRole('button', { name: 'Open bookhushly.com' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Pay on bookhushly.com' }));
   expect(openBrowserAsync).toHaveBeenCalledWith('https://bookhushly.com/dashboard/customer');
+});
+
+it('a hotel booking with no total says only paid or not (no call action either)', async () => {
+  loaded({ row: ho({ id: ID, total_amount: null }) });
+  await show('hotel');
+  expect(screen.getByLabelText('Payment, Paid')).toBeTruthy();
+  expect(screen.queryByText(/₦/)).toBeNull();
+  expect(screen.queryByRole('button', { name: /call/i })).toBeNull();
 });
 
 it('hotel: dates with the hotel times, room type, guests, payment and the check-in code', async () => {
@@ -109,7 +118,8 @@ it('hotel: dates with the hotel times, room type, guests, payment and the check-
   expect(screen.getByLabelText('Check-out, Thu 15 Oct · by 12:00 pm')).toBeTruthy();
   expect(screen.getByLabelText('Room type, Deluxe')).toBeTruthy();
   expect(screen.getByLabelText('Guests, 2 adults, 1 child')).toBeTruthy();
-  expect(screen.getByLabelText('Payment, Paid')).toBeTruthy();
+  expect(screen.getByLabelText('Payment, ₦45,000, Paid')).toBeTruthy();
+  expect(screen.getByText('₦45,000')).toBeTruthy();
   await fireEvent.press(screen.getByRole('link', { name: 'Address, Ikeja, Lagos' }));
   expect(openURL).toHaveBeenCalledWith('https://maps.apple.com/?q=Ikeja%2C%20Lagos');
   await fireEvent.press(screen.getByRole('button', { name: 'Show check-in code' }));
@@ -150,7 +160,7 @@ it('apartment: area, address, dates and nights, times, guests and payment', asyn
   expect(screen.getByLabelText('Check-in, Tue 20 Oct · from 3:00 pm')).toBeTruthy();
   expect(screen.getByLabelText('Check-out, Thu 22 Oct · by 11:00 am')).toBeTruthy();
   expect(screen.getByLabelText('Guests, 2 guests')).toBeTruthy();
-  expect(screen.getByLabelText('Payment, Not paid')).toBeTruthy();
+  expect(screen.getByLabelText('Payment, ₦45,000, Not paid')).toBeTruthy();
   expect(screen.getByText('Finish paying on bookhushly.com')).toBeTruthy();
   await fireEvent.press(
     screen.getByRole('link', { name: 'Address, 5 Admiralty Way, Lekki, Lagos' }),
@@ -163,9 +173,9 @@ it('apartment: area, address, dates and nights, times, guests and payment', asyn
 it('a booking RLS does not return, or bad params, is not on your account', async () => {
   loaded({ row: null });
   await show('hotel');
-  expect(screen.getByText("This booking isn't on your account")).toBeTruthy();
+  expect(screen.getByText('This booking isn’t on your account')).toBeTruthy();
   await render(<BookingScreen userId="u1" booking={null} {...h} />);
-  expect(screen.getByText("This booking isn't on your account")).toBeTruthy();
+  expect(screen.getByText('This booking isn’t on your account')).toBeTruthy();
 });
 
 it('offline, the saved copy shows with its tickets and a saved-data banner', async () => {
@@ -187,8 +197,8 @@ it('offline, the saved copy shows with its tickets and a saved-data banner', asy
 it('a failed load with nothing saved is an error with Try again, never "not yours"', async () => {
   const refetch = loaded({ error: true });
   await show('event');
-  expect(screen.getByText("Couldn't load this booking")).toBeTruthy();
-  expect(screen.queryByText("This booking isn't on your account")).toBeNull();
+  expect(screen.getByText('Couldn’t load this booking')).toBeTruthy();
+  expect(screen.queryByText('This booking isn’t on your account')).toBeNull();
   await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
   expect(refetch).toHaveBeenCalledTimes(1);
 });

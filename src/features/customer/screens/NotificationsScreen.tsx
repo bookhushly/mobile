@@ -31,8 +31,8 @@ import {
 /** C13: the "All marked as read" Undo stays this long. */
 export const UNDO_MS = 5_000;
 
-const STALE = "Couldn't update. Sign in again if this keeps happening.";
-const TRANSIENT = "Couldn't update — try again";
+const STALE = 'Couldn’t update. Sign in again if this keeps happening.';
+const TRANSIENT = 'Couldn’t update — try again';
 
 type Props = {
   userId: string;
@@ -114,8 +114,8 @@ export function NotificationsScreen({ userId, onBack, onOpenBooking, onOpenTab }
   } else if (notes.error) {
     body = (
       <ErrorState
-        title="Couldn't load your notifications"
-        message="Check the connection and try again."
+        title="Couldn’t load your notifications"
+        message="Check your connection and try again."
         onRetry={refresh}
       />
     );

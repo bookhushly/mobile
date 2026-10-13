@@ -36,7 +36,7 @@ type Props = {
 };
 
 const GUEST_LINE =
-  "Booked as a guest before you had an account? Those bookings can't be shown in the app yet.";
+  'Booked as a guest before you had an account? Those bookings can’t be shown in the app yet.';
 
 // Spec §3 Bookings, C3, C16, C17.
 export function BookingsScreen({
@@ -72,8 +72,8 @@ export function BookingsScreen({
     // C17: a failed load never reads as "no bookings".
     body = (
       <ErrorState
-        title="Couldn't load your bookings"
-        message="Check the connection and try again."
+        title="Couldn’t load your bookings"
+        message="Check your connection and try again."
         onRetry={refresh}
       />
     );
@@ -92,10 +92,11 @@ export function BookingsScreen({
             message={`Showing saved bookings — last updated ${savedAtLabel(my.saved.savedAt, clock.serverNow())}. Pull to refresh.`}
           />
         ) : null}
-        {lists.today.map((b) => (
+        {lists.today.map((b, i) => (
           <TodayCard
             key={`${b.kind}:${b.id}`}
             booking={b}
+            primary={i === 0}
             action={mainAction(b, my.rows)}
             onOpen={open}
             onShowTickets={(t) => {
@@ -142,7 +143,7 @@ export function BookingsScreen({
       );
     else if (segment === 'past')
       empty = saved ? (
-        <EmptyState icon={History} title="Past bookings show when you're back online" />
+        <EmptyState icon={History} title="Past bookings show when you’re back online" />
       ) : (
         <EmptyState icon={History} title="No past bookings" />
       );
@@ -151,7 +152,7 @@ export function BookingsScreen({
         <EmptyState
           icon={CalendarClock}
           title="No saved upcoming bookings"
-          message="Pull to refresh when you're back online"
+          message="Pull to refresh when you’re back online"
         />
       ) : (
         <EmptyState icon={CalendarClock} title="No upcoming bookings" />

@@ -216,7 +216,7 @@ it('a stale session: zero rows → refresh → retry → rolled back with a neut
   await open();
   await fireEvent.press(await screen.findByRole('button', { name: /^Unread, Booking confirmed/ }));
   expect(
-    await screen.findByText("Couldn't update. Sign in again if this keeps happening."),
+    await screen.findByText('Couldn’t update. Sign in again if this keeps happening.'),
   ).toBeTruthy();
   expect(refresh).toHaveBeenCalledTimes(1);
   expect(db.markRead).toHaveBeenCalledTimes(2);
@@ -229,7 +229,7 @@ it('a transient failure says try again', async () => {
   await open();
   await screen.findByText('Booking confirmed');
   await fireEvent.press(screen.getByRole('link', { name: 'Mark all as read' }));
-  expect(await screen.findByText("Couldn't update — try again")).toBeTruthy();
+  expect(await screen.findByText('Couldn’t update — try again')).toBeTruthy();
   expect(screen.queryByText('All marked as read')).toBeNull();
   expect(screen.getByTestId('unread-booked')).toBeTruthy();
 });
@@ -279,17 +279,17 @@ it('a write error can be dismissed, and a clean pull to refresh clears it', asyn
   db.markRead.mockResolvedValue(err({ kind: 'network' }));
   await open();
   await fireEvent.press(await screen.findByRole('button', { name: /^Unread, Booking confirmed/ }));
-  await screen.findByText("Couldn't update — try again");
+  await screen.findByText('Couldn’t update — try again');
   await fireEvent.press(screen.getByRole('button', { name: 'Dismiss' }));
-  expect(screen.queryByText("Couldn't update — try again")).toBeNull();
+  expect(screen.queryByText('Couldn’t update — try again')).toBeNull();
 
   await fireEvent.press(screen.getByRole('button', { name: /^Unread, Booking confirmed/ }));
-  await screen.findByText("Couldn't update — try again");
+  await screen.findByText('Couldn’t update — try again');
   const before = db.notifications.mock.calls.length;
   await pullToRefresh();
   expect(db.notifications.mock.calls.length).toBe(before + 1);
   await waitFor(() => {
-    expect(screen.queryByText("Couldn't update — try again")).toBeNull();
+    expect(screen.queryByText('Couldn’t update — try again')).toBeNull();
   });
 });
 
@@ -298,7 +298,7 @@ it('a failed pull to refresh keeps the write error', async () => {
   db.markRead.mockResolvedValue(err({ kind: 'network' }));
   await open();
   await fireEvent.press(await screen.findByRole('button', { name: /^Unread, Booking confirmed/ }));
-  await screen.findByText("Couldn't update — try again");
+  await screen.findByText('Couldn’t update — try again');
   db.notifications.mockResolvedValue(err({ kind: 'network' }));
   await pullToRefresh();
   await waitFor(() => {
@@ -307,7 +307,7 @@ it('a failed pull to refresh keeps the write error', async () => {
   await act(async () => {
     await jest.advanceTimersByTimeAsync(0);
   });
-  expect(screen.getByText("Couldn't update — try again")).toBeTruthy();
+  expect(screen.getByText('Couldn’t update — try again')).toBeTruthy();
 });
 
 it('any other row action ends the Undo', async () => {

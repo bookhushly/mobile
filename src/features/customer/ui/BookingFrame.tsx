@@ -68,7 +68,7 @@ export function BookingFrame({ booking: b, onBack, onRefresh, notice, footer, ch
           tone="info"
           message="Finish paying on bookhushly.com"
           action={{
-            label: 'Open bookhushly.com',
+            label: 'Pay on bookhushly.com',
             onPress: () => {
               openWeb(WEB_DASHBOARD);
             },
