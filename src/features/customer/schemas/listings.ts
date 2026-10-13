@@ -158,15 +158,30 @@ export const roomType = z.object({
 export type RoomType = z.infer<typeof roomType>;
 
 const bed = z.object({ type: z.string().nullable().catch(null), count: num });
-// jsonb: an array of beds, or (legacy) one bed object; anything else → [].
-function asList(v: unknown): unknown[] {
+type Bed = z.infer<typeof bed>;
+const BED_SIZES = ['king', 'queen', 'double', 'single'] as const;
+const bedCount = numeric.refine((n) => Number.isInteger(n) && n > 0);
+
+/**
+ * `hotel_room_rates.beds` is a count per size, `{king, queen, double, single}` (prod default;
+ * contract review K1): sizes with a count, king first. A list of `{type, count}` is read only as
+ * a fallback; anything else is no beds.
+ */
+function bedsOf(v: unknown): Bed[] {
   if (Array.isArray(v)) {
-    const list: unknown[] = v;
-    return list;
+    const rows: unknown[] = v;
+    return rows.flatMap((r) => {
+      const p = bed.safeParse(r);
+      return p.success ? [p.data] : [];
+    });
   }
-  return typeof v === 'object' && v !== null ? [v] : [];
+  if (typeof v !== 'object' || v === null) return [];
+  return BED_SIZES.flatMap((type) => {
+    const p = bedCount.safeParse(Reflect.get(v, type));
+    return p.success ? [{ type, count: p.data }] : [];
+  });
 }
-const beds = z.unknown().transform(asList).pipe(z.array(bed)).catch([]);
+const beds = z.unknown().default(null).transform(bedsOf);
 
 export const roomRate = z.object({
   id: z.string(),
@@ -267,14 +282,14 @@ export const eventDetail = z.object({
   ticket_packages: z
     .unknown()
     .default(null)
-    .transform((v) =>
-      Array.isArray(v)
-        ? asList(v).flatMap((t) => {
-            const p = ticketPackage.safeParse(t);
-            return p.success ? [p.data] : [];
-          })
-        : [],
-    ),
+    .transform((v) => {
+      if (!Array.isArray(v)) return [];
+      const tiers: unknown[] = v;
+      return tiers.flatMap((t) => {
+        const p = ticketPackage.safeParse(t);
+        return p.success ? [p.data] : [];
+      });
+    }),
   low_stock_threshold: threshold,
   cancellation_policy: text,
 });

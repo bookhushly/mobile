@@ -180,13 +180,25 @@ describe('detail rows', () => {
     const r = roomRate.parse({
       id: 'r1',
       room_type_id: 'rt1',
-      beds: { type: 'King', count: 1 },
+      // hotel_room_rates.beds as stored (prod default shape): a count per size.
+      beds: { single: 1, double: 0, queen: '2', king: 1 },
       price_per_night: 38000,
       is_default: true,
       label: null,
     });
-    expect(r.beds).toEqual([{ type: 'King', count: 1 }]);
-    expect(roomRate.parse({ id: 'r2', room_type_id: 'rt1', beds: 'odd' }).beds).toEqual([]);
+    // K1: sizes with a count, in king → single order.
+    expect(r.beds).toEqual([
+      { type: 'king', count: 1 },
+      { type: 'queen', count: 2 },
+      { type: 'single', count: 1 },
+    ]);
+    const bedsOf = (beds: unknown) => roomRate.parse({ id: 'r', room_type_id: 'rt1', beds }).beds;
+    expect(bedsOf({ king: 0, queen: 0, double: 0, single: 0 })).toEqual([]);
+    expect(bedsOf({ king: -1, queen: 'x', double: 1.5 })).toEqual([]);
+    // The list form only as a fallback.
+    expect(bedsOf([{ type: 'King', count: 1 }])).toEqual([{ type: 'King', count: 1 }]);
+    expect(bedsOf('odd')).toEqual([]);
+    expect(bedsOf(null)).toEqual([]);
   });
 
   it('an apartment and its pricing rules', () => {

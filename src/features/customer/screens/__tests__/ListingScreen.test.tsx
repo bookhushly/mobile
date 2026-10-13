@@ -90,7 +90,7 @@ const HOTEL: HotelListing = {
     roomRate.parse({
       id: 'r1',
       room_type_id: 'rt1',
-      beds: [{ type: 'king', count: 1 }],
+      beds: { king: 1, queen: 0, double: 0, single: 0 },
       price_per_night: 55000,
       is_default: true,
     }),
