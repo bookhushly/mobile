@@ -1,0 +1,171 @@
+import { useInfiniteQuery, useQuery, type InfiniteData } from '@tanstack/react-query';
+import { useCallback, useMemo } from 'react';
+
+import { fetchListings, type ItemFor } from '@/features/customer/api/listingsApi';
+import {
+  afterThisWeekend,
+  buildListingParams,
+  inThisWeekend,
+  type Category,
+  type Filters,
+} from '@/features/customer/domain/discover';
+import {
+  CustomerLoadError,
+  discoverKeys,
+  type ListingsWhere,
+} from '@/features/customer/hooks/customerKeys';
+import { apiErrorOf, discoverRetry, useRetryAfter } from '@/features/customer/hooks/discoverRetry';
+import { loadFailed } from '@/features/customer/hooks/loadState';
+import type { ListingsPage } from '@/features/customer/schemas/listings';
+import { api, clock } from '@/shared/api/instance';
+import type { ApiError } from '@/shared/lib/errors';
+import { lagosToday } from '@/shared/lib/lagosDay';
+
+/**
+ * "This weekend" is filtered here (the route takes one date only). A page with nothing from the
+ * weekend reads on, up to this many server pages per page shown, so a run of empty pages never
+ * reads as "No matches" while the 60/min budget is still respected.
+ */
+export const WEEKEND_MAX_PAGES = 3;
+
+/**
+ * Perf review P1: public listings change slowly, so a list is fresh for 5 minutes and coming
+ * back to the app doesn't reload it; pull to refresh and "Try again" still do.
+ */
+export const LISTINGS_STALE_MS = 5 * 60_000;
+
+function eventDateOf(item: object): string | null {
+  const d: unknown = Reflect.get(item, 'event_date');
+  return typeof d === 'string' ? d : null;
+}
+
+async function loadPage<C extends Category>(
+  cat: C,
+  where: ListingsWhere,
+  filters: Filters,
+  firstPage: number,
+  signal: AbortSignal,
+): Promise<ListingsPage<ItemFor[C]>> {
+  const today = lagosToday(clock.serverNow());
+  let page = firstPage;
+  for (let read = 1; ; read += 1) {
+    const { params, clientFilter } = buildListingParams(cat, { ...where, page }, filters, today);
+    const r = await fetchListings(api, cat, params, signal);
+    if (!r.ok) throw new CustomerLoadError(r.error);
+    if (clientFilter !== 'weekend') return r.value;
+    const items = r.value.items.filter((i) => inThisWeekend(eventDateOf(i), today));
+    // Soonest first (events' `top_rated`): once a page reaches past Sunday, no later page can
+    // match, so the list ends there instead of reading on.
+    const last = r.value.items.at(-1);
+    const passed =
+      filters.sort === 'top_rated' &&
+      last !== undefined &&
+      afterThisWeekend(eventDateOf(last), today);
+    const next = passed ? undefined : r.value.nextPage;
+    // The route's count is for every date, so it isn't shown for a client-filtered list.
+    if (items.length > 0 || next === undefined || read >= WEEKEND_MAX_PAGES)
+      return { items, nextPage: next, totalCount: null };
+    page = next;
+  }
+}
+
+export type Listings<T> = {
+  items: T[];
+  /** The route's count (only when it sent one, and never for "This weekend"). */
+  totalCount: number | null;
+  /** First load (no data yet, not failed). */
+  loading: boolean;
+  /** Nothing to show: the first page failed, or is paused offline. */
+  failed: boolean;
+  /** The last load's error (a failed "load more" keeps the pages already shown). */
+  error: ApiError | null;
+  /** Seconds the server asked to wait after a 429, while waiting; else null. */
+  retryAfterSec: number | null;
+  hasMore: boolean;
+  loadingMore: boolean;
+  /** Next page; a no-op while one is loading, at the end, or inside a 429's Retry-After. */
+  loadMore: () => void;
+  refetch: () => Promise<unknown>;
+};
+
+// Spec D2/D16: GET /api/listings, 20 a page, infinite. Public (no user in the key), not persisted.
+export function useListings<C extends Category>(
+  cat: C,
+  where: ListingsWhere,
+  filters: Filters,
+  opts: { enabled?: boolean } = {},
+): Listings<ItemFor[C]> {
+  const q = useInfiniteQuery<
+    ListingsPage<ItemFor[C]>,
+    Error,
+    InfiniteData<ListingsPage<ItemFor[C]>, number>,
+    ReturnType<typeof discoverKeys.listings>,
+    number
+  >({
+    queryKey: discoverKeys.listings(cat, where, filters),
+    queryFn: ({ pageParam, signal }) => loadPage(cat, where, filters, pageParam, signal),
+    initialPageParam: 0,
+    getNextPageParam: (last) => last.nextPage,
+    retry: discoverRetry,
+    staleTime: LISTINGS_STALE_MS,
+    refetchOnWindowFocus: false,
+    enabled: opts.enabled ?? true,
+  });
+  const error = apiErrorOf(q.error);
+  const retryAfterSec = useRetryAfter(error, q.errorUpdatedAt);
+  const items = useMemo(() => q.data?.pages.flatMap((p) => p.items) ?? [], [q.data]);
+  const { hasNextPage, isFetching, fetchNextPage } = q;
+  const loadMore = useCallback(() => {
+    if (!hasNextPage || isFetching || retryAfterSec !== null) return;
+    void fetchNextPage();
+  }, [hasNextPage, isFetching, retryAfterSec, fetchNextPage]);
+  const failed = loadFailed(q);
+  return {
+    items,
+    totalCount: q.data?.pages[0]?.totalCount ?? null,
+    loading: q.isPending && q.fetchStatus === 'fetching',
+    failed,
+    error,
+    retryAfterSec,
+    hasMore: hasNextPage,
+    loadingMore: q.isFetchingNextPage,
+    loadMore,
+    refetch: q.refetch,
+  };
+}
+
+export type RailListings<T> = Pick<
+  Listings<T>,
+  'items' | 'loading' | 'failed' | 'error' | 'retryAfterSec' | 'refetch'
+>;
+
+/**
+ * An Explore rail (perf review P1): one page under its own key, so a pull to refresh reads one
+ * page per rail, never every page Results has loaded for the same search.
+ */
+export function useListingsRail<C extends Category>(
+  cat: C,
+  where: ListingsWhere,
+  filters: Filters,
+  opts: { enabled?: boolean } = {},
+): RailListings<ItemFor[C]> {
+  const q = useQuery({
+    queryKey: discoverKeys.rail(cat, where, filters),
+    queryFn: ({ signal }) => loadPage(cat, where, filters, 0, signal),
+    retry: discoverRetry,
+    staleTime: LISTINGS_STALE_MS,
+    refetchOnWindowFocus: false,
+    enabled: opts.enabled ?? true,
+  });
+  const error = apiErrorOf(q.error);
+  const retryAfterSec = useRetryAfter(error, q.errorUpdatedAt);
+  const items = useMemo(() => q.data?.items ?? [], [q.data]);
+  return {
+    items,
+    loading: q.isPending && q.fetchStatus === 'fetching',
+    failed: loadFailed(q),
+    error,
+    retryAfterSec,
+    refetch: q.refetch,
+  };
+}

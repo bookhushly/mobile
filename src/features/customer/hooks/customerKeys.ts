@@ -1,3 +1,4 @@
+import type { Category, Filters, ListingKind } from '@/features/customer/domain/discover';
 import type { BookingKind } from '@/features/customer/domain/myBookings';
 import type { ApiError } from '@/shared/lib/errors';
 
@@ -13,6 +14,26 @@ export const customerKeys = {
   profile: (u: string) => ['customer', u, 'profile'] as const,
   /** The offline wallet as read from disk; only loaded when a network load has failed. */
   wallet: (u: string) => ['customer', u, 'wallet'] as const,
+  /** Saved listings (spec D9): own rows under RLS. */
+  saved: (u: string) => ['customer', u, 'saved'] as const,
+  /** Recent searches and the Explore place, read from this device. */
+  recentSearches: (u: string) => ['customer', u, 'recentSearches'] as const,
+  explorePlace: (u: string) => ['customer', u, 'explorePlace'] as const,
+};
+
+export type ListingsWhere = { q: string; state?: string; city?: string };
+
+// Public listings aren't per user (the route is anonymous): keyed without one. Never persisted.
+export const discoverKeys = {
+  all: ['discover'] as const,
+  listings: (cat: Category, where: ListingsWhere, filters: Filters) =>
+    ['discover', 'listings', cat, where, filters] as const,
+  /** An Explore rail: its first page only, apart from Results' pages (perf review P1). */
+  rail: (cat: Category, where: ListingsWhere, filters: Filters) =>
+    ['discover', 'rail', cat, where, filters] as const,
+  listing: (kind: ListingKind, id: string) => ['discover', 'listing', kind, id] as const,
+  reviews: (kind: 'hotel' | 'apartment', id: string, pageSize: number) =>
+    ['discover', 'reviews', kind, id, pageSize] as const,
 };
 
 // Carries the typed ApiError (has `kind`) so the query retry policy can classify it.

@@ -1,5 +1,7 @@
 export const iconSize = { xs: 16, sm: 20, md: 24, lg: 32, xl: 96, xxl: 128 } as const;
 export type IconSizeKey = keyof typeof iconSize;
+/** The outline icon set's stroke (DESIGN_SYSTEM: 1.5–2 px on a 24 grid). */
+export const iconStroke = 1.75;
 
 export const borderWidth = { hairline: 1, thick: 2 } as const;
 
@@ -16,3 +18,10 @@ export const layout = {
   // Ticket and check-in QR codes: as wide as the screen allows, capped on tablets.
   qrMax: 360,
 } as const;
+
+/** Listing cards (customer Discover): a rail card's width (its 4:3 image follows) and a row's
+ * square thumbnail. */
+export const cardSize = { railWidth: 240, rowImage: 96 } as const;
+
+/** Skeleton bars standing in for a line of text: a title line and a caption line. */
+export const skeletonLine = { title: 16, caption: 12 } as const;

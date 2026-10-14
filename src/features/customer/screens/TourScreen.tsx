@@ -30,7 +30,8 @@ const PAGES: readonly Page[] = [
   {
     scene: 'pay',
     headline: 'Pay in naira',
-    body: 'Card, bank transfer or crypto. You see the full price before you pay.',
+    // D15: booking and payment hand off to the website until in-app checkout lands.
+    body: 'For now you book and pay on bookhushly.com. You see the full price before you pay.',
   },
   {
     scene: 'showUp',

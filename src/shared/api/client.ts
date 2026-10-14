@@ -13,6 +13,8 @@ export type RequestOptions<T> = {
   idempotent?: boolean;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** `false`: a public route. No token is read or sent, and a 401 is never refreshed. */
+  auth?: false;
 };
 
 export type RefreshOutcome = { token: string } | { failure: 'network' | 'invalid' };
@@ -110,7 +112,8 @@ export function createApiClient(deps: Deps) {
     if (!path.startsWith('/') || path.startsWith('//')) return err({ kind: 'validation' });
     const method = opts.method ?? 'GET';
     const canRetry = method === 'GET' || opts.idempotent === true;
-    let token = await deps.getAccessToken();
+    const withAuth = opts.auth !== false;
+    let token = withAuth ? await deps.getAccessToken() : null;
     let refreshed = false;
     let attempt = 0;
 
@@ -133,7 +136,7 @@ export function createApiClient(deps: Deps) {
           const parsed = opts.schema.safeParse(await readBody(res));
           return parsed.success ? ok(parsed.data) : err({ kind: 'validation' });
         }
-        if (res.status === 401 && !refreshed) {
+        if (res.status === 401 && withAuth && !refreshed) {
           refreshed = true;
           const next = await deps.refreshSession();
           if ('failure' in next) {

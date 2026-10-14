@@ -85,6 +85,7 @@ function handlers(): Omit<Props, 'userId'> {
     onShowTickets: jest.fn(),
     onShowCheckInCode: jest.fn(),
     onOpenNotifications: jest.fn(),
+    onBrowse: jest.fn(),
   };
 }
 
@@ -177,17 +178,19 @@ it('saved bookings say so, and a saved ticket still shows from the Today card', 
   expect(h.onShowTickets).toHaveBeenCalledWith('e-today');
 });
 
-it('with no bookings at all, explains and offers the website', async () => {
+it('with no bookings at all, explains and offers Explore in the app (F3)', async () => {
   ready({ events: [], hotels: [], apartments: [] });
-  await render(<BookingsScreen userId="u1" {...handlers()} />);
+  const h = handlers();
+  await render(<BookingsScreen userId="u1" {...h} />);
   expect(screen.getByText('No bookings yet')).toBeTruthy();
   expect(
     screen.getByText('Bookings you make while signed in with this email show up here.'),
   ).toBeTruthy();
   expect(screen.getByText(/^Booked as a guest before you had an account\?/)).toBeTruthy();
   expect(screen.queryByRole('tab')).toBeNull();
-  await fireEvent.press(screen.getByRole('button', { name: 'Browse on bookhushly.com' }));
-  expect(openBrowserAsync).toHaveBeenCalledWith('https://bookhushly.com');
+  await fireEvent.press(screen.getByRole('button', { name: 'Browse' }));
+  expect(h.onBrowse).toHaveBeenCalled();
+  expect(openBrowserAsync).not.toHaveBeenCalled();
 });
 
 it('with only past bookings, upcoming says none', async () => {
@@ -235,7 +238,7 @@ it('an empty saved copy never claims there are no bookings (C17)', async () => {
   expect(screen.getByText('No saved upcoming bookings')).toBeTruthy();
   expect(screen.getByText('Pull to refresh when you’re back online')).toBeTruthy();
   expect(screen.queryByText('No bookings yet')).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Browse on bookhushly.com' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Browse' })).toBeNull();
 });
 
 it('while saved, Past has no count and says it shows once back online', async () => {

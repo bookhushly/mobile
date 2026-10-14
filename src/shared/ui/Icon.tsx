@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react-native';
 
-import { iconSize, textTone, type ColorRole, type IconSizeKey } from '@/shared/theme';
+import { iconSize, iconStroke, textTone, type ColorRole, type IconSizeKey } from '@/shared/theme';
 
 type Props = {
   as: LucideIcon;
@@ -16,7 +16,7 @@ export function Icon({
   size = 'md',
   tone = 'textPrimary',
   color,
-  strokeWidth = 1.75,
+  strokeWidth = iconStroke,
 }: Props) {
   const px = typeof size === 'number' ? size : iconSize[size];
   return <Glyph size={px} color={color ?? textTone[tone]} strokeWidth={strokeWidth} />;

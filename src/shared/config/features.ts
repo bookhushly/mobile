@@ -4,9 +4,9 @@
 type Features = { customerTour: boolean };
 
 const features: Features = {
-  // Find · Pay · Show up intro tour (spec 2026-10-08 UI-B §2 decision 2): built now, switched on
-  // in Phase 4 once there is something to browse. A test pins it off so a merge never ships it on.
-  customerTour: false,
+  // Find · Pay · Show up intro tour (spec 2026-10-08 UI-B §2 decision 2), switched on in Phase 4b
+  // (spec D15) now that there is something to browse. A test pins it on.
+  customerTour: true,
 };
 
 export const CUSTOMER_TOUR_ENABLED = features.customerTour;

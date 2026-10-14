@@ -1,7 +1,11 @@
 import {
   bookingIdParam,
   bookingRefParams,
+  categoryParam,
+  searchParams,
+  listingRefParams,
   pagerIndexParam,
+  resultsParams,
 } from '@/features/customer/domain/routeParams';
 
 const ID = '0b6f1f4e-2c1a-4f6e-9a39-6f0e7d2b9c11';
@@ -43,4 +47,61 @@ it('takes a pager index within the tickets, else the first', () => {
   expect(pagerIndexParam(' 1', 3)).toBe(0);
   expect(pagerIndexParam(['1'], 3)).toBe(0);
   expect(pagerIndexParam('1', 0)).toBe(0);
+});
+
+describe('listingRefParams', () => {
+  it('accepts hotel, apartment and event with a UUID', () => {
+    expect(listingRefParams('hotel', ID)).toEqual({ kind: 'hotel', id: ID });
+    expect(listingRefParams('apartment', ID)).toEqual({ kind: 'apartment', id: ID });
+    expect(listingRefParams('event', ID)).toEqual({ kind: 'event', id: ID });
+  });
+
+  it.each<[unknown, unknown]>([
+    ['hotels', ID],
+    ['listing', ID],
+    [undefined, ID],
+    ['hotel', 'h1'],
+    ['hotel', [ID]],
+    ['hotel', undefined],
+  ])('rejects kind %p with id %p', (kind, id) => {
+    expect(listingRefParams(kind, id)).toBeNull();
+  });
+});
+
+describe('searchParams', () => {
+  it('reads the category (null when odd) and a sanitised query', () => {
+    expect(searchParams({ category: 'events', q: ' Lekki (Phase 1) ' })).toEqual({
+      category: 'events',
+      q: 'Lekki Phase 1',
+    });
+    expect(searchParams({ category: 'cars', q: ['x'] })).toEqual({ category: null, q: '' });
+    expect(searchParams({})).toEqual({ category: null, q: '' });
+  });
+});
+
+describe('resultsParams', () => {
+  it('reads the category and a sanitised query, state (as region) and city', () => {
+    expect(
+      resultsParams({ category: 'events', q: ' Lagos, Lekki (Phase 1) ', region: 'Lagos' }),
+    ).toEqual({ category: 'events', q: 'Lagos Lekki Phase 1', state: 'Lagos' });
+    expect(resultsParams({ category: 'serviced_apartments', city: 'Port Harcourt' })).toEqual({
+      category: 'serviced_apartments',
+      q: '',
+      city: 'Port Harcourt',
+    });
+  });
+
+  it('an unknown category is hotels; odd or empty values are dropped', () => {
+    expect(resultsParams({ category: 'flights', q: ['a', 'b'], region: '  ', city: 7 })).toEqual({
+      category: 'hotels',
+      q: '',
+    });
+    expect(resultsParams({})).toEqual({ category: 'hotels', q: '' });
+  });
+
+  it('categoryParam is null for anything else', () => {
+    expect(categoryParam('hotels')).toBe('hotels');
+    expect(categoryParam('Hotels')).toBeNull();
+    expect(categoryParam(undefined)).toBeNull();
+  });
 });
