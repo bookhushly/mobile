@@ -89,7 +89,9 @@ function Details({ l }: { l: ListingCardModel }) {
       ) : null}
       {l.kind === 'event' ? (
         l.when !== null ? (
+          // Final UX review U5: a tag on a wash, no border, so it never reads as a chip/button.
           <View
+            testID="event-when"
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -98,9 +100,7 @@ function Details({ l }: { l: ListingCardModel }) {
               paddingHorizontal: space.s3,
               paddingVertical: space.s1,
               borderRadius: radius.r2,
-              borderWidth: borderWidth.hairline,
-              borderColor: color.border,
-              backgroundColor: color.surface,
+              backgroundColor: color.wash,
             }}
           >
             <Icon as={CalendarDays} size="xs" tone="textSecondary" />

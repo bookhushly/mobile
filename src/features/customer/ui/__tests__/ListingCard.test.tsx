@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import type { ListingCardModel } from '@/features/customer/domain/listingCard';
 import { ListingCard } from '@/features/customer/ui/ListingCard';
+import { borderWidth, color } from '@/shared/theme';
 
 const HOTEL: ListingCardModel = {
   kind: 'hotel',
@@ -77,6 +78,10 @@ it('an event card shows its date chip instead of a rating, and a price range', a
     />,
   );
   expect(screen.getByText('Sat 17 Oct · 7:00 pm')).toBeTruthy();
+  // U5: a tag, not a chip — no border, so it never reads as a button.
+  const tag = screen.getByTestId('event-when');
+  expect(tag).not.toHaveStyle({ borderWidth: borderWidth.hairline });
+  expect(tag).toHaveStyle({ backgroundColor: color.wash });
   // D5: a free tier next to paid ones reads "Free", never "₦0".
   expect(screen.getByText('Free – ₦5,000')).toBeTruthy();
   expect(screen.queryByText(/₦0/)).toBeNull();
