@@ -1,15 +1,18 @@
-import { FlatList, View } from 'react-native';
+import { FlatList, Pressable, View } from 'react-native';
 
 import type { ListingCardModel } from '@/features/customer/domain/listingCard';
 import { ListingCard, RAIL_CARD_WIDTH } from '@/features/customer/ui/ListingCard';
-import { space } from '@/shared/theme';
+import { density, space } from '@/shared/theme';
 import { Banner, Skeleton, Text, TextLink } from '@/shared/ui';
 
 /** A rail shows the first few; See all opens the full list. */
 export const RAIL_MAX = 10;
 
 type Props = {
+  /** "Hotels"; with `place`, the heading reads "Hotels in Lagos". */
   title: string;
+  /** The rail's place, tappable in the heading to change it (final UX review U2). */
+  place?: { label: string; onChange: () => void };
   /** The one line shown in the rail's place when it has nothing ("No hotels in Abuja yet"). */
   emptyNote: string;
   items: readonly ListingCardModel[];
@@ -47,7 +50,8 @@ function RailSkeleton() {
 // Spec §3 / §6: a heading, See all, then a horizontal list of cards. Each rail loads, fails and
 // retries on its own; an empty rail gives its place to one line.
 export function Rail({
-  title,
+  title: what,
+  place,
   emptyNote,
   items,
   loading,
@@ -61,6 +65,7 @@ export function Rail({
   onToggleSaved,
   testID,
 }: Props) {
+  const title = place === undefined ? what : `${what} in ${place.label}`;
   if (!loading && !failed && items.length === 0)
     return (
       <Text testID={testID} variant="bodySm" tone="textSecondary">
@@ -70,9 +75,34 @@ export function Rail({
   return (
     <View testID={testID} style={{ gap: space.s3 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}>
-        <Text variant="headline" accessibilityRole="header" numberOfLines={1} style={{ flex: 1 }}>
-          {title}
-        </Text>
+        {place === undefined ? (
+          <Text variant="headline" accessibilityRole="header" numberOfLines={1} style={{ flex: 1 }}>
+            {title}
+          </Text>
+        ) : (
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+            <View accessible accessibilityRole="header" accessibilityLabel={title}>
+              <Text variant="headline" numberOfLines={1}>
+                {`${what} in`}
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${place.label}. Change place`}
+              onPress={place.onChange}
+              style={{
+                flexShrink: 1,
+                minHeight: density.customer.minTarget,
+                justifyContent: 'center',
+                paddingHorizontal: space.s2,
+              }}
+            >
+              <Text variant="headline" tone="linkText" numberOfLines={1}>
+                {place.label}
+              </Text>
+            </Pressable>
+          </View>
+        )}
         <TextLink label="See all" accessibilityLabel={`See all, ${title}`} onPress={onSeeAll} />
       </View>
       {loading ? (

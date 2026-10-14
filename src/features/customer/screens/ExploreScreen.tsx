@@ -86,6 +86,10 @@ export function ExploreScreen({
   const now = Math.floor(clock.serverNow() / MINUTE_MS) * MINUTE_MS;
   const today = my.bookings === null ? null : todayBanner(my.bookings.today, my.rows);
   const where = place?.label ?? '';
+  const choosePlace = () => {
+    setChoosing(true);
+  };
+  const placeLink = place === null ? undefined : { label: where, onChange: choosePlace };
   useSavedNotices(saved);
 
   // Review 5 (4): only the first RAIL_MAX of every page become card models, memoised on the
@@ -186,7 +190,10 @@ export function ExploreScreen({
           Search hotels, apartments and events
         </Text>
       </Pressable>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: d.targetGap }}>
+      <View
+        testID="explore-chips"
+        style={{ flexDirection: 'row', flexWrap: 'wrap', gap: d.targetGap }}
+      >
         {CATEGORIES.map((c) => (
           <ChipButton
             key={c.cat}
@@ -197,6 +204,12 @@ export function ExploreScreen({
             }}
           />
         ))}
+        <ChipButton
+          label={place === null ? 'Where to?' : `Where to? · ${where}`}
+          accessibilityLabel={place === null ? 'Where to?' : `Where to? ${where}. Change place`}
+          icon={MapPin}
+          onPress={choosePlace}
+        />
       </View>
       <Rail
         title="Happening soon"
@@ -212,18 +225,9 @@ export function ExploreScreen({
         testID="rail-events"
         {...railProps}
       />
-      <View style={{ alignSelf: 'flex-start' }}>
-        <ChipButton
-          label={place === null ? 'Where to?' : `Where to? · ${where}`}
-          accessibilityLabel={place === null ? 'Where to?' : `Where to? ${where}. Change place`}
-          icon={MapPin}
-          onPress={() => {
-            setChoosing(true);
-          }}
-        />
-      </View>
       <Rail
-        title={place === null ? 'Hotels' : `Hotels in ${where}`}
+        title="Hotels"
+        {...(placeLink === undefined ? {} : { place: placeLink })}
         emptyNote={`No hotels in ${where} yet.`}
         items={hotelCards}
         loading={place === null || hotels.loading}
@@ -237,7 +241,8 @@ export function ExploreScreen({
         {...railProps}
       />
       <Rail
-        title={place === null ? 'Apartments' : `Apartments in ${where}`}
+        title="Apartments"
+        {...(placeLink === undefined ? {} : { place: placeLink })}
         emptyNote={`No apartments in ${where} yet.`}
         items={apartmentCards}
         loading={place === null || apartments.loading}

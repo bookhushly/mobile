@@ -292,6 +292,18 @@ it('the place chip changes the stays query', async () => {
   );
 });
 
+it('"Where to?" sits with the category chips, and a stays heading’s place is tappable (U2)', async () => {
+  await render(<ExploreScreen {...props()} />);
+  const chips = screen.getByTestId('explore-chips');
+  expect(within(chips).getByRole('button', { name: 'Where to? Lagos. Change place' })).toBeTruthy();
+  expect(within(chips).getByText('Hotels')).toBeTruthy();
+  const hotels = screen.getByTestId('rail-hotels');
+  expect(within(hotels).getByRole('header', { name: 'Hotels in Lagos' })).toBeTruthy();
+  await fireEvent.press(within(hotels).getByRole('button', { name: 'Lagos. Change place' }));
+  await fireEvent.press(screen.getByRole('radio', { name: 'Abuja' }));
+  expect(screen.getByRole('header', { name: 'Apartments in Abuja' })).toBeTruthy();
+});
+
 it('stays wait for the place before loading', async () => {
   mockPlace.mockReturnValue({ place: null, setPlace: jest.fn() });
   await render(<ExploreScreen {...props()} />);
