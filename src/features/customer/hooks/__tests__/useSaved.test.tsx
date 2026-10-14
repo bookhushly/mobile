@@ -208,6 +208,31 @@ describe('useSaved', () => {
     await unmount();
   });
 
+  it('toggle keeps its identity across a tap, and isSaved across unrelated renders (P3)', async () => {
+    const { result, rerender, unmount } = await run();
+    const { toggle, isSaved } = result.current;
+    await rerender({});
+    expect(result.current.isSaved).toBe(isSaved);
+    // The server has it once the save lands.
+    list.mockResolvedValue(
+      ok([row(HOTEL, '2026-10-13T11:00:00.000Z'), row(EVENT, '2026-10-12T10:00:00.000Z')]),
+    );
+    await act(async () => {
+      await result.current.toggle(HOTEL);
+    });
+    await waitFor(() => {
+      expect(result.current.isSaved('hotel', 'h1')).toBe(true);
+    });
+    // A heart tap doesn't hand every card a new callback.
+    expect(result.current.toggle).toBe(toggle);
+    // The second tap still reads the current state from the cache: it unsaves.
+    await act(async () => {
+      await result.current.toggle(HOTEL);
+    });
+    expect(unsave).toHaveBeenCalledWith(USER, HOTEL);
+    await unmount();
+  });
+
   it('quick taps on one heart write in tap order, and the list refetches once at the end', async () => {
     const first = deferred<Awaited<ReturnType<Db['save']>>>();
     save.mockReturnValueOnce(first.promise);

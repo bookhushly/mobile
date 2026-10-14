@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { FlatList } from 'react-native';
 
 import { filterCount, type Filters, type ListingKind } from '@/features/customer/domain/discover';
-import { cardOf, type ListingCardModel } from '@/features/customer/domain/listingCard';
+import { cardOf, minuteOf, type ListingCardModel } from '@/features/customer/domain/listingCard';
 import type { ResultsQuery } from '@/features/customer/domain/routeParams';
 import type { ListingsWhere } from '@/features/customer/hooks/customerKeys';
 import { useListings } from '@/features/customer/hooks/useListings';
@@ -57,7 +57,7 @@ export function ResultsScreen({
   const list = useListings(cat, where, filters);
   const saved = useSaved(userId);
   useSavedNotices(saved);
-  const now = clock.serverNow();
+  const now = minuteOf(clock.serverNow());
   const n = filterCount(cat, filters);
   const title = [
     CATEGORY_LABEL[cat],

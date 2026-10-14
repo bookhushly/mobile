@@ -2,6 +2,7 @@ import { ArrowLeft } from 'lucide-react-native';
 import { useState } from 'react';
 
 import { webListingUrl, type ListingKind } from '@/features/customer/domain/discover';
+import { minuteOf } from '@/features/customer/domain/listingCard';
 import { useListing } from '@/features/customer/hooks/useListing';
 import { useSaved } from '@/features/customer/hooks/useSaved';
 import { useSavedNotices } from '@/features/customer/hooks/useSavedNotices';
@@ -31,7 +32,6 @@ const KIND_WORD: Record<ListingKind, string> = {
   apartment: 'Apartment',
   event: 'Event',
 };
-const MINUTE_MS = 60_000;
 
 type Props = {
   kind: ListingKind;
@@ -58,7 +58,7 @@ export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props
     setOpen(null);
   };
   // Minute steps: early-bird prices turn on the clock.
-  const now = Math.floor(clock.serverNow() / MINUTE_MS) * MINUTE_MS;
+  const now = minuteOf(clock.serverNow());
   const data = listing.data;
   if (data === null) return <ListingNotFound onBack={onBack} />;
   const s = data === undefined ? null : listingSummary(data, now);

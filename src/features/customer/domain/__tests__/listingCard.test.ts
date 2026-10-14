@@ -2,6 +2,7 @@ import {
   cardOf,
   eventWhenLabel,
   firstHttpsImage,
+  minuteOf,
   placeLine,
 } from '@/features/customer/domain/listingCard';
 import type { ApartmentItem, EventItem, HotelItem } from '@/features/customer/schemas/listings';
@@ -52,6 +53,13 @@ const event = (p: Partial<EventItem> = {}): EventItem => ({
   event_time: '2026-10-17T18:00:00+00:00',
   low_stock_threshold: null,
   ...p,
+});
+
+describe('minuteOf (P2)', () => {
+  it('steps the clock to the minute, so card models stay put between minutes', () => {
+    expect(minuteOf(NOW + 59_999)).toBe(NOW);
+    expect(minuteOf(NOW + 60_000)).toBe(NOW + 60_000);
+  });
 });
 
 describe('firstHttpsImage', () => {

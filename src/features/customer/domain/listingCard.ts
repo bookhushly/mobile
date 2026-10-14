@@ -45,6 +45,16 @@ export const KIND_OF: Record<Category, ListingKind> = {
   events: 'event',
 };
 
+const MINUTE_MS = 60_000;
+
+/**
+ * The clock in minute steps (perf review P2): early-bird prices and "Started" turn on the minute,
+ * so card models built from it stay the same object between minutes and memoised cards skip work.
+ */
+export function minuteOf(nowMs: number): number {
+  return Math.floor(nowMs / MINUTE_MS) * MINUTE_MS;
+}
+
 /** The first `https://` URL (never http or a data/file URI), else null. */
 export function firstHttpsImage(urls: readonly string[] | null): string | null {
   return urls?.find((u) => u.trim().toLowerCase().startsWith('https://'))?.trim() ?? null;

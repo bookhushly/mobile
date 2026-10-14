@@ -155,9 +155,15 @@ export function useSaved(userId: string): Saved {
     [qc, userId],
   );
 
+  // Perf review P3: stable across taps (it reads the cache, not the render's list), so a heart tap
+  // never hands every memoised card a new callback. `isSaved` does change with the saved set: the
+  // cards' `saved` flag is read from it during render.
   const toggle = useCallback(
-    (item: SavedInput) => write(item, !isSaved(item.kind, item.listingId)),
-    [write, isSaved],
+    (item: SavedInput) => {
+      const rows = qc.getQueryData<SavedItem[]>(customerKeys.saved(userId)) ?? [];
+      return write(item, !rows.some((r) => same(r, item)));
+    },
+    [qc, userId, write],
   );
 
   const undo = useCallback(async (): Promise<WriteOutcome | null> => {

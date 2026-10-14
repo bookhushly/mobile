@@ -11,7 +11,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, View } from 'react-native';
 
 import type { Category, Filters, ListingKind, Place } from '@/features/customer/domain/discover';
-import { cardOf, type ListingCardModel } from '@/features/customer/domain/listingCard';
+import { cardOf, minuteOf, type ListingCardModel } from '@/features/customer/domain/listingCard';
 import { todayBanner } from '@/features/customer/domain/todayBanner';
 import type { ListingsWhere } from '@/features/customer/hooks/customerKeys';
 import { useExplorePlace } from '@/features/customer/hooks/useExplorePlace';
@@ -52,7 +52,6 @@ const CATEGORIES: readonly { cat: Category; label: string; icon: LucideIcon }[] 
 const SOONEST: Filters = { sort: 'top_rated' };
 const NEWEST: Filters = { sort: 'newest' };
 const ANYWHERE: ListingsWhere = { q: '' };
-const MINUTE_MS = 60_000;
 const SAVED_LOAD_ERROR = 'Couldn’t load your saved list — pull to refresh.';
 
 const whereOf = (p: Place | null): ListingsWhere => ({
@@ -92,7 +91,7 @@ export function ExploreScreen({
 
   // Minute steps (early-bird prices turn on the clock): the card models below then stay the same
   // object across re-renders (refresh state, the place sheet) and the memoised cards skip work.
-  const now = Math.floor(clock.serverNow() / MINUTE_MS) * MINUTE_MS;
+  const now = minuteOf(clock.serverNow());
   const today = my.bookings === null ? null : todayBanner(my.bookings.today, my.rows);
   const where = place?.label ?? '';
   const choosePlace = () => {
