@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { webListingUrl, type ListingKind } from '@/features/customer/domain/discover';
 import { minuteOf } from '@/features/customer/domain/listingCard';
 import { useListing } from '@/features/customer/hooks/useListing';
+import { useReviews } from '@/features/customer/hooks/useReviews';
 import { useSaved } from '@/features/customer/hooks/useSaved';
 import { useSavedNotices } from '@/features/customer/hooks/useSavedNotices';
 import { useWebNote } from '@/features/customer/hooks/useWebNote';
@@ -22,7 +23,11 @@ import { ListingFooter, WEB_NOTE } from '@/features/customer/ui/ListingFooter';
 import { ListingOverview } from '@/features/customer/ui/ListingOverview';
 import { listingSummary } from '@/features/customer/ui/listingSummary';
 import { ReadMoreText } from '@/features/customer/ui/ReadMoreText';
-import { AllReviewsSheet, ReviewsSection } from '@/features/customer/ui/ReviewsSection';
+import {
+  AllReviewsSheet,
+  REVIEWS_PAGE,
+  ReviewsSection,
+} from '@/features/customer/ui/ReviewsSection';
 import { SavedBanner, savedBannerShown } from '@/features/customer/ui/SavedBanner';
 import { clock } from '@/shared/api/instance';
 import { Banner, ErrorState, Header, IconButton, Screen, Sheet, SkeletonRows } from '@/shared/ui';
@@ -48,6 +53,11 @@ type Open = { to: 'photos'; index: number } | { to: 'amenities' } | { to: 'revie
 // reviews (stays only), and a sticky footer handing off to bookhushly.com.
 export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props) {
   const listing = useListing(kind, id);
+  // Perf review P5: reviews start with the detail (the id is already a valid UUID here), one
+  // query shared by the section and the sheet. Events have none in 4b.
+  const reviews = useReviews(kind === 'apartment' ? 'apartment' : 'hotel', id, REVIEWS_PAGE, {
+    enabled: kind !== 'event',
+  });
   const saved = useSaved(userId);
   useSavedNotices(saved);
   const note = useWebNote();
@@ -161,8 +171,7 @@ export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props
       {stay === null ? about : null}
       {stay !== null ? (
         <ReviewsSection
-          kind={stay}
-          listingId={id}
+          reviews={reviews}
           onSeeAll={() => {
             setOpen({ to: 'reviews' });
           }}
@@ -177,7 +186,7 @@ export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props
         </Sheet>
       ) : null}
       {open?.to === 'reviews' && stay !== null ? (
-        <AllReviewsSheet kind={stay} listingId={id} onClose={close} />
+        <AllReviewsSheet reviews={reviews} onClose={close} />
       ) : null}
     </Screen>
   );

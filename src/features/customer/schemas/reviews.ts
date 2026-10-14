@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+import { plainText } from '@/features/customer/domain/plainText';
+
+/** `comment` and `vendorResponse` are plain text, cleaned once here (never HTML). */
 export type Review = {
   id: string;
   customerName: string | null;
@@ -29,10 +32,11 @@ const review = z
     id: r.id,
     customerName: r.customer_name,
     rating: r.rating,
-    comment: r.comment,
+    // Perf review P6: cleaned once at parse time, not on every render of the list.
+    comment: plainText(r.comment),
     verified: r.verified_booking === true,
     createdAt: r.created_at,
-    vendorResponse: r.vendor_response,
+    vendorResponse: plainText(r.vendor_response),
     vendorResponseDate: r.vendor_response_date,
   }));
 

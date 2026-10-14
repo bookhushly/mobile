@@ -2,16 +2,16 @@ import { BadgeCheck, Star } from 'lucide-react-native';
 import { View } from 'react-native';
 
 import { reviewDate } from '@/features/customer/domain/listingDetail';
-import { plainText } from '@/features/customer/domain/plainText';
 import type { Review } from '@/features/customer/schemas/reviews';
 import { borderWidth, color, space } from '@/shared/theme';
 import { Icon, Text } from '@/shared/ui';
 
-function ReviewItem({ r }: { r: Review }) {
+/** One review; its text is already plain (cleaned when parsed). */
+export function ReviewItem({ r }: { r: Review }) {
   const name = r.customerName?.trim() ?? '';
   const date = r.createdAt === null ? null : reviewDate(r.createdAt);
-  const comment = plainText(r.comment);
-  const response = plainText(r.vendorResponse);
+  const comment = r.comment;
+  const response = r.vendorResponse;
   return (
     <View
       testID={`review-${r.id}`}

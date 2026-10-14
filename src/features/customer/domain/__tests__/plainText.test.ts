@@ -94,3 +94,19 @@ describe('plainText on hostile input', () => {
     expect(performance.now() - t0).toBeLessThan(50);
   });
 });
+
+describe('plainText fast path (P6)', () => {
+  it('plain text without tags or entities reads the same as the full clean', () => {
+    for (const raw of [
+      'Lovely stay',
+      '  two   spaces \t here ',
+      'Line one\r\nLine two\n\n\n\nEnd',
+      '',
+      '   ',
+      'Rooms ₦50,000 · wifi',
+    ]) {
+      const viaTags = plainText(`<span></span>${raw}`);
+      expect(plainText(raw)).toBe(viaTags);
+    }
+  });
+});

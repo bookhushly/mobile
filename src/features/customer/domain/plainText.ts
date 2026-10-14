@@ -82,9 +82,25 @@ function dropScripts(s: string): string {
   }
 }
 
+/** Line breaks normalised, spaces collapsed per line, blank runs at most one empty line. */
+function tidy(s: string): string | null {
+  const text = s
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[ \t\u00a0]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return text === '' ? null : text;
+}
+
+/** Short text with no tag or entity in it skips the HTML passes (perf review P6). */
+const SHORT = 2_000;
+
 /** HTML or plain text → plain text with line breaks kept; null when nothing is left. */
 export function plainText(raw: string | null): string | null {
   if (raw === null) return null;
+  if (raw.length <= SHORT && !raw.includes('<') && !raw.includes('&')) return tidy(raw);
   // `[^<>]*` stops each attempt at the next "<", so a run of unclosed "<a" stays linear.
   const stripped = dropScripts(dropComments(capped(raw)))
     .replace(/<br\b[^<>]*>/gi, '\n')
@@ -94,12 +110,5 @@ export function plainText(raw: string | null): string | null {
     // Only real tags (a letter, / or ! after <): "Rooms < ₦50,000" stays.
     .replace(/<\/?[a-z!][^<>]*>/gi, '');
   // Decoded last: "&lt;b&gt;" is shown as text, never parsed as a tag.
-  const text = decode(stripped)
-    .replace(/\r\n?/g, '\n')
-    .split('\n')
-    .map((line) => line.replace(/[ \t\u00a0]+/g, ' ').trim())
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-  return text === '' ? null : text;
+  return tidy(decode(stripped));
 }

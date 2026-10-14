@@ -166,7 +166,8 @@ const REVIEWS: ReturnType<typeof useReviews> = {
       id: 'rv1',
       customerName: 'Ada',
       rating: 5,
-      comment: '<p>Lovely&nbsp;stay</p>',
+      // Cleaned when parsed (P6): the hook hands over plain text.
+      comment: 'Lovely stay',
       verified: true,
       createdAt: '2026-10-01T10:00:00Z',
       vendorResponse: null,
@@ -229,7 +230,7 @@ describe('hotel', () => {
     expect(allText()).not.toMatch(/<p>|<b>|<script|alert\(/);
     expect(screen.getByText('Breakfast included')).toBeTruthy();
     expect(screen.getByText('From 2:00 pm')).toBeTruthy();
-    expect(mockReviews).toHaveBeenCalledWith('hotel', ID, 3);
+    expect(mockReviews).toHaveBeenCalledWith('hotel', ID, 10, { enabled: true });
     expect(screen.getByText('Lovely stay')).toBeTruthy();
     expect(screen.getByText('See all reviews (5)')).toBeTruthy();
     expect(screen.getByText('All amenities (7)')).toBeTruthy();
@@ -286,6 +287,23 @@ describe('hotel', () => {
     share.mockRestore();
   });
 
+  it('starts the reviews with the detail, not after it (P5)', async () => {
+    show(undefined);
+    await render(<ListingScreen kind="hotel" {...props} />);
+    expect(mockReviews).toHaveBeenCalledWith('hotel', ID, 10, { enabled: true });
+  });
+
+  it('See all opens a virtualised sheet on the same query, no second fetch (P5)', async () => {
+    show(HOTEL);
+    await render(<ListingScreen kind="hotel" {...props} />);
+    await fireEvent.press(screen.getByText('See all reviews (5)'));
+    expect(screen.getByTestId('all-reviews-list')).toBeTruthy();
+    expect(within(screen.getByTestId('all-reviews')).getByText('Lovely stay')).toBeTruthy();
+    // Every call is the one shared query.
+    for (const call of mockReviews.mock.calls)
+      expect(call).toEqual(['hotel', ID, 10, { enabled: true }]);
+  });
+
   it('reads the description right after the overview, before the rooms (U3)', async () => {
     show(HOTEL);
     await render(<ListingScreen kind="hotel" {...props} />);
@@ -340,7 +358,7 @@ describe('apartment', () => {
     expect(screen.getByText('₦50,000')).toBeTruthy();
     expect(screen.getByText('No parties & no smoking')).toBeTruthy();
     expect(screen.getByLabelText('80,000 naira per night')).toBeTruthy();
-    expect(mockReviews).toHaveBeenCalledWith('apartment', ID, 3);
+    expect(mockReviews).toHaveBeenCalledWith('apartment', ID, 10, { enabled: true });
     expect(screen.getByText('Book on bookhushly.com')).toBeTruthy();
     expect(allText()).not.toContain(PHONE);
   });
@@ -416,7 +434,8 @@ describe('event', () => {
     await fireEvent.press(screen.getByText('Get tickets on bookhushly.com'));
     await fireEvent.press(screen.getByText('Continue'));
     expect(openBrowserAsync).toHaveBeenCalledWith(`https://bookhushly.com/services/${ID}`);
-    expect(mockReviews).not.toHaveBeenCalled();
+    // Events have no reviews in 4b: the query never runs.
+    for (const call of mockReviews.mock.calls) expect(call[3]).toEqual({ enabled: false });
     expect(screen.queryByTestId('reviews')).toBeNull();
     expect(allText()).not.toContain(PHONE);
   });
