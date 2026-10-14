@@ -30,6 +30,12 @@ export default function ResultsRoute() {
       onOpenListing={(kind, id) => {
         router.push({ pathname: '/listing/[kind]/[id]', params: { kind, id } });
       }}
+      onChangeSearch={() => {
+        router.push({
+          pathname: '/search',
+          params: { category: query.category, q: query.q },
+        });
+      }}
       onSignInAgain={() => {
         signOut();
       }}

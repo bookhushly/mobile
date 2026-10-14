@@ -56,6 +56,14 @@ it('searches only on submit, with sanitised text, and saves it to recent', async
   });
 });
 
+it('opens with the query to change, from an empty Results list (U7)', async () => {
+  const p = props();
+  await render(<SearchScreen {...p} initialCategory="events" initialText="Ikeja" />);
+  expect(screen.getByLabelText('Where or what')).toHaveDisplayValue('Ikeja');
+  await fireEvent(screen.getByLabelText('Where or what'), 'submitEditing');
+  expect(p.onSearch).toHaveBeenCalledWith({ category: 'events', q: 'Ikeja' });
+});
+
 it('blank or stripped-away text never searches', async () => {
   const p = props();
   await render(<SearchScreen {...p} />);

@@ -85,6 +85,7 @@ function props(query: Partial<ResultsQuery> = {}) {
     query: { category: 'hotels' as const, q: '', state: 'Lagos', ...query },
     onBack: jest.fn(),
     onOpenListing: jest.fn(),
+    onChangeSearch: jest.fn(),
     onSignInAgain: jest.fn(),
   };
 }
@@ -151,8 +152,26 @@ it('a failed first page is a neutral error with Try again', async () => {
   current = listings([], { failed: true, error: { kind: 'network' } });
   await render(<ResultsScreen {...props()} />);
   expect(screen.getByText('Couldn’t load results')).toBeTruthy();
+  expect(screen.getByText('Check your connection and try again.')).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
   expect(current.refetch).toHaveBeenCalled();
+});
+
+it('a server-side failure never says to check the connection (U7)', async () => {
+  current = listings([], { failed: true, error: { kind: 'unavailable', status: 503 } });
+  await render(<ResultsScreen {...props()} />);
+  expect(screen.getByText('Try again in a moment.')).toBeTruthy();
+  expect(screen.queryByText(/connection/)).toBeNull();
+});
+
+it('an empty list with no filters offers Change search (U7)', async () => {
+  current = listings([]);
+  const p = props({ q: 'Ikeja' });
+  await render(<ResultsScreen {...p} />);
+  const empty = within(screen.getByTestId('results-empty'));
+  expect(empty.queryByRole('button', { name: 'Clear filters' })).toBeNull();
+  await fireEvent.press(empty.getByRole('button', { name: 'Change search' }));
+  expect(p.onChangeSearch).toHaveBeenCalled();
 });
 
 it('filters apply only on Show results, and the chip counts them', async () => {

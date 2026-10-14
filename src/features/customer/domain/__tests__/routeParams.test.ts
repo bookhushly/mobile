@@ -2,6 +2,7 @@ import {
   bookingIdParam,
   bookingRefParams,
   categoryParam,
+  searchParams,
   listingRefParams,
   pagerIndexParam,
   resultsParams,
@@ -64,6 +65,17 @@ describe('listingRefParams', () => {
     ['hotel', undefined],
   ])('rejects kind %p with id %p', (kind, id) => {
     expect(listingRefParams(kind, id)).toBeNull();
+  });
+});
+
+describe('searchParams', () => {
+  it('reads the category (null when odd) and a sanitised query', () => {
+    expect(searchParams({ category: 'events', q: ' Lekki (Phase 1) ' })).toEqual({
+      category: 'events',
+      q: 'Lekki Phase 1',
+    });
+    expect(searchParams({ category: 'cars', q: ['x'] })).toEqual({ category: null, q: '' });
+    expect(searchParams({})).toEqual({ category: null, q: '' });
   });
 });
 

@@ -74,3 +74,11 @@ export function resultsParams(p: {
   if (city !== '') out.city = city;
   return out;
 }
+
+/** `/search?category=&q=`: the category (null → the screen's default) and the text, sanitised. */
+export function searchParams(p: { category?: unknown; q?: unknown }): {
+  category: Category | null;
+  q: string;
+} {
+  return { category: categoryParam(p.category), q: textParam(p.q) };
+}

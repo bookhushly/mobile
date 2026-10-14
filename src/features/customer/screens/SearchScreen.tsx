@@ -24,6 +24,8 @@ export type SearchTarget = { category: Category; q?: string; region?: string; ci
 type Props = {
   userId: string;
   initialCategory?: Category;
+  /** The query to change (from an empty Results list). */
+  initialText?: string;
   onBack: () => void;
   onSearch: (t: SearchTarget) => void;
 };
@@ -39,9 +41,15 @@ const keyOf = (e: RecentSearch) => `${e.category}:${e.q ?? ''}:${e.state ?? ''}:
 
 // Spec D3/D7; Mobbin §2 (Marriott recents, Shangri-La popular places). A search runs only on
 // submit or on tapping a recent or popular item, never per keystroke.
-export function SearchScreen({ userId, initialCategory = 'hotels', onBack, onSearch }: Props) {
+export function SearchScreen({
+  userId,
+  initialCategory = 'hotels',
+  initialText = '',
+  onBack,
+  onSearch,
+}: Props) {
   const recent = useRecentSearches(userId);
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialText);
   const [category, setCategory] = useState<Category>(initialCategory);
   const typed = sanitizeSearch(text);
 

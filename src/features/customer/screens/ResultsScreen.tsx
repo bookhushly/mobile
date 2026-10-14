@@ -9,7 +9,12 @@ import type { ListingsWhere } from '@/features/customer/hooks/customerKeys';
 import { useListings } from '@/features/customer/hooks/useListings';
 import { useSaved } from '@/features/customer/hooks/useSaved';
 import { useSavedNotices } from '@/features/customer/hooks/useSavedNotices';
-import { CATEGORY_LABEL, placeLabel, sortLabel } from '@/features/customer/ui/discoverLabels';
+import {
+  CATEGORY_LABEL,
+  loadFailedMessage,
+  placeLabel,
+  sortLabel,
+} from '@/features/customer/ui/discoverLabels';
 import { NO_FILTERS } from '@/features/customer/ui/filterOptions';
 import { FiltersSheet } from '@/features/customer/ui/FiltersSheet';
 import { ListingCard } from '@/features/customer/ui/ListingCard';
@@ -26,11 +31,20 @@ type Props = {
   query: ResultsQuery;
   onBack: () => void;
   onOpenListing: (kind: ListingKind, id: string) => void;
+  /** Back to Search with this query (an empty list with no filters, U7). */
+  onChangeSearch: () => void;
   onSignInAgain: () => void;
 };
 
 // Spec §3 Results, D2, D8, D16; Mobbin §3 (Booking.com, Tripadvisor, Agoda).
-export function ResultsScreen({ userId, query, onBack, onOpenListing, onSignInAgain }: Props) {
+export function ResultsScreen({
+  userId,
+  query,
+  onBack,
+  onOpenListing,
+  onChangeSearch,
+  onSignInAgain,
+}: Props) {
   const cat = query.category;
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -61,7 +75,7 @@ export function ResultsScreen({ userId, query, onBack, onOpenListing, onSignInAg
     body = (
       <ErrorState
         title="Couldn’t load results"
-        message={list.error?.kind === 'rateLimited' ? BUSY : 'Check your connection and try again.'}
+        message={list.error?.kind === 'rateLimited' ? BUSY : loadFailedMessage(list.error)}
         {...(waiting ? {} : { onRetry: () => void list.refetch() })}
         testID="results-error"
       />
@@ -110,17 +124,17 @@ export function ResultsScreen({ userId, query, onBack, onOpenListing, onSignInAg
               icon={SearchX}
               title="No matches"
               message="Try a different place or fewer filters."
-              {...(n > 0
-                ? {
-                    action: {
+              action={
+                n > 0
+                  ? {
                       label: 'Clear filters',
                       // The sort stays: it never empties a list.
                       onPress: () => {
                         setFilters({ sort: filters.sort });
                       },
-                    },
-                  }
-                : {})}
+                    }
+                  : { label: 'Change search', onPress: onChangeSearch }
+              }
               testID="results-empty"
             />
           )
