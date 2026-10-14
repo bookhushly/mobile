@@ -219,6 +219,7 @@ export function ExploreScreen({
         items={eventCards}
         loading={events.loading}
         failed={events.failed}
+        error={events.error}
         waiting={events.retryAfterSec !== null}
         onRetry={() => void events.refetch()}
         onSeeAll={() => {
@@ -234,6 +235,7 @@ export function ExploreScreen({
         items={hotelCards}
         loading={place === null || hotels.loading}
         failed={hotels.failed}
+        error={hotels.error}
         waiting={hotels.retryAfterSec !== null}
         onRetry={() => void hotels.refetch()}
         onSeeAll={() => {
@@ -249,6 +251,7 @@ export function ExploreScreen({
         items={apartmentCards}
         loading={place === null || apartments.loading}
         failed={apartments.failed}
+        error={apartments.error}
         waiting={apartments.retryAfterSec !== null}
         onRetry={() => void apartments.refetch()}
         onSeeAll={() => {

@@ -7,6 +7,7 @@ import {
 } from '@/features/customer/api/listingDetailDb';
 import type { ListingKind } from '@/features/customer/domain/discover';
 import { CustomerLoadError, discoverKeys } from '@/features/customer/hooks/customerKeys';
+import { apiErrorOf } from '@/features/customer/hooks/discoverRetry';
 import { loadFailed } from '@/features/customer/hooks/loadState';
 import type { EventDetail } from '@/features/customer/schemas/listings';
 import type { ApiError } from '@/shared/lib/errors';
@@ -33,6 +34,8 @@ export function useListing<K extends ListingKind>(
   data: ListingFor[K] | null | undefined;
   /** Nothing to show: the load failed, or it is paused offline. */
   error: boolean;
+  /** The failed load's error (null while paused offline), for the copy (U7). */
+  apiError: ApiError | null;
   refetch: () => Promise<unknown>;
 } {
   const fetchOne: Fetchers[K] = fetchers[kind];
@@ -49,6 +52,7 @@ export function useListing<K extends ListingKind>(
   return {
     data: id === null ? null : q.data,
     error: id !== null && loadFailed(q),
+    apiError: apiErrorOf(q.error),
     refetch: q.refetch,
   };
 }

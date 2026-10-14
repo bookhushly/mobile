@@ -10,6 +10,7 @@ import { ListingNotFound } from '@/features/customer/screens/ListingNotFound';
 import { AmenityLines } from '@/features/customer/ui/AmenityList';
 import { ApartmentBody } from '@/features/customer/ui/ApartmentBody';
 import { DetailSection } from '@/features/customer/ui/DetailSection';
+import { loadFailedMessage } from '@/features/customer/ui/discoverLabels';
 import { EventBody } from '@/features/customer/ui/EventBody';
 import { Gallery } from '@/features/customer/ui/Gallery';
 import { GalleryViewer } from '@/features/customer/ui/GalleryViewer';
@@ -80,7 +81,7 @@ export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props
         {listing.error ? (
           <ErrorState
             title="Couldn’t load this listing"
-            message="Check your connection and try again."
+            message={loadFailedMessage(listing.apiError)}
             onRetry={() => {
               void listing.refetch();
             }}

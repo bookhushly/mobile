@@ -7,6 +7,7 @@ import { apiErrorOf, discoverRetry, useRetryAfter } from '@/features/customer/ho
 import { loadFailed } from '@/features/customer/hooks/loadState';
 import type { Review, ReviewsPage } from '@/features/customer/schemas/reviews';
 import { api } from '@/shared/api/instance';
+import type { ApiError } from '@/shared/lib/errors';
 
 // Spec D10/D16: the first 3 on detail (pageSize 3), "See all" pages 10 at a time. 30/min per IP,
 // so reviews load only when asked for (`enabled`) and a 429 is never retried on its own.
@@ -20,6 +21,8 @@ export function useReviews(
   total: number;
   loading: boolean;
   failed: boolean;
+  /** The failed load's error (null while paused offline). */
+  error: ApiError | null;
   retryAfterSec: number | null;
   hasMore: boolean;
   loadingMore: boolean;
@@ -46,7 +49,8 @@ export function useReviews(
     refetchOnWindowFocus: false,
     enabled: opts.enabled ?? true,
   });
-  const retryAfterSec = useRetryAfter(apiErrorOf(q.error), q.errorUpdatedAt);
+  const error = apiErrorOf(q.error);
+  const retryAfterSec = useRetryAfter(error, q.errorUpdatedAt);
   const reviews = useMemo(() => q.data?.pages.flatMap((p) => p.reviews) ?? [], [q.data]);
   const { hasNextPage, isFetching, fetchNextPage } = q;
   const loadMore = useCallback(() => {
@@ -58,6 +62,7 @@ export function useReviews(
     total: q.data?.pages[0]?.total ?? 0,
     loading: q.isPending && q.fetchStatus === 'fetching',
     failed: loadFailed(q),
+    error,
     retryAfterSec,
     hasMore: hasNextPage,
     loadingMore: q.isFetchingNextPage,

@@ -1,7 +1,9 @@
 import { FlatList, Pressable, View } from 'react-native';
 
 import type { ListingCardModel } from '@/features/customer/domain/listingCard';
+import { loadFailedLine } from '@/features/customer/ui/discoverLabels';
 import { ListingCard, RAIL_CARD_WIDTH } from '@/features/customer/ui/ListingCard';
+import type { ApiError } from '@/shared/lib/errors';
 import { density, skeletonLine, space } from '@/shared/theme';
 import { Banner, Skeleton, Text, TextLink } from '@/shared/ui';
 
@@ -18,6 +20,8 @@ type Props = {
   items: readonly ListingCardModel[];
   loading: boolean;
   failed: boolean;
+  /** The failed load's error (null while paused offline), for the copy (U7). */
+  error: ApiError | null;
   /** A 429 is still inside its Retry-After: Try again comes back after it. */
   waiting: boolean;
   onRetry: () => void;
@@ -56,6 +60,7 @@ export function Rail({
   items,
   loading,
   failed,
+  error,
   waiting,
   onRetry,
   onSeeAll,
@@ -113,7 +118,7 @@ export function Rail({
           message={
             waiting
               ? 'Lots of people are browsing right now. Try again in a few seconds.'
-              : 'Couldn’t load — check your connection and try again.'
+              : loadFailedLine(error)
           }
           action={waiting ? undefined : { label: 'Try again', onPress: onRetry }}
           testID={testID === undefined ? undefined : `${testID}-error`}

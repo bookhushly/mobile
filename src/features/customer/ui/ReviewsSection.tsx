@@ -2,6 +2,7 @@ import { View } from 'react-native';
 
 import type { ReviewKind } from '@/features/customer/api/reviewsApi';
 import { useReviews } from '@/features/customer/hooks/useReviews';
+import { loadFailedLine } from '@/features/customer/ui/discoverLabels';
 import { ReviewList } from '@/features/customer/ui/ReviewList';
 import { space } from '@/shared/theme';
 import { Button, SectionHeader, Sheet, Spinner, Text, TextLink } from '@/shared/ui';
@@ -10,7 +11,6 @@ import { Button, SectionHeader, Sheet, Spinner, Text, TextLink } from '@/shared/
 export const FIRST_REVIEWS = 3;
 const PAGE = 10;
 const BUSY = 'Lots of people are looking right now. Try again in a moment.';
-const FAILED = 'Couldn’t load reviews — check your connection.';
 
 type Loaded = ReturnType<typeof useReviews>;
 
@@ -20,7 +20,7 @@ function ReviewsFailed({ r }: { r: Loaded }) {
   return (
     <View style={{ gap: space.s2 }} testID="reviews-failed">
       <Text variant="bodySm" tone="textSecondary">
-        {busy ? BUSY : FAILED}
+        {busy ? BUSY : loadFailedLine(r.error, 'reviews')}
       </Text>
       <TextLink
         label="Try again"
@@ -70,7 +70,7 @@ export function AllReviewsSheet({ kind, listingId, onClose }: SheetProps) {
       {r.failed && r.reviews.length === 0 ? <ReviewsFailed r={r} /> : null}
       {r.failed && r.reviews.length > 0 ? (
         <Text variant="bodySm" tone="textSecondary">
-          {r.retryAfterSec !== null ? BUSY : FAILED}
+          {r.retryAfterSec !== null ? BUSY : loadFailedLine(r.error, 'more reviews')}
         </Text>
       ) : null}
       {r.hasMore && !r.loadingMore ? (

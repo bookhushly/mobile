@@ -160,6 +160,7 @@ const SAVED: Saved = {
   clearWriteError: jest.fn(),
 };
 const REVIEWS: ReturnType<typeof useReviews> = {
+  error: null,
   reviews: [
     {
       id: 'rv1',
@@ -186,7 +187,12 @@ function show(
   data: HotelListing | ApartmentListing | EventDetail | null | undefined,
   error = false,
 ) {
-  mockListing.mockReturnValue({ data, error, refetch: jest.fn(() => Promise.resolve()) });
+  mockListing.mockReturnValue({
+    data,
+    error,
+    apiError: null,
+    refetch: jest.fn(() => Promise.resolve()),
+  });
 }
 const HOTEL_SAVED = {
   listingId: ID,
@@ -374,6 +380,19 @@ describe('apartment prices and reviews', () => {
     await fireEvent.press(screen.getByText('Try again'));
     expect(refetch).toHaveBeenCalled();
   });
+
+  it('a server-side reviews failure says try again, not the connection (U7)', async () => {
+    mockReviews.mockReturnValue({
+      ...REVIEWS,
+      reviews: [],
+      total: 0,
+      failed: true,
+      error: { kind: 'unknown', status: 500 },
+    });
+    show(APARTMENT);
+    await render(<ListingScreen kind="apartment" {...props} />);
+    expect(screen.getByText('Couldn’t load reviews — try again.')).toBeTruthy();
+  });
 });
 
 describe('event', () => {
@@ -458,6 +477,7 @@ describe('states', () => {
     show(undefined, true);
     await render(<ListingScreen kind="event" {...props} />);
     expect(screen.getByText('Couldn’t load this listing')).toBeTruthy();
+    expect(screen.getByText('Check your connection and try again.')).toBeTruthy();
     expect(screen.queryByText('This listing isn’t available right now')).toBeNull();
   });
 });

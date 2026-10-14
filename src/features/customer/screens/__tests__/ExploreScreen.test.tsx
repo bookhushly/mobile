@@ -200,9 +200,13 @@ it('renders a rail per category with See all', async () => {
 });
 
 it('a failed rail offers Try again; an empty rail is one line', async () => {
-  byCat.hotels = listings([], { failed: true });
+  byCat.hotels = listings([], { failed: true, error: { kind: 'validation' } });
   byCat.serviced_apartments = listings([]);
   await render(<ExploreScreen {...props()} />);
+  // U7: not the connection's fault, so it doesn't say so.
+  expect(
+    within(screen.getByTestId('rail-hotels-error')).getByText('Couldn’t load — try again.'),
+  ).toBeTruthy();
   await fireEvent.press(
     within(screen.getByTestId('rail-hotels-error')).getByRole('button', { name: 'Try again' }),
   );

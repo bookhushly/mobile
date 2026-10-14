@@ -1,4 +1,5 @@
 import { POPULAR_PLACES, type Category, type Filters } from '@/features/customer/domain/discover';
+import type { ApiError } from '@/shared/lib/errors';
 
 // Copy for the search, results and filters screens (sentence case).
 
@@ -43,4 +44,25 @@ export function placeLabel(state: string | undefined, city: string | undefined):
 export function resultCount(n: number): string {
   const grouped = String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   return `${grouped} ${n === 1 ? 'result' : 'results'}`;
+}
+
+/**
+ * A failed load caused by the connection: no reply, a timeout, or a fetch paused offline (no
+ * error at all). Anything else is on the server's side, so "check your connection" would mislead.
+ */
+export function isConnectionFailure(error: ApiError | null): boolean {
+  return error === null || error.kind === 'network' || error.kind === 'timeout';
+}
+
+/** Final UX review U7: "Couldn’t load reviews — check your connection." or "… — try again." */
+export function loadFailedLine(error: ApiError | null, what = ''): string {
+  const next = isConnectionFailure(error) ? 'check your connection' : 'try again';
+  return `Couldn’t load${what === '' ? '' : ` ${what}`} — ${next}.`;
+}
+
+/** An error screen's message under "Couldn’t load …". */
+export function loadFailedMessage(error: ApiError | null): string {
+  return isConnectionFailure(error)
+    ? 'Check your connection and try again.'
+    : 'Try again in a moment.';
 }

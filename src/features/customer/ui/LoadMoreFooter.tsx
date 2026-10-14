@@ -1,5 +1,6 @@
 import { View } from 'react-native';
 
+import { loadFailedLine } from '@/features/customer/ui/discoverLabels';
 import type { ApiError } from '@/shared/lib/errors';
 import { space } from '@/shared/theme';
 import { Button, Spinner, Text } from '@/shared/ui';
@@ -19,8 +20,7 @@ type Props = {
 export const BUSY = 'Lots of searches right now. Try again in a moment.';
 
 function reason(error: ApiError | null, nothingYet: boolean): string | null {
-  if (error !== null)
-    return error.kind === 'rateLimited' ? BUSY : 'Couldn’t load more — check your connection.';
+  if (error !== null) return error.kind === 'rateLimited' ? BUSY : loadFailedLine(error, 'more');
   return nothingYet ? 'Nothing here yet — load more to keep looking.' : null;
 }
 
