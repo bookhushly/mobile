@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { color, space } from '@/shared/theme';
+import { color, density, space } from '@/shared/theme';
 import { IconButton, Text, useMotionTier } from '@/shared/ui';
 
 type Props = {
@@ -47,7 +47,7 @@ export function GalleryViewer({ title, images, startIndex, onClose }: Props) {
             alignItems: 'center',
             gap: space.s3,
             paddingHorizontal: space.s3,
-            minHeight: 56,
+            minHeight: density.customer.rowMin,
           }}
         >
           <IconButton icon={X} variant="inverse" accessibilityLabel="Close" onPress={onClose} />

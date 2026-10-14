@@ -63,7 +63,7 @@ export function ApartmentBody({ listing, onShowAmenities }: Props) {
                   accessible
                   accessibilityLabel={`${r.label}, ${spokenNaira(r.amount)} per night`}
                 >
-                  <Text variant="bodySm" tone="textSecondary">
+                  <Text variant="bodySm" tone="textSecondary" tabular>
                     {`${r.label}: ${formatNaira(r.amount)} per night`}
                   </Text>
                 </View>

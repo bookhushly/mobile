@@ -18,7 +18,7 @@ import { SavedBanner, savedBannerShown } from '@/features/customer/ui/SavedBanne
 import { TodayBanner } from '@/features/customer/ui/TodayBanner';
 import { clock } from '@/shared/api/instance';
 import { borderWidth, color, radius, space } from '@/shared/theme';
-import { Header, Icon, Screen, Text, useDensity } from '@/shared/ui';
+import { Header, Icon, refreshColors, Screen, Text, useDensity } from '@/shared/ui';
 
 export type ResultsTarget = { category: Category; region?: string; city?: string };
 
@@ -159,7 +159,9 @@ export function ExploreScreen({
       scroll
       header={<Header title="Explore" />}
       footer={footer}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshColors} />
+      }
     >
       {today !== null ? (
         <TodayBanner

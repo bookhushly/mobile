@@ -322,7 +322,10 @@ describe('apartment', () => {
     show(APARTMENT);
     await render(<ListingScreen kind="apartment" {...props} />);
     expect(screen.getByText('Prices vary by date')).toBeTruthy();
-    expect(screen.getByText('Christmas · 20 Dec – 2 Jan: ₦90,000 per night')).toBeTruthy();
+    // U6: amounts in a column of lines use tabular figures.
+    expect(screen.getByText('Christmas · 20 Dec – 2 Jan: ₦90,000 per night')).toHaveStyle({
+      fontVariant: ['tabular-nums'],
+    });
     expect(screen.getByText('2 nights')).toBeTruthy();
     expect(screen.getByText('₦50,000')).toBeTruthy();
     expect(screen.getByText('No parties & no smoking')).toBeTruthy();

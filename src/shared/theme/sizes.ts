@@ -18,3 +18,10 @@ export const layout = {
   // Ticket and check-in QR codes: as wide as the screen allows, capped on tablets.
   qrMax: 360,
 } as const;
+
+/** Listing cards (customer Discover): a rail card's width (its 4:3 image follows) and a row's
+ * square thumbnail. */
+export const cardSize = { railWidth: 240, rowImage: 96 } as const;
+
+/** Skeleton bars standing in for a line of text: a title line and a caption line. */
+export const skeletonLine = { title: 16, caption: 12 } as const;

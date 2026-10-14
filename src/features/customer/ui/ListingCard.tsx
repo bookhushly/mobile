@@ -8,14 +8,14 @@ import type { ListingCardModel } from '@/features/customer/domain/listingCard';
 import { HeartButton } from '@/features/customer/ui/HeartButton';
 import { PriceTag, priceSpoken } from '@/features/customer/ui/PriceTag';
 import { RatingLine, ratingSpoken } from '@/features/customer/ui/RatingLine';
-import { borderWidth, color, radius, space } from '@/shared/theme';
+import { borderWidth, cardSize, color, radius, space } from '@/shared/theme';
 import { Icon, PressableScale, Text } from '@/shared/ui';
 
 export type CardVariant = 'row' | 'rail' | 'grid';
 
 /** A rail card's width; its 4:3 image follows. */
-export const RAIL_CARD_WIDTH = 240;
-const ROW_IMAGE = 96;
+export const RAIL_CARD_WIDTH = cardSize.railWidth;
+const ROW_IMAGE = cardSize.rowImage;
 
 const KIND_WORD: Record<ListingKind, string> = {
   hotel: 'Hotel',

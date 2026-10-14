@@ -2,7 +2,7 @@ import { FlatList, Pressable, View } from 'react-native';
 
 import type { ListingCardModel } from '@/features/customer/domain/listingCard';
 import { ListingCard, RAIL_CARD_WIDTH } from '@/features/customer/ui/ListingCard';
-import { density, space } from '@/shared/theme';
+import { density, skeletonLine, space } from '@/shared/theme';
 import { Banner, Skeleton, Text, TextLink } from '@/shared/ui';
 
 /** A rail shows the first few; See all opens the full list. */
@@ -39,8 +39,8 @@ function RailSkeleton() {
       {[0, 1].map((i) => (
         <View key={i} style={{ width: RAIL_CARD_WIDTH, gap: space.s3 }}>
           <Skeleton height={(RAIL_CARD_WIDTH * 3) / 4} radius="r3" />
-          <Skeleton height={16} width="80%" />
-          <Skeleton height={12} width="50%" />
+          <Skeleton height={skeletonLine.title} width="80%" />
+          <Skeleton height={skeletonLine.caption} width="50%" />
         </View>
       ))}
     </View>

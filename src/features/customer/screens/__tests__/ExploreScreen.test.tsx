@@ -12,6 +12,7 @@ import { useSaved, type Saved } from '@/features/customer/hooks/useSaved';
 import { NOTICE_MS, NOTICE_READER_MS } from '@/features/customer/hooks/useSavedNotices';
 import type { ApartmentItem, EventItem, HotelItem } from '@/features/customer/schemas/listings';
 import { ExploreScreen } from '@/features/customer/screens/ExploreScreen';
+import { refreshColors } from '@/shared/ui';
 
 import { ev, ho, TODAY } from '../../hooks/__tests__/customerTestUtils';
 
@@ -302,6 +303,22 @@ it('"Where to?" sits with the category chips, and a stays heading’s place is t
   await fireEvent.press(within(hotels).getByRole('button', { name: 'Lagos. Change place' }));
   await fireEvent.press(screen.getByRole('radio', { name: 'Abuja' }));
   expect(screen.getByRole('header', { name: 'Apartments in Abuja' })).toBeTruthy();
+});
+
+it('pull to refresh uses the theme colours (U6)', async () => {
+  await render(<ExploreScreen {...props()} />);
+  // Element-valued props carry fiber cycles: skip anything already seen.
+  const seen = new WeakSet<object>();
+  const json = JSON.stringify(screen.toJSON(), (key, value: unknown) => {
+    if (key === '_owner' || key === '_store') return undefined;
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) return undefined;
+      seen.add(value);
+    }
+    return value;
+  });
+  expect(json).toContain(`"tintColor":"${refreshColors.tintColor}"`);
+  expect(json).toContain(`"colors":${JSON.stringify(refreshColors.colors)}`);
 });
 
 it('stays wait for the place before loading', async () => {
