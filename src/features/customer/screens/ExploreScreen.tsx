@@ -1,4 +1,12 @@
-import { BedDouble, Building2, MapPin, Search, Ticket, type LucideIcon } from 'lucide-react-native';
+import {
+  BedDouble,
+  Building2,
+  MapPin,
+  Search,
+  Ticket,
+  WifiOff,
+  type LucideIcon,
+} from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, View } from 'react-native';
 
@@ -12,13 +20,14 @@ import { useMyBookings } from '@/features/customer/hooks/useMyBookings';
 import { useSaved } from '@/features/customer/hooks/useSaved';
 import { useSavedNotices } from '@/features/customer/hooks/useSavedNotices';
 import { ChipButton } from '@/features/customer/ui/ChipButton';
+import { isConnectionFailure } from '@/features/customer/ui/discoverLabels';
 import { PlaceSheet } from '@/features/customer/ui/PlaceSheet';
 import { Rail, RAIL_MAX } from '@/features/customer/ui/Rail';
 import { SavedBanner, savedBannerShown } from '@/features/customer/ui/SavedBanner';
 import { TodayBanner } from '@/features/customer/ui/TodayBanner';
 import { clock } from '@/shared/api/instance';
 import { borderWidth, color, radius, space } from '@/shared/theme';
-import { Header, Icon, refreshColors, Screen, Text, useDensity } from '@/shared/ui';
+import { Banner, Header, Icon, refreshColors, Screen, Text, useDensity } from '@/shared/ui';
 
 export type ResultsTarget = { category: Category; region?: string; city?: string };
 
@@ -106,6 +115,14 @@ export function ExploreScreen({
     () => apartments.items.slice(0, RAIL_MAX).map((i) => cardOf('serviced_apartments', i, now)),
     [apartments.items, now],
   );
+
+  // Final review F7: when every rail failed for want of a connection, one calm line (the Today
+  // banner and Saved still work from the device) instead of three identical rail errors.
+  const rails = place === null ? [events] : [events, hotels, apartments];
+  const offline = rails.every((r) => r.failed && isConnectionFailure(r.error));
+  const retryRails = () => {
+    for (const r of rails) void r.refetch();
+  };
 
   const refresh = () => {
     // A refresh shows the server's truth: an old Undo or error no longer applies.
@@ -213,53 +230,65 @@ export function ExploreScreen({
           onPress={choosePlace}
         />
       </View>
-      <Rail
-        title="Happening soon"
-        emptyNote="No upcoming events yet."
-        items={eventCards}
-        loading={events.loading}
-        failed={events.failed}
-        error={events.error}
-        waiting={events.retryAfterSec !== null}
-        onRetry={() => void events.refetch()}
-        onSeeAll={() => {
-          onOpenResults({ category: 'events' });
-        }}
-        testID="rail-events"
-        {...railProps}
-      />
-      <Rail
-        title="Hotels"
-        {...(placeLink === undefined ? {} : { place: placeLink })}
-        emptyNote={`No hotels in ${where} yet.`}
-        items={hotelCards}
-        loading={place === null || hotels.loading}
-        failed={hotels.failed}
-        error={hotels.error}
-        waiting={hotels.retryAfterSec !== null}
-        onRetry={() => void hotels.refetch()}
-        onSeeAll={() => {
-          onOpenResults(targetOf('hotels', place));
-        }}
-        testID="rail-hotels"
-        {...railProps}
-      />
-      <Rail
-        title="Apartments"
-        {...(placeLink === undefined ? {} : { place: placeLink })}
-        emptyNote={`No apartments in ${where} yet.`}
-        items={apartmentCards}
-        loading={place === null || apartments.loading}
-        failed={apartments.failed}
-        error={apartments.error}
-        waiting={apartments.retryAfterSec !== null}
-        onRetry={() => void apartments.refetch()}
-        onSeeAll={() => {
-          onOpenResults(targetOf('serviced_apartments', place));
-        }}
-        testID="rail-apartments"
-        {...railProps}
-      />
+      {offline ? (
+        <Banner
+          tone="neutral"
+          icon={WifiOff}
+          message="You’re offline — showing what’s saved."
+          action={{ label: 'Try again', onPress: retryRails }}
+          testID="explore-offline"
+        />
+      ) : (
+        <>
+          <Rail
+            title="Happening soon"
+            emptyNote="No upcoming events yet."
+            items={eventCards}
+            loading={events.loading}
+            failed={events.failed}
+            error={events.error}
+            waiting={events.retryAfterSec !== null}
+            onRetry={() => void events.refetch()}
+            onSeeAll={() => {
+              onOpenResults({ category: 'events' });
+            }}
+            testID="rail-events"
+            {...railProps}
+          />
+          <Rail
+            title="Hotels"
+            {...(placeLink === undefined ? {} : { place: placeLink })}
+            emptyNote={`No hotels in ${where} yet.`}
+            items={hotelCards}
+            loading={place === null || hotels.loading}
+            failed={hotels.failed}
+            error={hotels.error}
+            waiting={hotels.retryAfterSec !== null}
+            onRetry={() => void hotels.refetch()}
+            onSeeAll={() => {
+              onOpenResults(targetOf('hotels', place));
+            }}
+            testID="rail-hotels"
+            {...railProps}
+          />
+          <Rail
+            title="Apartments"
+            {...(placeLink === undefined ? {} : { place: placeLink })}
+            emptyNote={`No apartments in ${where} yet.`}
+            items={apartmentCards}
+            loading={place === null || apartments.loading}
+            failed={apartments.failed}
+            error={apartments.error}
+            waiting={apartments.retryAfterSec !== null}
+            onRetry={() => void apartments.refetch()}
+            onSeeAll={() => {
+              onOpenResults(targetOf('serviced_apartments', place));
+            }}
+            testID="rail-apartments"
+            {...railProps}
+          />
+        </>
+      )}
       <PlaceSheet
         visible={choosing}
         current={place}

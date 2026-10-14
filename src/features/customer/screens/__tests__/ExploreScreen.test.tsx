@@ -225,6 +225,55 @@ it('a 429 waits before offering Try again', async () => {
   expect(within(err).queryByRole('button', { name: 'Try again' })).toBeNull();
 });
 
+it('offline: one banner instead of three rail errors, the Today banner still shown (F7)', async () => {
+  byCat.events = listings([], { failed: true, error: null });
+  byCat.hotels = listings([], { failed: true, error: { kind: 'network' } });
+  byCat.serviced_apartments = listings([], { failed: true, error: { kind: 'timeout' } });
+  const tonight = ev({ id: 'b-today' });
+  mockMy.mockReturnValue({
+    bookings: splitBookings([
+      fromEvent(
+        {
+          ...tonight,
+          listing:
+            tonight.listing === null
+              ? null
+              : {
+                  ...tonight.listing,
+                  event_date: `${TODAY}T00:00:00`,
+                  event_time: `${TODAY}T18:00:00+00:00`,
+                },
+        },
+        TODAY,
+      ),
+    ]),
+    rows: { events: [tonight], hotels: [], apartments: [] },
+    saved: null,
+    loading: false,
+    error: false,
+    refetch: jest.fn(() => Promise.resolve()),
+  });
+  await render(<ExploreScreen {...props()} />);
+  const offline = screen.getByTestId('explore-offline');
+  expect(within(offline).getByText('You’re offline — showing what’s saved.')).toBeTruthy();
+  expect(screen.queryByTestId('rail-events-error')).toBeNull();
+  expect(screen.queryByTestId('rail-hotels-error')).toBeNull();
+  expect(screen.queryByTestId('rail-apartments-error')).toBeNull();
+  expect(screen.getByTestId('today-banner')).toBeTruthy();
+  await fireEvent.press(within(offline).getByRole('button', { name: 'Try again' }));
+  expect(byCat.events.refetch).toHaveBeenCalled();
+  expect(byCat.hotels.refetch).toHaveBeenCalled();
+});
+
+it('a server-side failure on one rail keeps the rails’ own errors', async () => {
+  byCat.events = listings([], { failed: true, error: { kind: 'network' } });
+  byCat.hotels = listings([], { failed: true, error: { kind: 'unavailable', status: 503 } });
+  byCat.serviced_apartments = listings([], { failed: true, error: { kind: 'network' } });
+  await render(<ExploreScreen {...props()} />);
+  expect(screen.queryByTestId('explore-offline')).toBeNull();
+  expect(screen.getByTestId('rail-hotels-error')).toBeTruthy();
+});
+
 it('shows the Today banner and its action opens the ticket', async () => {
   const tonight = ev({
     id: 'b-today',
