@@ -7,7 +7,6 @@ import { useMyBookings } from '@/features/customer/hooks/useMyBookings';
 import { useUnreadCount } from '@/features/customer/hooks/useUnreadCount';
 import { BellButton } from '@/features/customer/ui/BellButton';
 import { BookingRow } from '@/features/customer/ui/BookingRow';
-import { openWeb, WEB_HOME } from '@/features/customer/ui/links';
 import { mainAction } from '@/features/customer/ui/mainAction';
 import { savedAtLabel } from '@/features/customer/ui/savedAt';
 import { TodayCard } from '@/features/customer/ui/TodayCard';
@@ -33,6 +32,8 @@ type Props = {
   onShowTickets: (bookingId: string) => void;
   onShowCheckInCode: (bookingId: string) => void;
   onOpenNotifications: () => void;
+  /** The empty state's way on: the Explore tab (final review F3). */
+  onBrowse: () => void;
 };
 
 const GUEST_LINE =
@@ -45,6 +46,7 @@ export function BookingsScreen({
   onShowTickets,
   onShowCheckInCode,
   onOpenNotifications,
+  onBrowse,
 }: Props) {
   const my = useMyBookings(userId);
   const unread = useUnreadCount(userId);
@@ -129,12 +131,7 @@ export function BookingsScreen({
             icon={Ticket}
             title="No bookings yet"
             message="Bookings you make while signed in with this email show up here."
-            action={{
-              label: 'Browse on bookhushly.com',
-              onPress: () => {
-                openWeb(WEB_HOME);
-              },
-            }}
+            action={{ label: 'Browse', onPress: onBrowse }}
           />
           <Text variant="bodySm" tone="textSecondary" align="center">
             {GUEST_LINE}

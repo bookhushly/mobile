@@ -21,6 +21,9 @@ export default function BookingsRoute() {
       onOpenNotifications={() => {
         router.push('/notifications');
       }}
+      onBrowse={() => {
+        router.navigate('/explore');
+      }}
     />
   );
 }
