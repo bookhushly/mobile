@@ -26,6 +26,7 @@ export function ResultsBar({ sortLabel, filterCount, total, onSort, onFilters }:
       <ChipButton
         label={filterCount > 0 ? `Filters (${String(filterCount)})` : 'Filters'}
         icon={SlidersHorizontal}
+        active={filterCount > 0}
         onPress={onFilters}
       />
       {total !== null ? (

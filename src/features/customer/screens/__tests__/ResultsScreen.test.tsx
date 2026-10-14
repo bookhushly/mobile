@@ -7,6 +7,7 @@ import { useSaved, type Saved } from '@/features/customer/hooks/useSaved';
 import type { EventItem, HotelItem } from '@/features/customer/schemas/listings';
 import { ResultsScreen } from '@/features/customer/screens/ResultsScreen';
 import type { ApiError } from '@/shared/lib/errors';
+import { color } from '@/shared/theme';
 
 // Factories, not automocks: an automock loads the real module (supabase → native storage).
 jest.mock('@/features/customer/hooks/useSaved', () => ({ useSaved: jest.fn() }));
@@ -156,7 +157,10 @@ it('a failed first page is a neutral error with Try again', async () => {
 
 it('filters apply only on Show results, and the chip counts them', async () => {
   await render(<ResultsScreen {...props()} />);
-  expect(screen.getByRole('button', { name: 'Filters' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Filters' })).toHaveStyle({
+    backgroundColor: color.surface,
+    borderColor: color.borderStrong,
+  });
   await fireEvent.press(screen.getByRole('button', { name: 'Filters' }));
   const sheet = within(screen.getByTestId('filters-sheet'));
   await fireEvent.press(sheet.getByRole('checkbox', { name: 'Breakfast included' }));
@@ -175,8 +179,14 @@ it('filters apply only on Show results, and the chip counts them', async () => {
     priceMin: 20000,
   });
   // The sort isn't counted: its own chip shows it.
-  expect(screen.getByRole('button', { name: 'Filters (3)' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Sort: Lowest price' })).toBeTruthy();
+  // U4: an active Filters chip is filled with the selected wash, and says so.
+  const chip = screen.getByRole('button', { name: 'Filters (3)' });
+  expect(chip).toHaveStyle({
+    backgroundColor: color.selectedWash,
+    borderColor: color.borderStrong,
+  });
+  expect(chip).toBeSelected();
+  expect(screen.getByRole('button', { name: 'Sort: Lowest price' })).not.toBeSelected();
 });
 
 it('closing the sheet discards the draft', async () => {
