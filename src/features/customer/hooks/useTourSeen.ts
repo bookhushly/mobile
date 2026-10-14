@@ -10,9 +10,15 @@ const SEEN = '1';
 
 type Known = { userId: string; seen: boolean };
 
+/**
+ * Re-review L2: a keychain read that hasn't answered by now counts as seen, so the tabs' neutral
+ * gate never becomes a blank screen. A late answer is then ignored (the tour never pops up later).
+ */
+export const TOUR_READ_TIMEOUT_MS = 1_500;
+
 // Once per account per device. `seen` is null until the store answers (callers render nothing
-// tour-related meanwhile, so the tour never flashes); a failed read counts as seen because a
-// tour must never block the app.
+// tour-related meanwhile, so the tour never flashes); a failed or slow read counts as seen
+// because a tour must never block the app.
 export function useTourSeen(userId: string | null): {
   seen: boolean | null;
   markSeen: () => void;
@@ -21,16 +27,26 @@ export function useTourSeen(userId: string | null): {
   useEffect(() => {
     if (userId === null) return;
     let live = true;
+    const settle = (seen: boolean) => {
+      if (!live) return;
+      live = false;
+      clearTimeout(timer);
+      setKnown({ userId, seen });
+    };
+    const timer = setTimeout(() => {
+      settle(true);
+    }, TOUR_READ_TIMEOUT_MS);
     secureKv
       .get(tourKey(userId))
       .then((v) => {
-        if (live) setKnown({ userId, seen: v === SEEN });
+        settle(v === SEEN);
       })
       .catch(() => {
-        if (live) setKnown({ userId, seen: true });
+        settle(true);
       });
     return () => {
       live = false;
+      clearTimeout(timer);
     };
   }, [userId]);
   const markSeen = useCallback(() => {

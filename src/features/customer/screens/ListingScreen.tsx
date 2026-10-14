@@ -127,9 +127,9 @@ export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props
         <ReadMoreText text={s.description} testID="description" />
       </DetailSection>
     ) : null;
-  const notice = savedBannerShown(saved) ? (
-    <SavedBanner saved={saved} onSignInAgain={onSignInAgain} />
-  ) : noteOpen ? (
+  // The sign-in note answers the tap just made, so it wins over an older Undo or saved notice
+  // (re-review L1); those come back once the note is closed.
+  const notice = noteOpen ? (
     <Banner
       tone="info"
       message={WEB_NOTE}
@@ -137,6 +137,8 @@ export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props
       onDismiss={closeNote}
       testID="web-note"
     />
+  ) : savedBannerShown(saved) ? (
+    <SavedBanner saved={saved} onSignInAgain={onSignInAgain} />
   ) : null;
   const footer = (
     <ListingFooter

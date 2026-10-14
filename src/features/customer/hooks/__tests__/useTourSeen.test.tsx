@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
-import { useTourSeen } from '@/features/customer/hooks/useTourSeen';
+import { TOUR_READ_TIMEOUT_MS, useTourSeen } from '@/features/customer/hooks/useTourSeen';
 import { CUSTOMER_TOUR_ENABLED } from '@/shared/config/features';
 
 // In-memory SecureStore; `get` can be swapped per test. The factory must not touch module-scope
@@ -46,6 +46,43 @@ it('is null while loading, then false for a new user', async () => {
   await waitFor(() => {
     expect(result.current.seen).toBe(false);
   });
+});
+
+it('a keychain read that never settles counts as seen after 1.5 s (L2: never a blank screen)', async () => {
+  jest.useFakeTimers();
+  mockKv.get = () => new Promise<string | null>(() => undefined);
+  const { result, unmount } = await renderHook(() => useTourSeen('u1'));
+  expect(result.current.seen).toBeNull();
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(1_499);
+  });
+  expect(result.current.seen).toBeNull();
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(1);
+  });
+  expect(result.current.seen).toBe(true);
+  await unmount();
+  jest.useRealTimers();
+});
+
+it('a late answer after the timeout doesn’t bring the tour back', async () => {
+  jest.useFakeTimers();
+  let answer: (v: string | null) => void = () => undefined;
+  mockKv.get = () =>
+    new Promise<string | null>((resolve) => {
+      answer = resolve;
+    });
+  const { result, unmount } = await renderHook(() => useTourSeen('u1'));
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(TOUR_READ_TIMEOUT_MS);
+  });
+  await act(async () => {
+    answer(null);
+    await jest.advanceTimersByTimeAsync(0);
+  });
+  expect(result.current.seen).toBe(true);
+  await unmount();
+  jest.useRealTimers();
 });
 
 it('markSeen stores per user and flips to true', async () => {

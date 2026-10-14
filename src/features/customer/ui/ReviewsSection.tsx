@@ -59,10 +59,25 @@ export function ReviewsSection({ reviews: r, onSeeAll }: Props) {
   );
 }
 
+/** A failed "Load more": what happened, and Try again (it waits out a 429's Retry-After). */
+function PageFailed({ r }: { r: Loaded }) {
+  const busy = r.retryAfterSec !== null;
+  return (
+    <View style={{ gap: space.s2 }} testID="reviews-page-failed">
+      <Text variant="bodySm" tone="textSecondary">
+        {busy ? BUSY : loadFailedLine(r.error, 'more reviews')}
+      </Text>
+      <TextLink label="Try again" disabled={busy} onPress={r.loadMore} />
+    </View>
+  );
+}
+
 type SheetProps = { reviews: Loaded; onClose: () => void };
 
 /** Mounted only while open (one Modal at a time); pages 10 at a time on request, virtualised. */
 export function AllReviewsSheet({ reviews: r, onClose }: SheetProps) {
+  // A failed next page keeps the reviews shown (`failed` is only for nothing to show).
+  const pageFailed = r.reviews.length > 0 && r.error !== null && !r.loadingMore;
   return (
     <Sheet visible title="Reviews" onClose={onClose} testID="all-reviews">
       <FlatList
@@ -78,12 +93,8 @@ export function AllReviewsSheet({ reviews: r, onClose }: SheetProps) {
             {r.loadingMore ? <Spinner label="Loading more" /> : null}
             {/* After a first page, "Load more" asks again; before it, "Try again". */}
             {r.failed && r.reviews.length === 0 ? <ReviewsFailed r={r} /> : null}
-            {r.failed && r.reviews.length > 0 ? (
-              <Text variant="bodySm" tone="textSecondary">
-                {r.retryAfterSec !== null ? BUSY : loadFailedLine(r.error, 'more reviews')}
-              </Text>
-            ) : null}
-            {r.hasMore && !r.loadingMore ? (
+            {pageFailed ? <PageFailed r={r} /> : null}
+            {r.hasMore && !r.loadingMore && !pageFailed ? (
               <Button
                 variant="secondary"
                 label="Load more reviews"

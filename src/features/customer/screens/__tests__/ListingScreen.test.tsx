@@ -266,6 +266,40 @@ describe('hotel', () => {
     expect(await plainKv.get(WEB_NOTE_KEY)).toBe('1');
   });
 
+  it('the sign-in note takes precedence over Undo; the page opens only after Continue (L1)', async () => {
+    mockSaved.mockReturnValue({ ...SAVED, lastRemoved: { ...HOTEL_SAVED } });
+    show(HOTEL);
+    await render(<ListingScreen kind="hotel" {...props} />);
+    expect(screen.getByTestId('saved-undo')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Book on bookhushly.com'));
+    const notice = screen.getByTestId('footer-notice');
+    expect(within(notice).getByText(WEB_NOTE)).toBeTruthy();
+    expect(screen.queryByTestId('saved-undo')).toBeNull();
+    expect(openBrowserAsync).not.toHaveBeenCalled();
+    await fireEvent.press(within(notice).getByText('Continue'));
+    expect(openBrowserAsync).toHaveBeenCalledTimes(1);
+    // The note closed: Undo is back.
+    expect(screen.getByTestId('saved-undo')).toBeTruthy();
+  });
+
+  it('a failed Load more in the reviews sheet says so, with Try again', async () => {
+    const loadMore = jest.fn();
+    mockReviews.mockReturnValue({
+      ...REVIEWS,
+      hasMore: true,
+      error: { kind: 'network' },
+      loadMore,
+    });
+    show(HOTEL);
+    await render(<ListingScreen kind="hotel" {...props} />);
+    await fireEvent.press(screen.getByText('See all reviews (5)'));
+    const sheet = within(screen.getByTestId('all-reviews'));
+    expect(sheet.getByText('Couldn’t load more reviews — check your connection.')).toBeTruthy();
+    expect(sheet.queryByRole('button', { name: 'Load more reviews' })).toBeNull();
+    await fireEvent.press(sheet.getByRole('link', { name: 'Try again' }));
+    expect(loadMore).toHaveBeenCalled();
+  });
+
   it('the Undo banner floats above the footer, not inside it', async () => {
     mockSaved.mockReturnValue({ ...SAVED, lastRemoved: { ...HOTEL_SAVED } });
     show(HOTEL);
