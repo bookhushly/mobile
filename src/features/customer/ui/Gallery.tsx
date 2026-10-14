@@ -57,7 +57,8 @@ export function Counter({ index, total }: { index: number; total: number }) {
 // a wash block with the kind's icon, never a stock image.
 // D14 wants full-size photos only in the viewer, but there is no resize endpoint yet
 // (BACKEND_STATUS §9 "Booking thumbnails are full-size originals"): the pager loads originals,
-// at most ~3 at a time (`initialNumToRender` 2, `windowSize` 3).
+// at most ~3 at a time (`initialNumToRender` 1, `windowSize` 3): only the first photo loads with
+// the page (perf review P4), the next as the list fills its window.
 export function Gallery({ kind, title, images, onOpen }: Props) {
   const [width, setWidth] = useState(0);
   const [index, setIndex] = useState(0);
@@ -97,7 +98,7 @@ export function Gallery({ kind, title, images, onOpen }: Props) {
           showsHorizontalScrollIndicator={false}
           onMomentumScrollEnd={onSettle}
           getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
-          initialNumToRender={2}
+          initialNumToRender={1}
           windowSize={3}
           renderItem={({ item, index: i }) => (
             <Pressable

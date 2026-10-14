@@ -318,8 +318,12 @@ describe('hotel', () => {
     expect(
       screen.getByTestId('gallery-counter', { includeHiddenElements: true }),
     ).toHaveTextContent('1/2');
-    await fireEvent.press(screen.getByLabelText('Photo 2 of 2, Harbour Suites'));
-    expect(screen.getByTestId('viewer-counter')).toHaveTextContent('2/2');
+    // P4: only the first photo mounts with the page; the next follows once the list has measured
+    // its window (on a device, not under Jest).
+    expect(screen.getByTestId('gallery-photo-0')).toBeTruthy();
+    expect(screen.queryByTestId('gallery-photo-1')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Photo 1 of 2, Harbour Suites'));
+    expect(screen.getByTestId('viewer-counter')).toHaveTextContent('1/2');
   });
 });
 

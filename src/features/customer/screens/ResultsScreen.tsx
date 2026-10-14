@@ -91,7 +91,8 @@ export function ResultsScreen({
         style={{ flex: 1 }}
         keyExtractor={(c: ListingCardModel) => `${c.kind}:${c.id}`}
         initialNumToRender={8}
-        windowSize={5}
+        // Perf review P4: three screens' worth of rows mounted (image-heavy cards).
+        windowSize={3}
         onEndReachedThreshold={0.5}
         onEndReached={() => {
           // After a failure the customer asks again ("Load more"): no automatic retry loop.

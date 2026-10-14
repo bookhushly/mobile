@@ -129,7 +129,8 @@ export function Rail({
           data={items.slice(0, RAIL_MAX)}
           keyExtractor={(l) => `${l.kind}:${l.id}`}
           showsHorizontalScrollIndicator={false}
-          initialNumToRender={3}
+          // Perf review P4: two cards fill a phone's width; the rest render as the rail scrolls.
+          initialNumToRender={2}
           maxToRenderPerBatch={3}
           windowSize={3}
           contentContainerStyle={{ gap: space.s4 }}

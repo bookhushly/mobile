@@ -199,6 +199,17 @@ it('renders a rail per category with See all', async () => {
   expect(p.onOpenListing).toHaveBeenCalledWith('apartment', 'a1');
 });
 
+it('a rail mounts two cards first (P4)', async () => {
+  byCat.events = listings(
+    ['e1', 'e2', 'e3', 'e4'].map((id) => ({ ...EVENT, id, title: `Event ${id}` })),
+  );
+  await render(<ExploreScreen {...props()} />);
+  const rail = within(screen.getByTestId('rail-events'));
+  expect(rail.getByText('Event e1')).toBeTruthy();
+  expect(rail.getByText('Event e2')).toBeTruthy();
+  expect(rail.queryByText('Event e3')).toBeNull();
+});
+
 it('a failed rail offers Try again; an empty rail is one line', async () => {
   byCat.hotels = listings([], { failed: true, error: { kind: 'validation' } });
   byCat.serviced_apartments = listings([]);
