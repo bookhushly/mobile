@@ -108,6 +108,14 @@ export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props
     setOpen({ to: 'amenities' });
   };
   const stay = kind === 'event' ? null : kind;
+  // Final UX review U3: a stay's description comes right after the overview; an event's after
+  // its date, venue and tickets.
+  const about =
+    s.description !== null ? (
+      <DetailSection label="About">
+        <ReadMoreText text={s.description} testID="description" />
+      </DetailSection>
+    ) : null;
   const notice = savedBannerShown(saved) ? (
     <SavedBanner saved={saved} onSignInAgain={onSignInAgain} />
   ) : noteOpen ? (
@@ -141,6 +149,7 @@ export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props
         }}
       />
       <ListingOverview summary={s} showArea={kind !== 'event'} />
+      {stay !== null ? about : null}
       {'hotel' in data ? (
         <HotelBody listing={data} onShowAmenities={showAmenities} />
       ) : 'apartment' in data ? (
@@ -148,11 +157,7 @@ export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props
       ) : (
         <EventBody event={data} stock={s.stock ?? 'onSale'} nowMs={now} />
       )}
-      {s.description !== null ? (
-        <DetailSection label="About">
-          <ReadMoreText text={s.description} testID="description" />
-        </DetailSection>
-      ) : null}
+      {stay === null ? about : null}
       {stay !== null ? (
         <ReviewsSection
           kind={stay}

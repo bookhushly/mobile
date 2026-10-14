@@ -280,6 +280,15 @@ describe('hotel', () => {
     share.mockRestore();
   });
 
+  it('reads the description right after the overview, before the rooms (U3)', async () => {
+    show(HOTEL);
+    await render(<ListingScreen kind="hotel" {...props} />);
+    const text = allText();
+    expect(text.indexOf('"About"')).toBeGreaterThan(-1);
+    expect(text.indexOf('"About"')).toBeLessThan(text.indexOf('"Good to know"'));
+    expect(text.indexOf('"About"')).toBeLessThan(text.indexOf('"Rooms"'));
+  });
+
   it('saves with a snapshot from the heart', async () => {
     show(HOTEL);
     await render(<ListingScreen kind="hotel" {...props} />);
