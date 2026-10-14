@@ -132,7 +132,7 @@ it('the heart unsaves with Undo, and Undo saves the same snapshot again', async 
 
   await fireEvent.press(within(screen.getByTestId('saved-undo')).getByRole('button'));
   await settle();
-  expect(save).toHaveBeenCalledWith(USER, HOTEL);
+  expect(save).toHaveBeenCalledWith(USER, { ...HOTEL, createdAt: '2026-10-12T12:00:00.000Z' });
   expect(screen.getByText('Harbour Suites')).toBeTruthy();
   expect(screen.getByRole('tab', { name: 'All (3)' })).toBeTruthy();
   expect(screen.queryByTestId('saved-undo')).toBeNull();

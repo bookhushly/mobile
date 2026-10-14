@@ -25,6 +25,7 @@ const input = (s: SavedInput): SavedInput => ({
   title: s.title,
   image: s.image,
   location: s.location,
+  ...(s.createdAt !== undefined ? { createdAt: s.createdAt } : {}),
 });
 const newestFirst = (a: SavedItem, b: SavedItem) =>
   a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0;
@@ -40,7 +41,7 @@ export type Saved = {
   isSaved: (kind: SavedKind, listingId: string) => boolean;
   /** Saves or unsaves (whichever the heart shows now), optimistically; undone on failure. */
   toggle: (item: SavedInput) => Promise<WriteOutcome>;
-  /** The last unsaved item, for the Undo banner. */
+  /** The last unsaved item (with its original date), for the Undo banner. */
   lastRemoved: SavedInput | null;
   /** Saves `lastRemoved` again, after its unsave has finished. */
   undo: () => Promise<WriteOutcome | null>;
@@ -95,24 +96,30 @@ export function useSaved(userId: string): Saved {
       const id = keyOf(item);
       const snapshot = input(item);
       let removed: SavedItem | undefined;
+      // Read before the optimistic removal: the row's own date goes with the Undo offer (F5).
+      const removedAt = want
+        ? undefined
+        : qc.getQueryData<SavedItem[]>(key)?.find((r) => same(r, item))?.createdAt;
       void qc.cancelQueries({ queryKey: key });
       qc.setQueryData<SavedItem[]>(key, (rows) => {
         if (rows === undefined) return rows;
-        if (want)
-          return rows.some((r) => same(r, item))
-            ? rows
-            : [
-                {
-                  ...snapshot,
-                  id: `pending:${id}`,
-                  createdAt: new Date(clock.serverNow()).toISOString(),
-                },
-                ...rows,
-              ];
+        if (want) {
+          if (rows.some((r) => same(r, item))) return rows;
+          // An Undo carries the row's own date and goes back to its place (F5); a new save is
+          // the newest.
+          const at = snapshot.createdAt;
+          const added = {
+            ...snapshot,
+            id: `pending:${id}`,
+            createdAt: at ?? new Date(clock.serverNow()).toISOString(),
+          };
+          return at === undefined ? [added, ...rows] : [...rows, added].sort(newestFirst);
+        }
         removed = rows.find((r) => same(r, item));
         return rows.filter((r) => !same(r, item));
       });
-      if (!want) setLastRemoved(snapshot);
+      if (!want)
+        setLastRemoved(removedAt === undefined ? snapshot : { ...snapshot, createdAt: removedAt });
       setWriteError(null);
       const queue = queueFor(userId);
       queue.pending += 1;

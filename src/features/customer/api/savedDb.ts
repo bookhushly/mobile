@@ -16,6 +16,8 @@ export type SavedInput = SavedKey & {
   title: string | null;
   image: string | null;
   location: string | null;
+  /** Only on an Undo: the removed row's own date, so it returns to its place (final review F5). */
+  createdAt?: string;
 };
 export type SavedItem = SavedInput & { id: string; createdAt: string };
 
@@ -134,6 +136,7 @@ export function createSavedDb(client: SavedClient, refresh: () => Promise<boolea
             listing_title: item.title,
             listing_image: item.image,
             listing_location: item.location,
+            ...(item.createdAt !== undefined ? { created_at: item.createdAt } : {}),
           },
           UPSERT,
         )

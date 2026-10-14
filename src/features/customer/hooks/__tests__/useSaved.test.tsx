@@ -158,7 +158,7 @@ describe('useSaved', () => {
       first = result.current.toggle(EVENT);
     });
     expect(result.current.isSaved('event', 'e1')).toBe(false);
-    expect(result.current.lastRemoved).toEqual(EVENT);
+    expect(result.current.lastRemoved).toEqual({ ...EVENT, createdAt: '2026-10-12T10:00:00.000Z' });
     let undone: Promise<string | null> = Promise.resolve(null);
     await act(() => {
       undone = result.current.undo();
@@ -172,8 +172,39 @@ describe('useSaved', () => {
       expect(await first).toBe('ok');
       expect(await undone).toBe('ok');
     });
-    expect(save).toHaveBeenCalledWith(USER, EVENT);
+    expect(save).toHaveBeenCalledWith(USER, { ...EVENT, createdAt: '2026-10-12T10:00:00.000Z' });
     expect(unsave.mock.invocationCallOrder[0]).toBeLessThan(save.mock.invocationCallOrder[0] ?? 0);
+    await unmount();
+  });
+
+  it('Undo puts the item back at its original place with its original date (F5)', async () => {
+    const HOTEL_AT = '2026-10-10T10:00:00.000Z';
+    const OLDEST: SavedInput = { ...HOTEL, listingId: 'h0', title: 'Old' };
+    const rows = [
+      row(EVENT, '2026-10-12T10:00:00.000Z'),
+      row(HOTEL, HOTEL_AT),
+      row(OLDEST, '2026-10-01T10:00:00.000Z'),
+    ];
+    list.mockResolvedValue(ok(rows));
+    const { result, unmount } = await run();
+    await act(async () => {
+      await result.current.toggle(HOTEL);
+    });
+    expect(result.current.lastRemoved).toEqual({ ...HOTEL, createdAt: HOTEL_AT });
+    const back = deferred<Awaited<ReturnType<Db['save']>>>();
+    save.mockReturnValue(back.promise);
+    let undone: Promise<string | null> = Promise.resolve(null);
+    await act(() => {
+      undone = result.current.undo();
+    });
+    // Optimistically back in its place, not on top.
+    expect(result.current.items.map((i) => i.listingId)).toEqual(['e1', 'h1', 'h0']);
+    expect(result.current.items[1]?.createdAt).toBe(HOTEL_AT);
+    await act(async () => {
+      back.resolve(ok(undefined));
+      expect(await undone).toBe('ok');
+    });
+    expect(save).toHaveBeenCalledWith(USER, { ...HOTEL, createdAt: HOTEL_AT });
     await unmount();
   });
 
@@ -206,7 +237,7 @@ describe('useSaved', () => {
     await act(async () => {
       await result.current.toggle(EVENT);
     });
-    expect(result.current.lastRemoved).toEqual(EVENT);
+    expect(result.current.lastRemoved).toEqual({ ...EVENT, createdAt: '2026-10-12T10:00:00.000Z' });
     await act(() => {
       result.current.dismissUndo();
     });

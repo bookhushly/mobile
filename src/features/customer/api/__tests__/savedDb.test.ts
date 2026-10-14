@@ -177,6 +177,12 @@ describe('savedDb.save', () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
+  it('an Undo keeps the row’s original created_at, so it returns to its place (F5)', async () => {
+    const { db, ops } = fake([{ data: [ROW] }]);
+    await db.save('u1', { ...ITEM, createdAt: '2026-10-01T09:00:00.000Z' });
+    expect(ops[0]?.args[1]).toMatchObject({ created_at: '2026-10-01T09:00:00.000Z' });
+  });
+
   it('0 rows but the row is there (already saved, e.g. a retry after a lost response) is success', async () => {
     const { db, refresh, left } = fake([{ data: [] }, { data: ROW }]);
     expect(await db.save('u1', ITEM)).toEqual({ ok: true, value: undefined });
