@@ -5,8 +5,9 @@ import { plainKv } from '@/shared/platform/storage';
 export const WEB_NOTE_KEY = 'bh.listing.webNote';
 const SEEN = '1';
 
-// Spec D11: a one-time note before the first hand-off to bookhushly.com. Device-wide (no PII).
-// `show` is false until the store answers, and a failed read hides it: a note never blocks booking.
+// Spec D11, final UX review U1: a one-time note on the first hand-off to bookhushly.com.
+// Device-wide (no PII). `show` (still due) is false until the store answers, and a failed read
+// hides it: a note never blocks booking.
 export function useWebNote(): { show: boolean; markSeen: () => void } {
   const [show, setShow] = useState(false);
   useEffect(() => {

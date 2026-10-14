@@ -3,6 +3,7 @@ import {
   CircleCheck,
   Info,
   TriangleAlert,
+  X,
   type LucideIcon,
 } from 'lucide-react-native';
 import { View } from 'react-native';
@@ -12,6 +13,7 @@ import { color, radius, space, type ColorRole, type StatusTone } from '@/shared/
 import { useAnnounce } from './announce';
 import { Button } from './Button';
 import { Icon } from './Icon';
+import { IconButton } from './IconButton';
 import { Text } from './Text';
 
 const GLYPH = {
@@ -36,6 +38,8 @@ type Props = {
   /** Replaces the tone's glyph (a network-related caller may pass WifiOff). */
   icon?: LucideIcon;
   action?: { label: string; onPress: () => void };
+  /** A close button ("Dismiss") at the end, for a note the user may wave away. */
+  onDismiss?: () => void;
   /**
    * Android: the live region on the message. iOS: the message is announced when the banner
    * mounts with it and whenever it changes (a banner is always the result of something).
@@ -51,6 +55,7 @@ export function Banner({
   message,
   icon,
   action,
+  onDismiss,
   live = 'polite',
   testID = 'banner',
 }: Props) {
@@ -82,6 +87,9 @@ export function Banner({
           </View>
         ) : null}
       </View>
+      {onDismiss !== undefined ? (
+        <IconButton icon={X} accessibilityLabel="Dismiss" onPress={onDismiss} />
+      ) : null}
     </View>
   );
 }

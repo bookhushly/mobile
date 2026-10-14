@@ -7,6 +7,7 @@ import { useListing } from '@/features/customer/hooks/useListing';
 import { useReviews } from '@/features/customer/hooks/useReviews';
 import { useSaved, type Saved } from '@/features/customer/hooks/useSaved';
 import { WEB_NOTE_KEY } from '@/features/customer/hooks/useWebNote';
+import { WEB_NOTE } from '@/features/customer/ui/ListingFooter';
 import {
   apartmentDetail,
   eventDetail,
@@ -187,6 +188,13 @@ function show(
 ) {
   mockListing.mockReturnValue({ data, error, refetch: jest.fn(() => Promise.resolve()) });
 }
+const HOTEL_SAVED = {
+  listingId: ID,
+  kind: 'hotel' as const,
+  title: 'Harbour Suites',
+  image: null,
+  location: null,
+};
 const props = { id: ID, userId: 'u1', onBack: jest.fn(), onSignInAgain: jest.fn() };
 const allText = () => JSON.stringify(screen.toJSON());
 
@@ -222,14 +230,41 @@ describe('hotel', () => {
     expect(allText()).not.toContain(PHONE);
   });
 
-  it('notes the web sign-in once, then opens the hotel page in the in-app browser', async () => {
+  it('notes the web sign-in on the first hand-off only, above the footer (U1)', async () => {
     show(HOTEL);
     await render(<ListingScreen kind="hotel" {...props} />);
-    expect(await screen.findByText('You may need to sign in on the website.')).toBeTruthy();
+    expect(screen.queryByText(WEB_NOTE)).toBeNull();
     await fireEvent.press(screen.getByText('Book on bookhushly.com'));
+    // The first tap shows the note instead of leaving the app.
+    expect(openBrowserAsync).not.toHaveBeenCalled();
+    const notice = screen.getByTestId('footer-notice');
+    expect(within(notice).getByText(WEB_NOTE)).toBeTruthy();
+    expect(within(screen.getByTestId('listing-footer')).queryByText(WEB_NOTE)).toBeNull();
+    await fireEvent.press(within(notice).getByText('Continue'));
     expect(openBrowserAsync).toHaveBeenCalledWith(`https://bookhushly.com/services/hotels/${ID}`);
-    expect(screen.queryByText('You may need to sign in on the website.')).toBeNull();
+    expect(screen.queryByText(WEB_NOTE)).toBeNull();
     expect(await plainKv.get(WEB_NOTE_KEY)).toBe('1');
+    // Once seen, the button opens the page at once.
+    await fireEvent.press(screen.getByText('Book on bookhushly.com'));
+    expect(openBrowserAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('the sign-in note can be dismissed without leaving the app', async () => {
+    show(HOTEL);
+    await render(<ListingScreen kind="hotel" {...props} />);
+    await fireEvent.press(screen.getByText('Book on bookhushly.com'));
+    await fireEvent.press(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByText(WEB_NOTE)).toBeNull();
+    expect(openBrowserAsync).not.toHaveBeenCalled();
+    expect(await plainKv.get(WEB_NOTE_KEY)).toBe('1');
+  });
+
+  it('the Undo banner floats above the footer, not inside it', async () => {
+    mockSaved.mockReturnValue({ ...SAVED, lastRemoved: { ...HOTEL_SAVED } });
+    show(HOTEL);
+    await render(<ListingScreen kind="hotel" {...props} />);
+    expect(within(screen.getByTestId('footer-notice')).getByTestId('saved-undo')).toBeTruthy();
+    expect(within(screen.getByTestId('listing-footer')).queryByTestId('saved-undo')).toBeNull();
   });
 
   it.each([
@@ -342,8 +377,9 @@ describe('event', () => {
     expect(within(screen.getByTestId('ticket-Regular')).getByText('Few tickets left')).toBeTruthy();
     // K4: tiers at different prices read as a range.
     expect(screen.getByLabelText('7,000 naira to 25,000 naira')).toBeTruthy();
-    expect(screen.getByText('· Sat 17 Oct')).toBeTruthy();
+    expect(within(screen.getByTestId('footer-summary')).getByText('Sat 17 Oct')).toBeTruthy();
     await fireEvent.press(screen.getByText('Get tickets on bookhushly.com'));
+    await fireEvent.press(screen.getByText('Continue'));
     expect(openBrowserAsync).toHaveBeenCalledWith(`https://bookhushly.com/services/${ID}`);
     expect(mockReviews).not.toHaveBeenCalled();
     expect(screen.queryByTestId('reviews')).toBeNull();
@@ -375,7 +411,7 @@ describe('event', () => {
     expect(book).toBeDisabled();
     await fireEvent.press(book);
     expect(openBrowserAsync).not.toHaveBeenCalled();
-    expect(screen.queryByText('You may need to sign in on the website.')).toBeNull();
+    expect(screen.queryByText(WEB_NOTE)).toBeNull();
   });
 });
 

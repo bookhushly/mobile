@@ -1,48 +1,60 @@
 import { ExternalLink } from 'lucide-react-native';
+import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
 import type { CardPrice } from '@/features/customer/domain/listingCard';
+import { FooterNotice } from '@/features/customer/ui/FooterNotice';
 import { PriceTag } from '@/features/customer/ui/PriceTag';
 import { space } from '@/shared/theme';
-import { Banner, Button, Text } from '@/shared/ui';
+import { Button, Text } from '@/shared/ui';
 
 type Props = {
   price: CardPrice;
-  /** Events: "Sat 17 Oct" beside the price. */
+  /** Events: "Sat 17 Oct" under the price. */
   when?: string | null;
   label: string;
   /** Why the button is off ("Sold out"); it then reads the reason (D12). */
   blocked: string | null;
-  /** The one-time "sign in on the website" note (D11). */
-  showNote: boolean;
   onBook: () => void;
+  /** Floats above the row (Undo, the sign-in note); never part of it. */
+  notice?: ReactNode;
 };
 
 export const WEB_NOTE = 'You may need to sign in on the website.';
 
-// Spec §3, D11: sticky price summary + the hand-off to bookhushly.com. The label never promises
+// Spec §3, D11, final UX review U1: one row, the price summary on the left and the hand-off on
+// the right (the button takes the row only when there is no summary). The label never promises
 // booking in the app. No urgency copy.
-export function ListingFooter({ price, when, label, blocked, showNote, onBook }: Props) {
+export function ListingFooter({ price, when, label, blocked, onBook, notice }: Props) {
+  const hasWhen = when !== undefined && when !== null;
+  const summary = price !== null || hasWhen;
   return (
-    <View style={{ gap: space.s3 }} testID="listing-footer">
-      {showNote && blocked === null ? <Banner tone="info" message={WEB_NOTE} /> : null}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}>
-        <View style={{ flexShrink: 1 }}>
-          <PriceTag price={price} testID="footer-price" />
-        </View>
-        {when != null ? (
-          <Text variant="bodySm" tone="textSecondary" numberOfLines={1}>
-            {price === null ? when : `· ${when}`}
-          </Text>
+    <View>
+      {notice !== undefined && notice !== null ? <FooterNotice>{notice}</FooterNotice> : null}
+      <View
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space.s4 }}
+        testID="listing-footer"
+      >
+        {summary ? (
+          <View style={{ flex: 1, gap: space.s1 }} testID="footer-summary">
+            <PriceTag price={price} testID="footer-price" />
+            {hasWhen ? (
+              <Text variant="bodySm" tone="textSecondary" numberOfLines={1}>
+                {when}
+              </Text>
+            ) : null}
+          </View>
         ) : null}
+        <View style={summary ? { flexShrink: 0, maxWidth: '60%' } : { flex: 1 }}>
+          <Button
+            label={blocked ?? label}
+            icon={blocked === null ? ExternalLink : undefined}
+            disabled={blocked !== null}
+            onPress={onBook}
+            testID="listing-book"
+          />
+        </View>
       </View>
-      <Button
-        label={blocked ?? label}
-        icon={blocked === null ? ExternalLink : undefined}
-        disabled={blocked !== null}
-        onPress={onBook}
-        testID="listing-book"
-      />
     </View>
   );
 }

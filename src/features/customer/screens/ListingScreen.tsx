@@ -16,14 +16,14 @@ import { GalleryViewer } from '@/features/customer/ui/GalleryViewer';
 import { HotelBody } from '@/features/customer/ui/HotelBody';
 import { openWeb } from '@/features/customer/ui/links';
 import { ListingActions } from '@/features/customer/ui/ListingActions';
-import { ListingFooter } from '@/features/customer/ui/ListingFooter';
+import { ListingFooter, WEB_NOTE } from '@/features/customer/ui/ListingFooter';
 import { ListingOverview } from '@/features/customer/ui/ListingOverview';
 import { listingSummary } from '@/features/customer/ui/listingSummary';
 import { ReadMoreText } from '@/features/customer/ui/ReadMoreText';
 import { AllReviewsSheet, ReviewsSection } from '@/features/customer/ui/ReviewsSection';
 import { SavedBanner, savedBannerShown } from '@/features/customer/ui/SavedBanner';
 import { clock } from '@/shared/api/instance';
-import { ErrorState, Header, IconButton, Screen, Sheet, SkeletonRows } from '@/shared/ui';
+import { Banner, ErrorState, Header, IconButton, Screen, Sheet, SkeletonRows } from '@/shared/ui';
 
 const KIND_WORD: Record<ListingKind, string> = {
   hotel: 'Hotel',
@@ -51,6 +51,8 @@ export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props
   useSavedNotices(saved);
   const note = useWebNote();
   const [open, setOpen] = useState<Open>(null);
+  // The one-time sign-in note, shown on the first tap of the hand-off (U1).
+  const [noteOpen, setNoteOpen] = useState(false);
   const close = () => {
     setOpen(null);
   };
@@ -91,25 +93,41 @@ export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props
 
   const book = () => {
     if (s.action.blocked !== null) return;
-    if (note.show) note.markSeen();
+    if (note.show && !noteOpen) {
+      setNoteOpen(true);
+      return;
+    }
+    closeNote();
     openWeb(url);
   };
+  function closeNote() {
+    setNoteOpen(false);
+    if (note.show) note.markSeen();
+  }
   const showAmenities = () => {
     setOpen({ to: 'amenities' });
   };
   const stay = kind === 'event' ? null : kind;
+  const notice = savedBannerShown(saved) ? (
+    <SavedBanner saved={saved} onSignInAgain={onSignInAgain} />
+  ) : noteOpen ? (
+    <Banner
+      tone="info"
+      message={WEB_NOTE}
+      action={{ label: 'Continue', onPress: book }}
+      onDismiss={closeNote}
+      testID="web-note"
+    />
+  ) : null;
   const footer = (
-    <>
-      {savedBannerShown(saved) ? <SavedBanner saved={saved} onSignInAgain={onSignInAgain} /> : null}
-      <ListingFooter
-        price={s.price}
-        when={s.when}
-        label={s.action.label}
-        blocked={s.action.blocked}
-        showNote={note.show}
-        onBook={book}
-      />
-    </>
+    <ListingFooter
+      price={s.price}
+      when={s.when}
+      label={s.action.label}
+      blocked={s.action.blocked}
+      onBook={book}
+      notice={notice}
+    />
   );
 
   return (
