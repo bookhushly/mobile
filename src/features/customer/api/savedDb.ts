@@ -23,7 +23,9 @@ export type SavedItem = SavedInput & { id: string; createdAt: string };
 
 export const SAVED_COLUMNS =
   'id, listing_id, listing_type, listing_title, listing_image, listing_location, created_at';
-export const SAVED_LIMIT = 200;
+// Web parity (final review F6). A heart beyond the newest 500 shows unsaved until tapped (the
+// save is idempotent, so the tap is harmless); 500 is enough for v1, so no per-heart point check.
+export const SAVED_LIMIT = 500;
 const TABLE = 'saved_listings';
 const UPSERT = { onConflict: 'user_id,listing_id,listing_type', ignoreDuplicates: true };
 

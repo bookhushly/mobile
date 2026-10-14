@@ -86,7 +86,7 @@ describe('saved kinds', () => {
 });
 
 describe('savedDb.list', () => {
-  it('selects the own rows, newest first, at most 200, and maps them', async () => {
+  it('selects the own rows, newest first, at most 500 (web parity), and maps them', async () => {
     const { db, ops } = fake([
       {
         data: [
@@ -116,7 +116,7 @@ describe('savedDb.list', () => {
           SAVED_COLUMNS,
           ['eq', 'user_id', 'u1'],
           ['order', 'created_at', { ascending: false }],
-          ['limit', 200],
+          ['limit', 500],
         ],
       },
     ]);
