@@ -24,7 +24,7 @@ function words(price: NonNullable<CardPrice>): {
       spoken: `${free ? 'Free' : spokenNaira(price.min)} to ${spokenNaira(price.max)}`,
     };
   }
-  const prefix = 'prefix' in price && price.prefix !== undefined ? `${price.prefix} ` : '';
+  const prefix = 'prefix' in price ? `${price.prefix} ` : '';
   const unit = 'unit' in price ? price.unit : null;
   return {
     shown: `${prefix}${formatNaira(price.amount)}`,
