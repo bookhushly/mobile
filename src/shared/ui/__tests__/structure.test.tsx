@@ -9,6 +9,7 @@ import { ListRow, SectionHeader } from '@/shared/ui/ListRow';
 import { Screen } from '@/shared/ui/Screen';
 import { SegmentedControl } from '@/shared/ui/SegmentedControl';
 import { Sheet } from '@/shared/ui/Sheet';
+import { Inline } from '@/shared/ui/Stack';
 import { color } from '@/shared/theme';
 
 const metrics = {
@@ -246,4 +247,17 @@ it('screen keeps working for existing callers (children + scroll)', async () => 
     </Screen>,
   );
   expect(screen.getByText('Only body')).toBeTruthy();
+});
+
+it('Inline can centre its children along the row', async () => {
+  await render(
+    <Inline justify="center" testID="row">
+      <Text>Send a new code</Text>
+    </Inline>,
+  );
+  expect(screen.getByTestId('row')).toHaveStyle({
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  });
 });
