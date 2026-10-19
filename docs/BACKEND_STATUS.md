@@ -227,7 +227,7 @@ Hotel-booking JSON route · apartment booking JSON · my-bookings route · scann
   (k) `/api/listings` `event_date` filters by the UTC day, so a Lagos event between 00:00 and 01:00 lands on the wrong day; use Africa/Lagos.
   (l) `listings.category_data.stream_url` (online event links) is anon-readable under RLS, and `/api/listings` returns the whole `category_data`; the app selects/keeps only `low_stock_threshold`, but the link needs a column-level grant, a separate table or a view.
 - **Customer 5 (found 2026-10-19).**
-  (a) cancel routes differ: hotel `not_cancellable` is 400, event/apartment 409; apartment cancel has no date check and ignores its update error; event/apartment cancels aren't conditional writes;
+  (a) cancel routes differ: hotel `not_cancellable` is 400, event/apartment 409; apartment cancel has no date check and ignores its update error; event/apartment cancels aren't conditional writes; event cancel also ignores its update error and still answers 200 `success`; every cancel, `/refunds/request` and `/transfer` answers a failed DB read as 404, so a transient failure reads as 'not on your account';
   (b) `/api/refunds/request`, `/transfer`, `/waitlist`, `/follow` and reviews' 400/401/500 have no `code`s;
   (c) no refund-status route;
   (d) follow is a toggle (not idempotent);
