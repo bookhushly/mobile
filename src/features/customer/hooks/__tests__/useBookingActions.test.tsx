@@ -15,6 +15,7 @@ import {
   useTransferTickets,
 } from '@/features/customer/hooks/useBookingActions';
 import { customerKeys } from '@/features/customer/hooks/customerKeys';
+import { unsettled } from '@/features/customer/hooks/unsettled';
 import { wallet } from '@/features/customer/offline/wallet';
 import type { memoryKv } from '@/shared/lib/kv';
 import type { ApiError } from '@/shared/lib/errors';
@@ -83,6 +84,7 @@ beforeEach(async () => {
   mockSessionUser = USER;
   qc = makeQueryClient();
   drop.mockResolvedValue(undefined);
+  unsettled.clearAll();
   for (const k of Object.keys(mockKv.dump())) await mockKv.delete(k);
 });
 afterEach(() => {
@@ -241,10 +243,117 @@ describe('useCancelBooking', () => {
   });
 });
 
+describe('unsettled actions only re-check (review 3)', () => {
+  it('cancel: uncertain → sheet closed → tapped again → no second POST; the re-read decides', async () => {
+    cancelMock.mockResolvedValue(timeout);
+    db.event
+      .mockResolvedValueOnce(ok(ev({ status: 'confirmed' })))
+      .mockResolvedValueOnce(ok(ev({ status: 'cancelled' })));
+    const { result, unmount } = await renderHook(
+      () => useCancelBooking(USER, 'event', 'e1'),
+      opts(),
+    );
+    await act(async () => {
+      await result.current.cancel();
+    });
+    expect(result.current.state).toEqual({ kind: 'uncertain' });
+    await act(() => {
+      result.current.reset();
+    });
+    await act(async () => {
+      await result.current.cancel();
+    });
+    expect(cancelMock).toHaveBeenCalledTimes(1);
+    expect(db.event).toHaveBeenCalledTimes(2);
+    expect(result.current.state).toEqual({ kind: 'done', value: null });
+    // Settled: a later cancel posts again.
+    expect(unsettled.get(USER, 'event', 'e1')).toBeNull();
+    await unmount();
+  });
+
+  it('cancel: the latch outlives the hook (sheet unmounted and reopened)', async () => {
+    cancelMock.mockResolvedValue(err({ kind: 'network' }));
+    db.hotel.mockResolvedValue(ok(ho({ booking_status: 'confirmed' })));
+    const first = await renderHook(() => useCancelBooking(USER, 'hotel', 'h1'), opts());
+    await act(async () => {
+      await first.result.current.cancel();
+    });
+    await first.unmount();
+    const again = await renderHook(() => useCancelBooking(USER, 'hotel', 'h1'), opts());
+    await act(async () => {
+      await again.result.current.cancel();
+    });
+    expect(cancelMock).toHaveBeenCalledTimes(1);
+    expect(again.result.current.state).toEqual({ kind: 'uncertain' });
+    // Another booking is not latched.
+    const other = await renderHook(() => useCancelBooking(USER, 'hotel', 'h2'), opts());
+    await act(async () => {
+      await other.result.current.cancel();
+    });
+    expect(cancelMock).toHaveBeenCalledTimes(2);
+    await again.unmount();
+    await other.unmount();
+  });
+
+  it('a refusal or a rate limit settles the latch', async () => {
+    cancelMock
+      .mockResolvedValueOnce(err({ kind: 'rateLimited', retryAfterSec: 5 }))
+      .mockResolvedValueOnce(err({ kind: 'conflict', code: 'not_cancellable' }))
+      .mockResolvedValueOnce(err({ kind: 'conflict', code: 'not_cancellable' }));
+    const { result, unmount } = await renderHook(
+      () => useCancelBooking(USER, 'event', 'e1'),
+      opts(),
+    );
+    for (let i = 0; i < 3; i += 1) {
+      await act(async () => {
+        await result.current.cancel();
+      });
+    }
+    expect(cancelMock).toHaveBeenCalledTimes(3);
+    expect(db.event).not.toHaveBeenCalled();
+    await unmount();
+  });
+
+  it('transfer: a fresh sheet re-reads only, and reports the address first sent to', async () => {
+    transferMock.mockResolvedValue(timeout);
+    db.event.mockResolvedValueOnce(ok(ev())).mockResolvedValueOnce(ok(null));
+    const first = await renderHook(() => useTransferTickets(USER, 'e1'), opts());
+    await act(async () => {
+      await first.result.current.transfer('B@x.com');
+    });
+    expect(first.result.current.state).toEqual({ kind: 'uncertain' });
+    await first.unmount();
+    const again = await renderHook(() => useTransferTickets(USER, 'e1'), opts());
+    await act(async () => {
+      await again.result.current.transfer('someone-else@x.com');
+    });
+    expect(transferMock).toHaveBeenCalledTimes(1);
+    expect(again.result.current.state).toEqual({
+      kind: 'done',
+      value: { transferredTo: 'b@x.com' },
+    });
+    await again.unmount();
+  });
+
+  it('transfer: a re-read showing nothing after sign-out is not success', async () => {
+    transferMock.mockResolvedValue(timeout);
+    db.event.mockResolvedValue(ok(null));
+    mockSessionUser = null;
+    const { result, unmount } = await renderHook(() => useTransferTickets(USER, 'e1'), opts());
+    await act(async () => {
+      await result.current.transfer('b@x.com');
+    });
+    expect(result.current.state).toEqual({ kind: 'uncertain' });
+    expect(drop).not.toHaveBeenCalled();
+    await unmount();
+  });
+});
+
 describe('useTransferTickets', () => {
   it('done: drops the tickets from the device and reloads the list', async () => {
     transferMock.mockResolvedValue(ok({ transferredTo: 'b@x.com' }));
     qc.setQueryData(customerKeys.booking(USER, 'event', 'e1'), { row: ev() });
+    qc.setQueryData(customerKeys.wallet(USER), { savedAt: 1, entries: [] });
     const spy = jest.spyOn(qc, 'invalidateQueries');
     const { result, unmount } = await renderHook(() => useTransferTickets(USER, 'e1'), opts());
     await act(async () => {
@@ -254,6 +363,7 @@ describe('useTransferTickets', () => {
     expect(result.current.state).toEqual({ kind: 'done', value: { transferredTo: 'b@x.com' } });
     expect(drop).toHaveBeenCalledWith(USER, 'event', 'e1');
     expect(qc.getQueryData(customerKeys.booking(USER, 'event', 'e1'))).toBeUndefined();
+    expect(qc.getQueryData(customerKeys.wallet(USER))).toBeUndefined();
     expect(spy).toHaveBeenCalledWith({ queryKey: customerKeys.bookings(USER) });
     await unmount();
   });

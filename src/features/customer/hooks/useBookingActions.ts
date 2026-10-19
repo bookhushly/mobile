@@ -1,5 +1,5 @@
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 
 import {
   cancelBooking,
@@ -20,6 +20,7 @@ import type { BookingKind } from '@/features/customer/domain/myBookings';
 import { useAction, type ActionState } from '@/features/customer/hooks/actionState';
 import { customerKeys, discoverKeys } from '@/features/customer/hooks/customerKeys';
 import { isSignedInAs } from '@/features/customer/hooks/sessionWrite';
+import { unsettled } from '@/features/customer/hooks/unsettled';
 import { useRefundRequested, useReviewedSet } from '@/features/customer/hooks/useActionMarks';
 import { wallet } from '@/features/customer/offline/wallet';
 import type { CancelResult } from '@/features/customer/schemas/actions';
@@ -73,25 +74,29 @@ export function useCancelBooking(
         const b = await reread(userId, kind, id);
         if (b?.status === 'cancelled') o = { kind: 'done', value: null };
       }
+      // Only a lost answer stays unsettled; any server answer (or a 429 / 401, which never ran
+      // the cancel) settles it.
+      if (o.kind !== 'uncertain') unsettled.clear(userId, kind, id);
       if (o.kind === 'done') refreshBooking(qc, userId, kind, id);
       return o;
     },
     [qc, userId, kind, id],
   );
 
-  const cancel = useCallback(
-    () =>
-      run({ kind: 'sending' }, async (show) => {
-        const o: ActionOutcome<CancelDone> = cancelOutcome(await cancelBooking(api, kind, id));
-        if (o.kind === 'uncertain') show({ kind: 'checking' });
-        return settle(o);
-      }),
-    [run, settle, kind, id],
-  );
   const recheck = useCallback(
     () => run({ kind: 'checking' }, () => settle({ kind: 'uncertain' })),
     [run, settle],
   );
+  const cancel = useCallback(() => {
+    // An earlier cancel's answer was lost (even from a closed sheet): re-read, never re-post.
+    if (unsettled.get(userId, kind, id) !== null) return recheck();
+    return run({ kind: 'sending' }, async (show) => {
+      unsettled.set(userId, kind, id, { action: 'cancel', sentAt: Date.now(), email: null });
+      const o: ActionOutcome<CancelDone> = cancelOutcome(await cancelBooking(api, kind, id));
+      if (o.kind === 'uncertain') show({ kind: 'checking' });
+      return settle(o);
+    });
+  }, [run, settle, recheck, userId, kind, id]);
   return { state, cancel, recheck, reset };
 }
 
@@ -109,14 +114,19 @@ export function useTransferTickets(
 } {
   const qc = useQueryClient();
   const { state, run, reset } = useAction<TransferDone>();
-  const sentTo = useRef('');
-
   const settle = useCallback(
     async (o: ActionOutcome<TransferDone>): Promise<ActionOutcome<TransferDone>> => {
-      // The booking moves to the new holder: no longer readable means the transfer landed.
-      if (o.kind === 'uncertain' && (await reread(userId, 'event', bookingId)) === null) {
-        o = { kind: 'done', value: { transferredTo: sentTo.current } };
+      const sent = unsettled.get(userId, 'event', bookingId);
+      // The booking moves to the new holder: no longer readable means the transfer landed. But
+      // an RLS read without this user's session also reads nothing (review 3, finding 2).
+      if (
+        o.kind === 'uncertain' &&
+        (await reread(userId, 'event', bookingId)) === null &&
+        (await isSignedInAs(userId))
+      ) {
+        o = { kind: 'done', value: { transferredTo: sent?.email ?? '' } };
       }
+      if (o.kind !== 'uncertain') unsettled.clear(userId, 'event', bookingId);
       if (o.kind === 'done') {
         // The tickets leave this device at once (spec E7), then the list reloads without it.
         await isSignedInAs(userId)
@@ -124,6 +134,8 @@ export function useTransferTickets(
           .catch(() => undefined);
         qc.removeQueries({ queryKey: customerKeys.booking(userId, 'event', bookingId) });
         qc.removeQueries({ queryKey: customerKeys.liveCodes(userId, bookingId) });
+        // The offline copy read from disk would still show it.
+        qc.removeQueries({ queryKey: customerKeys.wallet(userId) });
         void qc.invalidateQueries({ queryKey: customerKeys.bookings(userId) });
       }
       return o;
@@ -131,19 +143,26 @@ export function useTransferTickets(
     [qc, userId, bookingId],
   );
 
-  const transfer = useCallback(
-    (newEmail: string) =>
-      run({ kind: 'sending' }, async (show) => {
-        sentTo.current = newEmail.trim().toLowerCase();
-        const o = transferOutcome(await transferTickets(api, bookingId, newEmail));
-        if (o.kind === 'uncertain') show({ kind: 'checking' });
-        return settle(o);
-      }),
-    [run, settle, bookingId],
-  );
   const recheck = useCallback(
     () => run({ kind: 'checking' }, () => settle({ kind: 'uncertain' })),
     [run, settle],
+  );
+  const transfer = useCallback(
+    (newEmail: string) => {
+      // An earlier transfer's answer was lost: re-read only, whatever address is typed now.
+      if (unsettled.get(userId, 'event', bookingId) !== null) return recheck();
+      return run({ kind: 'sending' }, async (show) => {
+        unsettled.set(userId, 'event', bookingId, {
+          action: 'transfer',
+          sentAt: Date.now(),
+          email: newEmail.trim().toLowerCase(),
+        });
+        const o = transferOutcome(await transferTickets(api, bookingId, newEmail));
+        if (o.kind === 'uncertain') show({ kind: 'checking' });
+        return settle(o);
+      });
+    },
+    [run, settle, recheck, userId, bookingId],
   );
   return { state, transfer, recheck, reset };
 }
