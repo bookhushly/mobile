@@ -72,10 +72,10 @@ it('after sign-out (or another account) the mark stays in memory only', async ()
   await act(async () => {
     await result.current.mark('l2');
   });
+  // The render can trail the cache by a tick: wait for both.
   await waitFor(() => {
-    expect(result.current.has('l1')).toBe(true);
+    expect([result.current.has('l1'), result.current.has('l2')]).toEqual([true, true]);
   });
-  expect(result.current.has('l2')).toBe(true);
   expect(mockKv.dump()).toEqual({});
   await unmount();
 });
