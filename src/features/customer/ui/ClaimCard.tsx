@@ -34,7 +34,11 @@ type Props = {
 };
 
 const TITLE = 'Bookings made as a guest';
+/** UX review U4: where to confirm (the sign-in code is the only path in the app). */
+export const CONFIRM_EMAIL =
+  'Confirm your email first: sign out, then sign in and follow the code we email you.';
 
+// An offer or a note, never a result: neither is announced on mount (Task 4 review, item 1).
 export function ClaimCard({ kind, email, total, onAdd, onDismiss }: Props) {
   if (kind === 'confirmEmail') {
     return (
@@ -42,8 +46,9 @@ export function ClaimCard({ kind, email, total, onAdd, onDismiss }: Props) {
         tone="info"
         testID="claim-card"
         title={TITLE}
-        message="To add bookings you made as a guest, confirm your email first."
+        message={CONFIRM_EMAIL}
         onDismiss={onDismiss}
+        announceOnMount={false}
       />
     );
   }
@@ -55,6 +60,7 @@ export function ClaimCard({ kind, email, total, onAdd, onDismiss }: Props) {
       message={`${bookingsWord(total)} made with ${maskEmail(email)} can be added to your account.`}
       action={{ label: total === 1 ? 'Add it' : 'Add them', onPress: onAdd }}
       onDismiss={onDismiss}
+      announceOnMount={false}
     />
   );
 }

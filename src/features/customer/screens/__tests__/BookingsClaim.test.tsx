@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import { AccessibilityInfo, Platform } from 'react-native';
 
 import { claim, claimCounts, sendClaimCode } from '@/features/customer/api/claimApi';
 import { fromEvent, splitBookings } from '@/features/customer/domain/myBookings';
@@ -89,6 +90,14 @@ async function toCodeStep() {
 }
 
 describe('the card', () => {
+  it('is an offer, not a result: not announced when Bookings loads (Task 4 review)', async () => {
+    jest.replaceProperty(Platform, 'OS', 'ios');
+    const spy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockClear();
+    await show();
+    await screen.findByRole('button', { name: 'Add them' });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
   it('offers the guest bookings with the masked email, and can be dismissed', async () => {
     await show();
     expect(
@@ -126,7 +135,9 @@ describe('the card', () => {
     countsMock.mockResolvedValue(err({ kind: 'forbidden', code: 'email_unverified' }));
     await show();
     expect(
-      await screen.findByText('To add bookings you made as a guest, confirm your email first.'),
+      await screen.findByText(
+        'Confirm your email first: sign out, then sign in and follow the code we email you.',
+      ),
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Add them' })).toBeNull();
   });
@@ -175,24 +186,68 @@ describe('the sheet', () => {
     sendMock.mockResolvedValue(err({ kind: 'rateLimited', retryAfterSec: 120 }));
     const sheet = await openSheet();
     await fireEvent.press(within(sheet).getByRole('button', { name: 'Send code' }));
-    expect(
-      await within(sheet).findByText('Too many tries. You can try again in 2:00.'),
-    ).toBeTruthy();
+    // U1: the banner keeps a fixed line; the seconds tick in plain, non-live text beside it.
+    expect(await within(sheet).findByText('Too many tries.')).toBeTruthy();
+    const wait = within(sheet).getByTestId('claim-wait');
+    expect(wait).toHaveTextContent('You can try again in 2:00');
+    expect(wait.props.accessibilityLiveRegion).toBeUndefined();
     const button = within(sheet).getByRole('button', { name: 'Send code in 2:00' });
     expect(button.props.accessibilityState).toMatchObject({ disabled: true });
     await act(() => {
       jest.advanceTimersByTime(60_000);
     });
-    expect(within(sheet).getByText('Too many tries. You can try again in 1:00.')).toBeTruthy();
+    expect(within(sheet).getByTestId('claim-wait')).toHaveTextContent('You can try again in 1:00');
+    expect(within(sheet).getByText('Too many tries.')).toBeTruthy();
+  });
+
+  it('reopened after a rate-limited send, the wait carries on (no second request)', async () => {
+    sendMock.mockResolvedValue(err({ kind: 'rateLimited', retryAfterSec: 120 }));
+    const sheet = await openSheet();
+    await fireEvent.press(within(sheet).getByRole('button', { name: 'Send code' }));
+    await within(sheet).findByText('Too many tries.');
+    await fireEvent.press(within(sheet).getByRole('button', { name: 'Close' }));
+    await act(() => {
+      jest.advanceTimersByTime(30_000);
+    });
+    await fireEvent.press(screen.getByRole('button', { name: 'Add them' }));
+    const again = screen.getByTestId('claim-sheet');
+    await act(() => {
+      jest.advanceTimersByTime(1_000);
+    });
+    const button = within(again).getByRole('button', { name: 'Send code in 1:29' });
+    expect(button.props.accessibilityState).toMatchObject({ disabled: true });
+    expect(sendMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('a lost verify answer, then nothing left to claim: "Added your bookings" (security S2)', async () => {
+    claimMock.mockResolvedValueOnce(err({ kind: 'timeout' }));
+    const sheet = await toCodeStep();
+    countsMock.mockResolvedValue(ok({ events: 0, hotels: 0, apartments: 0, total: 0 }));
+    await fireEvent.changeText(within(sheet).getByTestId('claim-code'), '123456');
+    expect(await within(sheet).findByText('Added your bookings')).toBeTruthy();
+    expect(screen.queryByText('That code is wrong or has expired')).toBeNull();
+  });
+
+  it('a lost verify answer with bookings still to claim, then the same code: still checked first', async () => {
+    claimMock
+      .mockResolvedValueOnce(err({ kind: 'timeout' }))
+      .mockResolvedValueOnce(err({ kind: 'forbidden', code: 'invalid_code' }));
+    const sheet = await toCodeStep();
+    await fireEvent.changeText(within(sheet).getByTestId('claim-code'), '123456');
+    expect(await within(sheet).findByText('Something went wrong. Try again.')).toBeTruthy();
+    // Meanwhile the first claim landed: the server now has nothing left for this account.
+    countsMock.mockResolvedValue(ok({ events: 0, hotels: 0, apartments: 0, total: 0 }));
+    await fireEvent.press(within(sheet).getByRole('button', { name: 'Add bookings' }));
+    expect(await within(sheet).findByText('Added your bookings')).toBeTruthy();
+    expect(screen.queryByText('That code is wrong or has expired')).toBeNull();
   });
 
   it('a rate-limited verify keeps the code and counts down', async () => {
     claimMock.mockResolvedValue(err({ kind: 'rateLimited', retryAfterSec: 90 }));
     const sheet = await toCodeStep();
     await fireEvent.changeText(within(sheet).getByTestId('claim-code'), '123456');
-    expect(
-      await within(sheet).findByText('Too many tries. You can try again in 1:30.'),
-    ).toBeTruthy();
+    expect(await within(sheet).findByText('Too many tries.')).toBeTruthy();
+    expect(within(sheet).getByTestId('claim-wait')).toHaveTextContent('You can try again in 1:30');
     expect(within(sheet).getByTestId('claim-code').props.value).toBe('123456');
   });
 

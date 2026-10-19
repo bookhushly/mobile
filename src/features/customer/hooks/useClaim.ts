@@ -27,7 +27,8 @@ export type ClaimState =
   /** `resendAt`: phone-clock ms from which "Send a new code" is offered. */
   | { kind: 'codeSent'; resendAt: number }
   | { kind: 'verifying' }
-  | { kind: 'done'; total: number }
+  /** `total`: null when an earlier verify landed unseen (the counts went to 0, security S2). */
+  | { kind: 'done'; total: number | null }
   /**
    * `step`: which call failed. A failed verify keeps the code step (wrong code, rate limit);
    * `resendAt` is carried so its timer keeps running.
@@ -53,6 +54,11 @@ export function useClaim(userId: string): {
   /** The counts check failed (transient, signed out…): the card hides quietly (Task 4). */
   countsError: boolean;
   state: ClaimState;
+  /**
+   * Phone-clock ms from which a new code can be asked for, kept across closing the sheet (a
+   * rate-limited send seeds the countdown when it is reopened). null: no wait.
+   */
+  resendAt: number | null;
   send: () => Promise<void>;
   verify: (code: string) => Promise<void>;
   /** Close the sheet: back to idle (ignored while a call runs). */
@@ -71,6 +77,26 @@ export function useClaim(userId: string): {
   const [state, setState] = useState<ClaimState>({ kind: 'idle' });
   const busy = useRef(false);
   const resendAt = useRef<number | null>(null);
+  const [resendAtSeen, setResendAtSeen] = useState<number | null>(null);
+  // A verify whose answer was lost may have claimed (security S2): a later "wrong code" is then
+  // checked against the counts before it is shown.
+  const verifyUnsure = useRef(false);
+
+  // After a lost verify answer: the list and the counts reload; nothing left to claim means the
+  // claim landed.
+  const claimedUnseen = useCallback(async (): Promise<boolean> => {
+    void qc.invalidateQueries({ queryKey: customerKeys.bookings(userId) });
+    try {
+      const a = await qc.query({
+        queryKey: customerKeys.claimCounts(userId),
+        queryFn: loadCounts,
+        staleTime: 0,
+      });
+      return 'counts' in a && a.counts.total === 0;
+    } catch {
+      return false;
+    }
+  }, [qc, userId]);
 
   const send = useCallback(async () => {
     if (busy.current) return;
@@ -80,10 +106,12 @@ export function useClaim(userId: string): {
       const o = claimOutcome(await sendClaimCode(api));
       if (o.kind === 'done') {
         resendAt.current = Date.now() + CLAIM_RESEND_SEC * 1000;
+        setResendAtSeen(resendAt.current);
         setState({ kind: 'codeSent', resendAt: resendAt.current });
       } else {
         if (o.kind === 'rateLimited') {
           resendAt.current = Date.now() + (o.retryAfterSec ?? CLAIM_RESEND_SEC) * 1000;
+          setResendAtSeen(resendAt.current);
         }
         setState({ kind: 'error', step: 'send', outcome: o, resendAt: resendAt.current });
       }
@@ -108,14 +136,28 @@ export function useClaim(userId: string): {
         const o = claimOutcome(await claim(api, code));
         if (o.kind === 'done') {
           resendAt.current = null;
+          setResendAtSeen(null);
+          verifyUnsure.current = false;
           setState({ kind: 'done', total: o.value.claimed.total });
           // The claimed bookings now read under RLS: the list (and so the wallet) reloads.
           void qc.invalidateQueries({ queryKey: customerKeys.bookings(userId) });
           void qc.invalidateQueries({ queryKey: customerKeys.claimCounts(userId) });
         } else {
-          setState({ kind: 'error', step: 'verify', outcome: o, resendAt: resendAt.current });
+          const unsure = o.kind === 'uncertain';
+          const wrongAfterUnsure =
+            verifyUnsure.current && o.kind === 'refused' && o.reason === 'invalidCode';
+          if (unsure) verifyUnsure.current = true;
+          if ((unsure || wrongAfterUnsure) && (await claimedUnseen())) {
+            verifyUnsure.current = false;
+            resendAt.current = null;
+            setResendAtSeen(null);
+            setState({ kind: 'done', total: null });
+          } else {
+            setState({ kind: 'error', step: 'verify', outcome: o, resendAt: resendAt.current });
+          }
         }
       } catch {
+        verifyUnsure.current = true;
         setState({
           kind: 'error',
           step: 'verify',
@@ -126,7 +168,7 @@ export function useClaim(userId: string): {
         busy.current = false;
       }
     },
-    [qc, userId],
+    [qc, userId, claimedUnseen],
   );
 
   const reset = useCallback(() => {
@@ -140,6 +182,7 @@ export function useClaim(userId: string): {
     blocked: answer !== undefined && 'blocked' in answer ? answer.blocked : null,
     countsError: q.isError && answer === undefined,
     state,
+    resendAt: resendAtSeen,
     send,
     verify,
     reset,

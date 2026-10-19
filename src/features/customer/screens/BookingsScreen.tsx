@@ -220,6 +220,7 @@ export function BookingsScreen({
         visible={claiming}
         email={email}
         state={claim.state}
+        resendAt={claim.resendAt}
         onSend={claim.send}
         onVerify={claim.verify}
         onClose={() => {
