@@ -3,10 +3,13 @@ import { useState, type ReactNode } from 'react';
 import { FlatList, RefreshControl, View } from 'react-native';
 
 import type { BookingKind, MyBooking } from '@/features/customer/domain/myBookings';
+import { useClaim } from '@/features/customer/hooks/useClaim';
 import { useMyBookings } from '@/features/customer/hooks/useMyBookings';
 import { useUnreadCount } from '@/features/customer/hooks/useUnreadCount';
 import { BellButton } from '@/features/customer/ui/BellButton';
 import { BookingRow } from '@/features/customer/ui/BookingRow';
+import { ClaimCard, claimCardKind } from '@/features/customer/ui/ClaimCard';
+import { ClaimSheet } from '@/features/customer/ui/ClaimSheet';
 import { mainAction } from '@/features/customer/ui/mainAction';
 import { savedAtLabel } from '@/features/customer/ui/savedAt';
 import { TodayCard } from '@/features/customer/ui/TodayCard';
@@ -21,13 +24,14 @@ import {
   Screen,
   SegmentedControl,
   SkeletonRows,
-  Text,
 } from '@/shared/ui';
 
 type Segment = 'upcoming' | 'past';
 
 type Props = {
   userId: string;
+  /** The account email, shown masked on the guest bookings card and sheet. */
+  email: string;
   onOpenBooking: (kind: BookingKind, id: string) => void;
   onShowTickets: (bookingId: string) => void;
   onShowCheckInCode: (bookingId: string) => void;
@@ -36,12 +40,10 @@ type Props = {
   onBrowse: () => void;
 };
 
-const GUEST_LINE =
-  'Booked as a guest before you had an account? Those bookings can’t be shown in the app yet.';
-
 // Spec §3 Bookings, C3, C16, C17.
 export function BookingsScreen({
   userId,
+  email,
   onOpenBooking,
   onShowTickets,
   onShowCheckInCode,
@@ -52,6 +54,30 @@ export function BookingsScreen({
   const unread = useUnreadCount(userId);
   const [segment, setSegment] = useState<Segment>('upcoming');
   const [refreshing, setRefreshing] = useState(false);
+  // Spec E4: the guest bookings card, dismissible for the session; one sheet for the flow.
+  const claim = useClaim(userId);
+  const [claimDismissed, setClaimDismissed] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+  const cardKind = claimCardKind(claim.counts, claim.blocked);
+  const openClaim = () => {
+    setClaiming(true);
+  };
+  const claimCard = (dismissible: boolean) =>
+    cardKind === null ? null : (
+      <ClaimCard
+        kind={cardKind}
+        email={email}
+        total={claim.counts?.total ?? 0}
+        onAdd={openClaim}
+        onDismiss={
+          dismissible
+            ? () => {
+                setClaimDismissed(true);
+              }
+            : undefined
+        }
+      />
+    );
 
   const refresh = () => {
     setRefreshing(true);
@@ -94,6 +120,7 @@ export function BookingsScreen({
             message={`Showing saved bookings — last updated ${savedAtLabel(my.saved.savedAt, clock.serverNow())}. Pull to refresh.`}
           />
         ) : null}
+        {nothing || claimDismissed ? null : claimCard(true)}
         {lists.today.map((b, i) => (
           <TodayCard
             key={`${b.kind}:${b.id}`}
@@ -133,9 +160,8 @@ export function BookingsScreen({
             message="Bookings you make while signed in with this email show up here."
             action={{ label: 'Browse', onPress: onBrowse }}
           />
-          <Text variant="bodySm" tone="textSecondary" align="center">
-            {GUEST_LINE}
-          </Text>
+          {/* StubHub's "don't see your orders?": the empty list offers the same path. */}
+          {claimCard(false)}
         </View>
       );
     else if (segment === 'past')
@@ -179,6 +205,17 @@ export function BookingsScreen({
       }
     >
       {body}
+      <ClaimSheet
+        visible={claiming}
+        email={email}
+        state={claim.state}
+        onSend={claim.send}
+        onVerify={claim.verify}
+        onClose={() => {
+          claim.reset();
+          setClaiming(false);
+        }}
+      />
     </Screen>
   );
 }

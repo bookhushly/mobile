@@ -20,6 +20,19 @@ import { ap, ev, ho, TODAY } from '../../hooks/__tests__/customerTestUtils';
 // Factories, not automocks: an automock loads the real module (supabase → native storage).
 jest.mock('@/features/customer/hooks/useMyBookings', () => ({ useMyBookings: jest.fn() }));
 jest.mock('@/features/customer/hooks/useUnreadCount', () => ({ useUnreadCount: jest.fn() }));
+// The guest bookings card has its own test (BookingsClaim.test.tsx): here nothing is claimable.
+jest.mock('@/features/customer/hooks/useClaim', () => ({
+  CLAIM_RESEND_SEC: 60,
+  useClaim: () => ({
+    counts: { events: 0, hotels: 0, apartments: 0, total: 0 },
+    blocked: null,
+    countsError: false,
+    state: { kind: 'idle' },
+    send: jest.fn(),
+    verify: jest.fn(),
+    reset: jest.fn(),
+  }),
+}));
 jest.mock('@/shared/api/instance', () => ({ clock: { serverNow: () => mockNow } }));
 jest.mock('expo-web-browser', () => ({
   openBrowserAsync: jest.fn(() => Promise.resolve({ type: 'opened' })),
@@ -81,6 +94,7 @@ const unpaidToday = ap({
 type Props = ComponentProps<typeof BookingsScreen>;
 function handlers(): Omit<Props, 'userId'> {
   return {
+    email: 'ada@example.com',
     onOpenBooking: jest.fn(),
     onShowTickets: jest.fn(),
     onShowCheckInCode: jest.fn(),
@@ -186,7 +200,8 @@ it('with no bookings at all, explains and offers Explore in the app (F3)', async
   expect(
     screen.getByText('Bookings you make while signed in with this email show up here.'),
   ).toBeTruthy();
-  expect(screen.getByText(/^Booked as a guest before you had an account\?/)).toBeTruthy();
+  // Nothing to claim: no guest bookings card.
+  expect(screen.queryByTestId('claim-card')).toBeNull();
   expect(screen.queryByRole('tab')).toBeNull();
   await fireEvent.press(screen.getByRole('button', { name: 'Browse' }));
   expect(h.onBrowse).toHaveBeenCalled();

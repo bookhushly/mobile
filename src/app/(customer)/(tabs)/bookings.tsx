@@ -6,9 +6,11 @@ import { BookingsScreen } from '@/features/customer/screens/BookingsScreen';
 export default function BookingsRoute() {
   const state = useAuth((s) => s.state);
   const userId = state.status === 'signedIn' ? state.userId : '';
+  const email = state.status === 'signedIn' ? state.email : '';
   return (
     <BookingsScreen
       userId={userId}
+      email={email}
       onOpenBooking={(kind, id) => {
         router.push({ pathname: '/my-booking/[kind]/[id]', params: { kind, id } });
       }}
