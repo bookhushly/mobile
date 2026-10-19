@@ -75,6 +75,8 @@ function outcome<T>(r: Result<T, ApiError>, status: ByStatus): ActionOutcome<T> 
     case 'conflict':
       return refused(byCode(e.code) ?? status.conflict);
     case 'unknown':
+      // 408 / 425: the request may still have run (final review minor 4).
+      if (e.status === 408 || e.status === 425) return { kind: 'uncertain' };
       if (e.status !== undefined && e.status >= 400 && e.status < 500) {
         return refused(byCode(e.code) ?? status.badRequest);
       }

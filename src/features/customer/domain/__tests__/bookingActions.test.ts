@@ -282,6 +282,32 @@ describe('bookingActions: hotels', () => {
       expect(bookingActions(row, 'hotel', TODAY, NOW)).toEqual(['review']);
     });
 
+    it('completed (K4) is reviewable, whatever the dates, and never cancellable', () => {
+      const row = ho({
+        check_in_date: '2026-10-20',
+        check_out_date: '2026-10-22',
+        booking_status: 'completed',
+      });
+      expect(bookingActions(row, 'hotel', TODAY, NOW)).toEqual(['review']);
+      const apt = ap({
+        check_in_date: '2026-10-20',
+        check_out_date: '2026-10-22',
+        booking_status: 'completed',
+        apartment: {
+          id: 'ap1',
+          name: 'Lekki loft',
+          city: 'Lagos',
+          state: 'Lagos',
+          area: 'Lekki',
+          address: null,
+          image_urls: [],
+          check_in_time: null,
+          check_out_time: null,
+        },
+      });
+      expect(bookingActions(apt, 'apartment', TODAY, NOW)).toEqual(['review']);
+    });
+
     it('check-out today is reviewable', () => {
       const row = ho({ check_in_date: '2026-10-17', check_out_date: '2026-10-19' });
       expect(bookingActions(row, 'hotel', TODAY, NOW)).toEqual(['review']);

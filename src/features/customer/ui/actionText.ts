@@ -61,7 +61,8 @@ export function cancelNotice<T>(o: Exclude<ActionOutcome<T>, { kind: 'done' }>):
       return danger('This event has already started, so it can’t be cancelled.');
     if (r === 'checkInPassed')
       return danger('Check-in has passed, so this booking can’t be cancelled.');
-    if (r === 'bookingChanged') return warning('This booking changed — pull to refresh.');
+    if (r === 'bookingChanged')
+      return warning('This booking changed — go back and pull to refresh.');
     if (r === 'forbidden' || r === 'notFound') return danger(NOT_YOURS);
     return danger('This booking can’t be cancelled now.');
   });
@@ -81,7 +82,7 @@ export function transferNotice<T>(o: Exclude<ActionOutcome<T>, { kind: 'done' }>
   return notice(o, TRANSFER_UNSURE, (r) => {
     if (r === 'forbidden' || r === 'notFound') return danger(NOT_YOURS);
     if (r === 'invalid') return danger('Check the email address and try again.');
-    return danger('These tickets can’t be transferred.');
+    return danger('These tickets can’t be sent to that address right now.');
   });
 }
 

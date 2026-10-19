@@ -151,7 +151,7 @@ describe('Transfer sheet', () => {
     const r = await showActions({ kind: 'event', row: ev() });
     await toReview('bola@example.com');
     await fireEvent.press(sheet().getByRole('button', { name: 'Transfer tickets' }));
-    expect(await screen.findByText('These tickets can’t be transferred.')).toBeTruthy();
+    expect(await screen.findByText('These tickets can’t be sent to that address right now.')).toBeTruthy();
     expect(r.onTransferred).not.toHaveBeenCalled();
     await r.unmount();
   });

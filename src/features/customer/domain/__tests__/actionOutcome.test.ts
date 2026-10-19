@@ -43,6 +43,8 @@ describe('shared answers', () => {
     { kind: 'unavailable', status: 503, code: 'fetch_failed' },
     { kind: 'unavailable', status: 500 },
     { kind: 'unknown' },
+    { kind: 'unknown', status: 408 },
+    { kind: 'unknown', status: 425 },
   ])('transient or unreadable answers are uncertain, never a refusal: %p', (e) => {
     for (const f of all) expect(f(err(e))).toEqual({ kind: 'uncertain' });
   });

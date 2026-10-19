@@ -65,10 +65,11 @@ type StayReview = {
   hasListing: boolean;
 };
 
-// Web `bookingQualifies` for stays: checked out, or confirmed / checked in with check-out ≤ today.
+// Web `bookingQualifies` for stays: checked out or completed (contract review K4), or confirmed /
+// checked in with check-out ≤ today.
 function stayReviewable(s: StayReview, today: IsoDate): boolean {
   if (!s.paid || !s.hasListing) return false;
-  if (s.status === 'checked_out') return true;
+  if (s.status === 'checked_out' || s.status === 'completed') return true;
   if (s.status === 'confirmed' || s.status === 'checked_in') {
     return daysBetween(s.checkOut, today) >= 0;
   }
@@ -91,6 +92,7 @@ function hotelActions(row: HotelBookingRow, today: IsoDate): BookingAction[] {
     row.booking_status === 'cancelled' ||
     row.booking_status === 'checked_in' ||
     row.booking_status === 'checked_out' ||
+    row.booking_status === 'completed' ||
     row.checked_in === true ||
     row.checked_in_at !== null;
   if (!closed && daysBetween(today, row.check_in_date) > 0) out.push('cancel');
@@ -118,6 +120,7 @@ function apartmentActions(row: ApartmentBookingRow, today: IsoDate): BookingActi
     row.booking_status === 'cancelled' ||
     row.booking_status === 'checked_in' ||
     row.booking_status === 'checked_out' ||
+    row.booking_status === 'completed' ||
     row.booking_status === 'no_show' ||
     row.checked_in_at !== null;
   if (!closed && daysBetween(today, row.check_in_date) > 0) out.push('cancel');

@@ -256,7 +256,7 @@ export function fromHotel(row: HotelBookingRow, today: IsoDate): MyBooking {
       terminal:
         st === 'cancelled'
           ? 'Cancelled'
-          : st === 'checked_out'
+          : st === 'checked_out' || st === 'completed'
             ? 'Checked out'
             : row.payment_status === 'refunded'
               ? 'Refunded'
@@ -289,7 +289,7 @@ export function fromApartment(row: ApartmentBookingRow, today: IsoDate): MyBooki
           ? 'Cancelled'
           : st === 'no_show'
             ? 'No-show'
-            : st === 'checked_out'
+            : st === 'checked_out' || st === 'completed'
               ? 'Checked out'
               : refunded
                 ? 'Refunded'

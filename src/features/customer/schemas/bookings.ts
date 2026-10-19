@@ -90,7 +90,11 @@ export const hotelBookingRow = z.object({
   children: z.number().int().nullable(),
   payment_status: z.enum(['pending', 'completed', 'refunded', 'failed']).nullable(),
   total_amount: money,
-  booking_status: z.enum(['confirmed', 'checked_in', 'checked_out', 'cancelled']).nullable(),
+  // `completed` is not in the table's check constraint today, but the web review rule accepts it
+  // (contract review K4): read it rather than fail the row.
+  booking_status: z
+    .enum(['confirmed', 'checked_in', 'checked_out', 'completed', 'cancelled'])
+    .nullable(),
   checked_in: z.boolean().nullable(),
   checked_in_at: z.string().nullable(),
   checked_out_at: z.string().nullable(),
@@ -125,7 +129,15 @@ export const apartmentBookingRow = z.object({
     .nullable(),
   total_amount: money,
   booking_status: z
-    .enum(['pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled', 'no_show'])
+    .enum([
+      'pending',
+      'confirmed',
+      'checked_in',
+      'checked_out',
+      'completed',
+      'cancelled',
+      'no_show',
+    ])
     .nullable(),
   checked_in_at: z.string().nullable(),
   checked_out_at: z.string().nullable(),
