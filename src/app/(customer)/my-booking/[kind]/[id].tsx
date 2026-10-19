@@ -8,9 +8,11 @@ export default function MyBookingRoute() {
   const params = useLocalSearchParams<{ kind: string; id: string }>();
   const state = useAuth((s) => s.state);
   const userId = state.status === 'signedIn' ? state.userId : '';
+  const email = state.status === 'signedIn' ? state.email : '';
   return (
     <BookingScreen
       userId={userId}
+      email={email}
       // Anything but a booking kind and a UUID is "isn't on your account", without a query.
       booking={bookingRefParams(params.kind, params.id)}
       onBack={() => {
@@ -22,6 +24,10 @@ export default function MyBookingRoute() {
       }}
       onShowCheckInCode={(bookingId) => {
         router.push({ pathname: '/check-in-code/[bookingId]', params: { bookingId } });
+      }}
+      onTransferred={() => {
+        // Spec E7: the booking is no longer this user's; Bookings says where the tickets went.
+        router.dismissTo('/bookings');
       }}
     />
   );

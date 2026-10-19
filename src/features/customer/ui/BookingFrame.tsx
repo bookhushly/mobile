@@ -18,12 +18,22 @@ type Props = {
   notice?: ReactNode;
   /** The primary action, pinned in the thumb zone. */
   footer?: ReactNode;
+  /** The Manage booking section (spec E9), under the details. */
+  manage?: ReactNode;
   children?: ReactNode;
 };
 
 // C12 shell shared by every kind: back, title (or the kind word, C4), status, the pending-payment
-// banner (C5), the body rows, and the "change or cancel on the web" line.
-export function BookingFrame({ booking: b, onBack, onRefresh, notice, footer, children }: Props) {
+// banner (C5), the body rows, and the Manage booking section (spec E9).
+export function BookingFrame({
+  booking: b,
+  onBack,
+  onRefresh,
+  notice,
+  footer,
+  manage,
+  children,
+}: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const refresh =
     onRefresh === undefined
@@ -77,11 +87,7 @@ export function BookingFrame({ booking: b, onBack, onRefresh, notice, footer, ch
       ) : null}
       {notice}
       {children}
-      {b !== undefined ? (
-        <Text variant="bodySm" tone="textSecondary">
-          To change or cancel, use bookhushly.com
-        </Text>
-      ) : null}
+      {manage}
     </Screen>
   );
 }

@@ -5,6 +5,7 @@ import { FlatList, RefreshControl, View } from 'react-native';
 import type { BookingKind, MyBooking } from '@/features/customer/domain/myBookings';
 import { useClaim } from '@/features/customer/hooks/useClaim';
 import { useMyBookings } from '@/features/customer/hooks/useMyBookings';
+import { useSentNotice } from '@/features/customer/hooks/sentNotice';
 import { useUnreadCount } from '@/features/customer/hooks/useUnreadCount';
 import { BellButton } from '@/features/customer/ui/BellButton';
 import { BookingRow } from '@/features/customer/ui/BookingRow';
@@ -52,6 +53,8 @@ export function BookingsScreen({
 }: Props) {
   const my = useMyBookings(userId);
   const unread = useUnreadCount(userId);
+  // Spec E7: where the tickets of a transfer just made went (the booking has left the list).
+  const sent = useSentNotice();
   const [segment, setSegment] = useState<Segment>('upcoming');
   const [refreshing, setRefreshing] = useState(false);
   // Spec E4: the guest bookings card, dismissible for the session; one sheet for the flow.
@@ -118,6 +121,14 @@ export function BookingsScreen({
           <Banner
             tone="neutral"
             message={`Showing saved bookings — last updated ${savedAtLabel(my.saved.savedAt, clock.serverNow())}. Pull to refresh.`}
+          />
+        ) : null}
+        {sent.message !== null ? (
+          <Banner
+            tone="success"
+            message={sent.message}
+            onDismiss={sent.dismiss}
+            testID="sent-notice"
           />
         ) : null}
         {nothing || claimDismissed ? null : claimCard(true)}

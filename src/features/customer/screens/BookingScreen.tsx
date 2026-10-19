@@ -5,6 +5,8 @@ import type { BookingKind } from '@/features/customer/domain/myBookings';
 import { useBooking } from '@/features/customer/hooks/useBooking';
 import { NoticeScreen } from '@/features/customer/screens/NoticeScreen';
 import { ApartmentDetails } from '@/features/customer/ui/ApartmentDetails';
+import type { ActionTarget } from '@/features/customer/ui/actionTarget';
+import { BookingActions } from '@/features/customer/ui/BookingActions';
 import { BookingFrame } from '@/features/customer/ui/BookingFrame';
 import { EventDetails } from '@/features/customer/ui/EventDetails';
 import { HotelDetails } from '@/features/customer/ui/HotelDetails';
@@ -15,9 +17,13 @@ type Handlers = {
   onBack: () => void;
   onShowTickets: (bookingId: string) => void;
   onShowCheckInCode: (bookingId: string) => void;
+  /** After a transfer: back to Bookings (the booking is no longer this user's). */
+  onTransferred: () => void;
 };
 type Props = Handlers & {
   userId: string;
+  /** The session email (a transfer never goes to it). */
+  email: string;
   /** null: the route params weren't a booking kind and UUID. */
   booking: { kind: BookingKind; id: string } | null;
 };
@@ -68,7 +74,22 @@ function settle<R>(b: Loaded<R>, h: Handlers, details: (row: R) => ReactNode): R
   );
 }
 
-function EventBooking({ userId, id, ...h }: Handlers & { userId: string; id: string }) {
+type One = Handlers & { userId: string; email: string; id: string };
+
+function manage(p: One, target: ActionTarget, today: string): ReactNode {
+  return (
+    <BookingActions
+      userId={p.userId}
+      email={p.email}
+      target={target}
+      today={today}
+      onTransferred={p.onTransferred}
+    />
+  );
+}
+
+function EventBooking(p: One) {
+  const { userId, id, ...h } = p;
   const b = useBooking(userId, 'event', id);
   return settle(b, h, (row) => (
     <EventDetails
@@ -77,11 +98,13 @@ function EventBooking({ userId, id, ...h }: Handlers & { userId: string; id: str
       onBack={h.onBack}
       onRefresh={b.refetch}
       onShowTickets={h.onShowTickets}
+      manage={manage(p, { kind: 'event', row }, b.today)}
     />
   ));
 }
 
-function HotelBooking({ userId, id, ...h }: Handlers & { userId: string; id: string }) {
+function HotelBooking(p: One) {
+  const { userId, id, ...h } = p;
   const b = useBooking(userId, 'hotel', id);
   return settle(b, h, (row) => (
     <HotelDetails
@@ -90,26 +113,36 @@ function HotelBooking({ userId, id, ...h }: Handlers & { userId: string; id: str
       onBack={h.onBack}
       onRefresh={b.refetch}
       onShowCheckInCode={h.onShowCheckInCode}
+      manage={manage(p, { kind: 'hotel', row }, b.today)}
     />
   ));
 }
 
-function ApartmentBooking({ userId, id, ...h }: Handlers & { userId: string; id: string }) {
+function ApartmentBooking(p: One) {
+  const { userId, id, ...h } = p;
   const b = useBooking(userId, 'apartment', id);
   return settle(b, h, (row) => (
-    <ApartmentDetails row={row} today={b.today} onBack={h.onBack} onRefresh={b.refetch} />
+    <ApartmentDetails
+      row={row}
+      today={b.today}
+      onBack={h.onBack}
+      onRefresh={b.refetch}
+      manage={manage(p, { kind: 'apartment', row }, b.today)}
+    />
   ));
 }
 
 // C12: one booking's details, per kind.
-export function BookingScreen({ userId, booking, ...h }: Props) {
+export function BookingScreen({ userId, email, booking, ...h }: Props) {
   if (booking === null) return <NotYours onBack={h.onBack} />;
   switch (booking.kind) {
     case 'event':
-      return <EventBooking key={booking.id} userId={userId} id={booking.id} {...h} />;
+      return <EventBooking key={booking.id} userId={userId} email={email} id={booking.id} {...h} />;
     case 'hotel':
-      return <HotelBooking key={booking.id} userId={userId} id={booking.id} {...h} />;
+      return <HotelBooking key={booking.id} userId={userId} email={email} id={booking.id} {...h} />;
     case 'apartment':
-      return <ApartmentBooking key={booking.id} userId={userId} id={booking.id} {...h} />;
+      return (
+        <ApartmentBooking key={booking.id} userId={userId} email={email} id={booking.id} {...h} />
+      );
   }
 }
