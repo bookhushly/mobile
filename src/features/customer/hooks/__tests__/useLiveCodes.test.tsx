@@ -55,6 +55,7 @@ let onAppState: ((s: AppStateStatus) => void) | null = null;
 beforeEach(() => {
   jest.useFakeTimers({ now: Date.parse('2026-10-13T18:00:00Z') });
   jest.clearAllMocks();
+  fetchCodes.mockReset();
   onAppState = null;
   AppState.currentState = 'active';
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, handler) => {
@@ -87,7 +88,7 @@ it('one fetch per booking, each ticket read from it, refreshed 2 s before expiry
   fetchCodes.mockImplementationOnce(live('A1', 'A2')).mockImplementationOnce(live('B1', 'B2'));
   const { result, unmount } = await run();
   expect(fetchCodes).toHaveBeenCalledTimes(1);
-  expect(fetchCodes).toHaveBeenCalledWith({}, 'e1');
+  expect(fetchCodes).toHaveBeenCalledWith({}, 'e1', expect.any(AbortSignal));
   expect(result.current.perTicket).toBe(false);
   expect(result.current.stateOf('t1')).toMatchObject({ kind: 'live', token: 'A1' });
   expect(result.current.stateOf('t2')).toMatchObject({ kind: 'live', token: 'A2' });
@@ -241,5 +242,25 @@ it('Try again fetches now', async () => {
   await advance(0);
   expect(fetchCodes).toHaveBeenCalledTimes(2);
   expect(result.current.stateOf('t1')).toMatchObject({ kind: 'live', token: 'A1' });
+  await unmount();
+});
+
+it('Try again while a request is in flight aborts it; closing aborts it too', async () => {
+  const signals: AbortSignal[] = [];
+  fetchCodes.mockImplementation((_c, _id, signal) => {
+    if (signal) signals.push(signal);
+    return new Promise(() => undefined);
+  });
+  const { result, rerender, unmount } = await run();
+  expect(signals).toHaveLength(1);
+  await act(() => {
+    result.current.retry();
+  });
+  await advance(0);
+  expect(signals).toHaveLength(2);
+  expect(signals[0]?.aborted).toBe(true);
+  expect(signals[1]?.aborted).toBe(false);
+  await rerender({ id: 'e1', on: false });
+  expect(signals[1]?.aborted).toBe(true);
   await unmount();
 });

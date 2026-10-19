@@ -72,6 +72,9 @@ export function useLiveCodes(bookingId: string | null, active: boolean): LiveCod
     if (!active || bookingId === null || perTicketFor.current === bookingId) return;
     const id = bookingId;
     let live = true;
+    // Review 3, finding 5: a retry or a close aborts the request in flight, so a double tap on
+    // "Try again" never spends a second request of the ticket-tier budget.
+    const inFlight = new AbortController();
     let fetching = false;
     let pollTimer: ReturnType<typeof setTimeout> | null = null;
     let expiryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -127,7 +130,7 @@ export function useLiveCodes(bookingId: string | null, active: boolean): LiveCod
     function run(): void {
       pollTimer = null;
       fetching = true;
-      void fetchEventCodes(api, id).then((r) => {
+      void fetchEventCodes(api, id, inFlight.signal).then((r) => {
         fetching = false;
         let answer: Result<EventCodes, ApiError>;
         if (!r.ok) answer = r;
@@ -200,6 +203,7 @@ export function useLiveCodes(bookingId: string | null, active: boolean): LiveCod
     });
     return () => {
       live = false;
+      inFlight.abort();
       clearTimers();
       sub.remove();
     };
