@@ -5,6 +5,8 @@ import { ActionDone } from '@/features/customer/ui/ActionDone';
 import { reasonError } from '@/features/customer/ui/actionInput';
 import { REFUND_ALREADY, refundNotice } from '@/features/customer/ui/actionText';
 import { BookingSummary } from '@/features/customer/ui/BookingSummary';
+import { CharCounter } from '@/features/customer/ui/CharCounter';
+import { RateLimitWait } from '@/features/customer/ui/RateLimitWait';
 import { REFUND_REASON_MAX } from '@/features/customer/schemas/actions';
 import { Banner, Button, Input, Sheet, Stack, Text } from '@/shared/ui';
 
@@ -56,9 +58,6 @@ export function RefundSheet({ visible, title, when, state, onSend, onClose }: Pr
         : refundNotice(state);
     body = (
       <Stack gap="s4">
-        <Text variant="displaySm" accessibilityRole="header">
-          Ask for a refund
-        </Text>
         <BookingSummary title={title} when={when} />
         <Text variant="body" tone="textSecondary">
           The organiser reviews refund requests. We’ll notify you when they decide.
@@ -77,11 +76,12 @@ export function RefundSheet({ visible, title, when, state, onSend, onClose }: Pr
           error={error ?? undefined}
           testID="refund-reason"
         />
-        <Text variant="caption" tone="textSecondary" tabular accessibilityLiveRegion="polite">
-          {`${String(reason.length)} / ${String(REFUND_REASON_MAX)}`}
-        </Text>
+        <CharCounter length={reason.length} max={REFUND_REASON_MAX} />
         {notice !== null ? (
           <Banner tone={notice.tone} message={notice.message} testID="refund-notice" />
+        ) : null}
+        {state.kind === 'rateLimited' ? (
+          <RateLimitWait retryAfterSec={state.retryAfterSec} />
         ) : null}
       </Stack>
     );
@@ -96,7 +96,7 @@ export function RefundSheet({ visible, title, when, state, onSend, onClose }: Pr
   return (
     <Sheet
       visible={visible}
-      title="Refund"
+      title="Ask for a refund"
       onClose={close}
       closeDisabled={busy}
       footer={footer}

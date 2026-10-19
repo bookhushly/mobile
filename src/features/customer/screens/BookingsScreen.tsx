@@ -54,7 +54,7 @@ export function BookingsScreen({
   const my = useMyBookings(userId);
   const unread = useUnreadCount(userId);
   // Spec E7: where the tickets of a transfer just made went (the booking has left the list).
-  const sent = useSentNotice();
+  const sent = useSentNotice(userId);
   const [segment, setSegment] = useState<Segment>('upcoming');
   const [refreshing, setRefreshing] = useState(false);
   // Spec E4: the guest bookings card, dismissible for the session; one sheet for the flow.

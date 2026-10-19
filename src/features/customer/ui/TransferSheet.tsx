@@ -80,7 +80,10 @@ export function TransferSheet(p: Props) {
   } else if (unsure || sentTo !== null) {
     const notice: Notice | null = unsure
       ? { tone: 'neutral', message: TRANSFER_UNSURE }
-      : state.kind === 'refused' || state.kind === 'rateLimited' || state.kind === 'signedOut'
+      : state.kind === 'refused' ||
+          state.kind === 'rateLimited' ||
+          state.kind === 'signedOut' ||
+          state.kind === 'notDone'
         ? transferNotice(state)
         : null;
     body = (
@@ -91,6 +94,7 @@ export function TransferSheet(p: Props) {
         email={sentTo}
         checking={state.kind === 'checking'}
         notice={notice}
+        waitSec={state.kind === 'rateLimited' ? state.retryAfterSec : undefined}
       />
     );
     footer =
@@ -114,9 +118,6 @@ export function TransferSheet(p: Props) {
   } else {
     body = (
       <Stack gap="s4">
-        <Text variant="displaySm" accessibilityRole="header">
-          Who are you sending them to?
-        </Text>
         <Text variant="body" tone="textSecondary">
           They’ll get the tickets by email and see them in their Bookhushly account.
         </Text>

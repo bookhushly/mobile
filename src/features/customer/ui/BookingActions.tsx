@@ -2,8 +2,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 
-import type { ActionOutcome } from '@/features/customer/domain/actionOutcome';
 import type { BookingAction } from '@/features/customer/domain/bookingActions';
+import type { ActionResult } from '@/features/customer/hooks/actionState';
 import { customerKeys } from '@/features/customer/hooks/customerKeys';
 import { sentNotice } from '@/features/customer/hooks/sentNotice';
 import { unsettled } from '@/features/customer/hooks/unsettled';
@@ -24,6 +24,9 @@ import { TransferSheet } from '@/features/customer/ui/TransferSheet';
 import { clock } from '@/shared/api/instance';
 import type { IsoDate } from '@/shared/lib/lagosDay';
 import { maskEmail } from '@/shared/lib/maskEmail';
+
+/** iOS: leave this long after closing the sheet if its dismissal never arrives. */
+export const LEAVE_FALLBACK_MS = 600;
 
 type Props = {
   userId: string;
@@ -54,8 +57,11 @@ export function BookingActions({ userId, email, target, today, onTransferred }: 
   useEffect(() => {
     onLeave.current = onTransferred;
   }, [onTransferred]);
+  // iOS: Modal `onDismiss` has been missed under the New Architecture; leave anyway after this.
+  const fallback = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
+      if (fallback.current !== null) clearTimeout(fallback.current);
       if (leaving.current) {
         leaving.current = false;
         onLeave.current();
@@ -64,21 +70,34 @@ export function BookingActions({ userId, email, target, today, onTransferred }: 
     [],
   );
   function leave() {
+    if (fallback.current !== null) clearTimeout(fallback.current);
+    fallback.current = null;
+    if (!leaving.current) return;
     leaving.current = false;
     onLeave.current();
   }
-  function afterTransfer(o: ActionOutcome<TransferDone> | null) {
+  function afterTransfer(o: ActionResult<TransferDone> | null) {
     if (o?.kind !== 'done') return;
     const to = o.value.transferredTo;
-    if (to !== '') sentNotice.set(maskEmail(to));
+    // Keyed by user (security S1); also tells the details screen not to read "not yours".
+    sentNotice.set(userId, row.id, to === '' ? null : maskEmail(to));
     leaving.current = true;
     setOpen(null);
-    if (Platform.OS !== 'ios') leave();
+    if (Platform.OS !== 'ios') {
+      leave();
+      return;
+    }
+    fallback.current = setTimeout(leave, LEAVE_FALLBACK_MS);
   }
 
   const latch = unsettled.get(userId, kind, row.id);
   const unsettledCancel = latch?.action === 'cancel' ? latch : null;
   const unsettledTransfer = latch?.action === 'transfer' ? latch : null;
+  // Ruling (a): while a lost cancel or transfer is unsettled, Cancel, Transfer and Refund all open
+  // the sheet of the action actually sent, so its own Check again (and side effects) settles it.
+  const openAction = (a: BookingAction) => {
+    setOpen(latch !== null && a !== 'review' ? latch.action : a);
+  };
   const profile = qc.getQueryData<ProfileRow | null>(customerKeys.profile(userId));
   const ownEmails = [email, profile?.email ?? ''].filter((e) => e !== '');
 
@@ -93,7 +112,7 @@ export function BookingActions({ userId, email, target, today, onTransferred }: 
         actions={f.actions}
         refundRequested={refund.requested}
         reviewed={review.reviewed}
-        onOpen={setOpen}
+        onOpen={openAction}
       />
       <CancelSheet
         visible={open === 'cancel'}
@@ -137,9 +156,7 @@ export function BookingActions({ userId, email, target, today, onTransferred }: 
         }}
         onReset={transfer.reset}
         onClose={close(transfer.reset)}
-        onDismissed={() => {
-          if (leaving.current) leave();
-        }}
+        onDismissed={leave}
       />
       <ReviewSheet
         visible={open === 'review'}

@@ -24,7 +24,10 @@ it('is a radio group of five stars, each ≥ 44 pt, with the word under it', asy
   expect(stars).toHaveLength(5);
   for (const s of stars) {
     expect(s).toHaveStyle({ minWidth: 44, minHeight: 44 });
+    // U2: no hit area reaches into the next star.
+    expect(s.props.hitSlop).toBeUndefined();
   }
+  expect(screen.getByTestId('star-rating')).toHaveStyle({ gap: 12 });
 
   await fireEvent.press(screen.getByRole('radio', { name: '4 of 5, Very good' }));
   expect(onChange).toHaveBeenCalledWith(4);

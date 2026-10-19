@@ -8,7 +8,7 @@ import { unsettled } from '@/features/customer/hooks/unsettled';
 import type { ApiError } from '@/shared/lib/errors';
 import { err, ok } from '@/shared/lib/result';
 
-import { ev } from '../../hooks/__tests__/customerTestUtils';
+import { ev, USER } from '../../hooks/__tests__/customerTestUtils';
 import { ME, pastEvent, rowNames, showActions, type DbMock } from './actionsKit';
 
 jest.mock('@/shared/api/instance', () => ({
@@ -108,7 +108,7 @@ describe('Transfer sheet', () => {
       expect(r.onTransferred).toHaveBeenCalledTimes(1);
     });
     expect(transferMock).toHaveBeenCalledWith({}, 'e1', 'bola@example.com');
-    expect(sentNotice.get()).toBe('Tickets sent to b•••a@example.com');
+    expect(sentNotice.messageFor(USER)).toBe('Tickets sent to b•••a@example.com');
     await r.unmount();
     expect(r.onTransferred).toHaveBeenCalledTimes(1);
   });
@@ -120,7 +120,7 @@ describe('Transfer sheet', () => {
     await toReview('bola@example.com');
     await fireEvent.press(sheet().getByRole('button', { name: 'Transfer tickets' }));
     await waitFor(() => {
-      expect(sentNotice.get()).not.toBeNull();
+      expect(sentNotice.messageFor(USER)).not.toBeNull();
     });
     expect(r.onTransferred).not.toHaveBeenCalled();
     // The RN Modal mock renders nothing once hidden, so its dismissal is fired directly.
@@ -141,8 +141,80 @@ describe('Transfer sheet', () => {
     await waitFor(() => {
       expect(r.onTransferred).toHaveBeenCalledTimes(1);
     });
-    expect(sentNotice.get()).toBe('Tickets sent to b•••a@example.com');
+    expect(sentNotice.messageFor(USER)).toBe('Tickets sent to b•••a@example.com');
     expect(transferMock).toHaveBeenCalledTimes(1);
+    await r.unmount();
+  });
+
+  it('iPhone: leaves after a fallback delay if the dismissal never arrives (fix 9)', async () => {
+    jest.replaceProperty(Platform, 'OS', 'ios');
+    transferMock.mockResolvedValue(ok({ transferredTo: 'bola@example.com' }));
+    const r = await showActions({ kind: 'event', row: ev() });
+    await toReview('bola@example.com');
+    jest.useFakeTimers();
+    try {
+      await fireEvent.press(sheet().getByRole('button', { name: 'Transfer tickets' }));
+      await act(async () => {
+        await Promise.resolve();
+      });
+      await waitFor(() => {
+        expect(sentNotice.messageFor(USER)).not.toBeNull();
+      });
+      expect(r.onTransferred).not.toHaveBeenCalled();
+      await act(() => {
+        jest.advanceTimersByTime(600);
+      });
+      expect(r.onTransferred).toHaveBeenCalledTimes(1);
+      // A late dismissal doesn't navigate twice.
+      await act(() => {
+        mockDismissed.transfer?.();
+      });
+      expect(r.onTransferred).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+    await r.unmount();
+    expect(r.onTransferred).toHaveBeenCalledTimes(1);
+  });
+
+  it('a lost transfer: tapping Cancel opens the transfer sheet on Check again (ruling a)', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    unsettled.set(USER, 'event', 'e1', {
+      action: 'transfer',
+      sentAt: Date.now(),
+      email: 'bola@example.com',
+      answered: false,
+    });
+    db.event.mockResolvedValue(ok(null));
+    const r = await showActions({ kind: 'event', row: ev() });
+    await fireEvent.press(screen.getByRole('button', { name: 'Cancel booking' }));
+    expect(
+      sheet().getByText('We couldn’t confirm whether your tickets were sent. Check again.'),
+    ).toBeTruthy();
+    await fireEvent.press(sheet().getByRole('button', { name: 'Check again' }));
+    await waitFor(() => {
+      expect(r.onTransferred).toHaveBeenCalledTimes(1);
+    });
+    expect(sentNotice.messageFor(USER)).toBe('Tickets sent to b•••a@example.com');
+    expect(transferMock).not.toHaveBeenCalled();
+    await r.unmount();
+  });
+
+  it('the notice is for this user only (security S1)', () => {
+    sentNotice.set(USER, 'e1', 'b•••a@example.com');
+    expect(sentNotice.messageFor('someone-else')).toBeNull();
+    expect(sentNotice.isFor(USER, 'e1')).toBe(true);
+  });
+
+  it('a 5xx answer with the tickets still yours: "Couldn’t send your tickets — try again"', async () => {
+    transferMock.mockResolvedValue(err<ApiError>({ kind: 'unavailable', status: 500 }));
+    db.event.mockResolvedValue(ok(ev()));
+    const r = await showActions({ kind: 'event', row: ev() });
+    await toReview('bola@example.com');
+    await fireEvent.press(sheet().getByRole('button', { name: 'Transfer tickets' }));
+    expect(await screen.findByText('Couldn’t send your tickets — try again.')).toBeTruthy();
+    expect(sheet().getByRole('button', { name: 'Transfer tickets' })).toBeTruthy();
+    expect(r.onTransferred).not.toHaveBeenCalled();
     await r.unmount();
   });
 
@@ -151,7 +223,9 @@ describe('Transfer sheet', () => {
     const r = await showActions({ kind: 'event', row: ev() });
     await toReview('bola@example.com');
     await fireEvent.press(sheet().getByRole('button', { name: 'Transfer tickets' }));
-    expect(await screen.findByText('These tickets can’t be sent to that address right now.')).toBeTruthy();
+    expect(
+      await screen.findByText('These tickets can’t be sent to that address right now.'),
+    ).toBeTruthy();
     expect(r.onTransferred).not.toHaveBeenCalled();
     await r.unmount();
   });

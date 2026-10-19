@@ -42,6 +42,8 @@ function useMarks(userId: string, set: MarkSet, keyOf: (u: string) => readonly u
       // The cancelled first read never landed: merge what is on disk back in (review 3,
       // finding 3), keeping anything only in memory (a write after sign-out is skipped).
       try {
+        // Signed out (or someone else) meanwhile: no merge into this user's cache (security S1).
+        if (!(await isSignedInAs(userId))) return;
         const disk = await set.get(userId);
         qc.setQueryData<string[]>(keyOf(userId), (ids) => [
           ...new Set([...disk, ...(ids ?? []), id]),

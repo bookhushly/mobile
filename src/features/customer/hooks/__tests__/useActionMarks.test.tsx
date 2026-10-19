@@ -99,3 +99,24 @@ it('marking before the first read lands keeps the ids already on disk', async ()
   get.mockRestore();
   await unmount();
 });
+
+it('after sign-out the disk ids are not merged back into memory (security S1)', async () => {
+  await mockKv.set('bh.reviewed.u1', '["l0"]');
+  const get = jest
+    .spyOn(mockKv, 'get')
+    .mockImplementationOnce(() => new Promise<string | null>(() => undefined));
+  const { result, unmount } = await renderHook(() => useReviewedSet(USER), {
+    wrapper: wrapper(qc),
+  });
+  mockSessionUser = null;
+  await act(async () => {
+    await result.current.mark('l1');
+  });
+  await waitFor(() => {
+    expect(result.current.has('l1')).toBe(true);
+  });
+  expect(result.current.has('l0')).toBe(false);
+  expect(get).toHaveBeenCalledTimes(1);
+  get.mockRestore();
+  await unmount();
+});

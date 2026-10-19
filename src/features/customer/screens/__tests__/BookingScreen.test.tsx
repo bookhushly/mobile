@@ -5,6 +5,7 @@ import { Linking } from 'react-native';
 import { fromEvent } from '@/features/customer/domain/myBookings';
 import { useBooking } from '@/features/customer/hooks/useBooking';
 import type { WalletEntry } from '@/features/customer/offline/wallet';
+import { sentNotice } from '@/features/customer/hooks/sentNotice';
 import { BookingScreen } from '@/features/customer/screens/BookingScreen';
 import { refreshColors } from '@/shared/ui';
 
@@ -237,4 +238,16 @@ it('pull to refresh on the details uses the theme colours', async () => {
   expect(json).toContain(`"tintColor":"${refreshColors.tintColor}"`);
   expect(json).toContain(`"colors":${JSON.stringify(refreshColors.colors)}`);
   expect(json).toContain(`"progressBackgroundColor":"${refreshColors.progressBackgroundColor}"`);
+});
+
+it('just transferred away: "not found" is the transfer working, never "not yours" (fix 9)', async () => {
+  sentNotice.set('u1', ID, 'b•••a@example.com');
+  try {
+    loaded({ row: null });
+    await show('event');
+    expect(screen.queryByText('This booking isn’t on your account')).toBeNull();
+    expect(screen.getByRole('header', { name: 'Booking' })).toBeTruthy();
+  } finally {
+    sentNotice.clear();
+  }
 });

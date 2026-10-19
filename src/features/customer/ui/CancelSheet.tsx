@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import type { MoneyLine } from '@/features/customer/domain/bookingActions';
 import type { ActionState } from '@/features/customer/hooks/actionState';
@@ -12,6 +12,7 @@ import {
   type Notice,
 } from '@/features/customer/ui/actionText';
 import { BookingSummary } from '@/features/customer/ui/BookingSummary';
+import { RateLimitWait } from '@/features/customer/ui/RateLimitWait';
 import { Banner, Button, Inline, Sheet, Spinner, Stack, Text } from '@/shared/ui';
 
 type Props = {
@@ -28,15 +29,26 @@ type Props = {
   onClose: () => void;
 };
 
-// Spec E5 (Airbnb / Tripadvisor): what is cancelled, the honest money line, "This can't be
+// Spec E5 (Airbnb / Tripadvisor): what is cancelled and the honest money line, "This can't be
 // undone", then a destructive Cancel booking and Keep booking. The server decides.
 export function CancelSheet(p: Props) {
   const { state } = p;
+  // Final review I1: the refetch after a cancel flips payment to refunded, so the refund line
+  // uses whether it was paid when the cancel was sent.
+  const [paidAtSend, setPaidAtSend] = useState(p.paid);
+  const [seen, setSeen] = useState(state.kind);
+  if (seen !== state.kind) {
+    setSeen(state.kind);
+    if (state.kind === 'sending') setPaidAtSend(p.paid);
+  }
   const busy = state.kind === 'sending' || state.kind === 'checking';
   const unsure = state.kind === 'uncertain' || (state.kind === 'idle' && p.unsettled);
   const notice: Notice | null = unsure
     ? { tone: 'neutral', message: CANCEL_UNSURE }
-    : state.kind === 'refused' || state.kind === 'rateLimited' || state.kind === 'signedOut'
+    : state.kind === 'refused' ||
+        state.kind === 'rateLimited' ||
+        state.kind === 'signedOut' ||
+        state.kind === 'notDone'
       ? cancelNotice(state)
       : null;
 
@@ -44,16 +56,16 @@ export function CancelSheet(p: Props) {
   let footer: ReactNode;
   if (state.kind === 'done') {
     // A cancel confirmed by re-reading has no refund result: no refund words then.
-    body = <ActionDone title="Booking cancelled" message={cancelRefundLine(state.value, p.paid)} />;
+    body = (
+      <ActionDone title="Booking cancelled" message={cancelRefundLine(state.value, paidAtSend)} />
+    );
     footer = <Button label="Done" onPress={p.onClose} />;
   } else {
     body = (
       <Stack gap="s4">
-        <Text variant="displaySm" accessibilityRole="header">
-          Cancel this booking?
-        </Text>
-        <BookingSummary title={p.title} when={p.when} />
-        <Text variant="body">{MONEY_LINE[p.money]}</Text>
+        <BookingSummary title={p.title} when={p.when}>
+          <Text variant="bodyStrong">{MONEY_LINE[p.money]}</Text>
+        </BookingSummary>
         <Text variant="bodyStrong">This can’t be undone.</Text>
         {state.kind === 'checking' ? (
           <Inline gap="s2">
@@ -65,6 +77,9 @@ export function CancelSheet(p: Props) {
         ) : null}
         {notice !== null ? (
           <Banner tone={notice.tone} message={notice.message} testID="cancel-notice" />
+        ) : null}
+        {state.kind === 'rateLimited' ? (
+          <RateLimitWait retryAfterSec={state.retryAfterSec} />
         ) : null}
       </Stack>
     );

@@ -146,7 +146,7 @@ describe('useCancelBooking', () => {
   });
 
   it('a lost answer with the booking unchanged stays uncertain; Check again re-reads only', async () => {
-    cancelMock.mockResolvedValue(err({ kind: 'unavailable', status: 503 }));
+    cancelMock.mockResolvedValue(timeout);
     db.apartment
       .mockResolvedValueOnce(ok(ap({ booking_status: 'confirmed' })))
       .mockResolvedValueOnce(err({ kind: 'network' }))
@@ -345,6 +345,103 @@ describe('unsettled actions only re-check (review 3)', () => {
     });
     expect(result.current.state).toEqual({ kind: 'uncertain' });
     expect(drop).not.toHaveBeenCalled();
+    await unmount();
+  });
+});
+
+describe('the latch settles once the answer can no longer land (final review I2, K1)', () => {
+  it('cancel: a 5xx answer and the booking unchanged → not cancelled, and a new POST is allowed', async () => {
+    cancelMock
+      .mockResolvedValueOnce(err({ kind: 'unavailable', status: 500, code: 'cancel_failed' }))
+      .mockResolvedValueOnce(ok({ refunded: false, refundMessage: null }));
+    db.hotel.mockResolvedValue(ok(ho({ booking_status: 'confirmed' })));
+    const { result, unmount } = await renderHook(
+      () => useCancelBooking(USER, 'hotel', 'h1'),
+      opts(),
+    );
+    await act(async () => {
+      await result.current.cancel();
+    });
+    expect(result.current.state).toEqual({ kind: 'notDone' });
+    expect(unsettled.get(USER, 'hotel', 'h1')).toBeNull();
+    await act(async () => {
+      await result.current.cancel();
+    });
+    expect(cancelMock).toHaveBeenCalledTimes(2);
+    expect(result.current.state).toEqual({
+      kind: 'done',
+      value: { refunded: false, refundMessage: null },
+    });
+    await unmount();
+  });
+
+  it('cancel: a timeout keeps the latch while the answer may land, then settles as not done', async () => {
+    jest.useFakeTimers({ now: Date.parse('2026-10-13T11:00:00Z') });
+    try {
+      cancelMock.mockResolvedValue(timeout);
+      db.event.mockResolvedValue(ok(ev({ status: 'confirmed' })));
+      const { result, unmount } = await renderHook(
+        () => useCancelBooking(USER, 'event', 'e1'),
+        opts(),
+      );
+      await act(async () => {
+        await result.current.cancel();
+      });
+      expect(result.current.state).toEqual({ kind: 'uncertain' });
+      jest.setSystemTime(Date.parse('2026-10-13T11:00:45Z'));
+      await act(async () => {
+        await result.current.recheck();
+      });
+      expect(result.current.state).toEqual({ kind: 'uncertain' });
+      jest.setSystemTime(Date.parse('2026-10-13T11:00:46Z'));
+      await act(async () => {
+        await result.current.recheck();
+      });
+      expect(result.current.state).toEqual({ kind: 'notDone' });
+      expect(unsettled.get(USER, 'event', 'e1')).toBeNull();
+      expect(cancelMock).toHaveBeenCalledTimes(1);
+      await unmount();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('cancel: a failed re-read never settles as not done', async () => {
+    cancelMock.mockResolvedValue(err({ kind: 'unavailable', status: 500 }));
+    db.event.mockResolvedValue(err({ kind: 'network' }));
+    const { result, unmount } = await renderHook(
+      () => useCancelBooking(USER, 'event', 'e1'),
+      opts(),
+    );
+    await act(async () => {
+      await result.current.cancel();
+    });
+    expect(result.current.state).toEqual({ kind: 'uncertain' });
+    expect(unsettled.get(USER, 'event', 'e1')).not.toBeNull();
+    await unmount();
+  });
+
+  it('transfer: a 5xx answer and the booking still yours → not sent, the wallet untouched', async () => {
+    transferMock.mockResolvedValue(err({ kind: 'unavailable', status: 500 }));
+    db.event.mockResolvedValue(ok(ev()));
+    const { result, unmount } = await renderHook(() => useTransferTickets(USER, 'e1'), opts());
+    await act(async () => {
+      await result.current.transfer('b@x.com');
+    });
+    expect(result.current.state).toEqual({ kind: 'notDone' });
+    expect(unsettled.get(USER, 'event', 'e1')).toBeNull();
+    expect(drop).not.toHaveBeenCalled();
+    await unmount();
+  });
+
+  it('transfer: an address the client won’t send never sets the latch (minor 6)', async () => {
+    const { result, unmount } = await renderHook(() => useTransferTickets(USER, 'e1'), opts());
+    await act(async () => {
+      await result.current.transfer('not-an-email');
+    });
+    expect(result.current.state).toEqual({ kind: 'refused', reason: 'invalid' });
+    expect(unsettled.get(USER, 'event', 'e1')).toBeNull();
+    expect(transferMock).not.toHaveBeenCalled();
     await unmount();
   });
 });

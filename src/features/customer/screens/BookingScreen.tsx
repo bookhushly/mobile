@@ -2,6 +2,7 @@ import { SearchX } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 
 import type { BookingKind } from '@/features/customer/domain/myBookings';
+import { useTransferredAway } from '@/features/customer/hooks/sentNotice';
 import { useBooking } from '@/features/customer/hooks/useBooking';
 import { NoticeScreen } from '@/features/customer/screens/NoticeScreen';
 import { ApartmentDetails } from '@/features/customer/ui/ApartmentDetails';
@@ -91,6 +92,10 @@ function manage(p: One, target: ActionTarget, today: string): ReactNode {
 function EventBooking(p: One) {
   const { userId, id, ...h } = p;
   const b = useBooking(userId, 'event', id);
+  // Final review minor 1 / fix 9: once this user has just sent the tickets away, the booking
+  // reads as not found; that is the transfer working, never "isn't on your account".
+  const away = useTransferredAway(userId, id);
+  if (away && b.row === null) return <BookingFrame onBack={h.onBack} />;
   return settle(b, h, (row) => (
     <EventDetails
       row={row}

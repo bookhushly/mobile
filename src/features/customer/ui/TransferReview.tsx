@@ -1,5 +1,6 @@
 import type { Notice } from '@/features/customer/ui/actionText';
 import { BookingSummary } from '@/features/customer/ui/BookingSummary';
+import { RateLimitWait } from '@/features/customer/ui/RateLimitWait';
 import { Banner, Inline, Spinner, Stack, Text } from '@/shared/ui';
 
 type Props = {
@@ -10,6 +11,8 @@ type Props = {
   email: string | null;
   checking: boolean;
   notice: Notice | null;
+  /** Set after a 429: the countdown under the notice (undefined: none). */
+  waitSec?: number | null;
 };
 
 function ticketsWord(n: number): string {
@@ -17,10 +20,10 @@ function ticketsWord(n: number): string {
 }
 
 // Spec E7 step 2 (Posh "Confirm details", One "can't be cancelled"): event, date, tickets, To.
-export function TransferReview({ title, when, tickets, email, checking, notice }: Props) {
+export function TransferReview({ title, when, tickets, email, checking, notice, waitSec }: Props) {
   return (
     <Stack gap="s4">
-      <Text variant="displaySm" accessibilityRole="header">
+      <Text variant="titleLg" accessibilityRole="header">
         Check before you send
       </Text>
       <BookingSummary title={title} when={when} extra={tickets > 0 ? ticketsWord(tickets) : null} />
@@ -46,6 +49,7 @@ export function TransferReview({ title, when, tickets, email, checking, notice }
       {notice !== null ? (
         <Banner tone={notice.tone} message={notice.message} testID="transfer-notice" />
       ) : null}
+      {waitSec !== undefined ? <RateLimitWait retryAfterSec={waitSec} /> : null}
     </Stack>
   );
 }

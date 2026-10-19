@@ -7,6 +7,8 @@ import { ActionDone } from '@/features/customer/ui/ActionDone';
 import { commentError } from '@/features/customer/ui/actionInput';
 import { reviewNotice } from '@/features/customer/ui/actionText';
 import { BookingSummary } from '@/features/customer/ui/BookingSummary';
+import { CharCounter } from '@/features/customer/ui/CharCounter';
+import { RateLimitWait } from '@/features/customer/ui/RateLimitWait';
 import { StarRating } from '@/features/customer/ui/StarRating';
 import { Banner, Button, Input, Sheet, Stack, Text } from '@/shared/ui';
 
@@ -27,13 +29,16 @@ export function ReviewSheet({ visible, title, when, state, onPost, onClose }: Pr
   const [tried, setTried] = useState(false);
   const busy = state.kind === 'sending';
   const ratingError = tried && rating === 0 ? 'Choose a rating.' : null;
-  const textError = tried ? commentError(comment) : null;
+  // UX review U5: the minimum is checked when the box is left, not only on Post.
+  const [blurred, setBlurred] = useState(false);
+  const textError = tried || blurred ? commentError(comment) : null;
 
   function close() {
     if (busy) return;
     setRating(0);
     setComment('');
     setTried(false);
+    setBlurred(false);
     onClose();
   }
 
@@ -60,9 +65,6 @@ export function ReviewSheet({ visible, title, when, state, onPost, onClose }: Pr
         : reviewNotice(state);
     body = (
       <Stack gap="s4">
-        <Text variant="displaySm" accessibilityRole="header">
-          How was it?
-        </Text>
         <BookingSummary title={title} when={when} />
         <Stack gap="s2">
           <StarRating value={rating} onChange={setRating} disabled={busy} />
@@ -74,9 +76,12 @@ export function ReviewSheet({ visible, title, when, state, onPost, onClose }: Pr
         </Stack>
         <Input
           label="Your review"
-          hint="Others see it on the listing."
+          hint="At least 10 characters. Others see it on the listing."
           value={comment}
           onChangeText={setComment}
+          onBlur={() => {
+            if (comment !== '') setBlurred(true);
+          }}
           multiline
           maxLength={REVIEW_COMMENT_MAX}
           textAlignVertical="top"
@@ -84,11 +89,12 @@ export function ReviewSheet({ visible, title, when, state, onPost, onClose }: Pr
           error={textError ?? undefined}
           testID="review-comment"
         />
-        <Text variant="caption" tone="textSecondary" tabular accessibilityLiveRegion="polite">
-          {`${String(comment.length)} / ${String(REVIEW_COMMENT_MAX)}`}
-        </Text>
+        <CharCounter length={comment.length} max={REVIEW_COMMENT_MAX} />
         {notice !== null ? (
           <Banner tone={notice.tone} message={notice.message} testID="review-notice" />
+        ) : null}
+        {state.kind === 'rateLimited' ? (
+          <RateLimitWait retryAfterSec={state.retryAfterSec} />
         ) : null}
       </Stack>
     );

@@ -13,7 +13,23 @@ export type Unsettled = {
   sentAt: number;
   /** Transfer only: the address the tickets were sent to (normalised). */
   email: string | null;
+  /**
+   * The server answered with a 5xx: it was reached and the action failed there (final review
+   * I2, K1). A re-read showing the booking unchanged then settles it as not done.
+   */
+  answered: boolean;
 };
+
+/** The POST's own timeout (shared client default) plus a grace for a slow server. */
+export const LOST_ANSWER_MS = 15_000 + 30_000;
+
+/**
+ * Whether a lost answer could still land. False once the server answered with a 5xx, or once
+ * the request timeout plus the grace has passed since it was sent (phone clock, ms).
+ */
+export function mayStillLand(u: Unsettled, nowMs: number): boolean {
+  return !u.answered && nowMs - u.sentAt <= LOST_ANSWER_MS;
+}
 
 const pending = new Map<string, Unsettled>();
 const keyOf = (userId: string, kind: BookingKind, id: string) => `${userId}|${kind}|${id}`;

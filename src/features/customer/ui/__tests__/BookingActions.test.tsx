@@ -157,7 +157,12 @@ describe('Cancel sheet', () => {
   });
 
   it('an unsettled cancel opens on Check again', async () => {
-    unsettled.set(USER, 'event', 'e1', { action: 'cancel', sentAt: 0, email: null });
+    unsettled.set(USER, 'event', 'e1', {
+      action: 'cancel',
+      sentAt: Date.now(),
+      email: null,
+      answered: false,
+    });
     db.event.mockResolvedValue(ok(ev()));
     const r = await showActions({ kind: 'event', row: ev() });
     await openCancel();

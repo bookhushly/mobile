@@ -20,7 +20,8 @@ export function ratingWord(n: number): string | null {
 }
 
 // Spec §6: a radio group ("Rating, 4 of 5, Very good"), each star a ≥ 44 pt radio, the word under
-// the stars. No bounce at all, so Reduce Motion has nothing to turn off.
+// the stars. Stars sit `targetGap` apart with no overlapping hit areas (UX review U2). No bounce
+// at all, so Reduce Motion has nothing to turn off.
 export function StarRating({ value, onChange, disabled = false, testID = 'star-rating' }: Props) {
   const d = useDensity();
   const word = ratingWord(value);
@@ -31,7 +32,7 @@ export function StarRating({ value, onChange, disabled = false, testID = 'star-r
         testID={testID}
         accessibilityRole="radiogroup"
         accessibilityLabel={groupLabel}
-        style={{ flexDirection: 'row', gap: space.s1 }}
+        style={{ flexDirection: 'row', gap: d.targetGap }}
       >
         {STARS.map((n) => {
           const on = n <= value;
@@ -42,7 +43,6 @@ export function StarRating({ value, onChange, disabled = false, testID = 'star-r
               accessibilityLabel={`${String(n)} of 5, ${RATING_WORDS[n - 1] ?? ''}`}
               accessibilityState={{ checked: n === value, disabled }}
               disabled={disabled}
-              hitSlop={space.s1}
               onPress={() => {
                 onChange(n);
               }}
