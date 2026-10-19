@@ -1,10 +1,14 @@
 import {
   REFRESH_AFTER_ERROR_MS,
+  codesFinal,
+  codesFromResult,
   liveCodeFromResult,
   nextRefreshMs,
   stillUsable,
+  ticketCodeState,
   usableUntil,
 } from '@/features/customer/domain/liveCode';
+import type { EventCodes } from '@/features/customer/schemas/actions';
 import type { TicketCodeBody } from '@/features/customer/schemas/ticketCode';
 import type { ApiError } from '@/shared/lib/errors';
 import { err, ok } from '@/shared/lib/result';
@@ -103,5 +107,92 @@ describe('timing', () => {
 
   it('retries 15 s after an error', () => {
     expect(REFRESH_AFTER_ERROR_MS).toBe(15_000);
+  });
+});
+
+describe('booking codes (spec E2)', () => {
+  const codes: EventCodes = {
+    format: 2,
+    expiresAt: 1_760_000_030_000,
+    stepSeconds: 30,
+    tickets: [
+      { id: 't1', type: 'VIP', index: 1, checkedInAt: null, token: 'BH2.one' },
+      { id: 't2', type: 'VIP', index: 2, checkedInAt: '2026-11-01T19:30:00Z', token: null },
+    ],
+  };
+  const batch = codesFromResult(ok(codes), null);
+
+  it('maps each ticket: a token is live, a null token is admitted (final)', () => {
+    expect(ticketCodeState(batch, 't1')).toEqual({
+      kind: 'live',
+      token: 'BH2.one',
+      expiresAt: 1_760_000_030_000,
+    });
+    expect(ticketCodeState(batch, 't2')).toEqual({ kind: 'admitted', at: '2026-11-01T19:30:00Z' });
+  });
+
+  it('a ticket missing from the answer, or none issued yet, is the fallback', () => {
+    expect(ticketCodeState(batch, 't9')).toEqual({ kind: 'fallback' });
+    const none = codesFromResult(
+      ok({ format: null, expiresAt: null, stepSeconds: 30, tickets: [] }),
+      null,
+    );
+    expect(ticketCodeState(none, 't1')).toEqual({ kind: 'fallback' });
+    expect(codesFinal(none)).toBe(false);
+  });
+
+  it.each<[string, ApiError, string]>([
+    ['409 not_confirmed', { kind: 'conflict', code: 'not_confirmed' }, 'notConfirmed'],
+    ['403', { kind: 'forbidden', code: 'forbidden' }, 'notYours'],
+    ['404 not_found', { kind: 'notFound', code: 'not_found' }, 'notYours'],
+    ['401', { kind: 'auth' }, 'signedOut'],
+    ['503', { kind: 'unavailable', status: 503, code: 'unavailable' }, 'fallback'],
+    ['network', { kind: 'network' }, 'fallback'],
+    ['timeout', { kind: 'timeout' }, 'fallback'],
+  ])('%s → %s for every ticket', (_, e, kind) => {
+    const s = codesFromResult(err(e), null);
+    expect(s.kind).toBe(kind);
+    expect(ticketCodeState(s, 't1').kind).toBe(kind);
+  });
+
+  it('a 429 keeps each ticket’s last token, and a used one stays admitted', () => {
+    const live = batch.kind === 'live' ? batch : null;
+    const s = codesFromResult(err({ kind: 'rateLimited', retryAfterSec: 20 }), live);
+    expect(ticketCodeState(s, 't1')).toEqual({
+      kind: 'rateLimited',
+      retryAfterSec: 20,
+      last: { token: 'BH2.one', expiresAt: 1_760_000_030_000 },
+    });
+    expect(ticketCodeState(s, 't2')).toEqual({ kind: 'admitted', at: '2026-11-01T19:30:00Z' });
+    expect(ticketCodeState(s, 't9')).toEqual({
+      kind: 'rateLimited',
+      retryAfterSec: 20,
+      last: null,
+    });
+    const cold = codesFromResult(err({ kind: 'rateLimited' }), null);
+    expect(ticketCodeState(cold, 't1')).toEqual({
+      kind: 'rateLimited',
+      retryAfterSec: null,
+      last: null,
+    });
+  });
+
+  it('is final once refused for good or every ticket is used', () => {
+    expect(codesFinal(batch)).toBe(false);
+    expect(
+      codesFinal(codesFromResult(err({ kind: 'conflict', code: 'not_confirmed' }), null)),
+    ).toBe(true);
+    expect(codesFinal(codesFromResult(err({ kind: 'forbidden', code: 'forbidden' }), null))).toBe(
+      true,
+    );
+    expect(codesFinal(codesFromResult(err({ kind: 'auth' }), null))).toBe(false);
+    const used = codesFromResult(
+      ok({
+        ...codes,
+        tickets: codes.tickets.map((t) => ({ ...t, token: null, checkedInAt: 'x' })),
+      }),
+      null,
+    );
+    expect(codesFinal(used)).toBe(true);
   });
 });
