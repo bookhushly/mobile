@@ -136,6 +136,24 @@ export function createWallet(deps: { store: Store }) {
       const p = walletSchema.safeParse(parseJson(raw));
       return p.success && p.data.userId === userId ? p.data : null;
     },
+    /**
+     * Removes one booking now (its tickets were transferred away, spec E7), keeping `savedAt`:
+     * the rest is no fresher than before. A wipe queued first wins.
+     */
+    drop(userId: string, kind: WalletEntry['kind'], id: string): Promise<void> {
+      const calledAt = generation;
+      return enqueue(async () => {
+        if (calledAt !== generation) return;
+        const raw = await deps.store.getItem(WALLET_KEY);
+        if (raw === null) return;
+        const p = walletSchema.safeParse(parseJson(raw));
+        if (!p.success || p.data.userId !== userId) return;
+        const entries = p.data.entries.filter((e) => !(e.kind === kind && e.id === id));
+        if (entries.length === p.data.entries.length) return;
+        await deps.store.setItem(WALLET_KEY, JSON.stringify({ ...p.data, entries }));
+        lastWritten.clear();
+      });
+    },
     wipe(): Promise<void> {
       generation += 1;
       lastWritten.clear();
