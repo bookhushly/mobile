@@ -4,10 +4,15 @@ import type { ActionState } from '@/features/customer/hooks/actionState';
 import type { TransferDone } from '@/features/customer/hooks/useBookingActions';
 import { ActionDone } from '@/features/customer/ui/ActionDone';
 import { checkEmail } from '@/features/customer/ui/actionInput';
-import { TRANSFER_UNSURE, transferNotice, type Notice } from '@/features/customer/ui/actionText';
+import {
+  TRANSFER_NOT_DONE,
+  TRANSFER_UNSURE,
+  transferNotice,
+  type Notice,
+} from '@/features/customer/ui/actionText';
 import { TransferReview } from '@/features/customer/ui/TransferReview';
 import { maskEmail } from '@/shared/lib/maskEmail';
-import { Button, Input, Sheet, Stack, Text } from '@/shared/ui';
+import { Banner, Button, Input, Sheet, Stack, Text } from '@/shared/ui';
 
 /** RFC 5321's longest address (security review S5). */
 export const EMAIL_MAX = 254;
@@ -60,6 +65,14 @@ export function TransferSheet(p: Props) {
     setEmail(r.email);
   }
 
+  // Re-review N1: the re-read clears the latch, so keep its address here. A "not sent" answer then
+  // stays on the review step with its notice, whichever row or visit opened the sheet.
+  function recheck() {
+    const latched = p.unsettled?.email ?? null;
+    if (email === null && latched !== null) setEmail(latched);
+    p.onRecheck();
+  }
+
   function back() {
     if (busy) return;
     p.onReset();
@@ -99,7 +112,7 @@ export function TransferSheet(p: Props) {
     );
     footer =
       unsure || state.kind === 'checking' ? (
-        <Button label="Check again" loading={state.kind === 'checking'} onPress={p.onRecheck} />
+        <Button label="Check again" loading={state.kind === 'checking'} onPress={recheck} />
       ) : (
         <Stack gap="s3">
           {state.kind === 'refused' || state.kind === 'signedOut' ? null : (
@@ -144,6 +157,10 @@ export function TransferSheet(p: Props) {
           error={error ?? undefined}
           testID="transfer-email"
         />
+        {state.kind === 'notDone' ? (
+          // The address of a lost transfer was unknown: say it wasn't sent, here too.
+          <Banner tone="neutral" message={TRANSFER_NOT_DONE} testID="transfer-notice" />
+        ) : null}
       </Stack>
     );
     footer = <Button label="Continue" disabled={text.trim() === ''} onPress={next} />;

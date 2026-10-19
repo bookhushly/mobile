@@ -51,11 +51,13 @@ async function reread(
 }
 
 // A 5xx answer: the server was reached and failed the action (final review I2, contract K1).
+// 502 and 504 come from the edge (a function killed or timed out): its write may still land, so
+// they count as lost, not answered (re-review).
 function serverFailed<T>(r: Result<T, ApiError>): boolean {
   if (r.ok) return false;
   const e = r.error;
-  if (e.kind === 'unavailable') return e.status >= 500;
-  return e.kind === 'unknown' && e.status !== undefined && e.status >= 500;
+  const status = e.kind === 'unavailable' || e.kind === 'unknown' ? e.status : undefined;
+  return status !== undefined && status >= 500 && status !== 502 && status !== 504;
 }
 
 // The latch for a lost answer is kept only while that answer could still land.

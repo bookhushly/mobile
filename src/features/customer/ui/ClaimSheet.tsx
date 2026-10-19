@@ -248,7 +248,14 @@ export function ClaimSheet({
         />
         <Inline justify="center">
           {resendLeft > 0 ? (
-            <Text variant="bodySm" tone="textSecondary" tabular>
+            // Re-review N2: wraps at large text instead of clipping inside the row.
+            <Text
+              variant="bodySm"
+              tone="textSecondary"
+              tabular
+              align="center"
+              style={{ flexShrink: 1 }}
+            >
               Send a new code in {mmss(resendLeft)}
             </Text>
           ) : (

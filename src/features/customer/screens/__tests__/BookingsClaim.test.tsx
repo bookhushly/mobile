@@ -161,7 +161,8 @@ describe('the sheet', () => {
     await fireEvent.press(within(sheet).getByRole('button', { name: 'Send code' }));
     expect(sendMock).toHaveBeenCalledTimes(1);
     expect(await within(sheet).findByText('Enter the 6-digit code')).toBeTruthy();
-    expect(within(sheet).getByText('Send a new code in 1:00')).toBeTruthy();
+    // Re-review N2: the line can shrink and wrap inside its centred row.
+    expect(within(sheet).getByText('Send a new code in 1:00')).toHaveStyle({ flexShrink: 1 });
     await act(() => {
       jest.advanceTimersByTime(30_000);
     });

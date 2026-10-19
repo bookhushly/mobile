@@ -406,6 +406,24 @@ describe('the latch settles once the answer can no longer land (final review I2,
     }
   });
 
+  it.each([502, 504])(
+    'cancel: a %i from the edge is lost, not answered: the latch stays (re-review)',
+    async (status) => {
+      cancelMock.mockResolvedValue(err({ kind: 'unavailable', status }));
+      db.event.mockResolvedValue(ok(ev({ status: 'confirmed' })));
+      const { result, unmount } = await renderHook(
+        () => useCancelBooking(USER, 'event', 'e1'),
+        opts(),
+      );
+      await act(async () => {
+        await result.current.cancel();
+      });
+      expect(result.current.state).toEqual({ kind: 'uncertain' });
+      expect(unsettled.get(USER, 'event', 'e1')).not.toBeNull();
+      await unmount();
+    },
+  );
+
   it('cancel: a failed re-read never settles as not done', async () => {
     cancelMock.mockResolvedValue(err({ kind: 'unavailable', status: 500 }));
     db.event.mockResolvedValue(err({ kind: 'network' }));

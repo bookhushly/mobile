@@ -208,6 +208,43 @@ describe('Transfer sheet', () => {
     await r.unmount();
   });
 
+  it('a lost transfer settled as not sent from a reopened sheet keeps its notice (re-review N1)', async () => {
+    unsettled.set(USER, 'event', 'e1', {
+      action: 'transfer',
+      sentAt: Date.now() - 46_000,
+      email: 'bola@example.com',
+      answered: false,
+    });
+    db.event.mockResolvedValue(ok(ev()));
+    const r = await showActions({ kind: 'event', row: ev() });
+    // Ruling (a): the Cancel row opens the transfer sheet while its latch is set.
+    await fireEvent.press(screen.getByRole('button', { name: 'Cancel booking' }));
+    await fireEvent.press(sheet().getByRole('button', { name: 'Check again' }));
+    expect(await sheet().findByText('Couldn’t send your tickets — try again.')).toBeTruthy();
+    expect(sheet().getByTestId('transfer-to')).toHaveTextContent('bola@example.com');
+    expect(sheet().getByRole('button', { name: 'Transfer tickets' })).toBeTruthy();
+    expect(unsettled.get(USER, 'event', 'e1')).toBeNull();
+    expect(transferMock).not.toHaveBeenCalled();
+    expect(r.onTransferred).not.toHaveBeenCalled();
+    await r.unmount();
+  });
+
+  it('a lost transfer with no address on record: the address step says it wasn’t sent', async () => {
+    unsettled.set(USER, 'event', 'e1', {
+      action: 'transfer',
+      sentAt: Date.now() - 46_000,
+      email: null,
+      answered: false,
+    });
+    db.event.mockResolvedValue(ok(ev()));
+    const r = await showActions({ kind: 'event', row: ev() });
+    await fireEvent.press(screen.getByRole('button', { name: 'Transfer tickets' }));
+    await fireEvent.press(sheet().getByRole('button', { name: 'Check again' }));
+    expect(await sheet().findByText('Couldn’t send your tickets — try again.')).toBeTruthy();
+    expect(sheet().getByTestId('transfer-email')).toBeTruthy();
+    await r.unmount();
+  });
+
   it('the notice is for this user only (security S1)', () => {
     sentNotice.set(USER, 'e1', 'b•••a@example.com');
     expect(sentNotice.messageFor('someone-else')).toBeNull();
