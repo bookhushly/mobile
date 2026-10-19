@@ -102,6 +102,17 @@ it('banner announces on iOS the message it mounts with and every change, polite 
   expect(spy).toHaveBeenLastCalledWith('Sync failed');
 });
 
+it('a banner can skip the mount announcement and still announces a change', async () => {
+  jest.replaceProperty(Platform, 'OS', 'ios');
+  const spy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockClear();
+  await render(<Banner tone="info" message="3 bookings can be added" announceOnMount={false} />);
+  expect(spy).not.toHaveBeenCalled();
+  await screen.rerender(
+    <Banner tone="info" message="1 booking can be added" announceOnMount={false} />,
+  );
+  expect(spy).toHaveBeenLastCalledWith('1 booking can be added');
+});
+
 it('on Android a banner relies on its live region and never calls announceForAccessibility', async () => {
   jest.replaceProperty(Platform, 'OS', 'android');
   const spy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockClear();

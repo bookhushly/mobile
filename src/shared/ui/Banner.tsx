@@ -45,6 +45,11 @@ type Props = {
    * mounts with it and whenever it changes (a banner is always the result of something).
    */
   live?: 'polite' | 'assertive';
+  /**
+   * iOS: also announce the message the banner mounts with (default). Pass false for a standing
+   * offer or note that is not the result of something (it would be read on every screen load).
+   */
+  announceOnMount?: boolean;
   testID?: string;
 };
 
@@ -57,9 +62,10 @@ export function Banner({
   action,
   onDismiss,
   live = 'polite',
+  announceOnMount = true,
   testID = 'banner',
 }: Props) {
-  useAnnounce(message, true);
+  useAnnounce(message, announceOnMount);
   return (
     <View
       testID={testID}
