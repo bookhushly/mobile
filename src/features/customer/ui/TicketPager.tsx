@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 
 import type { TicketView } from '@/features/customer/domain/tickets';
+import type { LiveCodes } from '@/features/customer/hooks/useLiveCodes';
 import { TicketCard } from '@/features/customer/ui/TicketCard';
 import type { IsoDate } from '@/shared/lib/lagosDay';
 import { color, layout, radius, space } from '@/shared/theme';
@@ -34,10 +35,12 @@ type Props = {
   onSignIn: () => void;
   /** The signed-in customer's name for the ticket line; null if unknown. */
   holder: string | null;
+  /** The booking's live codes (spec E2). */
+  codes: LiveCodes;
 };
 
 // C11: one ticket per page, swiped or stepped; only the page on screen polls (C7).
-export function TicketPager({ tickets, liveOnly, today, start, onSignIn, holder }: Props) {
+export function TicketPager({ tickets, liveOnly, today, start, onSignIn, holder, codes }: Props) {
   const { width } = useWindowDimensions();
   const gutter = useWide() ? layout.tabletGutter : layout.phoneGutter;
   const tier = useMotionTier();
@@ -46,6 +49,8 @@ export function TicketPager({ tickets, liveOnly, today, start, onSignIn, holder 
   const last = tickets.length - 1;
   const current = Math.max(0, Math.min(index, last));
   const qrSize = Math.min(width - gutter * 2, layout.qrMax);
+  // Memoised by the compiler: a new object only when the page or the codes change.
+  const extra = { current, codes };
   // useCallback: FlatList refuses a new onViewableItemsChanged after mount; setIndex is stable.
   const onViewable = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken<TicketView>[] }) => {
@@ -90,7 +95,8 @@ export function TicketPager({ tickets, liveOnly, today, start, onSignIn, holder 
         onMomentumScrollEnd={onSettle}
         viewabilityConfig={VIEWABILITY}
         onViewableItemsChanged={onViewable}
-        extraData={current}
+        // A new answer for the booking (or another page on screen) re-renders the cards.
+        extraData={extra}
         // One full-screen page at a time: render it and its neighbours only (a QR each).
         windowSize={3}
         initialNumToRender={1}
@@ -112,6 +118,7 @@ export function TicketPager({ tickets, liveOnly, today, start, onSignIn, holder 
               today={today}
               onSignIn={onSignIn}
               holder={holder}
+              codes={codes}
             />
           </ScrollView>
         )}

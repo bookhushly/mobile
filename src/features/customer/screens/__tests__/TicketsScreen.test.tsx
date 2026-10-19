@@ -5,6 +5,7 @@ import type { LiveCodeState } from '@/features/customer/domain/liveCode';
 import { fromEvent } from '@/features/customer/domain/myBookings';
 import { useBooking } from '@/features/customer/hooks/useBooking';
 import { useLiveCode } from '@/features/customer/hooks/useLiveCode';
+import { useLiveCodes, type LiveCodes } from '@/features/customer/hooks/useLiveCodes';
 import type { WalletEntry } from '@/features/customer/offline/wallet';
 import type { EventBookingRow } from '@/features/customer/schemas/bookings';
 import { TicketsScreen } from '@/features/customer/screens/TicketsScreen';
@@ -15,6 +16,7 @@ import { ev, NOON, TODAY } from '../../hooks/__tests__/customerTestUtils';
 
 jest.mock('@/features/customer/hooks/useBooking', () => ({ useBooking: jest.fn() }));
 jest.mock('@/features/customer/hooks/useLiveCode', () => ({ useLiveCode: jest.fn() }));
+jest.mock('@/features/customer/hooks/useLiveCodes', () => ({ useLiveCodes: jest.fn() }));
 const mockProfile: { name: string | null } = { name: 'Ada Obi' };
 jest.mock('@/features/customer/hooks/useProfile', () => ({
   useProfile: () => ({
@@ -29,6 +31,7 @@ jest.mock('@/shared/api/instance', () => ({ clock: { serverNow: () => Date.now()
 
 const mockBooking = jest.mocked(useBooking);
 const mockLive = jest.mocked(useLiveCode);
+const mockCodes = jest.mocked(useLiveCodes);
 const mockBright = jest.mocked(useBrightScreen);
 const mockCapture = jest.mocked(usePreventCapture);
 
@@ -39,7 +42,14 @@ const T3 = 'c3d4e5f6-0000-4000-8000-000000000003';
 const LIVE: LiveCodeState = { kind: 'live', token: 'tok-1', expiresAt: NOON + 20_000 };
 
 const retry = jest.fn();
+const retryAll = jest.fn();
 let states: Record<string, LiveCodeState> = {};
+// Most tests below run on a deploy without the per-booking route (each card polls its own
+// ticket, the 4a path); `batch()` switches to the one poll per booking (spec E2).
+let perTicket = true;
+function batch() {
+  perTicket = false;
+}
 
 function threeTickets(p: Partial<EventBookingRow> = {}): EventBookingRow {
   return ev({
@@ -107,6 +117,12 @@ beforeEach(() => {
   mockLive.mockImplementation((id) => ({
     state: (id === null ? undefined : states[id]) ?? { kind: 'loading' },
     retry,
+  }));
+  perTicket = true;
+  mockCodes.mockImplementation((): LiveCodes => ({
+    perTicket,
+    stateOf: (id) => states[id] ?? { kind: 'loading' },
+    retry: retryAll,
   }));
 });
 
@@ -433,4 +449,60 @@ it('no tickets yet, not yours, failed and bad ids never brighten the screen', as
   );
   expect(screen.getByText('This booking isn’t on your account')).toBeTruthy();
   expect(mockBooking).not.toHaveBeenCalled();
+});
+
+describe('one poll per booking (spec E2)', () => {
+  it('polls the booking while open, never a ticket, and draws only the page on screen', async () => {
+    batch();
+    states = { [T1]: LIVE, [T2]: { ...LIVE, token: 'tok-2' }, [T3]: LIVE };
+    loaded({ row: threeTickets() });
+    await show();
+    expect(mockCodes).toHaveBeenLastCalledWith(ID, true);
+    expect(polling()).toEqual([]);
+    await settle(0);
+    expect(screen.getByLabelText('Ticket 1 of 3 code')).toBeTruthy();
+    expect(screen.queryByLabelText('Ticket 2 of 3 code', hidden)).toBeNull();
+    await scrollTo(1);
+    expect(screen.getByLabelText('Ticket 2 of 3 code')).toBeTruthy();
+    expect(screen.queryByLabelText('Ticket 1 of 3 code', hidden)).toBeNull();
+    expect(polling()).toEqual([]);
+  });
+
+  it('a used ticket (null token) reads "Admitted"', async () => {
+    batch();
+    states = { [T1]: { kind: 'admitted', at: `${TODAY}T18:42:00Z` } };
+    loaded({ row: oneTicket() });
+    await show();
+    expect(screen.getByText(/^Admitted/)).toBeTruthy();
+    expect(screen.queryByLabelText('Ticket 1 of 1 code')).toBeNull();
+  });
+
+  it('a 429 keeps the usable code on screen', async () => {
+    batch();
+    states = {
+      [T1]: { kind: 'rateLimited', retryAfterSec: 10, last: { token: 'tok-0', expiresAt: NOON } },
+    };
+    loaded({ row: oneTicket() });
+    await show();
+    expect(screen.getByLabelText('Ticket 1 of 1 code')).toBeTruthy();
+    expect(screen.getByText('Refreshing shortly')).toBeTruthy();
+  });
+
+  it('live-only with nothing usable asks to connect; Try again re-polls the booking', async () => {
+    batch();
+    states = { [T1]: { kind: 'fallback' } };
+    loaded({ row: oneTicket() });
+    await show();
+    expect(screen.queryByLabelText('Ticket 1 of 1 code')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+    expect(retryAll).toHaveBeenCalledTimes(1);
+    expect(retry).not.toHaveBeenCalled();
+  });
+
+  it('no polling while the saved (offline) tickets are not shown', async () => {
+    batch();
+    loaded({ row: null });
+    await show();
+    expect(mockCodes).toHaveBeenLastCalledWith(null, true);
+  });
 });
