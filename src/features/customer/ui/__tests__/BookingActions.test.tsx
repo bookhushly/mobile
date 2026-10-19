@@ -3,6 +3,7 @@ import { fireEvent, screen, within } from '@testing-library/react-native';
 import { cancelBooking, requestRefund } from '@/features/customer/api/bookingActionsApi';
 import { unsettled } from '@/features/customer/hooks/unsettled';
 import type { ApiError } from '@/shared/lib/errors';
+import type { memoryKv } from '@/shared/lib/kv';
 import { err, ok } from '@/shared/lib/result';
 
 import { ap, ev, ho, USER } from '../../hooks/__tests__/customerTestUtils';
@@ -40,7 +41,14 @@ const db = jest.requireMock<{ customerDb: DbMock }>(
 ).customerDb;
 const timeout = err<ApiError>({ kind: 'timeout' });
 
-beforeEach(() => {
+// The marks (reviewed, refund requested) live in this in-memory store: empty it per test, or a
+// mark written late by one test shows up in the next.
+const mockKv = jest.requireMock<{ plainKv: ReturnType<typeof memoryKv> }>(
+  '@/shared/platform/storage',
+).plainKv;
+
+beforeEach(async () => {
+  for (const k of Object.keys(mockKv.dump())) await mockKv.delete(k);
   jest.clearAllMocks();
   unsettled.clearAll();
 });

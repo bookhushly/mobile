@@ -6,6 +6,7 @@ import { postReview } from '@/features/customer/api/reviewsApi';
 import { sentNotice } from '@/features/customer/hooks/sentNotice';
 import { unsettled } from '@/features/customer/hooks/unsettled';
 import type { ApiError } from '@/shared/lib/errors';
+import type { memoryKv } from '@/shared/lib/kv';
 import { err, ok } from '@/shared/lib/result';
 
 import { ev, USER } from '../../hooks/__tests__/customerTestUtils';
@@ -55,7 +56,14 @@ const db = jest.requireMock<{ customerDb: DbMock }>(
   '@/features/customer/api/customerDb',
 ).customerDb;
 
-beforeEach(() => {
+// The marks (reviewed, refund requested) live in this in-memory store: empty it per test, or a
+// mark written late by one test shows up in the next.
+const mockKv = jest.requireMock<{ plainKv: ReturnType<typeof memoryKv> }>(
+  '@/shared/platform/storage',
+).plainKv;
+
+beforeEach(async () => {
+  for (const k of Object.keys(mockKv.dump())) await mockKv.delete(k);
   jest.clearAllMocks();
   unsettled.clearAll();
   sentNotice.clear();
