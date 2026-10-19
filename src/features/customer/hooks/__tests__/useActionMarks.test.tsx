@@ -79,3 +79,23 @@ it('after sign-out (or another account) the mark stays in memory only', async ()
   expect(mockKv.dump()).toEqual({});
   await unmount();
 });
+
+it('marking before the first read lands keeps the ids already on disk', async () => {
+  await mockKv.set('bh.reviewed.u1', '["l0"]');
+  // The first read hangs, so mark() cancels it.
+  const get = jest
+    .spyOn(mockKv, 'get')
+    .mockImplementationOnce(() => new Promise<string | null>(() => undefined));
+  const { result, unmount } = await renderHook(() => useReviewedSet(USER), {
+    wrapper: wrapper(qc),
+  });
+  await act(async () => {
+    await result.current.mark('l1');
+  });
+  await waitFor(() => {
+    expect([result.current.has('l0'), result.current.has('l1')]).toEqual([true, true]);
+  });
+  expect(mockKv.dump()['bh.reviewed.u1']).toBe('["l0","l1"]');
+  get.mockRestore();
+  await unmount();
+});

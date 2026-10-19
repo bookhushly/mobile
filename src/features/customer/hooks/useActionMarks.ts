@@ -39,6 +39,16 @@ function useMarks(userId: string, set: MarkSet, keyOf: (u: string) => readonly u
       } catch {
         // Best effort: a lost mark costs a re-post that the server answers with 409.
       }
+      // The cancelled first read never landed: merge what is on disk back in (review 3,
+      // finding 3), keeping anything only in memory (a write after sign-out is skipped).
+      try {
+        const disk = await set.get(userId);
+        qc.setQueryData<string[]>(keyOf(userId), (ids) => [
+          ...new Set([...disk, ...(ids ?? []), id]),
+        ]);
+      } catch {
+        // Memory keeps the new id; the disk ids come back on the next launch.
+      }
     },
     [qc, set, keyOf, userId],
   );
