@@ -11,6 +11,8 @@ import '@/features/gate/offline/signOutGuard';
 import '@/features/customer/offline/wallet';
 // Same for recent searches (spec D7: cleared on sign-out).
 import '@/features/customer/offline/recentSearches';
+// And the reviewed / refund-requested marks (spec E6, E8).
+import '@/features/customer/offline/actionMarks';
 import { resolveRoute } from '@/features/mode/domain/route';
 import { useModeState } from '@/features/mode/hooks/useModeState';
 import { useRouteStore } from '@/features/mode/hooks/useRouteStore';

@@ -45,6 +45,12 @@ type Props = {
    * mounts with it and whenever it changes (a banner is always the result of something).
    */
   live?: 'polite' | 'assertive';
+  /**
+   * iOS: also announce the message the banner mounts with (default). Pass false for a standing
+   * offer or note that is not the result of something (it would be read on every screen load);
+   * on Android that also drops the live region, so TalkBack doesn't read it as it appears.
+   */
+  announceOnMount?: boolean;
   testID?: string;
 };
 
@@ -57,9 +63,10 @@ export function Banner({
   action,
   onDismiss,
   live = 'polite',
+  announceOnMount = true,
   testID = 'banner',
 }: Props) {
-  useAnnounce(message, true);
+  useAnnounce(message, announceOnMount);
   return (
     <View
       testID={testID}
@@ -78,7 +85,12 @@ export function Banner({
             {title}
           </Text>
         ) : null}
-        <Text variant="bodySm" tone={FG[tone]} accessibilityLiveRegion={live}>
+        <Text
+          variant="bodySm"
+          tone={FG[tone]}
+          // Re-review N3: a standing note is not a live region on Android either.
+          accessibilityLiveRegion={announceOnMount ? live : 'none'}
+        >
           {message}
         </Text>
         {action !== undefined ? (

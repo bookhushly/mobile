@@ -3,6 +3,8 @@ import { useIsFocused } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { customerDb, withSessionRetry } from '@/features/customer/api/customerDb';
+import { isFallback } from '@/features/customer/api/fallback';
+import { readAllNotifications } from '@/features/customer/api/notificationsApi';
 import {
   CustomerLoadError,
   customerKeys,
@@ -17,8 +19,17 @@ import {
 import { useFocusRefetch } from '@/features/customer/hooks/useFocusRefetch';
 import { loadFailed } from '@/features/customer/hooks/loadState';
 import type { NotificationRow } from '@/features/customer/schemas/notifications';
+import { api } from '@/shared/api/instance';
 import type { ApiError } from '@/shared/lib/errors';
-import type { Result } from '@/shared/lib/result';
+import { ok, type Result } from '@/shared/lib/result';
+
+// Spec E3: the server route answers with the count, and a stale session is an explicit 401
+// (`auth` → stale). A deploy without it (404) falls back to the RLS write.
+async function markAllReadOnServer(userId: string): Promise<Result<number, ApiError>> {
+  const r = await readAllNotifications(api);
+  if (!r.ok) return r;
+  return isFallback(r.value) ? customerDb.markAllRead(userId) : ok(r.value.updated);
+}
 
 function newestFirst(a: NotificationRow, b: NotificationRow): number {
   return a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0;
@@ -126,10 +137,10 @@ export function useNotifications(userId: string): {
         rows.map((n) => (set.has(n.id) ? { ...n, read: v } : n));
       // Expected 0: the list can be a minute old, so another device may already have read them
       // (0 rows, not a stale session). The refetch after the write reconciles.
-      // Known limitation (BACKEND_STATUS §9 Customer 4a (g)): 0 rows is ambiguous, so a stale
-      // session can't be detected here. The UI shows "All marked as read" and the next refetch
-      // quietly brings the rows back as unread. A server route returning the count would fix it.
-      const done = write(to(true), to(false), () => customerDb.markAllRead(userId), 0);
+      // On the RLS fallback only (an older deploy), 0 rows stays ambiguous (BACKEND_STATUS §9
+      // Customer 4a (g)): a stale session can't be detected there, and the next refetch quietly
+      // brings the rows back as unread.
+      const done = write(to(true), to(false), () => markAllReadOnServer(userId), 0);
       lastMarkedAll.current = { ids, done };
     },
     undoMarkAll: () => {

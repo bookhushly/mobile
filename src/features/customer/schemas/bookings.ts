@@ -34,6 +34,12 @@ const money = z
   .nullable()
   .catch(null);
 
+// `hotel_rooms.room_number`: text in the schema, a number in the contract's example. Display only.
+const roomNumber = z
+  .union([z.string(), z.number().transform(String)])
+  .nullable()
+  .catch(null);
+
 export const eventTicket = z.object({
   id: z.string(),
   ticket_type: z.string(),
@@ -60,7 +66,8 @@ export const eventBookingRow = z.object({
   listing: z
     .object({
       id: z.string(),
-      title: z.string(),
+      // Nullable for `/api/bookings/mine`, which sends `title ?? null`.
+      title: z.string().nullable(),
       location: z.string().nullable(),
       media_urls: urls,
       event_date: dateLike.nullable(),
@@ -83,7 +90,11 @@ export const hotelBookingRow = z.object({
   children: z.number().int().nullable(),
   payment_status: z.enum(['pending', 'completed', 'refunded', 'failed']).nullable(),
   total_amount: money,
-  booking_status: z.enum(['confirmed', 'checked_in', 'checked_out', 'cancelled']).nullable(),
+  // `completed` is not in the table's check constraint today, but the web review rule accepts it
+  // (contract review K4): read it rather than fail the row.
+  booking_status: z
+    .enum(['confirmed', 'checked_in', 'checked_out', 'completed', 'cancelled'])
+    .nullable(),
   checked_in: z.boolean().nullable(),
   checked_in_at: z.string().nullable(),
   checked_out_at: z.string().nullable(),
@@ -92,7 +103,7 @@ export const hotelBookingRow = z.object({
   hotel: z
     .object({
       id: z.string(),
-      name: z.string(),
+      name: z.string().nullable(),
       city: z.string().nullable(),
       state: z.string().nullable(),
       address: z.string().nullable(),
@@ -101,7 +112,9 @@ export const hotelBookingRow = z.object({
       check_out_time: clock,
     })
     .nullable(),
-  room_type: z.object({ id: z.string(), name: z.string() }).nullable(),
+  room_type: z.object({ id: z.string(), name: z.string().nullable() }).nullable(),
+  // Only `/api/bookings/mine` has it (customers can't read `hotel_rooms`, §7).
+  room_number: roomNumber.optional(),
 });
 export type HotelBookingRow = z.infer<typeof hotelBookingRow>;
 
@@ -116,7 +129,15 @@ export const apartmentBookingRow = z.object({
     .nullable(),
   total_amount: money,
   booking_status: z
-    .enum(['pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled', 'no_show'])
+    .enum([
+      'pending',
+      'confirmed',
+      'checked_in',
+      'checked_out',
+      'completed',
+      'cancelled',
+      'no_show',
+    ])
     .nullable(),
   checked_in_at: z.string().nullable(),
   checked_out_at: z.string().nullable(),
@@ -124,7 +145,7 @@ export const apartmentBookingRow = z.object({
   apartment: z
     .object({
       id: z.string(),
-      name: z.string(),
+      name: z.string().nullable(),
       city: z.string().nullable(),
       state: z.string().nullable(),
       area: z.string().nullable(),
@@ -136,3 +157,119 @@ export const apartmentBookingRow = z.object({
     .nullable(),
 });
 export type ApartmentBookingRow = z.infer<typeof apartmentBookingRow>;
+
+// ── GET /api/bookings/mine (contract: web docs/mobile/CUSTOMER_BOOKINGS_API.md §1) ─────────────────
+// Parsed into the RLS row shapes above, so mapping and the wallet stay the same. `/mine` sends one
+// `image` instead of the URL arrays, and lacks a few display fields (null here).
+
+const image = z.string().nullable().catch(null);
+const imageUrls = (i: string | null): string[] | null => (i === null ? null : [i]);
+
+export const mineEventRow = eventBookingRow
+  .omit({ listing: true })
+  .extend({
+    listing: z
+      .object({
+        id: z.string(),
+        title: z.string().nullable(),
+        image,
+        location: z.string().nullable(),
+        event_date: dateLike.nullable(),
+        event_time: z.string().nullable(),
+        require_dynamic_ticket: z.boolean().nullable(),
+      })
+      .nullable(),
+  })
+  .transform(({ listing: l, ...row }): EventBookingRow => ({
+    ...row,
+    listing:
+      l === null
+        ? null
+        : {
+            id: l.id,
+            title: l.title,
+            location: l.location,
+            media_urls: imageUrls(l.image),
+            event_date: l.event_date,
+            event_end_date: null,
+            event_time: l.event_time,
+            require_dynamic_ticket: l.require_dynamic_ticket,
+          },
+  }));
+
+export const mineHotelRow = hotelBookingRow
+  .omit({ hotel: true, checked_in: true })
+  .extend({
+    hotel: z
+      .object({
+        id: z.string(),
+        name: z.string().nullable(),
+        city: z.string().nullable(),
+        state: z.string().nullable(),
+        image,
+      })
+      .nullable(),
+    room_number: roomNumber,
+  })
+  .transform(({ hotel: h, ...row }): HotelBookingRow => ({
+    ...row,
+    checked_in: null,
+    hotel:
+      h === null
+        ? null
+        : {
+            id: h.id,
+            name: h.name,
+            city: h.city,
+            state: h.state,
+            address: null,
+            image_urls: imageUrls(h.image),
+            check_in_time: null,
+            check_out_time: null,
+          },
+  }));
+
+export const mineApartmentRow = apartmentBookingRow
+  .omit({ apartment: true })
+  .extend({
+    apartment: z
+      .object({
+        id: z.string(),
+        name: z.string().nullable(),
+        city: z.string().nullable(),
+        state: z.string().nullable(),
+        area: z.string().nullable(),
+        image,
+      })
+      .nullable(),
+  })
+  .transform(({ apartment: a, ...row }): ApartmentBookingRow => ({
+    ...row,
+    apartment:
+      a === null
+        ? null
+        : {
+            id: a.id,
+            name: a.name,
+            city: a.city,
+            state: a.state,
+            area: a.area,
+            address: null,
+            image_urls: imageUrls(a.image),
+            check_in_time: null,
+            check_out_time: null,
+          },
+  }));
+
+export type MineBookings = {
+  events: EventBookingRow[];
+  hotels: HotelBookingRow[];
+  apartments: ApartmentBookingRow[];
+};
+
+// The whole body: all three lists are asked for, so all three must be there.
+export const mineBody = z.object({
+  events: z.array(mineEventRow),
+  hotels: z.array(mineHotelRow),
+  apartments: z.array(mineApartmentRow),
+});

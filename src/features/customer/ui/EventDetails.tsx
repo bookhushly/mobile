@@ -1,4 +1,5 @@
 import { Ticket } from 'lucide-react-native';
+import type { ReactNode } from 'react';
 
 import { eventWhen, packagesLine } from '@/features/customer/domain/detailText';
 import { fromEvent } from '@/features/customer/domain/myBookings';
@@ -16,11 +17,13 @@ type Props = {
   today: IsoDate;
   onBack: () => void;
   onRefresh: () => Promise<unknown>;
+  /** The Manage booking section (spec E9). */
+  manage?: ReactNode;
   onShowTickets: (bookingId: string) => void;
 };
 
 // C12 event: date and time, venue (→ Maps), packages, payment, tickets, Show tickets.
-export function EventDetails({ row, today, onBack, onRefresh, onShowTickets }: Props) {
+export function EventDetails({ row, today, onBack, onRefresh, manage, onShowTickets }: Props) {
   const b = fromEvent(row, today);
   const tickets = canShowTickets(row);
   const place = b.place;
@@ -29,6 +32,7 @@ export function EventDetails({ row, today, onBack, onRefresh, onShowTickets }: P
       booking={b}
       onBack={onBack}
       onRefresh={onRefresh}
+      manage={manage}
       notice={
         tickets === 'issuing' ? (
           <Banner tone="neutral" message="Your tickets are being issued — pull to refresh" />

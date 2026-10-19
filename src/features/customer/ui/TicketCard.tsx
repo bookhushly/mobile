@@ -18,6 +18,7 @@ import {
   type TicketView,
 } from '@/features/customer/domain/tickets';
 import { useLiveCode } from '@/features/customer/hooks/useLiveCode';
+import type { LiveCodes } from '@/features/customer/hooks/useLiveCodes';
 import { CountdownRing } from '@/features/customer/ui/CountdownRing';
 import { LiveClock } from '@/features/customer/ui/LiveClock';
 import { clock } from '@/shared/api/instance';
@@ -37,6 +38,8 @@ type Props = {
   onSignIn: () => void;
   /** The signed-in customer's name (their own profile), first on the ticket line; null if unknown. */
   holder: string | null;
+  /** The booking's live codes (one poll for all its tickets, spec E2). */
+  codes: LiveCodes;
 };
 
 const CONNECT = 'Connect to the internet to show this ticket. This event only accepts live codes.';
@@ -92,10 +95,27 @@ function Notice({
 }
 
 // One page of the ticket viewer (C7, C8, C11). A known admission needs no poll: it is final.
-export function TicketCard({ ticket, active, liveOnly, qrSize, today, onSignIn, holder }: Props) {
+// Only the page on screen draws a code; the others show a placeholder.
+export function TicketCard({
+  ticket,
+  active,
+  liveOnly,
+  qrSize,
+  today,
+  onSignIn,
+  holder,
+  codes,
+}: Props) {
   const known = ticket.admittedAt !== null;
-  const { state: polled, retry } = useLiveCode(known ? null : ticket.id, active && !known);
-  const state: LiveCodeState = known ? { kind: 'admitted', at: ticket.admittedAt } : polled;
+  // A deploy without the per-booking route: this card polls its own ticket, as in 4a.
+  const own = codes.perTicket && !known;
+  const single = useLiveCode(own ? ticket.id : null, active && own);
+  const state: LiveCodeState = known
+    ? { kind: 'admitted', at: ticket.admittedAt }
+    : codes.perTicket
+      ? single.state
+      : codes.stateOf(ticket.id);
+  const retry = codes.perTicket ? single.retry : codes.retry;
   const label = `Ticket ${String(ticket.index)} of ${String(ticket.total)} code`;
   const meta = (
     <Text variant="bodyStrong" align="center">

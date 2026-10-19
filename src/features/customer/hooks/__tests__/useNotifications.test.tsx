@@ -2,6 +2,8 @@ import { onlineManager } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import { customerDb } from '@/features/customer/api/customerDb';
+import { FALLBACK } from '@/features/customer/api/fallback';
+import { readAllNotifications } from '@/features/customer/api/notificationsApi';
 import { NOTIFICATIONS_POLL_MS } from '@/features/customer/hooks/customerKeys';
 import { useNotifications } from '@/features/customer/hooks/useNotifications';
 import type { ApiError } from '@/shared/lib/errors';
@@ -15,6 +17,9 @@ jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused }));
 jest.mock('@/shared/supabase/client', () => ({
   supabase: { auth: { refreshSession: jest.fn(), updateUser: jest.fn() } },
 }));
+jest.mock('@/shared/api/instance', () => ({ api: {} }));
+jest.mock('@/features/customer/api/notificationsApi', () => ({ readAllNotifications: jest.fn() }));
+const readAll = jest.mocked(readAllNotifications);
 jest.mock('@/features/customer/api/customerDb', () => ({
   ...jest.requireActual<object>('@/features/customer/api/customerDb'),
   customerDb: {
@@ -49,6 +54,8 @@ const ROWS = [note('a'), note('bb', { read: true }), note('ccc')];
 beforeEach(() => {
   jest.clearAllMocks();
   mockFocused = true;
+  // An older deploy without read-all by default: the 4a RLS path below.
+  readAll.mockResolvedValue(ok(FALLBACK));
   db = {
     notifications: jest.spyOn(customerDb, 'notifications').mockResolvedValue(ok(ROWS)),
     markRead: jest.spyOn(customerDb, 'markRead').mockResolvedValue(ok(1)),
@@ -184,7 +191,57 @@ it('a failed session refresh is stale without a retry', async () => {
   await done();
 });
 
+describe('mark all read through read-all (spec E3)', () => {
+  it('uses the server route, not the RLS write', async () => {
+    readAll.mockResolvedValue(ok({ updated: 2 }));
+    const { result, done } = await run();
+    db.notifications.mockResolvedValue(ok(ROWS.map((n) => ({ ...n, read: true }))));
+    await act(() => {
+      result.current.markAllRead();
+    });
+    expect(result.current.unread).toBe(0);
+    await waitFor(() => {
+      expect(db.notifications).toHaveBeenCalledTimes(2);
+    });
+    expect(readAll).toHaveBeenCalledWith({});
+    expect(db.markAllRead).not.toHaveBeenCalled();
+    expect(result.current.writeError).toBeNull();
+    await done();
+  });
+
+  it('a 401 from read-all is a stale session, rolled back (the 4a limitation is gone)', async () => {
+    readAll.mockResolvedValue(err({ kind: 'auth' }));
+    const { result, done } = await run();
+    db.notifications.mockResolvedValue(err({ kind: 'network' }));
+    await act(() => {
+      result.current.markAllRead();
+    });
+    await waitFor(() => {
+      expect(result.current.writeError).toBe('stale');
+    });
+    expect(result.current.unread).toBe(2);
+    expect(db.markAllRead).not.toHaveBeenCalled();
+    await done();
+  });
+
+  it('a 503 is transient, rolled back, and never falls back to the RLS write', async () => {
+    readAll.mockResolvedValue(err({ kind: 'unavailable', status: 503, code: 'update_failed' }));
+    const { result, done } = await run();
+    db.notifications.mockResolvedValue(err({ kind: 'network' }));
+    await act(() => {
+      result.current.markAllRead();
+    });
+    await waitFor(() => {
+      expect(result.current.writeError).toBe('transient');
+    });
+    expect(result.current.unread).toBe(2);
+    expect(db.markAllRead).not.toHaveBeenCalled();
+    await done();
+  });
+});
+
 it('mark all read touching 0 rows (read on another device) is fine, not stale', async () => {
+  // On the RLS fallback (an older deploy).
   db.markAllRead.mockResolvedValue(ok(0));
   const { result, done } = await run();
   db.notifications.mockResolvedValue(ok(ROWS.map((n) => ({ ...n, read: true }))));

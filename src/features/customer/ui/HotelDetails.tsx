@@ -1,4 +1,5 @@
 import { QrCode } from 'lucide-react-native';
+import type { ReactNode } from 'react';
 
 import { showCheckInCode } from '@/features/customer/domain/checkInCode';
 import { dayAt, guestsLine, joinAddress } from '@/features/customer/domain/detailText';
@@ -15,12 +16,14 @@ type Props = {
   today: IsoDate;
   onBack: () => void;
   onRefresh: () => Promise<unknown>;
+  /** The Manage booking section (spec E9). */
+  manage?: ReactNode;
   onShowCheckInCode: (bookingId: string) => void;
 };
 
 // C12 hotel: address (→ Maps), check-in/out with the hotel's times, room type, guests, payment.
 // No room number: customers can't read rooms.
-export function HotelDetails({ row, today, onBack, onRefresh, onShowCheckInCode }: Props) {
+export function HotelDetails({ row, today, onBack, onRefresh, manage, onShowCheckInCode }: Props) {
   const b = fromHotel(row, today);
   const h = row.hotel;
   const address = joinAddress([h?.address, h?.city, h?.state]);
@@ -29,6 +32,7 @@ export function HotelDetails({ row, today, onBack, onRefresh, onShowCheckInCode 
       booking={b}
       onBack={onBack}
       onRefresh={onRefresh}
+      manage={manage}
       footer={
         showCheckInCode(row) ? (
           <Button

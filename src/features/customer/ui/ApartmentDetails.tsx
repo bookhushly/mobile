@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import {
   dayAt,
   guestsCount,
@@ -16,17 +18,19 @@ type Props = {
   today: IsoDate;
   onBack: () => void;
   onRefresh: () => Promise<unknown>;
+  /** The Manage booking section (spec E9). */
+  manage?: ReactNode;
 };
 
 // C12 apartment: area, address (→ Maps), dates and nights, check-in/out times, guests, payment.
-export function ApartmentDetails({ row, today, onBack, onRefresh }: Props) {
+export function ApartmentDetails({ row, today, onBack, onRefresh, manage }: Props) {
   const b = fromApartment(row, today);
   const a = row.apartment;
   const address = joinAddress([a?.address, a?.area, a?.city]);
   const nights = row.number_of_nights ?? daysBetween(row.check_in_date, row.check_out_date);
   const dates = stayRange(row.check_in_date, row.check_out_date);
   return (
-    <BookingFrame booking={b} onBack={onBack} onRefresh={onRefresh}>
+    <BookingFrame booking={b} onBack={onBack} onRefresh={onRefresh} manage={manage}>
       <DetailRows
         rows={[
           { label: 'Area', value: b.place ?? '' },

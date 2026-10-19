@@ -1,10 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { openBrowserAsync } from 'expo-web-browser';
 import { Linking } from 'react-native';
 
 import { fromEvent } from '@/features/customer/domain/myBookings';
 import { useBooking } from '@/features/customer/hooks/useBooking';
 import type { WalletEntry } from '@/features/customer/offline/wallet';
+import { sentNotice } from '@/features/customer/hooks/sentNotice';
 import { BookingScreen } from '@/features/customer/screens/BookingScreen';
 import { refreshColors } from '@/shared/ui';
 
@@ -14,6 +15,15 @@ jest.mock('@/features/customer/hooks/useBooking', () => ({ useBooking: jest.fn()
 jest.mock('@/shared/api/instance', () => ({
   clock: { serverNow: () => Date.parse('2026-10-13T11:00:00Z') },
 }));
+// The section has its own tests (ui/__tests__/BookingActions*); here only where it sits.
+jest.mock('@/features/customer/ui/BookingActions', () => {
+  const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
+  const { createElement } = jest.requireActual<typeof import('react')>('react');
+  return {
+    BookingActions: ({ target, email }: { target: { kind: string }; email: string }) =>
+      createElement(Text, null, `manage ${target.kind} ${email}`),
+  };
+});
 jest.mock('expo-web-browser', () => ({
   openBrowserAsync: jest.fn(() => Promise.resolve({ type: 'opened' })),
 }));
@@ -39,9 +49,12 @@ const h = {
   onBack: jest.fn(),
   onShowTickets: jest.fn(),
   onShowCheckInCode: jest.fn(),
+  onTransferred: jest.fn(),
 };
 async function show(kind: 'event' | 'hotel' | 'apartment') {
-  await render(<BookingScreen userId="u1" booking={{ kind, id: ID }} {...h} />);
+  await render(
+    <BookingScreen userId="u1" email="me@example.com" booking={{ kind, id: ID }} {...h} />,
+  );
 }
 
 let openURL: jest.SpyInstance;
@@ -69,7 +82,9 @@ it('event: date, venue to Maps, packages, tickets and Show tickets', async () =>
   expect(screen.getByLabelText('Payment, ₦45,000, Paid')).toBeTruthy();
   expect(screen.getByLabelText('Ticket 1 · VIP, Seat A12, Valid')).toBeTruthy();
   expect(screen.getByLabelText('Ticket 2 · VIP, Admitted on Tue 20 Oct at 7:42 pm')).toBeTruthy();
-  expect(screen.getByText('To change or cancel, use bookhushly.com')).toBeTruthy();
+  // Spec E9: the Manage booking section replaces the 4a "use bookhushly.com" note.
+  expect(screen.getByText('manage event me@example.com')).toBeTruthy();
+  expect(screen.queryByText('To change or cancel, use bookhushly.com')).toBeNull();
 
   await fireEvent.press(screen.getByRole('link', { name: 'Venue, Eko Hotel, Lagos' }));
   expect(openURL).toHaveBeenCalledWith('https://maps.apple.com/?q=Eko%20Hotel%2C%20Lagos');
@@ -174,7 +189,7 @@ it('a booking RLS does not return, or bad params, is not on your account', async
   loaded({ row: null });
   await show('hotel');
   expect(screen.getByText('This booking isn’t on your account')).toBeTruthy();
-  await render(<BookingScreen userId="u1" booking={null} {...h} />);
+  await render(<BookingScreen userId="u1" email="" booking={null} {...h} />);
   expect(screen.getByText('This booking isn’t on your account')).toBeTruthy();
 });
 
@@ -223,4 +238,18 @@ it('pull to refresh on the details uses the theme colours', async () => {
   expect(json).toContain(`"tintColor":"${refreshColors.tintColor}"`);
   expect(json).toContain(`"colors":${JSON.stringify(refreshColors.colors)}`);
   expect(json).toContain(`"progressBackgroundColor":"${refreshColors.progressBackgroundColor}"`);
+});
+
+it('just transferred away: "not found" is the transfer working, never "not yours" (fix 9)', async () => {
+  sentNotice.set('u1', ID, 'b•••a@example.com');
+  try {
+    loaded({ row: null });
+    await show('event');
+    expect(screen.queryByText('This booking isn’t on your account')).toBeNull();
+    expect(screen.getByRole('header', { name: 'Booking' })).toBeTruthy();
+  } finally {
+    await act(() => {
+      sentNotice.clear();
+    });
+  }
 });

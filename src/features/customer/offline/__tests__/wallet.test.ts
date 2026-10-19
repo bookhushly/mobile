@@ -280,6 +280,26 @@ describe('save and wipe run one at a time', () => {
   });
 });
 
+describe('drop', () => {
+  it('removes one booking and keeps when the rest was saved', async () => {
+    const w = createWallet({ store: store() });
+    const stay = booking({ kind: 'hotel', id: 'h1' });
+    await w.save('u1', [ticketed, stay], NOW);
+    await w.drop('u1', 'event', 'e1');
+    expect(await w.load('u1')).toEqual({ userId: 'u1', savedAt: NOW, entries: [stay] });
+  });
+
+  it('leaves another account’s wallet alone, and loses to a wipe queued first', async () => {
+    const w = createWallet({ store: store() });
+    await w.save('u1', [ticketed], NOW);
+    await w.drop('u2', 'event', 'e1');
+    expect((await w.load('u1'))?.entries).toHaveLength(1);
+    const wiped = w.wipe();
+    await Promise.all([wiped, w.drop('u1', 'event', 'e1')]);
+    expect(await w.load('u1')).toBeNull();
+  });
+});
+
 it('the default wallet is encrypted and registered to be wiped on every sign-out', async () => {
   await wallet.save('u1', [ticketed], NOW);
   expect(await wallet.load('u1')).not.toBeNull();

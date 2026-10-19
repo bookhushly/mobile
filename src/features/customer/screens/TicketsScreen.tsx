@@ -13,6 +13,7 @@ import {
   type TicketView,
 } from '@/features/customer/domain/tickets';
 import { useBooking } from '@/features/customer/hooks/useBooking';
+import { useLiveCodes } from '@/features/customer/hooks/useLiveCodes';
 import { useProfile } from '@/features/customer/hooks/useProfile';
 import { CodeSheet } from '@/features/customer/ui/CodeSheet';
 import { savedAtLabel } from '@/features/customer/ui/savedAt';
@@ -81,6 +82,8 @@ function EventTickets({ userId, id, index, onClose, onSignIn }: Props & { id: st
   }
   // Full brightness and awake only while the codes are on screen (leaving restores both).
   useBrightScreen(focused && shown !== null);
+  // Spec E2: one poll for the whole booking while the codes are on screen.
+  const codes = useLiveCodes(shown !== null ? id : null, focused);
 
   if (b.row === null) return <NotYours onClose={onClose} />;
   if (shown !== null) {
@@ -104,6 +107,7 @@ function EventTickets({ userId, id, index, onClose, onSignIn }: Props & { id: st
           start={pagerIndexParam(index, shown.tickets.length)}
           onSignIn={onSignIn}
           holder={profile?.name ?? null}
+          codes={codes}
         />
       </CodeSheet>
     );

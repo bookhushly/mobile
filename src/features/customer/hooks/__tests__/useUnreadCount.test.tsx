@@ -12,6 +12,7 @@ jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused }));
 jest.mock('@/shared/supabase/client', () => ({
   supabase: { auth: { refreshSession: jest.fn(), updateUser: jest.fn() } },
 }));
+jest.mock('@/shared/api/instance', () => ({ api: {} }));
 jest.mock('@/features/customer/api/customerDb', () => ({
   ...jest.requireActual<object>('@/features/customer/api/customerDb'),
   customerDb: {

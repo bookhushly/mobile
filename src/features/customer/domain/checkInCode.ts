@@ -8,7 +8,8 @@ export function showCheckInCode(
   row: Pick<HotelBookingRow, 'payment_status' | 'booking_status' | 'check_in_code'>,
 ): boolean {
   if (row.payment_status !== 'completed') return false;
-  if (row.booking_status === 'cancelled' || row.booking_status === 'checked_out') return false;
+  const st = row.booking_status;
+  if (st === 'cancelled' || st === 'checked_out' || st === 'completed') return false;
   return row.check_in_code !== null && row.check_in_code.trim() !== '';
 }
 

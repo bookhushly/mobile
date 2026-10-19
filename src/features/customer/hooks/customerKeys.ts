@@ -19,6 +19,13 @@ export const customerKeys = {
   /** Recent searches and the Explore place, read from this device. */
   recentSearches: (u: string) => ['customer', u, 'recentSearches'] as const,
   explorePlace: (u: string) => ['customer', u, 'explorePlace'] as const,
+  /** Listing ids reviewed and event bookings with a refund request, read from this device. */
+  reviewed: (u: string) => ['customer', u, 'reviewed'] as const,
+  refundRequested: (u: string) => ['customer', u, 'refundRequested'] as const,
+  /** Guest bookings that can be claimed (`GET /api/bookings/claim`). */
+  claimCounts: (u: string) => ['customer', u, 'claimCounts'] as const,
+  /** One event booking's live codes (`GET /api/bookings/event/{id}/codes`). Never cached. */
+  liveCodes: (u: string, bookingId: string) => ['customer', u, 'liveCodes', bookingId] as const,
 };
 
 export type ListingsWhere = { q: string; state?: string; city?: string };
