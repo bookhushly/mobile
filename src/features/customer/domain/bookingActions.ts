@@ -109,9 +109,12 @@ function apartmentActions(row: ApartmentBookingRow, today: IsoDate): BookingActi
     today,
   );
   if (review) out.push('review');
-  // E5 plus two guards the server lacks (§9 Customer 5(a): no date check): a no-show, or a stay
-  // that has already started, is not offered — cancelling it would refund a used stay.
+  // E5 plus guards the server lacks (§9 Customer 5(a): no date check): a no-show, or a stay
+  // that has already started, is not offered — cancelling it would refund a used stay. A
+  // part-refunded stay isn't either: the server won't refund the rest, and "Nothing is charged"
+  // would be untrue for money already kept.
   const closed =
+    row.payment_status === 'partially_refunded' ||
     row.booking_status === 'cancelled' ||
     row.booking_status === 'checked_in' ||
     row.booking_status === 'checked_out' ||

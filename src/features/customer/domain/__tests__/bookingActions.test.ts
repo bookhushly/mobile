@@ -328,6 +328,11 @@ describe('bookingActions: apartments', () => {
     expect(bookingActions(row, 'apartment', TODAY, NOW)).toEqual([]);
   });
 
+  it('a part-refunded stay offers no cancel (no honest money line for it)', () => {
+    const row = ap({ payment_status: 'partially_refunded' });
+    expect(bookingActions(row, 'apartment', TODAY, NOW)).toEqual([]);
+  });
+
   describe('review', () => {
     it('paid (`paid`), checked out or past check-out', () => {
       const past = ap({ check_in_date: '2026-10-15', check_out_date: '2026-10-17' });
