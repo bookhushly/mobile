@@ -30,7 +30,11 @@ jest.mock('@/features/customer/api/customerDb', () => ({
   },
 }));
 jest.mock('@/features/customer/hooks/useMyBookings', () => ({ useMyBookings: jest.fn() }));
-jest.mock('@/shared/api/instance', () => ({ clock: { serverNow: () => mockNow } }));
+jest.mock('@/shared/api/instance', () => ({ api: {}, clock: { serverNow: () => mockNow } }));
+// An older deploy without read-all: "Mark all as read" takes the 4a RLS path.
+jest.mock('@/features/customer/api/notificationsApi', () => ({
+  readAllNotifications: () => Promise.resolve({ ok: true, value: { fallback: true } }),
+}));
 const mockNow = Date.parse('2026-10-13T11:00:00Z');
 
 type Db = typeof customerDb;
