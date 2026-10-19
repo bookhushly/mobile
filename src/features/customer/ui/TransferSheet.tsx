@@ -9,6 +9,9 @@ import { TransferReview } from '@/features/customer/ui/TransferReview';
 import { maskEmail } from '@/shared/lib/maskEmail';
 import { Button, Input, Sheet, Stack, Text } from '@/shared/ui';
 
+/** RFC 5321's longest address (security review S5). */
+export const EMAIL_MAX = 254;
+
 type Props = {
   visible: boolean;
   title: string;
@@ -131,6 +134,7 @@ export function TransferSheet(p: Props) {
             }
           }}
           keyboardType="email-address"
+          maxLength={EMAIL_MAX}
           autoCapitalize="none"
           autoCorrect={false}
           autoComplete="off"

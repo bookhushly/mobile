@@ -81,6 +81,7 @@ describe('Transfer sheet', () => {
     expect(screen.getByText('Enter a valid email address.')).toBeTruthy();
     expect(transferMock).not.toHaveBeenCalled();
     expect(ME).toBe('me@example.com');
+    expect(screen.getByTestId('transfer-email').props.maxLength).toBe(254);
     await r.unmount();
   });
 
