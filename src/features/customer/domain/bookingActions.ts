@@ -146,3 +146,16 @@ export function cancelMoneyLine(row: AnyRow, kind: BookingKind): MoneyLine {
   if (!paid) return 'nothingCharged';
   return kind === 'hotel' ? 'hotelFullRefund' : 'refundIfReversible';
 }
+
+/** What a review is posted on (spec E8): the booking's listing, when RLS still shows it. */
+export type ReviewTargetOf = { listingId: string; type: BookingKind };
+
+export function reviewTarget(row: AnyRow, kind: BookingKind): ReviewTargetOf | null {
+  const e = asEvent(row, kind);
+  if (e) return e.listing === null ? null : { listingId: e.listing.id, type: 'event' };
+  const h = asHotel(row, kind);
+  if (h) return h.hotel === null ? null : { listingId: h.hotel.id, type: 'hotel' };
+  const a = asApartment(row, kind);
+  if (a) return a.apartment === null ? null : { listingId: a.apartment.id, type: 'apartment' };
+  return null;
+}

@@ -1,4 +1,8 @@
-import { bookingActions, cancelMoneyLine } from '@/features/customer/domain/bookingActions';
+import {
+  bookingActions,
+  cancelMoneyLine,
+  reviewTarget,
+} from '@/features/customer/domain/bookingActions';
 import type {
   ApartmentBookingRow,
   EventBookingRow,
@@ -382,5 +386,23 @@ describe('cancelMoneyLine', () => {
     expect(cancelMoneyLine(ap({ payment_status: 'partially_refunded' }), 'apartment')).toBe(
       'nothingCharged',
     );
+  });
+});
+
+describe('reviewTarget', () => {
+  it('is the booking’s listing, by kind', () => {
+    expect(reviewTarget(ev(), 'event')).toEqual({ listingId: ev().listing?.id, type: 'event' });
+    expect(reviewTarget(ho(), 'hotel')).toEqual({ listingId: ho().hotel?.id, type: 'hotel' });
+    expect(reviewTarget(ap(), 'apartment')).toEqual({
+      listingId: ap().apartment?.id,
+      type: 'apartment',
+    });
+  });
+
+  it('a hidden listing (null embed) or a row of another kind has none', () => {
+    expect(reviewTarget(ev({ listing: null }), 'event')).toBeNull();
+    expect(reviewTarget(ho({ hotel: null }), 'hotel')).toBeNull();
+    expect(reviewTarget(ap({ apartment: null }), 'apartment')).toBeNull();
+    expect(reviewTarget(ho(), 'event')).toBeNull();
   });
 });
