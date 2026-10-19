@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { openBrowserAsync } from 'expo-web-browser';
 import { Linking } from 'react-native';
 
@@ -248,6 +248,8 @@ it('just transferred away: "not found" is the transfer working, never "not yours
     expect(screen.queryByText('This booking isn’t on your account')).toBeNull();
     expect(screen.getByRole('header', { name: 'Booking' })).toBeTruthy();
   } finally {
-    sentNotice.clear();
+    await act(() => {
+      sentNotice.clear();
+    });
   }
 });
