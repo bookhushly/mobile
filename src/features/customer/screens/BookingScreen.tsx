@@ -8,7 +8,7 @@ import { NoticeScreen } from '@/features/customer/screens/NoticeScreen';
 import { ApartmentDetails } from '@/features/customer/ui/ApartmentDetails';
 import type { ActionTarget } from '@/features/customer/ui/actionTarget';
 import { BookingActions } from '@/features/customer/ui/BookingActions';
-import { BookingFrame } from '@/features/customer/ui/BookingFrame';
+import { BookingFrame, type PayHandlers } from '@/features/customer/ui/BookingFrame';
 import { EventDetails } from '@/features/customer/ui/EventDetails';
 import { HotelDetails } from '@/features/customer/ui/HotelDetails';
 import { SavedDetails } from '@/features/customer/ui/SavedDetails';
@@ -20,7 +20,7 @@ type Handlers = {
   onShowCheckInCode: (bookingId: string) => void;
   /** After a transfer: back to Bookings (the booking is no longer this user's). */
   onTransferred: () => void;
-};
+} & PayHandlers;
 type Props = Handlers & {
   userId: string;
   /** The session email (a transfer never goes to it). */
@@ -44,13 +44,19 @@ type Loaded<R> = ReturnType<typeof useBooking> & { row: R | null | undefined };
 
 // Fresh row → its details; no such row (RLS) → not yours; failed with a saved copy → that copy;
 // failed without one → error; else loading. A failure never reads as "not yours" (C17).
-function settle<R>(b: Loaded<R>, h: Handlers, details: (row: R) => ReactNode): ReactNode {
+function settle<R>(
+  b: Loaded<R>,
+  userId: string,
+  h: Handlers,
+  details: (row: R) => ReactNode,
+): ReactNode {
   if (b.row !== undefined && b.row !== null) return details(b.row);
   if (b.row === null) return <NotYours onBack={h.onBack} />;
   if (b.fromWallet !== null)
     return (
       <SavedDetails
         entry={b.fromWallet}
+        userId={userId}
         savedAt={b.savedAt}
         onBack={h.onBack}
         onRefresh={b.refetch}
@@ -96,9 +102,11 @@ function EventBooking(p: One) {
   // reads as not found; that is the transfer working, never "isn't on your account".
   const away = useTransferredAway(userId, id);
   if (away && b.row === null) return <BookingFrame onBack={h.onBack} />;
-  return settle(b, h, (row) => (
+  return settle(b, userId, h, (row) => (
     <EventDetails
       row={row}
+      userId={userId}
+      pay={h}
       today={b.today}
       onBack={h.onBack}
       onRefresh={b.refetch}
@@ -111,9 +119,11 @@ function EventBooking(p: One) {
 function HotelBooking(p: One) {
   const { userId, id, ...h } = p;
   const b = useBooking(userId, 'hotel', id);
-  return settle(b, h, (row) => (
+  return settle(b, userId, h, (row) => (
     <HotelDetails
       row={row}
+      userId={userId}
+      pay={h}
       today={b.today}
       onBack={h.onBack}
       onRefresh={b.refetch}
@@ -126,9 +136,11 @@ function HotelBooking(p: One) {
 function ApartmentBooking(p: One) {
   const { userId, id, ...h } = p;
   const b = useBooking(userId, 'apartment', id);
-  return settle(b, h, (row) => (
+  return settle(b, userId, h, (row) => (
     <ApartmentDetails
       row={row}
+      userId={userId}
+      pay={h}
       today={b.today}
       onBack={h.onBack}
       onRefresh={b.refetch}

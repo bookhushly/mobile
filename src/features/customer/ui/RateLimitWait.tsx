@@ -11,11 +11,15 @@ export function mmss(seconds: number): string {
 
 export const DEFAULT_WAIT_SEC = 60;
 
-type Props = { retryAfterSec: number | null };
+type Props = {
+  retryAfterSec: number | null;
+  /** Called once the countdown reaches 0 (a caller can turn its action back on). */
+  onDone?: () => void;
+};
 
 // Spec E10 / ruling (b): a 429 counts down. UX review U1: the ticking line is plain text, never a
 // live region (the Banner above it keeps a fixed message), so it isn't read out every second.
-export function RateLimitWait({ retryAfterSec }: Props) {
+export function RateLimitWait({ retryAfterSec, onDone }: Props) {
   const total = Math.max(0, Math.ceil(retryAfterSec ?? DEFAULT_WAIT_SEC));
   const [left, setLeft] = useState(total);
   useEffect(() => {
@@ -29,6 +33,9 @@ export function RateLimitWait({ retryAfterSec }: Props) {
       clearInterval(id);
     };
   }, [total]);
+  useEffect(() => {
+    if (left === 0) onDone?.();
+  }, [left, onDone]);
   return (
     <Text variant="bodySm" tone="textSecondary" tabular testID="rate-limit-wait">
       {left > 0 ? `You can try again in ${mmss(left)}` : 'You can try again now.'}

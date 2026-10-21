@@ -15,6 +15,8 @@ export type RequestOptions<T> = {
   timeoutMs?: number;
   /** `false`: a public route. No token is read or sent, and a 401 is never refreshed. */
   auth?: false;
+  /** Extra per-request headers (e.g. `Idempotency-Key`). Never override the headers the client sets itself. */
+  headers?: Record<string, string>;
 };
 
 export type RefreshOutcome = { token: string } | { failure: 'network' | 'invalid' };
@@ -33,6 +35,23 @@ type Deps = {
   random?: () => number;
   onReach?: (reached: boolean) => void;
 };
+
+const RESERVED_HEADERS = new Set([
+  'accept',
+  'authorization',
+  'content-type',
+  'x-app-version',
+  'x-platform',
+]);
+
+// Header names are case-insensitive: drop any extra whose lowercased name is one the client owns.
+function safeExtras(extra: Record<string, string> | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(extra ?? {})) {
+    if (!RESERVED_HEADERS.has(name.toLowerCase())) out[name] = value;
+  }
+  return out;
+}
 
 export function createApiClient(deps: Deps) {
   const timeoutMs = deps.timeoutMs ?? 15_000;
@@ -65,6 +84,7 @@ export function createApiClient(deps: Deps) {
     token: string | null,
     outerSignal: AbortSignal | undefined,
     limitMs: number,
+    extraHeaders?: Record<string, string>,
   ): Promise<Result<Response, ApiError>> {
     const controller = new AbortController();
     const timer = setTimeout(() => {
@@ -76,6 +96,7 @@ export function createApiClient(deps: Deps) {
     outerSignal?.addEventListener('abort', onOuterAbort);
     try {
       const headers: Record<string, string> = {
+        ...safeExtras(extraHeaders),
         Accept: 'application/json',
         'X-App-Version': deps.appVersion,
         'X-Platform': deps.platform,
@@ -126,6 +147,7 @@ export function createApiClient(deps: Deps) {
         token,
         opts.signal,
         opts.timeoutMs ?? timeoutMs,
+        opts.headers,
       );
       let failure: ApiError;
       if (!sent.ok) {

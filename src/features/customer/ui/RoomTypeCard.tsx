@@ -2,7 +2,7 @@ import { View } from 'react-native';
 
 import { PriceTag } from '@/features/customer/ui/PriceTag';
 import { borderWidth, color, radius, space } from '@/shared/theme';
-import { Text } from '@/shared/ui';
+import { Button, Text } from '@/shared/ui';
 
 export type RoomTypeModel = {
   id: string;
@@ -31,9 +31,10 @@ export function roomFacts(
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
-// Mobbin §4 (Booking.com, Shopee): name, guests, beds, size, "From ₦… / night". Display only:
-// room status can't be read, so the label says "From" (D5).
-export function RoomTypeCard({ room }: { room: RoomTypeModel }) {
+// Mobbin §4 (Booking.com, Shopee): name, guests, beds, size, "From ₦… / night". Room status can't
+// be read, so the label says "From" (D5). With stays checkout on (P2) the listing passes
+// `onSelect`, which opens checkout for this room type; availability is checked there (P11).
+export function RoomTypeCard({ room, onSelect }: { room: RoomTypeModel; onSelect?: () => void }) {
   return (
     <View
       testID={`room-${room.id}`}
@@ -59,6 +60,15 @@ export function RoomTypeCard({ room }: { room: RoomTypeModel }) {
             : { amount: room.from, unit: 'night', prefix: 'From' }
         }
       />
+      {onSelect !== undefined ? (
+        <Button
+          label="Select"
+          accessibilityLabel={`Select ${room.name}`}
+          variant="secondary"
+          onPress={onSelect}
+          testID={`room-select-${room.id}`}
+        />
+      ) : null}
     </View>
   );
 }

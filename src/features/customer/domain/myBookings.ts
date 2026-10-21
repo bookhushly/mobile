@@ -3,6 +3,7 @@ import type {
   EventBookingRow,
   HotelBookingRow,
 } from '@/features/customer/schemas/bookings';
+import { CHECKOUT_PAYMENTS_ENABLED } from '@/shared/config/features';
 import {
   daysBetween,
   hour12,
@@ -35,9 +36,13 @@ export type MyBooking = {
   next: string;
   imageUrl: string | null;
   createdAt: string | null;
+  /** The listing, hotel or apartment booked, when RLS shows it ("Book again", P21). Not kept offline. */
+  listingId?: string | null;
 };
 
-const PAY_NEXT = 'Finish paying on bookhushly.com';
+/** P21: with in-app payment on, the details offer Pay now; otherwise the website. */
+const payNext = () =>
+  CHECKOUT_PAYMENTS_ENABLED ? 'Finish paying to confirm' : 'Finish paying on bookhushly.com';
 const PROCESSING_NEXT = 'Payment received — your tickets are on the way';
 const HHMM = /^([01]\d|2[0-3]):([0-5]\d)(:[0-5]\d)?$/;
 
@@ -155,7 +160,7 @@ export function fromEvent(row: EventBookingRow, today: IsoDate): MyBooking {
     next = (row.tickets ?? []).some((t) => t.checked_in_at !== null)
       ? 'Attended'
       : shortDate(start);
-  } else if (pending) next = PAY_NEXT;
+  } else if (pending) next = payNext();
   else if (word === 'Processing') next = PROCESSING_NEXT;
   else next = withTime(when === 'today' ? 'Today' : shortDate(start), time, ' · ');
 
@@ -175,6 +180,7 @@ export function fromEvent(row: EventBookingRow, today: IsoDate): MyBooking {
     next,
     imageUrl: firstUrl(l?.media_urls),
     createdAt: row.created_at,
+    listingId: l?.id ?? null,
   };
 }
 
@@ -188,6 +194,7 @@ type Stay = {
   checkInTime: string | null;
   imageUrl: string | null;
   createdAt: string | null;
+  listingId: string | null;
   paid: boolean;
   /** Booking-level word before the payment rule; null = confirmed-like. */
   terminal: 'Cancelled' | 'Checked out' | 'No-show' | 'Refunded' | null;
@@ -210,7 +217,7 @@ function fromStay(s: Stay, today: IsoDate): MyBooking {
   if (word === 'Cancelled') next = 'Cancelled';
   else if (word === 'Checked out') next = `Stayed ${stayRange(s.start, s.end)}`;
   else if (when === 'past') next = stayRange(s.start, s.end);
-  else if (pending) next = PAY_NEXT;
+  else if (pending) next = payNext();
   else if (s.inHouse) {
     next = daysBetween(today, s.end) <= 0 ? 'Check-out today' : `Check-out ${shortDate(s.end)}`;
   } else {
@@ -235,6 +242,7 @@ function fromStay(s: Stay, today: IsoDate): MyBooking {
     next,
     imageUrl: s.imageUrl,
     createdAt: s.createdAt,
+    listingId: s.listingId,
   };
 }
 
@@ -252,6 +260,7 @@ export function fromHotel(row: HotelBookingRow, today: IsoDate): MyBooking {
       checkInTime: h?.check_in_time ?? null,
       imageUrl: firstUrl(h?.image_urls),
       createdAt: row.created_at,
+      listingId: h?.id ?? null,
       paid: row.payment_status === 'completed',
       terminal:
         st === 'cancelled'
@@ -283,6 +292,7 @@ export function fromApartment(row: ApartmentBookingRow, today: IsoDate): MyBooki
       checkInTime: a?.check_in_time ?? null,
       imageUrl: firstUrl(a?.image_urls),
       createdAt: row.created_at,
+      listingId: a?.id ?? null,
       paid: row.payment_status === 'paid',
       terminal:
         st === 'cancelled'

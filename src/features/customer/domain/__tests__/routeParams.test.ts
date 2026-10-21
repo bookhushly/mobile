@@ -2,6 +2,7 @@ import {
   bookingIdParam,
   bookingRefParams,
   categoryParam,
+  checkoutParams,
   searchParams,
   listingRefParams,
   pagerIndexParam,
@@ -103,5 +104,30 @@ describe('resultsParams', () => {
     expect(categoryParam('hotels')).toBe('hotels');
     expect(categoryParam('Hotels')).toBeNull();
     expect(categoryParam(undefined)).toBeNull();
+  });
+});
+
+describe('checkoutParams', () => {
+  const L = '0b6f1f4e-2c1a-4f6e-9a39-6f0e7d2b9c11';
+  const R = '7d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+
+  it('reads the kind, listing, room type and rate', () => {
+    expect(checkoutParams({ kind: 'hotel', listingId: L, roomType: R, rate: R })).toEqual({
+      kind: 'hotel',
+      listingId: L,
+      roomTypeId: R,
+      rateId: R,
+    });
+  });
+
+  it('drops an off-shape room type or rate, and refuses an unknown kind or id', () => {
+    expect(checkoutParams({ kind: 'event', listingId: L, roomType: 'x', rate: ['a'] })).toEqual({
+      kind: 'event',
+      listingId: L,
+      roomTypeId: null,
+      rateId: null,
+    });
+    expect(checkoutParams({ kind: 'flight', listingId: L })).toBeNull();
+    expect(checkoutParams({ kind: 'hotel', listingId: 'nope' })).toBeNull();
   });
 });

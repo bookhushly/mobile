@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import { openBrowserAsync } from 'expo-web-browser';
-import { Platform, Share } from 'react-native';
+import { Platform, ScrollView, Share } from 'react-native';
 
 import type { ApartmentListing, HotelListing } from '@/features/customer/api/listingDetailDb';
 import { useListing } from '@/features/customer/hooks/useListing';
@@ -24,6 +24,19 @@ jest.mock('@/features/customer/hooks/useListing', () => ({ useListing: jest.fn()
 jest.mock('@/features/customer/hooks/useSaved', () => ({ useSaved: jest.fn() }));
 jest.mock('@/features/customer/hooks/useReviews', () => ({ useReviews: jest.fn() }));
 jest.mock('expo-router', () => ({ useIsFocused: () => true }));
+// Off unless a test turns one on: the 4b hand-off tests run with every switch off.
+const mockSwitches = { stays: false, events: false, payments: false };
+jest.mock('@/shared/config/features', () => ({
+  get CHECKOUT_STAYS_ENABLED() {
+    return mockSwitches.stays;
+  },
+  get CHECKOUT_EVENTS_ENABLED() {
+    return mockSwitches.events;
+  },
+  get CHECKOUT_PAYMENTS_ENABLED() {
+    return mockSwitches.payments;
+  },
+}));
 jest.mock('@/shared/api/instance', () => ({ clock: { serverNow: () => mockNow } }));
 jest.mock('expo-web-browser', () => ({
   openBrowserAsync: jest.fn(() => Promise.resolve({ type: 'opened' })),
@@ -202,11 +215,18 @@ const HOTEL_SAVED = {
   image: null,
   location: null,
 };
-const props = { id: ID, userId: 'u1', onBack: jest.fn(), onSignInAgain: jest.fn() };
+const props = {
+  id: ID,
+  userId: 'u1',
+  onCheckout: jest.fn(),
+  onBack: jest.fn(),
+  onSignInAgain: jest.fn(),
+};
 const allText = () => JSON.stringify(screen.toJSON());
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  Object.assign(mockSwitches, { stays: false, events: false, payments: false });
   mockSaved.mockReturnValue(SAVED);
   mockReviews.mockReturnValue(REVIEWS);
   await plainKv.delete(WEB_NOTE_KEY);
@@ -536,5 +556,81 @@ describe('states', () => {
     expect(screen.getByText('Couldn’t load this listing')).toBeTruthy();
     expect(screen.getByText('Check your connection and try again.')).toBeTruthy();
     expect(screen.queryByText('This listing isn’t available right now')).toBeNull();
+  });
+});
+
+describe('in-app checkout (P2)', () => {
+  it('event footer opens checkout when events switch on', async () => {
+    Object.assign(mockSwitches, { events: true, payments: true });
+    show(event());
+    await render(<ListingScreen kind="event" {...props} />);
+    expect(screen.queryByText('Get tickets on bookhushly.com')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Get tickets' }));
+    expect(props.onCheckout).toHaveBeenCalledWith({ kind: 'event', listingId: ID });
+    expect(openBrowserAsync).not.toHaveBeenCalled();
+    expect(screen.queryByText(WEB_NOTE)).toBeNull();
+  });
+
+  it('a paid event keeps the web hand-off while payments are off', async () => {
+    Object.assign(mockSwitches, { events: true, payments: false });
+    show(event());
+    await render(<ListingScreen kind="event" {...props} />);
+    expect(screen.getByText('Get tickets on bookhushly.com')).toBeTruthy();
+  });
+
+  it('a free event books in the app with payments off', async () => {
+    Object.assign(mockSwitches, { events: true, payments: false });
+    show(event({ ticket_packages: [{ ...PKG, price: 0 }] }));
+    await render(<ListingScreen kind="event" {...props} />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Get tickets' }));
+    expect(props.onCheckout).toHaveBeenCalledWith({ kind: 'event', listingId: ID });
+  });
+
+  it('a sold-out event never opens checkout', async () => {
+    Object.assign(mockSwitches, { events: true, payments: true });
+    show(event({ ticket_packages: [{ ...PKG, remaining: 0 }] }));
+    await render(<ListingScreen kind="event" {...props} />);
+    const book = screen.getByTestId('listing-book');
+    expect(book).toBeDisabled();
+    await fireEvent.press(book);
+    expect(props.onCheckout).not.toHaveBeenCalled();
+  });
+
+  it('hotel footer keeps web hand-off while stays switch off', async () => {
+    Object.assign(mockSwitches, { stays: false, events: true, payments: true });
+    show(HOTEL);
+    await render(<ListingScreen kind="hotel" {...props} />);
+    expect(screen.getByText('Book on bookhushly.com')).toBeTruthy();
+    expect(screen.queryByText('Choose a room')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Select Deluxe king' })).toBeNull();
+  });
+
+  it('with stays on, the hotel footer chooses a room and a room opens checkout', async () => {
+    Object.assign(mockSwitches, { stays: true, events: true, payments: true });
+    show(HOTEL);
+    await render(<ListingScreen kind="hotel" {...props} />);
+    expect(screen.queryByText('Book on bookhushly.com')).toBeNull();
+    // Rooms aren't laid out in tests: the page scrolls to its end instead (never silent).
+    const toEnd = jest
+      .spyOn(ScrollView.prototype, 'scrollToEnd')
+      .mockImplementation(() => undefined);
+    await fireEvent.press(screen.getByRole('button', { name: 'Choose a room' }));
+    expect(toEnd).toHaveBeenCalled();
+    expect(props.onCheckout).not.toHaveBeenCalled();
+    expect(openBrowserAsync).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole('button', { name: 'Select Deluxe king' }));
+    expect(props.onCheckout).toHaveBeenCalledWith({
+      kind: 'hotel',
+      listingId: ID,
+      roomTypeId: 'rt1',
+    });
+  });
+
+  it('with stays on, an apartment books in the app', async () => {
+    Object.assign(mockSwitches, { stays: true, events: true, payments: true });
+    show(APARTMENT);
+    await render(<ListingScreen kind="apartment" {...props} />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Book' }));
+    expect(props.onCheckout).toHaveBeenCalledWith({ kind: 'apartment', listingId: ID });
   });
 });

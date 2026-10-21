@@ -25,6 +25,15 @@ export default function ListingRoute() {
       kind={listing.kind}
       id={listing.id}
       userId={state.status === 'signedIn' ? state.userId : ''}
+      onCheckout={({ kind, listingId, roomTypeId }) => {
+        router.push({
+          pathname: '/checkout/[kind]/[listingId]',
+          params:
+            roomTypeId === undefined
+              ? { kind, listingId }
+              : { kind, listingId, roomType: roomTypeId },
+        });
+      }}
       onBack={back}
       onSignInAgain={() => {
         signOut();

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
 import type { TicketStockWord } from '@/features/customer/domain/listingDetail';
@@ -16,8 +17,14 @@ export type TicketTypeModel = {
   stock: TicketStockWord | null;
 };
 
+type Props = {
+  ticket: TicketTypeModel;
+  /** Checkout: a quantity control (or a stock line) under the price. */
+  stepper?: ReactNode;
+};
+
 // Mobbin §5: each ticket type with its price and a stock word (word + colour, never colour alone).
-export function TicketTypeRow({ ticket: t }: { ticket: TicketTypeModel }) {
+export function TicketTypeRow({ ticket: t, stepper }: Props) {
   const d = useDensity();
   return (
     <View
@@ -54,6 +61,7 @@ export function TicketTypeRow({ ticket: t }: { ticket: TicketTypeModel }) {
             label={t.stock}
           />
         ) : null}
+        {stepper}
       </View>
     </View>
   );

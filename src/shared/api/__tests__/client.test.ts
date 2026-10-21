@@ -88,7 +88,7 @@ describe('api client', () => {
       maxRetries: 2,
     });
     const r = await client.request('/api/x', { schema });
-    expect(r).toEqual({ ok: false, error: { kind: 'unavailable', status: 503 } });
+    expect(r).toEqual({ ok: false, error: { kind: 'unavailable', status: 503, body: {} } });
     expect(fetchFn).toHaveBeenCalledTimes(3);
   });
 
@@ -212,7 +212,12 @@ describe('api client', () => {
     const r = await client.request('/api/x', { method: 'POST', body: {}, schema });
     expect(r).toEqual({
       ok: false,
-      error: { kind: 'unavailable', status: 503, code: 'lookup_failed' },
+      error: {
+        kind: 'unavailable',
+        status: 503,
+        code: 'lookup_failed',
+        body: { code: 'lookup_failed' },
+      },
     });
     expect(calls).toHaveLength(1);
   });
@@ -297,5 +302,73 @@ describe('auth: false (public routes)', () => {
     expect(r.ok).toBe(true);
     expect(calls).toHaveLength(2);
     for (const c of calls) expect(headersOf(c)).not.toHaveProperty('Authorization');
+  });
+});
+
+describe('extra headers', () => {
+  it('sends extra headers', async () => {
+    const { client, calls } = make([res(200, { ok: true })]);
+    await client.request('/api/x', { schema, headers: { 'Idempotency-Key': 'k1' } });
+    expect(headersOf(calls[0])['Idempotency-Key']).toBe('k1');
+  });
+
+  it('extra headers cannot replace Authorization', async () => {
+    const { client, calls } = make([res(200, { ok: true })]);
+    await client.request('/api/x', {
+      method: 'POST',
+      body: {},
+      schema,
+      headers: {
+        Authorization: 'x',
+        'Content-Type': 'text/plain',
+        'X-App-Version': 'evil',
+        'X-Platform': 'evil',
+      },
+    });
+    const h = headersOf(calls[0]);
+    expect(h['Authorization']).toBe('Bearer tok1');
+    expect(h['Content-Type']).toBe('application/json');
+    expect(h['X-App-Version']).toBe('1.0.0 (7)');
+    expect(h['X-Platform']).toBe('android');
+  });
+
+  it('lowercase reserved keys cannot replace the client headers', async () => {
+    const { client, calls } = make([res(200, { ok: true })]);
+    await client.request('/api/x', {
+      method: 'POST',
+      body: {},
+      schema,
+      headers: { authorization: 'x', 'content-type': 'text/plain', 'x-platform': 'evil' },
+    });
+    const h = headersOf(calls[0]);
+    expect(Object.keys(h).filter((k) => k.toLowerCase() === 'authorization')).toEqual([
+      'Authorization',
+    ]);
+    expect(h['Authorization']).toBe('Bearer tok1');
+    expect(h['Content-Type']).toBe('application/json');
+    expect(h['X-Platform']).toBe('android');
+    expect(h['authorization']).toBeUndefined();
+  });
+
+  it('auth: false drops an extra Authorization header', async () => {
+    const { client, calls } = make([res(200, { ok: true })]);
+    await client.request('/api/x', { schema, auth: false, headers: { authorization: 'x' } });
+    const h = headersOf(calls[0]);
+    expect(Object.keys(h).some((k) => k.toLowerCase() === 'authorization')).toBe(false);
+  });
+
+  it('retries keep the same Idempotency-Key', async () => {
+    const { client, calls } = make([res(503, {}), res(200, { ok: true })]);
+    const r = await client.request('/api/x', {
+      method: 'POST',
+      body: {},
+      schema,
+      idempotent: true,
+      headers: { 'Idempotency-Key': 'k1' },
+    });
+    expect(r.ok).toBe(true);
+    expect(calls).toHaveLength(2);
+    expect(headersOf(calls[0])['Idempotency-Key']).toBe('k1');
+    expect(headersOf(calls[1])['Idempotency-Key']).toBe('k1');
   });
 });

@@ -14,6 +14,17 @@ import type {
 } from '@/features/customer/schemas/bookings';
 import { lagosToday } from '@/shared/lib/lagosDay';
 
+// Payments off unless a test turns them on: the 4a copy points to the website.
+const mockSwitches = { payments: false };
+jest.mock('@/shared/config/features', () => ({
+  get CHECKOUT_PAYMENTS_ENABLED() {
+    return mockSwitches.payments;
+  },
+}));
+beforeEach(() => {
+  mockSwitches.payments = false;
+});
+
 const TODAY = '2026-10-13';
 type Listing = NonNullable<EventBookingRow['listing']>;
 
@@ -193,6 +204,16 @@ describe('fromEvent', () => {
     expect(b.paid).toBe(false);
     expect(b.pending).toBe(true);
     expect(b.next).toBe('Finish paying on bookhushly.com');
+  });
+
+  it('with in-app payment on, pending reads finish paying to confirm (P21)', () => {
+    mockSwitches.payments = true;
+    expect(fromEvent(ev({ status: 'pending', payment_status: 'pending' }), TODAY).next).toBe(
+      'Finish paying to confirm',
+    );
+    expect(fromHotel(ho({ payment_status: 'pending' }), TODAY).next).toBe(
+      'Finish paying to confirm',
+    );
   });
 
   it('cancelled on any date → past, Cancelled', () => {

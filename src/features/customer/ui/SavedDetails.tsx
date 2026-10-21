@@ -13,6 +13,8 @@ import { Banner, Button } from '@/shared/ui';
 
 type Props = {
   entry: WalletEntry;
+  /** The signed-in customer: a payment this device started shows as being checked (P21). */
+  userId: string;
   savedAt: number | null;
   onBack: () => void;
   onRefresh: () => Promise<unknown>;
@@ -23,6 +25,7 @@ type Props = {
 // C9/C17: the network load failed, so the saved copy shows: dates, place, tickets, check-in code.
 export function SavedDetails({
   entry: e,
+  userId,
   savedAt,
   onBack,
   onRefresh,
@@ -60,6 +63,8 @@ export function SavedDetails({
   return (
     <BookingFrame
       booking={e}
+      userId={userId}
+      saved
       onBack={onBack}
       onRefresh={onRefresh}
       notice={<Banner tone="neutral" message={saved} />}

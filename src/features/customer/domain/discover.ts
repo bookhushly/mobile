@@ -263,6 +263,20 @@ export function eventPriceLabel(
   return positive(event.price) ? { amount: event.price } : { text: 'Free' };
 }
 
+/**
+ * Whether the event costs nothing right now: every tier's effective price is 0 (the "Free" label's
+ * rule), or a tierless event's price is 0. An unknown price is never free. P2: a free event books
+ * in the app without payments.
+ */
+export function eventIsFree(
+  event: { price: number | null; ticket_packages: readonly PackageLike[] },
+  nowMs: number,
+): boolean {
+  const pkgs = ticketTiers(event.ticket_packages);
+  if (pkgs.length > 0) return pkgs.every((p) => effectivePackagePrice(p, nowMs) <= 0);
+  return event.price !== null && !positive(event.price);
+}
+
 // ── Event stock (D12, the web's wording) ─────────────────────────────────────────────────────────
 
 export type EventStock =

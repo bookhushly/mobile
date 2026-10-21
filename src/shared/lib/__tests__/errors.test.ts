@@ -31,11 +31,17 @@ describe('errorFromResponse', () => {
     });
     expect(errorFromResponse(429, {}, h())).toEqual({ kind: 'rateLimited' });
   });
+  it('keeps the body on a 503', () => {
+    expect(
+      errorFromResponse(503, { code: 'booking_failed', booking_id: 'b-1' }, h()),
+    ).toMatchObject({ kind: 'unavailable', body: { booking_id: 'b-1' } });
+  });
   it('maps 5xx to unavailable and other codes to unknown', () => {
     expect(errorFromResponse(503, { code: 'lookup_failed' }, h())).toEqual({
       kind: 'unavailable',
       status: 503,
       code: 'lookup_failed',
+      body: { code: 'lookup_failed' },
     });
     expect(errorFromResponse(418, null, h())).toEqual({
       kind: 'unknown',

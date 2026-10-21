@@ -1,4 +1,4 @@
-import { cloneElement, useContext, type ReactElement, type ReactNode } from 'react';
+import { cloneElement, useContext, type ReactElement, type ReactNode, type Ref } from 'react';
 import { ScrollView, View, type RefreshControlProps } from 'react-native';
 import { SafeAreaInsetsContext, SafeAreaView } from 'react-native-safe-area-context';
 
@@ -17,6 +17,8 @@ type Props = {
   refreshControl?: ReactElement<RefreshControlProps>;
   /** `panel`: the tablet two-pane width (960) instead of the form width (640). */
   width?: 'form' | 'panel';
+  /** The scroll view, for scrolling to a section (with `scroll`). */
+  scrollRef?: Ref<ScrollView>;
 };
 
 export function Screen({
@@ -27,6 +29,7 @@ export function Screen({
   bg = 'canvas',
   refreshControl,
   width = 'form',
+  scrollRef,
 }: Props) {
   // Context, not the hook: the hook throws without a provider, which bare unit renders lack.
   const insets = useContext(SafeAreaInsetsContext) ?? { bottom: 0 };
@@ -57,6 +60,7 @@ export function Screen({
       {header !== undefined ? <View style={{ paddingHorizontal: gutter }}>{header}</View> : null}
       {scroll ? (
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={body}
           keyboardShouldPersistTaps="handled"
           automaticallyAdjustKeyboardInsets
