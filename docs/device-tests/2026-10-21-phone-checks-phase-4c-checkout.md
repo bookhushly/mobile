@@ -10,7 +10,7 @@
 **What's new:**
 
 - **Get tickets** on an event, then pick tickets, then **Review and pay**, all inside the app.
-- **Pay ₦…** opens Paystack in the app. A **Checking your payment** screen waits for the server, then **You're booked**.
+- **Pay ₦…** opens Paystack in the app. A **Checking your payment** screen waits for the server, then **You’re booked**.
 - **Pay now** on an unpaid booking in Bookings.
 - Hotels and apartments are included too, but only once the switch is flipped (Part H).
 
@@ -37,7 +37,7 @@ Everything you book here must be cancelled or refunded by the end. The last part
   2. The button reads **Pay ₦…** with the same total.
 - [ ] Tap **Pay**. Paystack opens in the app. Pay with the **success test card** (any future expiry; if it asks for a PIN or code, use the test values Paystack lists).
 - [ ] Back in the app it says **Checking your payment**. Note how many seconds it takes.
-- [ ] **You're booked:**
+- [ ] **You’re booked:**
   1. It shows the event, the time and "Confirmation sent to" your email, partly hidden.
   2. Tap **View tickets**: both tickets are there and the **live code** moves.
   3. Go back and tap **Done**: you land on Explore.
@@ -47,7 +47,7 @@ Everything you book here must be cancelled or refunded by the end. The last part
 ## Part B. Free event (about 3 min)
 
 - [ ] Open the free event, **Get tickets**, choose 1 ticket, **Continue**.
-- [ ] It goes straight to **You're booked** with no payment step.
+- [ ] It goes straight to **You’re booked** with no payment step.
 - [ ] **View tickets** shows a live code.
 
 ## Part C. Close the app while paying (about 10 min)
@@ -62,9 +62,9 @@ Everything you book here must be cancelled or refunded by the end. The last part
 ## Part D. Payment fails (about 5 min)
 
 - [ ] Start a paid event booking and tap **Pay**. Pay with the **declined test card**.
-- [ ] The app shows **Payment didn't go through. You weren't charged.** with **Try again** and **Go to Bookings**.
-  - If it says **We're still checking. If you paid, it'll show in Bookings shortly.** first, that is fine; tap **Check again** until it changes or note what it said.
-- [ ] **Try again** goes back to Review. Pay with the **success card** this time and finish: **You're booked**.
+- [ ] The app shows **Payment didn’t go through. You weren’t charged.** with **Try again** and **Go to Bookings**.
+  - If it says **We’re still checking. If you paid, it’ll show in Bookings shortly.** first, that is fine; tap **Check again** until it changes or note what it said.
+- [ ] **Try again** goes back to Review. Pay with the **success card** this time and finish: **You’re booked**.
 - [ ] **Paystack dashboard:** one failed and one successful test charge.
 
 ## Part E. Back out of Review (about 5 min)
@@ -78,16 +78,16 @@ Everything you book here must be cancelled or refunded by the end. The last part
 
 - [ ] Start a paid **event** booking, reach Review, close the app **before** tapping Pay. (Events have no hold, so it stays pending.)
 - [ ] Reopen. In Bookings, the booking says **Finish paying to confirm this booking** with **Pay now**.
-- [ ] **Pay now** opens Review. Pay with the success card: **You're booked**.
+- [ ] **Pay now** opens Review. Pay with the success card: **You’re booked**.
 - [ ] A stay older than the hold (see Part H) says **This hold has ended** with **Book again** instead.
 
 ## Part G. Comfort (about 5 min)
 
-- [ ] **Largest text:** on Select, Review and You're booked, text is readable, screens scroll and **Continue**, **Pay** and **Done** stay on screen.
+- [ ] **Largest text:** on Select, Review and You’re booked, text is readable, screens scroll and **Continue**, **Pay** and **Done** stay on screen.
 - [ ] **TalkBack:**
   1. On Select, ticket steppers say what they change and the current number.
   2. On Review, the **Pay ₦…** button reads its amount.
-  3. On You're booked, the heading is read and the buttons are announced in order.
+  3. On You’re booked, the heading is read and the buttons are announced in order.
 - [ ] **Airplane mode:**
   1. Turn it on and tap **Continue** on Select. It says **Couldn’t confirm your booking** with **Check again**.
   2. Turn it off and tap **Check again**.
@@ -100,10 +100,10 @@ Hotels and apartments are **off** until web PR #221 is live and `CHECKOUT_STAYS_
 - [ ] **Hotel with breakfast:**
   1. Choose a room type, then dates. The footer shows nights and a price.
   2. Add breakfast for 1 or 2 guests. The total goes up on Review.
-  3. Pay with the success card: **You're booked**, with **View booking**.
+  3. Pay with the success card: **You’re booked**, with **View booking**.
 - [ ] **Apartment with a minimum stay:** pick fewer nights than the minimum. It says "At least … nights" and **Continue** stays off. Pick enough nights and book.
 - [ ] **Hold ended:**
-  1. Start a hotel booking and stop on Review. It says "We're holding this for you until …".
+  1. Start a hotel booking and stop on Review. It says "We’re holding this for you until …".
   2. Wait **25 minutes** (don't leave Review).
   3. **Pay** is replaced by **Start again**, and it says **This hold has ended. Start again to book these dates.**
 
