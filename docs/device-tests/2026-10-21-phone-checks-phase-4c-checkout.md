@@ -22,7 +22,7 @@ Everything you book here must be cancelled or refunded by the end. The last part
 
 - [ ] Pick a **paid event** with at least 2 tickets left, and a **free event** (Booking B). If there isn't a free one, skip Part B and tell me.
 - [ ] Pick an **event with a Standard and a VIP package**, if one exists, for the quantity check in Part A.
-- [ ] Pick a **hotel or apartment** you can book for dates a week or more away, for Part E.
+- [ ] For Part E, use a **paid event** while stays are switched off. Once stays are on (Part H), use a **hotel or apartment** with dates a week or more away.
 
 ## Part A. Pay for an event (about 10 min)
 
@@ -88,7 +88,10 @@ Everything you book here must be cancelled or refunded by the end. The last part
   1. On Select, ticket steppers say what they change and the current number.
   2. On Review, the **Pay ₦…** button reads its amount.
   3. On You're booked, the heading is read and the buttons are announced in order.
-- [ ] **Airplane mode:** with it on, **Continue** says to check your connection and nothing is booked. Turn it off and try again.
+- [ ] **Airplane mode:**
+  1. Turn it on and tap **Continue** on Select. It says **Couldn’t confirm your booking** with **Check again**.
+  2. Turn it off and tap **Check again**.
+  3. Don’t assume nothing was booked: look in Bookings, or on the web, to see whether a booking exists.
 
 ## Part H. Stays (only after the owner flips the switch)
 
@@ -110,6 +113,7 @@ Hotels and apartments are **off** until web PR #221 is live and `CHECKOUT_STAYS_
 
 - [ ] **Every paid test booking** (Parts A, C, D, F, H): cancel or ask for a refund in the app, or refund it on the web.
 - [ ] **Free booking (Part B):** cancel it.
+- [ ] **Every unpaid or pending booking** left behind (Part C second try, Part E, Part F, Part G, Part H hold ended): open it in Bookings and cancel it, or confirm on the web that it shows **cancelled**. Nothing may stay active.
 - [ ] **Paystack test dashboard:** nothing left half-open.
 - [ ] **Check the web:** no test booking is still active or pending.
 
