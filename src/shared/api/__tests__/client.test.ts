@@ -298,7 +298,9 @@ describe('auth: false (public routes)', () => {
     expect(calls).toHaveLength(2);
     for (const c of calls) expect(headersOf(c)).not.toHaveProperty('Authorization');
   });
+});
 
+describe('extra headers', () => {
   it('sends extra headers', async () => {
     const { client, calls } = make([res(200, { ok: true })]);
     await client.request('/api/x', { schema, headers: { 'Idempotency-Key': 'k1' } });
@@ -323,6 +325,31 @@ describe('auth: false (public routes)', () => {
     expect(h['Content-Type']).toBe('application/json');
     expect(h['X-App-Version']).toBe('1.0.0 (7)');
     expect(h['X-Platform']).toBe('android');
+  });
+
+  it('lowercase reserved keys cannot replace the client headers', async () => {
+    const { client, calls } = make([res(200, { ok: true })]);
+    await client.request('/api/x', {
+      method: 'POST',
+      body: {},
+      schema,
+      headers: { authorization: 'x', 'content-type': 'text/plain', 'x-platform': 'evil' },
+    });
+    const h = headersOf(calls[0]);
+    expect(Object.keys(h).filter((k) => k.toLowerCase() === 'authorization')).toEqual([
+      'Authorization',
+    ]);
+    expect(h['Authorization']).toBe('Bearer tok1');
+    expect(h['Content-Type']).toBe('application/json');
+    expect(h['X-Platform']).toBe('android');
+    expect(h['authorization']).toBeUndefined();
+  });
+
+  it('auth: false drops an extra Authorization header', async () => {
+    const { client, calls } = make([res(200, { ok: true })]);
+    await client.request('/api/x', { schema, auth: false, headers: { authorization: 'x' } });
+    const h = headersOf(calls[0]);
+    expect(Object.keys(h).some((k) => k.toLowerCase() === 'authorization')).toBe(false);
   });
 
   it('retries keep the same Idempotency-Key', async () => {

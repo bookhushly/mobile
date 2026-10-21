@@ -36,6 +36,23 @@ type Deps = {
   onReach?: (reached: boolean) => void;
 };
 
+const RESERVED_HEADERS = new Set([
+  'accept',
+  'authorization',
+  'content-type',
+  'x-app-version',
+  'x-platform',
+]);
+
+// Header names are case-insensitive: drop any extra whose lowercased name is one the client owns.
+function safeExtras(extra: Record<string, string> | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(extra ?? {})) {
+    if (!RESERVED_HEADERS.has(name.toLowerCase())) out[name] = value;
+  }
+  return out;
+}
+
 export function createApiClient(deps: Deps) {
   const timeoutMs = deps.timeoutMs ?? 15_000;
   const maxRetries = deps.maxRetries ?? 2;
@@ -79,7 +96,7 @@ export function createApiClient(deps: Deps) {
     outerSignal?.addEventListener('abort', onOuterAbort);
     try {
       const headers: Record<string, string> = {
-        ...extraHeaders,
+        ...safeExtras(extraHeaders),
         Accept: 'application/json',
         'X-App-Version': deps.appVersion,
         'X-Platform': deps.platform,
