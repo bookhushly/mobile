@@ -39,15 +39,17 @@ export const PENDING_REINIT_MS = 15 * 60_000;
 
 export type StoredPayment = { reference: string; paymentUrl: string; startedAt: number };
 
+// hasPaid is never Done by itself: check-status ignores `fulfilled`, so a paid reference still goes
+// through the status poll (`check`), and only its 'paid' verdict ends in Done.
 export type PayPlan =
-  | { do: 'done' }
+  | { do: 'check'; reference: string }
   | { do: 'open'; reference: string; url: string }
   | { do: 'verifyPending'; reference: string }
   | { do: 'initialize' };
 
 /** Decides Pay from a fresh check-status answer and this device's stored entry, if any. */
 export function planPay(check: CheckStatus, stored: StoredPayment | null, nowMs: number): PayPlan {
-  if (check.hasPaid) return { do: 'done' };
+  if (check.hasPaid) return { do: 'check', reference: check.payment.reference };
   if (!check.hasPending) return { do: 'initialize' };
   const { reference } = check.payment;
   if (
@@ -60,7 +62,11 @@ export function planPay(check: CheckStatus, stored: StoredPayment | null, nowMs:
   return { do: 'verifyPending', reference };
 }
 
-/** After verifying a pending reference we have no URL for (P26). Never initialises on doubt. */
+/**
+ * After verifying a pending reference we have no URL for (P26). Never initialises on doubt.
+ * 'done' comes from verify, which doesn't report `fulfilled`: the caller dispatches `paid`, which
+ * moves to Checking, and Done still waits for the status poll.
+ */
 export function afterPendingVerify(
   v: PayVerdict,
   pendingCreatedAtIso: string,
@@ -74,12 +80,18 @@ export function afterPendingVerify(
 }
 
 // ── The flow reducer ─────────────────────────────────────────────────────────────────────────────
+//
+// Checking: on entry the caller verifies once (P6) and schedules the first status poll after
+// `nextDelayMs`. Verify counts as attempt 0 and its answer is not dispatched here; only status
+// poll answers (`fromPaymentState`) are sent as `verdict`. Each pending/unknown verdict computes
+// the next delay; when there is none left the same transition moves to stillChecking, so the
+// caller schedules purely from state and can never stall.
 
 export type FlowState =
   | { step: 'review' }
   | { step: 'starting' }
   | { step: 'inBrowser'; reference: string }
-  | { step: 'checking'; reference: string; startedAt: number; attempt: number }
+  | { step: 'checking'; reference: string; startedAt: number; attempt: number; nextDelayMs: number }
   | { step: 'done' }
   | { step: 'failed' }
   | { step: 'stillChecking'; reference: string }
@@ -95,8 +107,19 @@ export type FlowEvent =
   | { type: 'startFailed'; words: string }
   | { type: 'holdExpired' }
   | { type: 'checkAgain'; now: number }
-  | { type: 'paid' }
-  | { type: 'pendingElsewhere' };
+  | { type: 'paid'; reference: string; now: number }
+  | { type: 'pendingElsewhere' }
+  | { type: 'retry' };
+
+function startChecking(reference: string, now: number): FlowState {
+  return {
+    step: 'checking',
+    reference,
+    startedAt: now,
+    attempt: 0,
+    nextDelayMs: POLL_SCHEDULE_MS[0] ?? POLL_EVERY_MS,
+  };
+}
 
 /** Events that don't apply to the current step return the same state object. */
 export function flow(state: FlowState, ev: FlowEvent): FlowState {
@@ -110,27 +133,33 @@ export function flow(state: FlowState, ev: FlowEvent): FlowState {
     case 'startFailed':
       return state.step === 'starting' ? { step: 'startError', words: ev.words } : state;
     case 'paid':
-      return state.step === 'starting' ? { step: 'done' } : state;
+      // check-status or verify said paid; Done still waits for a fulfilled status poll.
+      return state.step === 'starting' ? startChecking(ev.reference, ev.now) : state;
     case 'pendingElsewhere':
       return state.step === 'starting' ? { step: 'pendingElsewhere' } : state;
     case 'returned':
-      return state.step === 'inBrowser'
-        ? { step: 'checking', reference: state.reference, startedAt: ev.now, attempt: 0 }
-        : state;
+      return state.step === 'inBrowser' ? startChecking(state.reference, ev.now) : state;
     case 'checkAgain':
-      if (state.step === 'stillChecking') {
-        return { step: 'checking', reference: state.reference, startedAt: ev.now, attempt: 0 };
-      }
+      if (state.step === 'stillChecking') return startChecking(state.reference, ev.now);
       // P26 "Check again" re-runs check-status and the pay plan.
       return state.step === 'pendingElsewhere' ? { step: 'starting' } : state;
+    case 'retry':
+      // Back to Review, which re-runs P4 on the next Pay (P14).
+      return state.step === 'failed' ||
+        state.step === 'stillChecking' ||
+        state.step === 'pendingElsewhere' ||
+        state.step === 'startError'
+        ? { step: 'review' }
+        : state;
     case 'verdict': {
       if (state.step !== 'checking') return state;
       if (ev.verdict === 'paid') return { step: 'done' };
       if (ev.verdict === 'failed') return { step: 'failed' };
       const attempt = state.attempt + 1;
-      return nextPollDelay(ev.now - state.startedAt, attempt) === null
+      const nextDelayMs = nextPollDelay(ev.now - state.startedAt, attempt);
+      return nextDelayMs === null
         ? { step: 'stillChecking', reference: state.reference }
-        : { ...state, attempt };
+        : { ...state, attempt, nextDelayMs };
     }
   }
 }

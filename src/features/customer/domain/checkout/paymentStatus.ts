@@ -11,7 +11,8 @@ const FAILED_STATUSES: ReadonlySet<string> = new Set(['failed', 'expired', 'aban
 /** `GET /api/payment/status/{ref}`: paid only once the server has also fulfilled the booking. */
 export function fromPaymentState(p: PaymentState): PayVerdict {
   const { status, fulfilled } = p.payment;
-  if (status === 'completed') return fulfilled ? 'paid' : 'pending';
+  // 'success' is a legacy spelling of 'completed'.
+  if (status === 'completed' || status === 'success') return fulfilled ? 'paid' : 'pending';
   return FAILED_STATUSES.has(status) ? 'failed' : 'pending';
 }
 

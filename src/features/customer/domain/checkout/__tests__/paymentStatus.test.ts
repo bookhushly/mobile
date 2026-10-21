@@ -24,6 +24,11 @@ describe('fromPaymentState', () => {
     expect(fromPaymentState(state(status, false))).toBe('pending');
   });
 
+  it('legacy success counts as completed', () => {
+    expect(fromPaymentState(state('success', true))).toBe('paid');
+    expect(fromPaymentState(state('success', false))).toBe('pending');
+  });
+
   it('fulfilled alone is not paid', () => {
     expect(fromPaymentState(state('pending', true))).toBe('pending');
   });
