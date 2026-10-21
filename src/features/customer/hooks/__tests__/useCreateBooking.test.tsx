@@ -19,7 +19,7 @@ jest.mock('@/features/customer/api/checkoutApi', () => ({
   createEvent: jest.fn(),
 }));
 jest.mock('@/features/customer/api/checkoutDb', () => ({
-  checkoutDb: { findRecentEventBooking: jest.fn() },
+  checkoutDb: { findRecentEventBooking: jest.fn(), findRecentStayBooking: jest.fn() },
 }));
 jest.mock('@/features/customer/api/bookingActionsApi', () => ({ cancelBooking: jest.fn() }));
 jest.mock('@/shared/platform/storage', () => ({
@@ -29,9 +29,14 @@ jest.mock('expo-crypto', () => ({ randomUUID: jest.fn() }));
 
 const stayMock = jest.mocked(createStay);
 const eventMock = jest.mocked(createEvent);
-const findMock = jest.requireMock<{
-  checkoutDb: { findRecentEventBooking: jest.MockedFunction<CheckoutDb['findRecentEventBooking']> };
-}>('@/features/customer/api/checkoutDb').checkoutDb.findRecentEventBooking;
+const dbMock = jest.requireMock<{
+  checkoutDb: {
+    findRecentEventBooking: jest.MockedFunction<CheckoutDb['findRecentEventBooking']>;
+    findRecentStayBooking: jest.MockedFunction<CheckoutDb['findRecentStayBooking']>;
+  };
+}>('@/features/customer/api/checkoutDb').checkoutDb;
+const findMock = dbMock.findRecentEventBooking;
+const findStayMock = dbMock.findRecentStayBooking;
 const cancelMock = jest.mocked(cancelBooking);
 const uuidMock = jest.mocked(Crypto.randomUUID);
 
@@ -113,6 +118,7 @@ beforeEach(async () => {
     return `k${String(n)}`;
   });
   cancelMock.mockResolvedValue(err<ApiError>({ kind: 'network' }));
+  findStayMock.mockResolvedValue(null);
   await checkoutStore.wipe();
 });
 
@@ -183,10 +189,47 @@ describe('useCreateBooking — stays', () => {
     expect(keysSent()).toEqual(['k1', 'k1']);
     await advance(1);
     await act(() => result.current.checkAgain());
+    // G3: nothing found from the first send, so a new key.
+    expect(findStayMock).toHaveBeenCalledTimes(1);
     expect(keysSent()).toEqual(['k1', 'k1', 'k2']);
     // The new key is kept from then on.
     await act(() => result.current.submit(stay(), ctx));
     expect(keysSent()).toEqual(['k1', 'k1', 'k2', 'k2']);
+  });
+
+  it('Check again past 9 min adopts a pending stay the lost send made, without sending (G3)', async () => {
+    stayMock.mockResolvedValue(lost);
+    findStayMock.mockResolvedValue({ id: 'hbX', created_at: '2026-10-21T12:00:00Z' });
+    const { result } = await renderHook(() => useCreateBooking(USER, 'hotel', HOTEL));
+    await act(() => result.current.submit(stay(), ctx));
+    await advance(9 * 60_000 - 1);
+    await act(() => result.current.checkAgain());
+    // Under 9 min: a replay with the same key, no lookup.
+    expect(findStayMock).not.toHaveBeenCalled();
+    await advance(1);
+    await act(() => result.current.checkAgain());
+    expect(findStayMock).toHaveBeenCalledWith(
+      'hotel',
+      USER,
+      { targetId: ROOM, checkIn: '2026-11-01', checkOut: '2026-11-03' },
+      new Date(NOW - 5000).toISOString(),
+    );
+    expect(keysSent()).toEqual(['k1', 'k1']);
+    expect(result.current.created).toEqual({ bookingId: 'hbX' });
+    expect(result.current.state).toEqual({ phase: 'idle' });
+  });
+
+  it('apartments look up by apartment; a failed lookup stays unsure and sends nothing (G3)', async () => {
+    stayMock.mockResolvedValue(lost);
+    const { result } = await renderHook(() => useCreateBooking(USER, 'apartment', 'ap1'));
+    await act(() => result.current.submit(stay(), { title: 'Loft' }));
+    await advance(9 * 60_000);
+    findStayMock.mockRejectedValueOnce(new Error('read failed'));
+    await act(() => result.current.checkAgain());
+    expect(findStayMock.mock.calls[0]?.[0]).toBe('apartment');
+    expect(findStayMock.mock.calls[0]?.[2]).toMatchObject({ targetId: 'ap1' });
+    expect(keysSent()).toEqual(['k1']);
+    expect(result.current.state).toEqual({ phase: 'unsure' });
   });
 
   it('stay create reuses the idempotency key for the same selection and mints a new one when it changes', async () => {

@@ -58,7 +58,8 @@ const LOOK: Record<Exclude<PayStateKind, 'checking'>, Look> = {
     icon: Ban,
     tone: 'neutralFg',
     title: 'This booking was cancelled.',
-    message: null,
+    // G2: a payment can land after a hold is swept; web flags it for a refund.
+    message: 'If money left your account, it’ll be refunded — check Bookings.',
   },
   stillChecking: {
     icon: Clock,

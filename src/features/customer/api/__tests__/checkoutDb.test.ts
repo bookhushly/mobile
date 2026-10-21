@@ -218,3 +218,92 @@ describe('checkoutDb.findRecentEventBooking', () => {
     ).toBeNull();
   });
 });
+
+// G3: a stay create whose answer was lost, its key now too old to replay, is looked for first.
+describe('checkoutDb.findRecentStayBooking', () => {
+  const since = '2026-10-21T09:59:00.000Z';
+  const match = { targetId: 'rt1', checkIn: '2026-11-01', checkOut: '2026-11-03' };
+
+  it('reads hotel_bookings by customer_id, room type and dates, newest first', async () => {
+    const { db, logs } = fake({
+      hotel_bookings: {
+        data: [
+          {
+            id: 'h1',
+            created_at: '2026-10-21T10:00:00.5+00:00',
+            payment_status: 'pending',
+            booking_status: 'confirmed',
+          },
+        ],
+      },
+    });
+    expect(await db.findRecentStayBooking('hotel', 'u1', match, since)).toEqual({
+      id: 'h1',
+      created_at: '2026-10-21T10:00:00.5+00:00',
+    });
+    expect(logs[0]?.table).toBe('hotel_bookings');
+    expect(logs[0]?.columns).toBe('id, created_at, payment_status, booking_status');
+    expect(logs[0]?.calls).toEqual([
+      ['eq', 'customer_id', 'u1'],
+      ['eq', 'room_type_id', 'rt1'],
+      ['eq', 'check_in_date', '2026-11-01'],
+      ['eq', 'check_out_date', '2026-11-03'],
+      ['order', 'created_at', { ascending: false }],
+      ['limit', 5],
+    ]);
+  });
+
+  it('reads apartment_bookings by user_id and apartment_id', async () => {
+    const { db, logs } = fake({
+      apartment_bookings: {
+        data: [
+          {
+            id: 'a1',
+            created_at: '2026-10-21T10:00:00+00:00',
+            payment_status: 'pending',
+            booking_status: 'pending',
+          },
+        ],
+      },
+    });
+    expect(
+      await db.findRecentStayBooking('apartment', 'u1', { ...match, targetId: 'ap1' }, since),
+    ).toEqual({ id: 'a1', created_at: '2026-10-21T10:00:00+00:00' });
+    expect(logs[0]?.table).toBe('apartment_bookings');
+    expect(logs[0]?.calls.slice(0, 2)).toEqual([
+      ['eq', 'user_id', 'u1'],
+      ['eq', 'apartment_id', 'ap1'],
+    ]);
+  });
+
+  it('skips cancelled, paid and older rows', async () => {
+    const row = (id: string, created_at: string, payment_status: string, booking_status: string) => ({
+      id,
+      created_at,
+      payment_status,
+      booking_status,
+    });
+    const { db } = fake({
+      hotel_bookings: {
+        data: [
+          row('h3', '2026-10-21T10:02:00+00:00', 'pending', 'cancelled'),
+          row('h2', '2026-10-21T10:01:00+00:00', 'completed', 'confirmed'),
+          row('h1', '2026-10-21T10:00:00+00:00', 'pending', 'confirmed'),
+        ],
+      },
+    });
+    expect(await db.findRecentStayBooking('hotel', 'u', match, since)).toEqual({
+      id: 'h1',
+      created_at: '2026-10-21T10:00:00+00:00',
+    });
+    const old = fake({
+      hotel_bookings: { data: [row('h1', '2026-10-21T09:00:00+00:00', 'pending', 'confirmed')] },
+    });
+    expect(await old.db.findRecentStayBooking('hotel', 'u', match, since)).toBeNull();
+  });
+
+  it('throws on a failed read: unknown is never "none found"', async () => {
+    const { db } = fake({ hotel_bookings: { data: null, error: { code: '500' } } });
+    await expect(db.findRecentStayBooking('hotel', 'u', match, since)).rejects.toThrow();
+  });
+});

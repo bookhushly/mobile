@@ -27,7 +27,17 @@ export type CheckoutDb = {
     listingId: string,
     sinceIso: string,
   ): Promise<{ id: string; created_at: string } | null>;
+  /** G3: this user's newest pending stay for the room type (or apartment) and dates since `sinceIso`. */
+  findRecentStayBooking(
+    kind: 'hotel' | 'apartment',
+    userId: string,
+    match: StayMatch,
+    sinceIso: string,
+  ): Promise<{ id: string; created_at: string } | null>;
 };
+
+/** `targetId`: the room type for a hotel, the apartment for an apartment. */
+export type StayMatch = { targetId: string; checkIn: string; checkOut: string };
 
 // Only the keys the form needs. `listings.custom_questions` is read here on purpose (spec P17);
 // the detail column lists leave it out.
@@ -86,6 +96,22 @@ const apartmentRow = z
     minimum_stay: finite.nullable().catch(null),
   })
   .nullable();
+// Baseline migration: hotel_bookings.customer_id/room_type_id; apartment_bookings.user_id/
+// apartment_id (customer_id there is generated from user_id); both check_in_date, check_out_date,
+// payment_status, booking_status, created_at. RLS lets the owner read each.
+const STAY_COLUMNS = 'id, created_at, payment_status, booking_status';
+const STAY_LOOKUP = {
+  hotel: { table: 'hotel_bookings', owner: 'customer_id', target: 'room_type_id' },
+  apartment: { table: 'apartment_bookings', owner: 'user_id', target: 'apartment_id' },
+} as const;
+const stayRows = z.array(
+  z.object({
+    id: z.string(),
+    created_at: z.string(),
+    payment_status: z.string().nullable(),
+    booking_status: z.string().nullable(),
+  }),
+);
 const recentRows = z.array(
   z.object({ id: z.string(), created_at: z.string(), status: z.string().nullable() }),
 );
@@ -170,6 +196,28 @@ export function createCheckoutDb(client: SupabaseLike): CheckoutDb {
       return found !== undefined && Date.parse(found.created_at) >= since
         ? { id: found.id, created_at: found.created_at }
         : null;
+    },
+    // A stay create whose answer was lost: an unpaid, uncancelled booking for the same thing.
+    // `since`, the status and the newest-first pick run here (the query slice has no gte or in).
+    async findRecentStayBooking(kind, userId, match, sinceIso) {
+      const t = STAY_LOOKUP[kind];
+      const q = client
+        .from(t.table)
+        .select(STAY_COLUMNS)
+        .eq(t.owner, userId)
+        .eq(t.target, match.targetId)
+        .eq('check_in_date', match.checkIn)
+        .eq('check_out_date', match.checkOut)
+        .order('created_at', { ascending: false })
+        .limit(RECENT_LIMIT);
+      const since = Date.parse(sinceIso);
+      const found = unwrap(await read(q, stayRows)).find(
+        (r) =>
+          r.payment_status === 'pending' &&
+          r.booking_status !== 'cancelled' &&
+          Date.parse(r.created_at) >= since,
+      );
+      return found !== undefined ? { id: found.id, created_at: found.created_at } : null;
     },
   };
 }

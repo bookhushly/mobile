@@ -37,6 +37,10 @@ type Props = {
   onPay: () => void;
   /** Cancel booking, when leaving would cancel it (P7); null offers Not now (back). */
   onCancel: (() => void) | null;
+  /** Cancel booking is checking and cancelling (G1): its button spins. */
+  cancelling: boolean;
+  /** Why Cancel booking didn't cancel (G1). */
+  cancelError: string | null;
   onBack: () => void;
 };
 
@@ -57,6 +61,8 @@ export function PayReview({
   startError,
   onPay,
   onCancel,
+  cancelling,
+  cancelError,
   onBack,
 }: Props) {
   const payable = payableTotal(total, charge);
@@ -116,10 +122,14 @@ export function PayReview({
           testID="pay-on-web"
         />
       )}
+      {cancelError !== null ? (
+        <Banner tone="neutral" message={cancelError} testID="pay-cancel-error" />
+      ) : null}
       {onCancel !== null ? (
         <Button
           label="Cancel booking"
           variant="ghost"
+          loading={cancelling}
           disabled={starting}
           onPress={onCancel}
           testID="pay-cancel"

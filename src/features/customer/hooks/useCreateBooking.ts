@@ -27,7 +27,7 @@ import { api, clock } from '@/shared/api/instance';
 
 // Spec P12, P28. Stays carry an Idempotency-Key kept while the selection is unchanged and the key
 // is under 9 min old (the server keeps it 10 min, contract check M6), so a re-send is a safe
-// replay. The client never re-sends a stay create by itself (A5): only Continue or Check again
+// replay. Past that, a pending booking from the unsettled send is looked for first (G3). The client never re-sends a stay create by itself (A5): only Continue or Check again
 // does. Events have none: a lost answer is never re-posted, it is settled by reading this user's
 // pending or confirmed booking back (RLS).
 
@@ -54,7 +54,7 @@ export type CreateCtx = {
 export const BUSY_RETRIES = 3;
 /** …then once more for the server's whole stuck-key window (60 s since web #223, V5). */
 export const BUSY_LAST_WAIT_SECONDS = 60;
-/** The event lookup starts this long before the create was sent (P12; server-clock drift). */
+/** A lost create's lookup starts this long before it was sent (P12, G3; server-clock drift). */
 export const EVENT_LOOKBACK_MS = 5000;
 /** A key this old is replaced even for the same selection: the server forgets it at 10 min (A6). */
 export const KEY_MAX_AGE_MS = 9 * 60_000;
@@ -227,10 +227,41 @@ export function useCreateBooking(
       if (kind === 'event') return;
       const fingerprint = selectionFingerprint(kind, listingId, ctx.roomTypeId ?? null, s);
       const now = clock.serverNow();
-      if (
-        idem.current?.fingerprint !== fingerprint ||
-        now - idem.current.mintedAt >= KEY_MAX_AGE_MS
-      ) {
+      const prev = idem.current;
+      inFlight.current = true;
+      show({ phase: 'sending' });
+      const gen = checkoutStore.generation();
+      if (prev?.fingerprint === fingerprint && now - prev.mintedAt >= KEY_MAX_AGE_MS) {
+        // G3: this selection's last send is unsettled and its key too old to replay. A booking it
+        // made is adopted rather than sending again with a new key.
+        let found: { id: string } | null;
+        try {
+          found = await checkoutDb.findRecentStayBooking(
+            kind,
+            userId,
+            {
+              targetId: kind === 'hotel' ? (ctx.roomTypeId ?? '') : listingId,
+              checkIn: s.checkIn ?? '',
+              checkOut: s.checkOut ?? '',
+            },
+            new Date(prev.mintedAt - EVENT_LOOKBACK_MS).toISOString(),
+          );
+        } catch {
+          // Couldn't read: still unknown, so nothing is sent.
+          inFlight.current = false;
+          show({ phase: 'unsure' });
+          return;
+        }
+        if (!alive()) return;
+        if (found !== null) {
+          inFlight.current = false;
+          idem.current = null;
+          // The read gives no amounts: Review shows the booking's total (P28).
+          await adopt(null, found.id, gen);
+          return;
+        }
+      }
+      if (idem.current?.fingerprint !== fingerprint || now - idem.current.mintedAt >= KEY_MAX_AGE_MS) {
         idem.current = { fingerprint, key: Crypto.randomUUID(), busyRetries: 0, mintedAt: now };
       }
       const k = idem.current;
@@ -240,9 +271,6 @@ export function useCreateBooking(
         kind === 'hotel'
           ? hotelBody(ctx.roomTypeId ?? '', listingId, s)
           : apartmentBody(listingId, s);
-      inFlight.current = true;
-      show({ phase: 'sending' });
-      const gen = checkoutStore.generation();
       for (;;) {
         const r = await createStay(api, kind, body, k.key);
         if (r.ok) {

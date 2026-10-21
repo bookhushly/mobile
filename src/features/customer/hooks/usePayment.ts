@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform, type NativeEventSubscription } from 'react-native';
 
 import { cancelBooking } from '@/features/customer/api/bookingActionsApi';
+import { cancelOutcome } from '@/features/customer/domain/actionOutcome';
 import {
   checkPayment,
   initializePayment,
@@ -44,6 +45,12 @@ import type { ApiError } from '@/shared/lib/errors';
 // Paystack says `failed`/`reversed` (V1).
 
 export type PayKind = 'hotel' | 'apartment' | 'event';
+
+/**
+ * What an explicit Cancel booking did (G1): cancelled; kept because a payment is (or may be) in
+ * progress; refused by the server; or not done because an answer was lost (network, 5xx, 429).
+ */
+export type ReviewCancel = 'cancelled' | 'paymentInProgress' | 'refused' | 'notDone';
 
 export const BROWSER_OPTIONS = { createTask: false, showInRecents: false } as const;
 
@@ -108,6 +115,8 @@ export function usePayment(
   retry: () => void;
   checkAgain: () => void;
   leave: () => void;
+  /** Cancel booking on Review (G1): the same checks as leave(), awaited, with the answer. */
+  cancelNow: () => Promise<ReviewCancel>;
   /** leave() would cancel the booking now (P7): Review offers Cancel booking only then. */
   willCancelOnLeave: boolean;
   /** Stays: when Pay stops (epoch ms, server clock). Null for events, or while unknown. */
@@ -495,6 +504,45 @@ export function usePayment(
     })().catch(() => undefined);
   }, [fromSelect, rowState, kind, bookingId, userId]);
 
+  const cancelNow = useCallback(async (): Promise<ReviewCancel> => {
+    const checks = () =>
+      cancelsOnLeave(
+        fromSelect,
+        rowState,
+        current.current.step,
+        sawPayment.current,
+        entryLoaded.current,
+        entryRef.current,
+      );
+    if (!checks()) return 'paymentInProgress';
+    // A2a, awaited this time: the server must say there is no payment, paid or pending.
+    const c = await checkPayment(api, kind, bookingId);
+    if (!c.ok) return 'notDone';
+    if (c.value.hasPaid || c.value.hasPending) {
+      // A payment exists: from now on leaving never cancels, and Review offers Not now.
+      sawPayment.current = true;
+      if (alive()) setSawPay(true);
+      return 'paymentInProgress';
+    }
+    // Pay may have been tapped while check-status was out.
+    if (!checks()) return 'paymentInProgress';
+    const o = cancelOutcome(await cancelBooking(api, kind, bookingId));
+    // A lost cancel may have landed: the row is re-read either way.
+    void qc.invalidateQueries({ queryKey: customerKeys.booking(userId, kind, bookingId) });
+    switch (o.kind) {
+      case 'done':
+        await checkoutStore.drop(userId, kind, bookingId).catch(() => undefined);
+        void qc.invalidateQueries({ queryKey: customerKeys.bookings(userId) });
+        return 'cancelled';
+      case 'refused':
+        return 'refused';
+      case 'uncertain':
+      case 'rateLimited':
+      case 'signedOut':
+        return 'notDone';
+    }
+  }, [fromSelect, rowState, kind, bookingId, userId, qc, alive]);
+
   // P6 (amended 4c.1 V1): verify once on entry, then status polls on the state's own schedule;
   // the first 2 s after verify answers.
   useEffect(() => {
@@ -564,6 +612,7 @@ export function usePayment(
     retry,
     checkAgain,
     leave,
+    cancelNow,
     willCancelOnLeave,
     holdEndsAt,
     canPay,
