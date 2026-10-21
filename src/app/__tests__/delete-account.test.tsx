@@ -8,7 +8,7 @@ const mockCheckSignOut = jest.fn<Promise<{ unsynced: number; unsyncable: number 
 const mockRefreshSession = jest.fn<Promise<{ error: unknown }>, []>();
 
 jest.mock('expo-router', () => ({
-  router: { replace: jest.fn(), push: jest.fn(), back: jest.fn() },
+  router: { replace: jest.fn(), push: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) },
 }));
 jest.mock('@/features/auth/api/accountApi', () => ({
   deleteAccount: jest.fn(() => Promise.resolve({ ok: true, value: true })),
@@ -122,4 +122,12 @@ it('cancel goes back', async () => {
   await render(<DeleteAccountRoute />);
   await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
   expect(router.back).toHaveBeenCalledTimes(1);
+});
+
+it('cancel with nothing to go back to returns to the app instead', async () => {
+  jest.mocked(router.canGoBack).mockReturnValueOnce(false);
+  await render(<DeleteAccountRoute />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+  expect(router.back).not.toHaveBeenCalled();
+  expect(router.replace).toHaveBeenCalledWith('/');
 });

@@ -26,6 +26,11 @@ import { AppProviders } from '@/shared/providers/AppProviders';
 
 export { ScreenError as ErrorBoundary } from '@/shared/ui/ScreenError';
 
+// When a guard change leaves no allowed screen in the stack (signing in hides (auth) before the
+// mode has loaded), the stack falls back to its initial route, else to the first declared screen —
+// which is the unguarded delete-account modal. Anchor it on the index redirect instead.
+export const unstable_settings = { initialRouteName: 'index' };
+
 initMonitoring(APP_VERSION);
 void SplashScreen.preventAutoHideAsync();
 
