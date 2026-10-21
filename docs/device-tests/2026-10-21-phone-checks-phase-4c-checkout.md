@@ -12,7 +12,7 @@
 - **Get tickets** on an event, then pick tickets, then **Review and pay**, all inside the app.
 - **Pay ₦…** opens Paystack in the app. A **Checking your payment** screen waits for the server, then **You’re booked**.
 - **Pay now** on an unpaid booking in Bookings.
-- Hotels and apartments are included too, but only once the switch is flipped (Part H).
+- Hotels and apartments too (Part H): stays are switched on.
 
 Everything you book here must be cancelled or refunded by the end. The last part lists how.
 
@@ -22,7 +22,7 @@ Everything you book here must be cancelled or refunded by the end. The last part
 
 - [ ] Pick a **paid event** with at least 2 tickets left, and a **free event** (Booking B). If there isn't a free one, skip Part B and tell me.
 - [ ] Pick an **event with a Standard and a VIP package**, if one exists, for the quantity check in Part A.
-- [ ] For Part E, use a **paid event** while stays are switched off. Once stays are on (Part H), use a **hotel or apartment** with dates a week or more away.
+- [ ] For Part E, use a **hotel or apartment** with dates a week or more away.
 
 ## Part A. Pay for an event (about 10 min)
 
@@ -36,7 +36,7 @@ Everything you book here must be cancelled or refunded by the end. The last part
   1. It shows the event, your details and **Price details**. The total is the server's.
   2. The button reads **Pay ₦…** with the same total.
 - [ ] Tap **Pay**. Paystack opens in the app. Pay with the **success test card** (any future expiry; if it asks for a PIN or code, use the test values Paystack lists).
-- [ ] Back in the app it says **Checking your payment**. Note how many seconds it takes.
+- [ ] Back in the app it says **Checking your payment** and **This can take a few minutes**. Note how many seconds it takes.
 - [ ] **You’re booked:**
   1. It shows the event, the time and "Confirmation sent to" your email, partly hidden.
   2. Tap **View tickets**: both tickets are there and the **live code** moves.
@@ -57,28 +57,34 @@ Everything you book here must be cancelled or refunded by the end. The last part
 - [ ] Reopen the app. Open **Bookings** (give it a minute, and pull down to refresh).
 - [ ] The booking shows **paid**. While it was still working it may have said **Checking your payment…**.
 - [ ] **Paystack dashboard:** only **one** charge for this booking. If there are two, tell me at once.
-- [ ] **Second try, before paying:** start a booking, tap **Pay**, close the app on the Paystack page without paying, reopen. Open the booking from Bookings. It must not start a second charge silently: **Pay now** or **Check again** only.
+- [ ] **Second try, before paying:** start a booking, tap **Pay**, close the app on the Paystack page without paying, reopen. Open the booking from Bookings. It must not start a second charge silently: at first it shows **Checking your payment…** with no button; later (once that payment is settled or 15 min old) **Pay now**.
 
-## Part D. Payment fails (about 5 min)
+## Part D. Payment fails (about 10 min, plus an optional 15-min wait)
 
-- [ ] Start a paid event booking and tap **Pay**. Pay with the **declined test card**.
-- [ ] The app shows **Payment didn’t go through. You weren’t charged.** with **Try again** and **Go to Bookings**.
-  - If it says **We’re still checking. If you paid, it’ll show in Bookings shortly.** first, that is fine; tap **Check again** until it changes or note what it said.
-- [ ] **Try again** goes back to Review. Pay with the **success card** this time and finish: **You’re booked**.
-- [ ] **Paystack dashboard:** one failed and one successful test charge.
+A payment that started less than 15 minutes ago is never called a failure: a bank transfer or USSD can take minutes to land.
+
+- [ ] Start a paid event booking and tap **Pay**. Pay with the **declined test card**, then close the Paystack page.
+- [ ] The app shows **We couldn’t confirm this payment yet.** and **If you paid by bank transfer or USSD it can take a few minutes. Check Bookings before paying again.** with **Check again** and **Go to Bookings**. It must never say "You weren’t charged".
+  - If it says **We’re still checking. If you paid, it’ll show in Bookings shortly.** instead, that is fine too; note which one you saw.
+- [ ] **Bank transfer or USSD (if Paystack test mode offers it):** start another booking, choose transfer or USSD on the Paystack page, come back to the app before it completes. It shows **We couldn’t confirm this payment yet.** (or still checking), never a failure. Cancel that booking at the end.
+- [ ] **Optional, after 15 minutes:** on the screen above, wait 15 minutes and tap **Check again**. If the server now says the payment failed, it shows **Payment didn’t go through.** and **If money left your account, it’ll be confirmed or refunded — check Bookings.** with **Try again** and **Go to Bookings**.
+  - **Try again** goes back to **Review and pay**; nothing opens until you tap **Pay**. Pay with the **success card**: **You’re booked**.
+- [ ] **Review warning:** when you reach Review for a booking whose last payment started under 15 minutes ago, it says **If you already paid by bank transfer or USSD, wait a few minutes — paying again could charge you twice.** above Pay.
+- [ ] **Paystack dashboard:** one failed and (if you did the optional step) one successful test charge, never two successful ones.
 
 ## Part E. Back out of Review (about 5 min)
 
-- [ ] Start a booking for a hotel or apartment **a week or more away** and reach **Review and pay**. (If stays are still switched off, use a paid event instead.)
+- [ ] Start a booking for a hotel or apartment **a week or more away** and reach **Review and pay** straight from Select.
 - [ ] Leave with **Cancel booking** (or the back button). Never tap **Pay**.
 - [ ] **On the web**, signed in as the QA customer: the booking shows **cancelled**.
-- [ ] **Not now:** for a booking where nothing would be cancelled (one you started paying for), the button reads **Not now** and the booking stays.
+- [ ] **Not now:** for a booking where nothing would be cancelled (one you started paying for, or one opened with **Pay now** from Bookings), the button reads **Not now** and the booking stays.
 
 ## Part F. Pay now from Bookings (about 5 min)
 
 - [ ] Start a paid **event** booking, reach Review, close the app **before** tapping Pay. (Events have no hold, so it stays pending.)
-- [ ] Reopen. In Bookings, the booking says **Finish paying to confirm this booking** with **Pay now**.
-- [ ] **Pay now** opens Review. Pay with the success card: **You’re booked**.
+- [ ] Reopen. In the Bookings list the row reads **Finish paying to confirm**. Open it: the booking details say **Finish paying to confirm this booking** with **Pay now**.
+- [ ] **Pay now** opens Review with **Not now** (not Cancel booking). Press back once: you are back on the booking and it is **still pending**, not cancelled.
+- [ ] **Pay now** again. Pay with the success card: **You’re booked**.
 - [ ] A stay older than the hold (see Part H) says **This hold has ended** with **Book again** instead.
 
 ## Part G. Comfort (about 5 min)
@@ -93,15 +99,15 @@ Everything you book here must be cancelled or refunded by the end. The last part
   2. Turn it off and tap **Check again**.
   3. Don’t assume nothing was booked: look in Bookings, or on the web, to see whether a booking exists.
 
-## Part H. Stays (only after the owner flips the switch)
+## Part H. Stays (about 35 min, most of it waiting)
 
-Hotels and apartments are **off** until web PR #221 is live and `CHECKOUT_STAYS_ENABLED` is turned on. Until then, the listing keeps its old hand-off to bookhushly.com. **Skip this part and tell me so.**
+Hotels and apartments are switched on (web #219/#221 are live).
 
 - [ ] **Hotel with breakfast:**
   1. Choose a room type, then dates. The footer shows nights and a price.
   2. Add breakfast for 1 or 2 guests. The total goes up on Review.
   3. Pay with the success card: **You’re booked**, with **View booking**.
-- [ ] **Apartment with a minimum stay:** pick fewer nights than the minimum. It says "At least … nights" and **Continue** stays off. Pick enough nights and book.
+- [ ] **Apartment with a minimum stay:** in the dates sheet, pick fewer nights than the minimum. The sheet says "At least … nights" and its **Choose** button stays off, so a short stay can't be picked. Pick enough nights and book.
 - [ ] **Hold ended:**
   1. Start a hotel booking and stop on Review. It says "We’re holding this for you until …".
   2. Wait **25 minutes** (don't leave Review).
