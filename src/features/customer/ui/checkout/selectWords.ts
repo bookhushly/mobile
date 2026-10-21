@@ -11,6 +11,8 @@ export const DATES_WORDS = 'Choose check-out after check-in, from today';
 export const MAX_TICKETS_LINE = 'Up to 20 tickets per booking';
 export const NO_ROOMS = 'No rooms left for these dates';
 export const QUESTION_WORDS = 'Answer this question';
+export const PROMO_ZERO =
+  "This code makes your order free, which can't be booked in the app yet. Remove the code or book on bookhushly.com.";
 
 const GUEST_WORDS = {
   guestName: 'Enter your name',
@@ -64,6 +66,8 @@ export function eventWords(p: EventProblem): string {
       return MAX_TICKETS_LINE;
     case 'overStock':
       return 'Not enough tickets left';
+    case 'promoZero':
+      return PROMO_ZERO;
     case 'guestName':
     case 'guestEmail':
     case 'guestPhone':

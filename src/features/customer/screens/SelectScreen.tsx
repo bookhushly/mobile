@@ -100,6 +100,15 @@ function Select({ kind, listingId, roomTypeId, rateId, userId, email, onBack, on
     );
   }
   return (
-    <EventSelect event={data} userId={userId} guest={guest} header={header} onCreated={onCreated} />
+    <EventSelect
+      event={data}
+      userId={userId}
+      guest={guest}
+      header={header}
+      onCreated={onCreated}
+      onRefused={() => {
+        void listing.refetch();
+      }}
+    />
   );
 }

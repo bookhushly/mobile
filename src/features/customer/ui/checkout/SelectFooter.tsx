@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { View } from 'react-native';
 
 import type { CreateState } from '@/features/customer/hooks/useCreateBooking';
@@ -35,6 +36,9 @@ export function SelectFooter({
   const sending =
     create.phase === 'sending' || (create.phase === 'busy' && create.words === undefined);
   const unsure = create.phase === 'unsure';
+  // A 429 keeps Continue off until its countdown ends; a new answer starts a new wait.
+  const [waitedOut, setWaitedOut] = useState<CreateState | null>(null);
+  const waiting = create.phase === 'busy' && create.words !== undefined && waitedOut !== create;
   return (
     <View style={{ gap: space.s3 }} testID="select-footer">
       {unsure ? (
@@ -48,7 +52,12 @@ export function SelectFooter({
       {create.phase === 'busy' && create.words !== undefined ? (
         <View style={{ gap: space.s2 }}>
           <Banner tone="neutral" message={create.words} testID="create-wait" />
-          <RateLimitWait retryAfterSec={create.waitSeconds ?? null} />
+          <RateLimitWait
+            retryAfterSec={create.waitSeconds ?? null}
+            onDone={() => {
+              setWaitedOut(create);
+            }}
+          />
         </View>
       ) : null}
       {create.phase === 'failed' && create.words !== undefined ? (
@@ -82,7 +91,7 @@ export function SelectFooter({
           <Button
             label="Continue"
             loading={sending}
-            disabled={disabled || unsure || blocked !== null}
+            disabled={disabled || unsure || waiting || blocked !== null}
             onPress={onContinue}
             testID="select-continue"
           />

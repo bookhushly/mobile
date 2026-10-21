@@ -17,7 +17,7 @@ import {
 } from '@/features/customer/hooks/useCheckoutData';
 import { useCreateBooking } from '@/features/customer/hooks/useCreateBooking';
 import { loadFailed } from '@/features/customer/hooks/loadState';
-import { usePromo } from '@/features/customer/hooks/usePromo';
+import { promoFor, usePromo } from '@/features/customer/hooks/usePromo';
 import type { RoomType } from '@/features/customer/schemas/listings';
 import { ExtrasSection, stayExtras } from '@/features/customer/ui/checkout/ExtrasSection';
 import { FormLoading } from '@/features/customer/ui/checkout/FormLoading';
@@ -117,15 +117,9 @@ export function StaySelect({ stay, requestedRate, userId, guest, header, onCreat
   const n =
     sel.checkIn !== null && sel.checkOut !== null ? nights(sel.checkIn, sel.checkOut) : null;
   const amount = n !== null && perNight !== null && n > 0 ? perNight * n : null;
-  const applied = promo.state.phase === 'applied' ? promo.state.promo : null;
-  const stale = applied !== null && applied.forAmount !== amount;
-  const selection: StaySelection = {
-    ...sel,
-    promo:
-      hotel !== null && applied !== null && !stale
-        ? { codeId: applied.codeId, discount: applied.discount }
-        : null,
-  };
+  const preview = promoFor(promo.state, amount);
+  const stale = preview.stale;
+  const selection: StaySelection = { ...sel, promo: hotel !== null ? preview.promo : null };
   const rules = { minNights, maxGuests };
   const problems = stayProblems(selection, {
     today: lagosToday(clock.serverNow()),

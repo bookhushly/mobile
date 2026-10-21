@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
-import { roomAvailability } from '@/features/customer/api/checkoutApi';
+import { roomAvailability, validatePromo } from '@/features/customer/api/checkoutApi';
 import { checkoutDb } from '@/features/customer/api/checkoutDb';
 import type { ApartmentListing, HotelListing } from '@/features/customer/api/listingDetailDb';
 import { useCreateBooking, type CreateState } from '@/features/customer/hooks/useCreateBooking';
@@ -128,13 +128,9 @@ function createState(state: CreateState, created: { bookingId: string } | null =
   mockCreate.mockReturnValue({ submit, checkAgain, state, created });
 }
 
+const refetchListing = jest.fn(() => Promise.resolve());
 function given(data: HotelListing | ApartmentListing | EventDetail, name = PROFILE.name) {
-  mockListing.mockReturnValue({
-    data,
-    error: false,
-    apiError: null,
-    refetch: jest.fn(() => Promise.resolve()),
-  });
+  mockListing.mockReturnValue({ data, error: false, apiError: null, refetch: refetchListing });
   mockProfile.mockReturnValue({
     profile: { ...PROFILE, name },
     loading: false,
@@ -371,6 +367,77 @@ describe('events', () => {
     await open('event');
     await screen.findByTestId('tickets');
     expect(onCreated).toHaveBeenCalledWith('e1', false);
+  });
+
+  it('a paid event asks for no name; a free one does', async () => {
+    given(PAID);
+    await open('event');
+    await screen.findByTestId('tickets');
+    await press('Increase Regular');
+    expect(screen.queryByTestId('guest-name')).toBeNull();
+    expect(screen.getByTestId('guest-email')).toBeTruthy();
+  });
+
+  it('a refusal re-reads the listing once for fresh stock (P11)', async () => {
+    given(PAID);
+    createState({ phase: 'refused', words: 'Not enough tickets left' });
+    await open('event');
+    await screen.findByTestId('tickets');
+    expect(screen.getByTestId('create-refused')).toHaveTextContent('Not enough tickets left');
+    expect(refetchListing).toHaveBeenCalledTimes(1);
+  });
+
+  it('a promo covering a paid order blocks Continue with its words', async () => {
+    jest.mocked(validatePromo).mockResolvedValue({
+      ok: true,
+      value: {
+        valid: true,
+        code_id: 'c1',
+        code: 'ALLFREE',
+        discount_amount: 5000,
+        discounted_total: 0,
+      },
+    });
+    given(PAID);
+    await open('event');
+    await screen.findByTestId('tickets');
+    await press('Increase Regular');
+    await fireEvent.press(screen.getByTestId('promo-open'));
+    await fireEvent.changeText(screen.getByTestId('promo-input'), 'ALLFREE');
+    await fireEvent.press(screen.getByTestId('promo-apply'));
+    expect(await screen.findByTestId('promo-applied')).toBeTruthy();
+    // Still paid: the free route ignores promos (P19 amended).
+    expect(screen.getByTestId('select-estimate')).toHaveTextContent('1 ticket · ₦5,000');
+    expect(screen.getByTestId('select-problem')).toHaveTextContent(
+      "This code makes your order free, which can't be booked in the app yet. Remove the code or book on bookhushly.com.",
+    );
+    await fireEvent.press(continueButton());
+    expect(submit).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByTestId('promo-remove'));
+    expect(screen.queryByTestId('select-problem')).toBeNull();
+    await fireEvent.press(continueButton());
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(submit.mock.calls[0]?.[0]).toMatchObject({ promo: null });
+    expect(submit.mock.calls[0]?.[1]).toMatchObject({ free: false });
+  });
+
+  it('a 429 keeps Continue off until the countdown ends', async () => {
+    jest.useFakeTimers();
+    try {
+      given(PAID);
+      createState({ phase: 'busy', waitSeconds: 2, words: 'Too many tries. Wait a moment' });
+      await open('event');
+      await screen.findByTestId('tickets');
+      expect(screen.getByTestId('rate-limit-wait')).toHaveTextContent('You can try again in 0:02');
+      expect(continueButton()).toBeDisabled();
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(2_100);
+      });
+      expect(continueButton()).toBeEnabled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('events switch off renders not found', async () => {

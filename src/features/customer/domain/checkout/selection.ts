@@ -35,6 +35,8 @@ export type EventProblem =
   | 'tooMany'
   | 'overStock'
   | { question: string }
+  /** A paid order whose promo covers it: /create refuses ₦0 and /free ignores promos (P19). */
+  | 'promoZero'
   | 'guestName'
   | 'guestEmail'
   | 'guestPhone';
@@ -126,6 +128,8 @@ export function eventProblems(
   packages: TicketPackage[],
   questions: CustomQuestion[],
   free: boolean,
+  /** A package-less listing's ticket price, for the promo check. */
+  listingPrice = 0,
 ): EventProblem[] {
   const out: EventProblem[] = [];
   const lines = validLines(s.qty, packages);
@@ -137,6 +141,10 @@ export function eventProblems(
     return n !== undefined && p.remaining != null && n > p.remaining;
   });
   if (over) out.push('overStock');
+  if (!free && total > 0 && s.promo !== null) {
+    const subtotal = eventSubtotal(s.qty, packages, listingPrice);
+    if (subtotal > 0 && s.promo.discount >= subtotal) out.push('promoZero');
+  }
   for (const q of questions) {
     if (q.required && (s.answers[q.id] ?? '').trim() === '') out.push({ question: q.id });
   }
@@ -159,7 +167,10 @@ export function eventSubtotal(
   return packages.reduce((sum, p) => sum + (lines[p.name] ?? 0) * p.price, 0);
 }
 
-/** Free means the subtotal after the promo preview is 0; a priced package-less listing never is (P19). */
+/**
+ * Free means the subtotal before any promo is 0 (P19 amended 2026-10-21: the free route ignores
+ * promos and refuses paid packages). A priced package-less listing never is.
+ */
 export function isFreeOrder(
   s: EventSelection,
   packages: TicketPackage[],
@@ -167,8 +178,7 @@ export function isFreeOrder(
 ): boolean {
   if (packages.length === 0 && listingPrice > 0) return false;
   if (Object.keys(validLines(s.qty, packages)).length === 0) return false;
-  const subtotal = eventSubtotal(s.qty, packages, listingPrice);
-  return Math.max(0, subtotal - (s.promo?.discount ?? 0)) === 0;
+  return eventSubtotal(s.qty, packages, listingPrice) === 0;
 }
 
 function sorted(rec: Record<string, number>): [string, number][] {

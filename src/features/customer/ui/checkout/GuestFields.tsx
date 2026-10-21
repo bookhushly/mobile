@@ -18,8 +18,8 @@ type Props = {
   nameRef: GuestRefs['name'];
   emailRef: GuestRefs['email'];
   phoneRef: GuestRefs['phone'];
-  /** Events: the name is only needed for a free registration. */
-  nameOptional?: boolean;
+  /** Events send a name only for a free registration, so a paid order doesn't ask for it. */
+  showName?: boolean;
 };
 
 const NAME_MAX = 100;
@@ -34,24 +34,26 @@ export function GuestFields({
   nameRef,
   emailRef,
   phoneRef,
-  nameOptional = false,
+  showName = true,
 }: Props) {
   return (
     <Stack gap="s4" testID="guest-fields">
       <Text variant="headline">Your details</Text>
-      <Input
-        ref={nameRef}
-        label={nameOptional ? 'Full name (optional)' : 'Full name'}
-        value={guest.name}
-        onChangeText={(name) => {
-          onChange({ ...guest, name });
-        }}
-        autoComplete="name"
-        textContentType="name"
-        maxLength={NAME_MAX}
-        error={errors.name}
-        testID="guest-name"
-      />
+      {showName ? (
+        <Input
+          ref={nameRef}
+          label="Full name"
+          value={guest.name}
+          onChangeText={(name) => {
+            onChange({ ...guest, name });
+          }}
+          autoComplete="name"
+          textContentType="name"
+          maxLength={NAME_MAX}
+          error={errors.name}
+          testID="guest-name"
+        />
+      ) : null}
       <Input
         ref={emailRef}
         label="Email"

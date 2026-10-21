@@ -159,6 +159,23 @@ describe('eventProblems', () => {
     expect(eventProblems(s, packages, [], false)).not.toContain('guestName');
     expect(eventProblems(s, packages, [], true)).toContain('guestName');
   });
+  it('flags a promo that covers a paid order (P19 amended)', () => {
+    const covered = event({ qty: { A: 2 }, promo: { codeId: 'p', discount: 2000 } });
+    expect(eventProblems(covered, packages, [], false)).toContain('promoZero');
+    const over = event({ qty: { A: 1 }, promo: { codeId: 'p', discount: 5000 } });
+    expect(eventProblems(over, packages, [], false)).toContain('promoZero');
+    const partial = event({ qty: { A: 2 }, promo: { codeId: 'p', discount: 1999 } });
+    expect(eventProblems(partial, packages, [], false)).not.toContain('promoZero');
+  });
+  it('prices a package-less listing for promoZero', () => {
+    const s = event({ qty: { x: 2 }, promo: { codeId: 'p', discount: 3000 } });
+    expect(eventProblems(s, [], [], false, 1500)).toContain('promoZero');
+    expect(eventProblems(s, [], [], false, 2000)).not.toContain('promoZero');
+  });
+  it('never flags promoZero for a free order', () => {
+    const s = event({ qty: { A: 1 }, promo: { codeId: 'p', discount: 100 } });
+    expect(eventProblems(s, [pkg('A', 0, 5)], [], true)).not.toContain('promoZero');
+  });
   it('flags a bad email and phone', () => {
     const s = event({ guest: { ...guest, email: 'x', phone: '1' } });
     expect(eventProblems(s, packages, [], false)).toEqual(
@@ -177,9 +194,9 @@ describe('isFreeOrder and eventSubtotal', () => {
   it('is free for a package-less free listing', () => {
     expect(isFreeOrder(event({ qty: { x: 1 } }), [], 0)).toBe(true);
   });
-  it('is free when a promo brings the subtotal to 0', () => {
+  it('ignores the promo: a promo bringing the subtotal to 0 is still paid (P19 amended)', () => {
     const s = event({ qty: { A: 1 }, promo: { codeId: 'p', discount: 2000 } });
-    expect(isFreeOrder(s, [pkg('A', 2000)], 0)).toBe(true);
+    expect(isFreeOrder(s, [pkg('A', 2000)], 0)).toBe(false);
   });
   it('is not free when the promo leaves a balance', () => {
     const s = event({ qty: { A: 1 }, promo: { codeId: 'p', discount: 500 } });

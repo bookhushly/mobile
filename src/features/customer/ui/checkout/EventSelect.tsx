@@ -13,7 +13,7 @@ import { eventStock, lowStockThreshold } from '@/features/customer/domain/discov
 import { useEventQuestions } from '@/features/customer/hooks/useCheckoutData';
 import { useCreateBooking } from '@/features/customer/hooks/useCreateBooking';
 import { loadFailed } from '@/features/customer/hooks/loadState';
-import { usePromo } from '@/features/customer/hooks/usePromo';
+import { promoFor, usePromo } from '@/features/customer/hooks/usePromo';
 import type { EventDetail } from '@/features/customer/schemas/listings';
 import { EventTickets, ticketLinesOf } from '@/features/customer/ui/checkout/EventTickets';
 import { FormLoading } from '@/features/customer/ui/checkout/FormLoading';
@@ -36,6 +36,8 @@ type Props = {
   guest: Guest;
   header: ReactNode;
   onCreated: (bookingId: string, free: boolean) => void;
+  /** Re-reads the listing: after a refusal the stock counts may be stale (P11). */
+  onRefused: () => void;
 };
 
 const BLOCKED: Partial<Record<ReturnType<typeof eventStock>, string>> = {
@@ -46,7 +48,7 @@ const BLOCKED: Partial<Record<ReturnType<typeof eventStock>, string>> = {
 
 // Spec §5 Select (events): a stepper per package (P18), the organiser's questions (P17), promo
 // (P9) and contact details (P16). Free orders register straight away (P19).
-export function EventSelect({ event: e, userId, guest, header, onCreated }: Props) {
+export function EventSelect({ event: e, userId, guest, header, onCreated, onRefused }: Props) {
   const [sel, setSel] = useState<EventSelection>({ qty: {}, answers: {}, promo: null, guest });
   const [tried, setTried] = useState(false);
   const nameRef = useRef<TextInput>(null);
@@ -64,6 +66,15 @@ export function EventSelect({ event: e, userId, guest, header, onCreated }: Prop
     handed.current = true;
     onCreated(created.bookingId, sentFree.current);
   }, [created, onCreated]);
+  // P11: a 409 (or any refusal) may mean the counts moved; fresh `remaining` caps the steppers.
+  // Once per refusal: the callback may change identity on every render.
+  const createState = create.state;
+  const refetchedFor = useRef<object | null>(null);
+  useEffect(() => {
+    if (createState.phase !== 'refused' || refetchedFor.current === createState) return;
+    refetchedFor.current = createState;
+    onRefused();
+  }, [createState, onRefused]);
 
   const questions = questionsQuery.data;
   if (questions === undefined) {
@@ -87,20 +98,16 @@ export function EventSelect({ event: e, userId, guest, header, onCreated }: Prop
   const total = Object.values(chosen).reduce((a, b) => a + b, 0);
   const subtotal = eventSubtotal(sel.qty, e.ticket_packages, listingPrice);
   const amount = subtotal > 0 ? subtotal : null;
-  const applied = promo.state.phase === 'applied' ? promo.state.promo : null;
-  const stale = applied !== null && applied.forAmount !== amount;
-  const selection: EventSelection = {
-    ...sel,
-    promo:
-      applied !== null && !stale ? { codeId: applied.codeId, discount: applied.discount } : null,
-  };
+  const { promo: sentPromo, stale } = promoFor(promo.state, amount);
+  const selection: EventSelection = { ...sel, promo: sentPromo };
   const free = isFreeOrder(selection, e.ticket_packages, listingPrice);
-  const problems = eventProblems(selection, e.ticket_packages, questions, free);
+  const problems = eventProblems(selection, e.ticket_packages, questions, free, listingPrice);
   const shown = tried ? problems : [];
   const missing = new Set(shown.flatMap((p) => (typeof p === 'object' ? [p.question] : [])));
-  const ticketProblem = shown.find(
-    (p) => p === 'noTickets' || p === 'tooMany' || p === 'overStock',
-  );
+  // A covering promo is said at once (it blocks Continue); the rest after Continue.
+  const ticketProblem = problems.includes('promoZero')
+    ? 'promoZero'
+    : shown.find((p) => p === 'noTickets' || p === 'tooMany' || p === 'overStock');
   const refused = create.state.phase === 'refused' ? create.state : null;
   const hasPrices = lines.some((l) => l.price > 0);
 
@@ -184,7 +191,7 @@ export function EventSelect({ event: e, userId, guest, header, onCreated }: Prop
         nameRef={nameRef}
         emailRef={emailRef}
         phoneRef={phoneRef}
-        nameOptional={!free}
+        showName={free}
       />
     </Screen>
   );
