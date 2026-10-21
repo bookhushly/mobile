@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { validatePromo } from '@/features/customer/api/checkoutApi';
 import { api } from '@/shared/api/instance';
 
-// Spec P9: a preview only. The server re-validates the code at create and prices it itself.
+// Spec P9 (amended 4c.1: apartments too): a preview only. The server re-validates the code at
+// create and prices it itself.
 
 export type AppliedPromo = {
   codeId: string;
@@ -44,7 +45,7 @@ export function promoFor(
 }
 
 export function usePromo(
-  serviceType: 'hotel' | 'event',
+  serviceType: 'hotel' | 'apartment' | 'event',
   serviceId: string,
 ): {
   state: PromoState;

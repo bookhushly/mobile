@@ -98,6 +98,9 @@ export type ServiceCharge = z.infer<typeof serviceCharge>;
 
 export const initialized = z.object({
   success: z.literal(true),
+  // Web #223: true when an open checkout for the booking was handed back (same reference and
+  // URL); absent on a fresh charge.
+  reused: z.boolean().optional(),
   payment: z.object({
     id,
     reference: id,
@@ -128,6 +131,9 @@ export type CheckStatus = z.infer<typeof checkStatus>;
 export const verified = z.object({
   verified: z.boolean(),
   status: z.string(),
+  // Web #222: Paystack's own status on an unverified answer (`failed`, `reversed`, `ongoing`, …).
+  // The status route does not expose it (web 18103652), so only verify carries it.
+  provider_status: z.string().nullable().optional(),
   payment: z.object({ reference: z.string(), status: z.string() }).optional(),
 });
 export type Verified = z.infer<typeof verified>;

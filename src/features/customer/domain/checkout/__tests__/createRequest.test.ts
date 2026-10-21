@@ -83,7 +83,7 @@ describe('hotelBody', () => {
 });
 
 describe('apartmentBody', () => {
-  it('uses number_of_guests and never sends a promo (P9)', () => {
+  it('uses number_of_guests and sends the promo (P9 amended 4c.1: the server subtracts it)', () => {
     const body = apartmentBody('apt-1', stay());
     expect(body).toMatchObject({
       apartment_id: 'apt-1',
@@ -91,13 +91,19 @@ describe('apartmentBody', () => {
       check_out_date: '2026-11-03',
       number_of_guests: 3,
       airport_transfer: false,
+      promo_code_id: 'promo-1',
       guest_name: 'Ada Obi',
       special_requests: 'late arrival',
     });
     const keys = Object.keys(body);
-    expect(keys).not.toContain('promo_code_id');
     expect(keys).not.toContain('rate_id');
     expect(keys).not.toContain('breakfast_selections');
+  });
+
+  it('sends no promo key without a promo', () => {
+    expect(Object.keys(apartmentBody('apt-1', stay({ promo: null })))).not.toContain(
+      'promo_code_id',
+    );
   });
 });
 

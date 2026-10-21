@@ -581,6 +581,93 @@ describe('usePayment', () => {
     expect(initMock).toHaveBeenCalledTimes(1);
   });
 
+  it('409 already_paid is never retried: check-status names the paid reference for Checking (W1)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValueOnce(noPayment).mockResolvedValueOnce(
+      ok<CheckStatus>({
+        hasPaid: true,
+        payment: { reference: 'refPaid', status: 'completed', created_at: '2026-10-21T11:50:00Z' },
+      }),
+    );
+    initMock.mockResolvedValue(err<ApiError>({ kind: 'conflict', code: 'already_paid' }));
+    const { result, invalidate } = await setup();
+    await act(() => {
+      result.current.pay();
+    });
+    await flush();
+    expect(initMock).toHaveBeenCalledTimes(1);
+    expect(result.current.state).toMatchObject({ step: 'checking', reference: 'refPaid' });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: customerKeys.booking(USER, 'hotel', BOOKING),
+    });
+  });
+
+  it('409 already_paid without a paid reference says so, with no retry (W1)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(noPayment);
+    initMock.mockResolvedValue(err<ApiError>({ kind: 'conflict', code: 'already_paid' }));
+    const { result } = await setup();
+    await act(() => {
+      result.current.pay();
+    });
+    await flush();
+    expect(result.current.state).toEqual({
+      step: 'startError',
+      words: 'This booking is already paid.',
+      action: 'paid',
+    });
+    expect(initMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('500 record_failed says Check again, which runs check-status before any new Pay (W1)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(noPayment);
+    initMock.mockResolvedValue(
+      err<ApiError>({ kind: 'unavailable', status: 500, code: 'record_failed' }),
+    );
+    const { result } = await setup();
+    await act(() => {
+      result.current.pay();
+    });
+    await flush();
+    expect(result.current.state).toEqual({
+      step: 'startError',
+      words: 'Couldn’t start payment. Check again.',
+      action: 'checkAgain',
+    });
+    checkMock.mockResolvedValue(pendingRef('ref1', new Date(NOW - 10_000).toISOString()));
+    await act(() => {
+      result.current.checkAgain();
+    });
+    await flush();
+    expect(checkMock).toHaveBeenCalledTimes(2);
+    expect(initMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('a 503 status poll with Retry-After waits at least that long, and is never failed (W4)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(noPayment);
+    initMock.mockResolvedValue(initialized('ref1'));
+    openMock.mockResolvedValue({ type: WebBrowser.WebBrowserResultType.CANCEL });
+    stateMock
+      .mockResolvedValueOnce(
+        err<ApiError>({ kind: 'unavailable', status: 503, code: 'fetch_failed', retryAfterSec: 9 }),
+      )
+      .mockResolvedValue(polled('pending', false));
+    const { result } = await setup();
+    await act(() => {
+      result.current.pay();
+    });
+    await flush();
+    await advance(2000);
+    expect(stateMock).toHaveBeenCalledTimes(1);
+    expect(result.current.state).toMatchObject({ step: 'checking', attempt: 1, nextDelayMs: 9000 });
+    await advance(8999);
+    expect(stateMock).toHaveBeenCalledTimes(1);
+    await advance(1);
+    expect(stateMock).toHaveBeenCalledTimes(2);
+  });
+
   it('a hold past 25 minutes ends without initialising', async () => {
     withPlatform('ios');
     checkMock.mockResolvedValue(noPayment);

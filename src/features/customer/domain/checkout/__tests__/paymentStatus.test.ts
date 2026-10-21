@@ -111,3 +111,40 @@ describe('startErrorAction', () => {
     expect(startErrorAction({ kind: 'network' })).toBe('tryAgain');
   });
 });
+
+// W1: web #223 codes on POST /api/payment/initialize.
+describe('initialise codes (web #223)', () => {
+  const alreadyPaid: ApiError = { kind: 'conflict', code: 'already_paid' };
+  const cancelled: ApiError = { kind: 'conflict', code: 'booking_cancelled' };
+  const emailRequired: ApiError = { kind: 'unknown', status: 400, code: 'email_required' };
+  const recordFailed: ApiError = { kind: 'unavailable', status: 500, code: 'record_failed' };
+  const initFailed: ApiError = { kind: 'unavailable', status: 500, code: 'init_failed' };
+
+  it('already_paid says so and never retries: it goes to Checking (or Done)', () => {
+    expect(startErrorWords(alreadyPaid)).toBe('This booking is already paid.');
+    expect(startErrorAction(alreadyPaid)).toBe('paid');
+  });
+
+  it('booking_cancelled starts again', () => {
+    expect(startErrorWords(cancelled)).toBe('This booking has ended. Start again to book.');
+    expect(startErrorAction(cancelled)).toBe('startAgain');
+  });
+
+  it('email_required is a refusal, not transient', () => {
+    expect(startErrorWords(emailRequired)).toBe('Add an email to your profile to pay.');
+    expect(startErrorAction(emailRequired)).toBeNull();
+  });
+
+  it('record_failed checks again (check-status runs before any new Pay)', () => {
+    expect(startErrorWords(recordFailed)).toBe('Couldn’t start payment. Check again.');
+    expect(startErrorAction(recordFailed)).toBe('checkAgain');
+  });
+
+  it('init_failed and other 5xx keep the try-again words', () => {
+    expect(startErrorWords(initFailed)).toBe('Couldn’t start payment. Try again');
+    expect(startErrorAction(initFailed)).toBe('tryAgain');
+    expect(startErrorWords({ kind: 'unavailable', status: 502 })).toBe(
+      'Couldn’t start payment. Try again',
+    );
+  });
+});

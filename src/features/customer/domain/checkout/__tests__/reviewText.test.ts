@@ -142,7 +142,7 @@ describe('priceLines', () => {
     expect(priceLines('event', null)).toBeNull();
     expect(priceLines('apartment', null)).toBeNull();
   });
-  it('never shows an apartment discount as reducing the price', () => {
+  it('shows an apartment discount as a minus line (W3: auto discount plus promo, subtracted)', () => {
     expect(
       priceLines('apartment', {
         price_per_night: 45000,
@@ -155,11 +155,17 @@ describe('priceLines', () => {
     ).toEqual({
       lines: [
         { label: 'Stay', amount: 90000 },
+        { label: 'Discount', amount: -9000 },
         { label: 'Caution deposit', amount: 20000 },
         { label: 'Airport transfer', amount: 15000 },
       ],
       discountIncluded: null,
     });
+  });
+  it('leaves the apartment discount line out when there is none', () => {
+    expect(
+      priceLines('apartment', { subtotal: 90000, discount_amount: 0, caution_deposit: 0 }),
+    ).toEqual({ lines: [{ label: 'Stay', amount: 90000 }], discountIncluded: null });
   });
 });
 

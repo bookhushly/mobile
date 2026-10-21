@@ -178,7 +178,8 @@ export type FlowEvent =
   | { type: 'pay' }
   | { type: 'opened'; reference: string; paymentStartedAt: number }
   | { type: 'returned'; now: number }
-  | { type: 'verdict'; verdict: PayVerdict; now: number }
+  /** `retryAfterMs`: a 503 `Retry-After` (web #223 `fetch_failed`); the next poll waits at least that. */
+  | { type: 'verdict'; verdict: PayVerdict; now: number; retryAfterMs?: number }
   | { type: 'startFailed'; words: string; action: StartErrorAction }
   | { type: 'holdExpired' }
   | { type: 'checkAgain'; now: number }
@@ -250,7 +251,7 @@ export function flow(state: FlowState, ev: FlowEvent): FlowState {
       const nextDelayMs = nextPollDelay(ev.now - state.startedAt, attempt);
       return nextDelayMs === null
         ? { step: 'stillChecking', reference, paymentStartedAt }
-        : { ...state, attempt, nextDelayMs };
+        : { ...state, attempt, nextDelayMs: Math.max(nextDelayMs, ev.retryAfterMs ?? 0) };
     }
   }
 }

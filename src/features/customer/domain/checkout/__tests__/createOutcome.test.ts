@@ -1,5 +1,6 @@
 import type { ApiError } from '@/shared/lib/errors';
 import { eventCreateOutcome, stayCreateOutcome } from '../createOutcome';
+import { PROMO_ZERO_WORDS } from '../selection';
 
 const conflict = (code: string, body: Record<string, unknown> = {}): ApiError => ({
   kind: 'conflict',
@@ -267,5 +268,64 @@ describe('eventCreateOutcome', () => {
       kind: 'refused',
       words: 'Sign in again to book',
     });
+  });
+});
+
+// W2: web #222/#223 codes. Status-based fallbacks stay for anything without a code.
+describe('create codes (web #222, #223)', () => {
+  it('hotel 409 not_bookable is a refusal', () => {
+    expect(
+      stayCreateOutcome(
+        conflict('not_bookable', { error: 'This room can’t be booked online right now.' }),
+        'hotel',
+      ),
+    ).toEqual({ kind: 'refused', words: 'This stay can’t be booked right now.' });
+  });
+
+  it('event invalid_quantity asks to check the ticket numbers', () => {
+    expect(eventCreateOutcome(bad('invalid_quantity', { error: 'Choose at least one' }))).toEqual({
+      kind: 'refused',
+      words: 'Check your ticket numbers.',
+    });
+  });
+
+  it('event ticket_type_unavailable says a type is gone (the screen refetches)', () => {
+    expect(eventCreateOutcome(bad('ticket_type_unavailable'))).toEqual({
+      kind: 'refused',
+      words: 'One of these ticket types isn’t available any more.',
+    });
+  });
+
+  it('event 409 sold_out says not enough tickets left', () => {
+    expect(eventCreateOutcome(conflict('sold_out', { error: 'Not enough “VIP” tickets left' }))).toEqual({
+      kind: 'refused',
+      words: 'Not enough tickets left.',
+    });
+  });
+
+  it('event not_free says the event has paid tickets', () => {
+    expect(eventCreateOutcome(bad('not_free'))).toEqual({
+      kind: 'refused',
+      words: 'This event has paid tickets.',
+    });
+  });
+
+  it('event zero_total uses the promoZero words', () => {
+    expect(eventCreateOutcome(bad('zero_total'))).toEqual({
+      kind: 'refused',
+      words: PROMO_ZERO_WORDS,
+    });
+  });
+
+  it('event 500 booking_failed is failed, with nothing to release', () => {
+    expect(eventCreateOutcome({ kind: 'unavailable', status: 500, code: 'booking_failed' })).toEqual({
+      kind: 'failed',
+      words: 'Couldn’t book. Try again',
+      strayBookingId: null,
+    });
+  });
+
+  it('an uncoded event 5xx is still unsure, never a refusal', () => {
+    expect(eventCreateOutcome({ kind: 'unavailable', status: 500 })).toEqual({ kind: 'unsure' });
   });
 });

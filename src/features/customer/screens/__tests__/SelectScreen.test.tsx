@@ -232,7 +232,40 @@ describe('stays', () => {
     given(APARTMENT);
     await open('apartment');
     expect(await screen.findByTestId('min-nights')).toHaveTextContent('At least 3 nights');
-    expect(screen.queryByTestId('promo-open')).toBeNull();
+  });
+
+  it('apartments preview a promo as apartment and send its id (W3)', async () => {
+    jest.mocked(validatePromo).mockResolvedValue({
+      ok: true,
+      value: {
+        valid: true,
+        code_id: 'c1',
+        code: 'STAY10',
+        discount_amount: 15000,
+        discounted_total: 135000,
+      },
+    });
+    given(APARTMENT);
+    await open('apartment');
+    await fireEvent.press(await screen.findByTestId('dates-row'));
+    await fireEvent.press(screen.getByTestId('day-2026-10-23'));
+    await fireEvent.press(screen.getByTestId('day-2026-10-26'));
+    await fireEvent.press(screen.getByRole('button', { name: 'Choose · 3 nights' }));
+    await fireEvent.press(screen.getByTestId('promo-open'));
+    await fireEvent.changeText(screen.getByTestId('promo-input'), 'STAY10');
+    await fireEvent.press(screen.getByTestId('promo-apply'));
+    expect(await screen.findByTestId('promo-applied')).toBeTruthy();
+    expect(jest.mocked(validatePromo).mock.calls[0]?.[1]).toEqual({
+      code: 'STAY10',
+      service_type: 'apartment',
+      service_id: ID,
+      amount: 150000,
+    });
+    await fireEvent.press(continueButton());
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(submit.mock.calls[0]?.[0]).toMatchObject({
+      promo: { codeId: 'c1', discount: 15000 },
+    });
   });
 
   it('refused dates_invalid shows the words', async () => {

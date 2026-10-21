@@ -182,7 +182,7 @@ const handlers = {
 };
 
 async function renderPay(
-  kind: 'hotel' | 'event',
+  kind: 'hotel' | 'apartment' | 'event',
   opts: { free?: boolean; fromSelect?: boolean } = {},
 ) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -472,6 +472,46 @@ it('a price that could not be confirmed offers Start again', async () => {
     listingId: 'h1',
     roomTypeId: 'rt1',
   });
+});
+
+it('record_failed offers Check again, which re-runs Pay through check-status (W1)', async () => {
+  setPayment({
+    step: 'startError',
+    words: 'Couldn’t start payment. Check again.',
+    action: 'checkAgain',
+  });
+  await renderPay('hotel');
+  await fireEvent.press(screen.getByRole('button', { name: 'Check again' }));
+  expect(pay.checkAgain).toHaveBeenCalledTimes(1);
+});
+
+it('already paid has no retry button beside its words (W1)', async () => {
+  setPayment({ step: 'startError', words: 'This booking is already paid.', action: 'paid' });
+  await renderPay('hotel');
+  expect(screen.getByText('This booking is already paid.')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull();
+});
+
+it('an apartment discount reads as a minus line on Review (W3)', async () => {
+  setRow(undefined);
+  setCharge({ data: null });
+  setPayment(
+    { step: 'review' },
+    {
+      entry: {
+        ...ENTRY,
+        kind: 'apartment',
+        total: 96000,
+        pricing: { subtotal: 90000, discount_amount: 9000, caution_deposit: 15000, airport_fee: 0 },
+      },
+    },
+  );
+  await renderPay('apartment');
+  expect(screen.getByText('Discount')).toBeTruthy();
+  expect(screen.getByText('−₦9,000')).toBeTruthy();
+  expect(screen.getByLabelText('Discount, minus 9,000 naira')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Pay ₦96,000' })).toBeTruthy();
 });
 
 it('a refusal has no button beside its words', async () => {

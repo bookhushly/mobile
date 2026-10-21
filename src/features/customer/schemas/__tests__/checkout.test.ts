@@ -135,6 +135,11 @@ describe('initialized', () => {
   it('fails without a reference', () => {
     expect(initialized.safeParse({ success: true, payment: { ...payment, reference: undefined } }).success).toBe(false);
   });
+  it('keeps reused when web #223 hands back an open checkout (W5)', () => {
+    expect(initialized.parse({ success: true, reused: true, payment }).reused).toBe(true);
+    expect(initialized.parse({ success: true, payment }).reused).toBeUndefined();
+    expect(initialized.safeParse({ success: true, reused: 'yes', payment }).success).toBe(false);
+  });
 });
 
 describe('checkStatus', () => {
@@ -159,6 +164,11 @@ describe('verified', () => {
   });
   it('fails without verified', () => {
     expect(verified.safeParse({ status: 'x' }).success).toBe(false);
+  });
+  it('keeps provider_status, a string or null, when present (W5)', () => {
+    expect(verified.parse({ verified: false, status: 'failed', provider_status: 'failed' }).provider_status).toBe('failed');
+    expect(verified.parse({ verified: false, status: 'pending', provider_status: null }).provider_status).toBeNull();
+    expect(verified.parse({ verified: false, status: 'pending' }).provider_status).toBeUndefined();
   });
 });
 

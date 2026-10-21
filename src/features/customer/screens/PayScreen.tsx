@@ -5,6 +5,7 @@ import { useEffect, useRef } from 'react';
 import { BackHandler } from 'react-native';
 
 import { rowPayState, type FlowState } from '@/features/customer/domain/checkout/paymentFlow';
+import type { StartErrorAction } from '@/features/customer/domain/checkout/paymentStatus';
 import {
   chargeEstimate,
   priceLines,
@@ -42,6 +43,28 @@ type Props = {
   onViewBooking: (kind: PayKind, bookingId: string) => void;
   onDone: () => void;
 };
+
+/**
+ * The button beside a start error (P14, W1). Try again and Check again both re-run Pay, which asks
+ * check-status first; an already-paid booking and a refusal have none.
+ */
+function startErrorButton(
+  action: StartErrorAction,
+  startAgain: () => void,
+  checkAgain: () => void,
+): { label: string; onPress: () => void } | null {
+  switch (action) {
+    case 'startAgain':
+      return { label: 'Start again', onPress: startAgain };
+    case 'tryAgain':
+      return { label: 'Try again', onPress: checkAgain };
+    case 'checkAgain':
+      return { label: 'Check again', onPress: checkAgain };
+    case 'paid':
+    case null:
+      return null;
+  }
+}
 
 /** Leaving is blocked: a payment is being started or checked (P6). */
 const BUSY: ReadonlySet<FlowState['step']> = new Set(['starting', 'inBrowser', 'checking']);
@@ -248,12 +271,7 @@ function Pay({
           ? null
           : {
               words: failure.words,
-              action:
-                failure.action === 'startAgain'
-                  ? { label: 'Start again', onPress: startAgain }
-                  : failure.action === 'tryAgain'
-                    ? { label: 'Try again', onPress: p.checkAgain }
-                    : null,
+                action: startErrorButton(failure.action, startAgain, p.checkAgain),
             }
       }
       onPay={p.pay}

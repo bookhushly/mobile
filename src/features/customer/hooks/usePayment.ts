@@ -33,6 +33,7 @@ import { holdPayScreen } from '@/features/customer/hooks/openPayScreens';
 import { useServerNow } from '@/features/customer/hooks/useServerNow';
 import { checkoutStore, type CheckoutEntry } from '@/features/customer/offline/checkoutStore';
 import { api, clock } from '@/shared/api/instance';
+import type { ApiError } from '@/shared/lib/errors';
 
 // Spec P4–P8, P26, P29. Money rules: one initialise per tap, only after check-status says there
 // is no reusable reference; the reference is on disk before the browser opens; Done only from a
@@ -252,6 +253,35 @@ export function usePayment(
     [userId, kind, bookingId, title, total, createdAt],
   );
 
+  /**
+   * A failed initialise (P14, W1). 409 `already_paid` is never retried: the booking row is
+   * reloaded (a paid row is Done) and check-status names the paid reference for Checking.
+   */
+  const startFailed = useCallback(
+    async (e: ApiError) => {
+      const words = startErrorWords(e);
+      const action = startErrorAction(e);
+      if (action !== 'paid') {
+        send({ type: 'startFailed', words, action });
+        return;
+      }
+      void qc.invalidateQueries({ queryKey: customerKeys.booking(userId, kind, bookingId) });
+      const c = await checkPayment(api, kind, bookingId);
+      if (!alive()) return;
+      if (c.ok && c.value.hasPaid) {
+        send({
+          type: 'paid',
+          reference: c.value.payment.reference,
+          paymentStartedAt: Date.parse(c.value.payment.created_at),
+          now: clock.serverNow(),
+        });
+        return;
+      }
+      send({ type: 'startFailed', words, action });
+    },
+    [send, qc, userId, kind, bookingId, alive],
+  );
+
   const initialize = useCallback(async () => {
     if (holdOver()) {
       send({ type: 'startFailed', words: HOLD_ENDED_WORDS, action: 'startAgain' });
@@ -276,11 +306,7 @@ export function usePayment(
     // Sent once: the client never re-sends it, and a lost answer is settled by check-status.
     const r = await initializePayment(api, kind, bookingId, to);
     if (!r.ok) {
-      send({
-        type: 'startFailed',
-        words: startErrorWords(r.error),
-        action: startErrorAction(r.error),
-      });
+      await startFailed(r.error);
       return;
     }
     const { reference, payment_url } = r.value.payment;
@@ -298,7 +324,7 @@ export function usePayment(
       return;
     }
     await openBrowser(reference, payment_url, startedAt);
-  }, [holdOver, email, send, kind, bookingId, userId, openBrowser, alive, recordStart]);
+  }, [holdOver, email, send, kind, bookingId, userId, openBrowser, alive, recordStart, startFailed]);
 
   /** In `starting`: check-status, then the pay plan (P4, P26). Never initialises on doubt. */
   const start = useCallback(async () => {
@@ -433,13 +459,15 @@ export function usePayment(
     const { reference } = state;
     const timer = setTimeout(() => {
       void paymentState(api, reference).then((r) => {
-        if (on) {
-          send({
-            type: 'verdict',
-            verdict: r.ok ? fromPaymentState(r.value) : 'unknown',
-            now: clock.serverNow(),
-          });
-        }
+        if (!on) return;
+        // W4: a 503 `fetch_failed` is unknown, never failed; its Retry-After delays the next poll.
+        const wait = !r.ok && r.error.kind === 'unavailable' ? r.error.retryAfterSec : undefined;
+        send({
+          type: 'verdict',
+          verdict: r.ok ? fromPaymentState(r.value) : 'unknown',
+          now: clock.serverNow(),
+          ...(wait !== undefined ? { retryAfterMs: wait * 1000 } : {}),
+        });
       });
     }, state.nextDelayMs);
     return () => {

@@ -378,6 +378,26 @@ describe('flow', () => {
     },
   );
 
+  it('a 503 Retry-After pushes the next poll out, and is never failed (W4)', () => {
+    expect(
+      flow(checking(0, 0, 2000), {
+        type: 'verdict',
+        verdict: 'unknown',
+        now: 2000,
+        retryAfterMs: 5000,
+      }),
+    ).toEqual(checking(0, 1, 5000));
+    // A shorter Retry-After never shortens the schedule.
+    expect(
+      flow(checking(0, 2, 5000), {
+        type: 'verdict',
+        verdict: 'unknown',
+        now: 10000,
+        retryAfterMs: 1000,
+      }),
+    ).toEqual(checking(0, 3, 8000));
+  });
+
   it('the second status poll comes 3 s after the first', () => {
     expect(flow(checking(0, 0, 2000), { type: 'verdict', verdict: 'pending', now: 2000 })).toEqual(
       checking(0, 1, 3000),

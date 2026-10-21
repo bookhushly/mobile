@@ -6,10 +6,14 @@ import type { RoomRate, TicketPackage } from '@/features/customer/schemas/listin
 
 export type Guest = { name: string; email: string; phone: string };
 
+/** A promo that makes a paid order ₦0 (P19): said on Select and for create's `zero_total`. */
+export const PROMO_ZERO_WORDS =
+  'This code makes your order free, which can’t be booked in the app yet. Remove the code or book on bookhushly.com.';
+
 export type StaySelection = {
   checkIn: string | null;
   checkOut: string | null;
-  // Apartments send `adults` as number_of_guests and ignore rateId, breakfast and promo.
+  // Apartments send `adults` as number_of_guests and ignore rateId and breakfast.
   adults: number;
   children: number;
   rateId: string | null;

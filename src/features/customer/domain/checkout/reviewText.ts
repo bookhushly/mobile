@@ -59,8 +59,9 @@ const positive = (n: number | null | undefined): n is number =>
 
 /**
  * The cached breakdown as lines, or null for the total-only layout (P28). Hotel discounts are
- * already inside `room_total`, so they are a note, never a minus line. An apartment discount is
- * recorded but not subtracted by the server, so it is never shown.
+ * already inside `room_total`, so they are a note, never a minus line. An apartment's
+ * `discount_amount` (automatic discount plus promo) is subtracted from `subtotal` by the server
+ * since web #223, so it is a minus line.
  */
 export function priceLines(
   kind: ReviewKind,
@@ -81,8 +82,11 @@ export function priceLines(
           ['Airport transfer', pricing.airport_fee],
         ];
   const lines: PriceLine[] = [{ label: kind === 'hotel' ? 'Room' : 'Stay', amount: main }];
-  for (const [label, amount] of extras) if (positive(amount)) lines.push({ label, amount });
   const discount = pricing.discount_amount;
+  if (kind === 'apartment' && positive(discount)) {
+    lines.push({ label: 'Discount', amount: -discount });
+  }
+  for (const [label, amount] of extras) if (positive(amount)) lines.push({ label, amount });
   return { lines, discountIncluded: kind === 'hotel' && positive(discount) ? discount : null };
 }
 

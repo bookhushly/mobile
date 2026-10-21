@@ -52,7 +52,7 @@ type Props = {
   onCreated: (bookingId: string) => void;
 };
 
-// Spec §5 Select (stays): room and bed option, dates, guests, extras, promo (hotels, P9), the
+// Spec §5 Select (stays): room and bed option, dates, guests, extras, promo (P9, amended 4c.1), the
 // guest's details (P16) and, for hotels, special requests. Continue creates the booking (P1).
 export function StaySelect({ stay, requestedRate, userId, guest, header, onCreated }: Props) {
   const hotel = stay.kind === 'hotel' ? stay : null;
@@ -80,7 +80,7 @@ export function StaySelect({ stay, requestedRate, userId, guest, header, onCreat
   const aptExtras = useApartmentExtras(hotel === null ? id : null);
   const availability = useRoomAvailability(hotel?.roomType.id ?? null, sel.checkIn, sel.checkOut);
   const create = useCreateBooking(userId, stay.kind, id);
-  const promo = usePromo('hotel', id);
+  const promo = usePromo(stay.kind, id);
   const created = create.created;
   // Hands over once: the parent's callback may change identity on every render.
   const handed = useRef(false);
@@ -119,7 +119,7 @@ export function StaySelect({ stay, requestedRate, userId, guest, header, onCreat
   const amount = n !== null && perNight !== null && n > 0 ? perNight * n : null;
   const preview = promoFor(promo.state, amount);
   const stale = preview.stale;
-  const selection: StaySelection = { ...sel, promo: hotel !== null ? preview.promo : null };
+  const selection: StaySelection = { ...sel, promo: preview.promo };
   const rules = { minNights, maxGuests };
   const problems = stayProblems(selection, {
     today: lagosToday(clock.serverNow()),
@@ -219,17 +219,15 @@ export function StaySelect({ stay, requestedRate, userId, guest, header, onCreat
           setSel({ ...sel, airport });
         }}
       />
-      {hotel !== null ? (
-        <PromoRow
-          state={promo.state}
-          stale={stale}
-          amount={amount}
-          onApply={(code) => {
-            if (amount !== null) void promo.apply(code, amount);
-          }}
-          onRemove={promo.remove}
-        />
-      ) : null}
+      <PromoRow
+        state={promo.state}
+        stale={stale}
+        amount={amount}
+        onApply={(code) => {
+          if (amount !== null) void promo.apply(code, amount);
+        }}
+        onRemove={promo.remove}
+      />
       <GuestFields
         guest={sel.guest}
         onChange={(g) => {
