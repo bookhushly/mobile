@@ -94,12 +94,16 @@ export function serviceCharge(c: Requester, type: string): Api<ServiceCharge> {
 
 // ── Payment ──────────────────────────────────────────────────────────────────────────────────────
 
-/** The body is these keys and nothing else: the server computes the amount (BACKEND_STATUS §9). */
+/**
+ * The body is these keys and nothing else: the server computes the amount (BACKEND_STATUS §9).
+ * Without `email` (V3) web compares the signed-in owner's own email, so an open checkout for the
+ * booking can be handed back (`reused: true`).
+ */
 export function initializePayment(
   c: Requester,
   kind: 'event' | StayKind,
   bookingId: string,
-  email: string,
+  email?: string,
 ): Api<Initialized> {
   return c.request('/api/payment/initialize', {
     method: 'POST',
@@ -108,7 +112,7 @@ export function initializePayment(
       requestType: kind,
       provider: 'paystack',
       currency: 'NGN',
-      email,
+      ...(email !== undefined ? { email } : {}),
     },
     schema: initialized,
   });

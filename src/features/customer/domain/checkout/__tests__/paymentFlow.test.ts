@@ -1,11 +1,11 @@
-import type { CheckStatus } from '@/features/customer/schemas/checkout';
+import type { CheckStatus, Initialized } from '@/features/customer/schemas/checkout';
 import {
+  acceptReuse,
   afterPendingVerify,
   flow,
   type FlowState,
   HOLD_MS,
   holdEndsAt,
-  isFreshPayment,
   isPaymentUrl,
   nextPollDelay,
   PENDING_REINIT_MS,
@@ -13,6 +13,7 @@ import {
   POLL_EVERY_MS,
   POLL_MAX_MS,
   POLL_SCHEDULE_MS,
+  REUSE_WINDOW_MS,
   rowPayState,
   URL_MAX_AGE_MS,
 } from '../paymentFlow';
@@ -28,6 +29,7 @@ describe('constants', () => {
     expect(HOLD_MS).toBe(25 * MIN);
     expect(URL_MAX_AGE_MS).toBe(24 * HOUR);
     expect(PENDING_REINIT_MS).toBe(15 * MIN);
+    expect(REUSE_WINDOW_MS).toBe(30 * MIN);
   });
 });
 
@@ -111,14 +113,6 @@ describe('rowPayState', () => {
   });
 });
 
-describe('isFreshPayment', () => {
-  it('is fresh under 15 min, and when the start is unknown', () => {
-    expect(isFreshPayment(0, 15 * MIN - 1)).toBe(true);
-    expect(isFreshPayment(0, 15 * MIN)).toBe(false);
-    expect(isFreshPayment(NaN, HOUR)).toBe(true);
-  });
-});
-
 describe('isPaymentUrl', () => {
   it.each([
     'https://checkout.paystack.com/abc',
@@ -183,44 +177,51 @@ describe('planPay', () => {
     });
   });
 
+  // An unusable stored URL counts as none (P26): under 30 min the pending checkout is asked for.
+  const reuse = { do: 'reuse', reference: 'ref_1', paymentStartedAt: created };
+
   it('a stored URL off the Paystack allowlist is never reopened', () => {
-    expect(planPay(pending, stored('ref_1', MIN, 'https://evil.test/pay'), now)).toEqual({
-      do: 'verifyPending',
+    expect(planPay(pending, stored('ref_1', MIN, 'https://evil.test/pay'), now)).toEqual(reuse);
+  });
+
+  it('pending with a stored URL 25 h old is treated as having no URL', () => {
+    expect(planPay(pending, stored('ref_1', 25 * HOUR), now)).toEqual(reuse);
+  });
+
+  it('pending with a stored URL for another reference is treated as having no URL', () => {
+    expect(planPay(pending, stored('ref_other', MIN), now)).toEqual(reuse);
+  });
+
+  it('pending 30 min old or more with nothing stored verifies', () => {
+    const old: CheckStatus = {
+      hasPaid: false,
+      hasPending: true,
+      payment: { ...payment, created_at: '2026-10-21T11:30:00Z' },
+    };
+    expect(planPay(old, null, now)).toEqual({ do: 'verifyPending', reference: 'ref_1' });
+  });
+
+  it('pending under 30 min old with no URL asks initialise for the same checkout (V3)', () => {
+    expect(planPay(pending, null, now)).toEqual({
+      do: 'reuse',
       reference: 'ref_1',
+      paymentStartedAt: created,
     });
-  });
-
-  it('pending with a stored URL 25 h old verifies instead', () => {
-    expect(planPay(pending, stored('ref_1', 25 * HOUR), now)).toEqual({
-      do: 'verifyPending',
-      reference: 'ref_1',
-    });
-  });
-
-  it('pending with a stored URL for another reference verifies', () => {
-    expect(planPay(pending, stored('ref_other', MIN), now)).toEqual({
-      do: 'verifyPending',
-      reference: 'ref_1',
-    });
-  });
-
-  it('pending with nothing stored verifies', () => {
-    expect(planPay(pending, null, now)).toEqual({ do: 'verifyPending', reference: 'ref_1' });
-  });
-
-  it('a pending reference under 15 min old with no URL waits: never verified (A1)', () => {
     const fresh: CheckStatus = {
       hasPaid: false,
       hasPending: true,
-      payment: { ...payment, created_at: '2026-10-21T11:46:00Z' },
+      payment: { ...payment, created_at: '2026-10-21T11:30:00.001Z' },
     };
-    expect(planPay(fresh, null, now)).toEqual({ do: 'wait' });
+    expect(planPay(fresh, stored('ref_other', MIN), now)).toMatchObject({ do: 'reuse' });
+  });
+
+  it('pending with an unreadable created_at verifies, never reuses', () => {
     const unreadable: CheckStatus = {
       hasPaid: false,
       hasPending: true,
       payment: { ...payment, created_at: 'garbage' },
     };
-    expect(planPay(unreadable, null, now)).toEqual({ do: 'wait' });
+    expect(planPay(unreadable, null, now)).toEqual({ do: 'verifyPending', reference: 'ref_1' });
   });
 
   it('neither paid nor pending initialises', () => {
@@ -229,33 +230,65 @@ describe('planPay', () => {
   });
 });
 
+describe('acceptReuse', () => {
+  const init = (reference: string, reused?: boolean): Initialized => ({
+    success: true,
+    ...(reused !== undefined ? { reused } : {}),
+    payment: {
+      id: 'p1',
+      reference,
+      amount: 1,
+      base_amount: 1,
+      service_charge_amount: 0,
+      service_charge_label: null,
+      currency: 'NGN',
+      payment_url: 'https://checkout.paystack.com/abc',
+    },
+  });
+
+  it('accepts only reused:true for the same reference (V3)', () => {
+    expect(acceptReuse(init('ref_1', true), 'ref_1')).toBe(true);
+    expect(acceptReuse(init('ref_2', true), 'ref_1')).toBe(false);
+    expect(acceptReuse(init('ref_1', false), 'ref_1')).toBe(false);
+    expect(acceptReuse(init('ref_1'), 'ref_1')).toBe(false);
+  });
+});
+
 describe('afterPendingVerify', () => {
   const created = '2026-10-21T11:00:00.000Z';
   const at = (ms: number) => Date.parse(created) + ms;
 
   it('paid is done', () => {
-    expect(afterPendingVerify('paid', created, at(MIN))).toBe('done');
+    expect(afterPendingVerify('paid', null, created, at(MIN))).toBe('done');
   });
 
   it('failed initialises anew', () => {
-    expect(afterPendingVerify('failed', created, at(MIN))).toBe('initialize');
+    expect(afterPendingVerify('failed', 'failed', created, at(MIN))).toBe('initialize');
   });
 
   it('pending at 14 min waits', () => {
-    expect(afterPendingVerify('pending', created, at(14 * MIN))).toBe('wait');
+    expect(afterPendingVerify('pending', null, created, at(14 * MIN))).toBe('wait');
   });
 
   it('pending at 15 min initialises', () => {
-    expect(afterPendingVerify('pending', created, at(15 * MIN))).toBe('initialize');
+    expect(afterPendingVerify('pending', null, created, at(15 * MIN))).toBe('initialize');
   });
 
   it('unknown follows the same age rule', () => {
-    expect(afterPendingVerify('unknown', created, at(14 * MIN))).toBe('wait');
-    expect(afterPendingVerify('unknown', created, at(16 * MIN))).toBe('initialize');
+    expect(afterPendingVerify('unknown', null, created, at(14 * MIN))).toBe('wait');
+    expect(afterPendingVerify('unknown', undefined, created, at(16 * MIN))).toBe('initialize');
   });
 
+  it.each(['ongoing', 'pending', 'processing', 'queued'])(
+    'Paystack %s waits at any age: a transfer or USSD may still land (V2)',
+    (ps) => {
+      expect(afterPendingVerify('pending', ps, created, at(5 * HOUR))).toBe('wait');
+      expect(afterPendingVerify('unknown', ps, created, at(HOUR))).toBe('wait');
+    },
+  );
+
   it('an unreadable created_at waits, never initialises', () => {
-    expect(afterPendingVerify('pending', 'garbage', at(HOUR))).toBe('wait');
+    expect(afterPendingVerify('pending', null, 'garbage', at(HOUR))).toBe('wait');
   });
 });
 
@@ -266,14 +299,15 @@ describe('flow', () => {
     startedAt: number,
     attempt: number,
     nextDelayMs: number,
-    paymentStartedAt = 0,
+    verify = false,
   ): FlowState => ({
     step: 'checking',
     reference: 'ref_1',
-    paymentStartedAt,
+    paymentStartedAt: 0,
     startedAt,
     attempt,
     nextDelayMs,
+    verify,
   });
   const inBrowser: FlowState = { step: 'inBrowser', reference: 'ref_1', paymentStartedAt: 0 };
   const still: FlowState = { step: 'stillChecking', reference: 'ref_1', paymentStartedAt: 0 };
@@ -313,8 +347,8 @@ describe('flow', () => {
     ).toEqual(inBrowser);
   });
 
-  it('returned moves inBrowser to checking: the first status poll is 2 s later', () => {
-    expect(flow(inBrowser, { type: 'returned', now: 500 })).toEqual(checking(500, 0, 2000));
+  it('returned moves inBrowser to checking, verify first (V1); the first status poll is 2 s later', () => {
+    expect(flow(inBrowser, { type: 'returned', now: 500 })).toEqual(checking(500, 0, 2000, true));
   });
 
   it('startFailed moves starting to startError', () => {
@@ -354,19 +388,41 @@ describe('flow', () => {
     });
   });
 
-  it('verdict failed on a payment 15 min old or more is failed', () => {
+  it('a status poll failed is unconfirmed without a definitive verify, at any age (V1)', () => {
     expect(
       flow(checking(0, 2, 5000), { type: 'verdict', verdict: 'failed', now: 15 * MIN }),
+    ).toEqual(unconfirmed);
+    expect(flow(checking(0, 2, 5000), { type: 'verdict', verdict: 'failed', now: 1 })).toEqual(
+      unconfirmed,
+    );
+  });
+
+  it('a definitive verify failure is failed at once (V1)', () => {
+    expect(
+      flow(checking(0, 0, 2000, true), {
+        type: 'verified',
+        verdict: 'failed',
+        definitive: true,
+        now: 100,
+      }),
     ).toEqual({ step: 'failed', reference: 'ref_1' });
   });
 
-  it('verdict failed on a payment under 15 min old is unconfirmed, never failed (A1b)', () => {
-    expect(
-      flow(checking(0, 2, 5000), { type: 'verdict', verdict: 'failed', now: 15 * MIN - 1 }),
-    ).toEqual(unconfirmed);
-    expect(
-      flow(checking(0, 2, 5000, NaN), { type: 'verdict', verdict: 'failed', now: HOUR }),
-    ).toEqual({ step: 'unconfirmed', reference: 'ref_1', paymentStartedAt: NaN });
+  it.each(['paid', 'pending', 'unknown', 'failed'] as const)(
+    'any other verify answer (%s) goes on to the status polls',
+    (verdict) => {
+      expect(
+        flow(checking(0, 0, 2000, true), { type: 'verified', verdict, definitive: false, now: 9 }),
+      ).toEqual(checking(0, 0, 2000));
+    },
+  );
+
+  it('verified outside a verifying check is ignored', () => {
+    const s = checking(0, 1, 3000);
+    expect(flow(s, { type: 'verified', verdict: 'failed', definitive: true, now: 1 })).toBe(s);
+    expect(flow(review, { type: 'verified', verdict: 'failed', definitive: true, now: 1 })).toBe(
+      review,
+    );
   });
 
   it.each(['pending', 'unknown'] as const)(
@@ -420,12 +476,16 @@ describe('flow', () => {
     expect(flow(inBrowser, { type: 'verdict', verdict: 'paid', now: 1 })).toBe(inBrowser);
   });
 
-  it('checkAgain from stillChecking restarts checking', () => {
-    expect(flow(still, { type: 'checkAgain', now: 200000 })).toEqual(checking(200000, 0, 2000));
+  it('checkAgain from stillChecking restarts checking, verifying once', () => {
+    expect(flow(still, { type: 'checkAgain', now: 200000 })).toEqual(
+      checking(200000, 0, 2000, true),
+    );
   });
 
-  it('checkAgain from unconfirmed polls the same reference again', () => {
-    expect(flow(unconfirmed, { type: 'checkAgain', now: 9000 })).toEqual(checking(9000, 0, 2000));
+  it('checkAgain from unconfirmed verifies and polls the same reference again', () => {
+    expect(flow(unconfirmed, { type: 'checkAgain', now: 9000 })).toEqual(
+      checking(9000, 0, 2000, true),
+    );
   });
 
   it('checkAgain from pendingElsewhere runs the pay plan again', () => {

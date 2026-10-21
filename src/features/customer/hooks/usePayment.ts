@@ -11,10 +11,10 @@ import {
   verifyPayment,
 } from '@/features/customer/api/checkoutApi';
 import {
+  acceptReuse,
   afterPendingVerify,
   flow,
   holdEndsAt as holdEnd,
-  isFreshPayment,
   isPaymentUrl,
   planPay,
   type FlowEvent,
@@ -24,6 +24,8 @@ import {
 import {
   fromPaymentState,
   fromVerified,
+  isDefinitiveFailure,
+  providerStillProcessing,
   startErrorAction,
   startErrorWords,
   type PayVerdict,
@@ -35,10 +37,11 @@ import { checkoutStore, type CheckoutEntry } from '@/features/customer/offline/c
 import { api, clock } from '@/shared/api/instance';
 import type { ApiError } from '@/shared/lib/errors';
 
-// Spec P4–P8, P26, P29. Money rules: one initialise per tap, only after check-status says there
-// is no reusable reference; the reference is on disk before the browser opens; Done only from a
-// fulfilled status poll; a hold past 25 min on the server clock never initialises. A payment
-// started under 15 min ago is never verified and its failure is never final (A1).
+// Spec P4–P8, P26, P29 (amended 4c.1). Money rules: one initialise per tap, only after
+// check-status says there is no reusable reference; the reference is on disk before the browser
+// opens; Done only from a fulfilled status poll; a hold past 25 min on the server clock never
+// initialises. On return verify runs once, then status is polled; a failure is final only when
+// Paystack says `failed`/`reversed` (V1).
 
 export type PayKind = 'hotel' | 'apartment' | 'event';
 
@@ -111,8 +114,8 @@ export function usePayment(
   holdEndsAt: number | null;
   /** Pay can start: the stay's age is known, its hold hasn't ended, the row isn't paid or cancelled. */
   canPay: boolean;
-  /** An earlier payment on this booking started under 15 min ago: Review warns before Pay (A1d). */
-  recentAttempt: boolean;
+  /** The latest verify for this booking says Paystack is still clearing it: Review warns (V4). */
+  providerPending: boolean;
   entry: CheckoutEntry | null;
 } {
   const qc = useQueryClient();
@@ -128,8 +131,8 @@ export function usePayment(
   // Render-time copies of the two refs above, for `willCancelOnLeave`.
   const [sawPay, setSawPay] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  /** When the latest payment on this booking was started (server clock), if known. */
-  const [attemptAt, setAttemptAt] = useState<number | null>(null);
+  /** Paystack's status from the latest verify for this booking, if any (V4). */
+  const [providerStatus, setProviderStatus] = useState<string | null>(null);
   const appSub = useRef<NativeEventSubscription | null>(null);
   const now = useServerNow();
   // A call, not a read: TypeScript would keep `live.current` narrowed across an await.
@@ -159,10 +162,6 @@ export function usePayment(
         entryLoaded.current = true;
         setLoaded(true);
         setEntry(e);
-        if (e?.payment) {
-          const at = e.payment.startedAt;
-          setAttemptAt((a) => (a === null ? at : Math.max(a, at)));
-        }
       })
       .catch(() => undefined);
     return () => {
@@ -184,7 +183,7 @@ export function usePayment(
   const { title, total, rowState, fromSelect } = booking;
   const rowSettled = rowState === 'paid' || rowState === 'cancelled';
   const canPay = !holdUnknown && !rowSettled && !(holdEndsAt !== null && now >= holdEndsAt);
-  const recentAttempt = attemptAt !== null && isFreshPayment(attemptAt, now);
+  const providerPending = providerStillProcessing(providerStatus);
 
   const holdOver = useCallback(
     () => holdEndsAt !== null && clock.serverNow() >= holdEndsAt,
@@ -199,8 +198,6 @@ export function usePayment(
   const openBrowser = useCallback(
     async (reference: string, url: string, paymentStartedAt: number) => {
       send({ type: 'opened', reference, paymentStartedAt });
-      if (alive())
-        setAttemptAt((a) => (a === null ? paymentStartedAt : Math.max(a, paymentStartedAt)));
       if (Platform.OS === 'android') {
         // The Custom Tab promise resolves 'opened' at once; coming back is the app turning active.
         appSub.current?.remove();
@@ -223,7 +220,19 @@ export function usePayment(
         send({ type: 'returned', now: clock.serverNow() });
       }
     },
-    [send, alive],
+    [send],
+  );
+
+  /** One verify; its Paystack status feeds the Review warning (V4). Unknown on any failure. */
+  const verifyOnce = useCallback(
+    async (reference: string): Promise<{ verdict: PayVerdict; definitive: boolean; provider: string | null }> => {
+      const v = await verifyPayment(api, reference);
+      if (!v.ok) return { verdict: 'unknown', definitive: false, provider: null };
+      const provider = v.value.provider_status ?? null;
+      if (alive()) setProviderStatus(provider);
+      return { verdict: fromVerified(v.value), definitive: isDefinitiveFailure(v.value), provider };
+    },
+    [alive],
   );
 
   const recordStart = useCallback(
@@ -326,6 +335,42 @@ export function usePayment(
     await openBrowser(reference, payment_url, startedAt);
   }, [holdOver, email, send, kind, bookingId, userId, openBrowser, alive, recordStart, startFailed]);
 
+  /**
+   * V3: a pending reference under 30 min old with no URL here. Initialise, signed in and without
+   * `email`, hands back that same checkout when web can reuse it; anything else is never opened
+   * (pendingElsewhere). The reference is on disk before the browser opens (P5).
+   */
+  const reuse = useCallback(
+    async (reference: string, paymentStartedAt: number) => {
+      const gen = checkoutStore.generation();
+      const startedEntry = await recordStart(email ?? '', gen);
+      entryRef.current = startedEntry;
+      if (!alive()) return;
+      setEntry(startedEntry);
+      const r = await initializePayment(api, kind, bookingId);
+      if (!alive()) return;
+      if (!r.ok) {
+        const action = startErrorAction(r.error);
+        if (action === 'paid' || action === 'startAgain') await startFailed(r.error);
+        else send({ type: 'pendingElsewhere' });
+        return;
+      }
+      const url = r.value.payment.payment_url;
+      if (!acceptReuse(r.value, reference) || !isPaymentUrl(url)) {
+        send({ type: 'pendingElsewhere' });
+        return;
+      }
+      const startedAt = Number.isFinite(paymentStartedAt) ? paymentStartedAt : clock.serverNow();
+      const payment = { reference, paymentUrl: url, startedAt };
+      await checkoutStore.setPayment(userId, kind, bookingId, payment, gen).catch(() => undefined);
+      entryRef.current = { ...startedEntry, payment };
+      if (!alive()) return;
+      setEntry(entryRef.current);
+      await openBrowser(reference, url, startedAt);
+    },
+    [recordStart, email, alive, kind, bookingId, startFailed, send, userId, openBrowser],
+  );
+
   /** In `starting`: check-status, then the pay plan (P4, P26). Never initialises on doubt. */
   const start = useCallback(async () => {
     const c = await checkPayment(api, kind, bookingId);
@@ -364,17 +409,15 @@ export function usePayment(
       case 'initialize':
         await initialize();
         return;
-      case 'wait':
-        // A reference under 15 min old with no URL here: never verified, never replaced (A1).
-        send({ type: 'pendingElsewhere' });
+      case 'reuse':
+        await reuse(plan.reference, plan.paymentStartedAt);
         return;
       case 'verifyPending': {
-        // Only references 15 min old or more reach verify (P26).
-        const v = await verifyPayment(api, plan.reference);
+        // P26, V2: a reference 30 min old or more (or of unknown age) with no URL here.
+        const v = await verifyOnce(plan.reference);
         if (!alive()) return;
-        const verdict: PayVerdict = v.ok ? fromVerified(v.value) : 'unknown';
         const createdAtIso = 'payment' in check ? check.payment.created_at : '';
-        const next = afterPendingVerify(verdict, createdAtIso, clock.serverNow());
+        const next = afterPendingVerify(v.verdict, v.provider, createdAtIso, clock.serverNow());
         if (next === 'done') {
           send({
             type: 'paid',
@@ -387,7 +430,7 @@ export function usePayment(
         return;
       }
     }
-  }, [kind, bookingId, userId, send, openBrowser, initialize, alive]);
+  }, [kind, bookingId, userId, send, openBrowser, initialize, alive, reuse, verifyOnce]);
 
   const pay = useCallback(() => {
     if (!PAYABLE.has(current.current.step)) return;
@@ -452,11 +495,27 @@ export function usePayment(
     })().catch(() => undefined);
   }, [fromSelect, rowState, kind, bookingId, userId]);
 
-  // P6 (amended A1): status polls only, on the state's own schedule; the first 2 s after entry.
+  // P6 (amended 4c.1 V1): verify once on entry, then status polls on the state's own schedule;
+  // the first 2 s after verify answers.
   useEffect(() => {
     if (state.step !== 'checking') return;
     let on = true;
     const { reference } = state;
+    if (state.verify) {
+      void verifyOnce(reference).then((v) => {
+        if (on) {
+          send({
+            type: 'verified',
+            verdict: v.verdict,
+            definitive: v.definitive,
+            now: clock.serverNow(),
+          });
+        }
+      });
+      return () => {
+        on = false;
+      };
+    }
     const timer = setTimeout(() => {
       void paymentState(api, reference).then((r) => {
         if (!on) return;
@@ -474,7 +533,7 @@ export function usePayment(
       on = false;
       clearTimeout(timer);
     };
-  }, [state, send]);
+  }, [state, send, verifyOnce]);
 
   // A settled payment: bookings, this booking and the tickets reload. Paid drops the entry; a
   // failed one keeps it, payment cleared, for Try again (R8). Either only while the entry still
@@ -508,7 +567,7 @@ export function usePayment(
     willCancelOnLeave,
     holdEndsAt,
     canPay,
-    recentAttempt,
+    providerPending,
     entry,
   };
 }

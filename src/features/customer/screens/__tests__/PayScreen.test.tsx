@@ -135,7 +135,7 @@ function setPayment(state: FlowState, over: Partial<Pay> = {}) {
     willCancelOnLeave: true,
     holdEndsAt: null,
     canPay: true,
-    recentAttempt: false,
+    providerPending: false,
     entry: null,
     ...over,
   };
@@ -296,6 +296,7 @@ it('checking blocks back and has nothing to press', async () => {
     startedAt: 0,
     attempt: 0,
     nextDelayMs: 2000,
+    verify: false,
   });
   await renderPay('hotel');
   expect(screen.getByText('Checking your payment')).toBeTruthy();
@@ -307,16 +308,10 @@ it('checking blocks back and has nothing to press', async () => {
   spy.mockRestore();
 });
 
-it('failed never says you weren’t charged; Try again goes back to Review (A1c, A1d)', async () => {
+it('failed (Paystack’s final word) says you weren’t charged; Try again goes back to Review (V1)', async () => {
   setPayment({ step: 'failed', reference: 'r1' });
   await renderPay('hotel');
-  expect(screen.getByText('Payment didn’t go through.')).toBeTruthy();
-  expect(
-    screen.getByText(
-      'If money left your account, it’ll be confirmed or refunded — check Bookings.',
-    ),
-  ).toBeTruthy();
-  expect(screen.queryByText(/weren’t charged/)).toBeNull();
+  expect(screen.getByText('Payment didn’t go through. You weren’t charged.')).toBeTruthy();
   expect(mockCue).toHaveBeenCalledWith('error');
   await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
   expect(pay.retry).toHaveBeenCalledTimes(1);
@@ -407,17 +402,17 @@ it('a row that already reads paid is Done, and the entry is dropped (A2b)', asyn
   expect(mockDrop).toHaveBeenCalledWith('u1', 'hotel', ID);
 });
 
-it('a recent payment attempt warns above Pay (A1d)', async () => {
-  setPayment({ step: 'review' }, { recentAttempt: true });
+it('a payment Paystack still reports as clearing warns above Pay (V4)', async () => {
+  setPayment({ step: 'review' }, { providerPending: true });
   await renderPay('hotel');
   expect(
     screen.getByText(
-      'If you already paid by bank transfer or USSD, wait a few minutes — paying again could charge you twice.',
+      'A bank transfer or USSD payment for this booking is still processing — paying again could charge you twice.',
     ),
   ).toBeTruthy();
-  setPayment({ step: 'review' }, { recentAttempt: false });
+  setPayment({ step: 'review' }, { providerPending: false });
   await renderPay('hotel');
-  expect(screen.queryByTestId('pay-recent-attempt')).toBeNull();
+  expect(screen.queryByTestId('pay-provider-pending')).toBeNull();
 });
 
 it('passes whether Review was reached from Select to the hook (A2a)', async () => {

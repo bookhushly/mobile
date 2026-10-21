@@ -3,6 +3,9 @@ import type { ApiError } from '@/shared/lib/errors';
 import {
   fromPaymentState,
   fromVerified,
+  isDefinitiveFailure,
+  providerStillProcessing,
+  settleVerdict,
   startErrorAction,
   startErrorWords,
 } from '../paymentStatus';
@@ -146,5 +149,74 @@ describe('initialise codes (web #223)', () => {
     expect(startErrorWords({ kind: 'unavailable', status: 502 })).toBe(
       'Couldn’t start payment. Try again',
     );
+  });
+});
+
+// V1/V2: web #222 reports Paystack's own status on an unverified verify.
+describe('providerStillProcessing', () => {
+  it.each(['ongoing', 'pending', 'processing', 'queued'])('%s is still processing', (ps) => {
+    expect(providerStillProcessing(ps)).toBe(true);
+  });
+  it.each(['failed', 'reversed', 'abandoned', 'success', '', null, undefined])(
+    '%s is not',
+    (ps) => {
+      expect(providerStillProcessing(ps)).toBe(false);
+    },
+  );
+});
+
+describe('isDefinitiveFailure', () => {
+  const v = (verified: boolean, status: string, ps?: string | null): Verified => ({
+    verified,
+    status,
+    ...(ps !== undefined ? { provider_status: ps } : {}),
+  });
+
+  it.each(['failed', 'reversed'])('verify failed with Paystack %s is definitive', (ps) => {
+    expect(isDefinitiveFailure(v(false, 'failed', ps))).toBe(true);
+  });
+
+  it.each(['abandoned', 'ongoing', 'pending', null])(
+    'verify failed with Paystack %s is not definitive',
+    (ps) => {
+      expect(isDefinitiveFailure(v(false, 'failed', ps))).toBe(false);
+    },
+  );
+
+  it('no provider_status is never definitive', () => {
+    expect(isDefinitiveFailure(v(false, 'failed'))).toBe(false);
+  });
+
+  it('a row not written failed is never definitive', () => {
+    expect(isDefinitiveFailure(v(false, 'pending', 'failed'))).toBe(false);
+    expect(isDefinitiveFailure(v(true, 'failed', 'failed'))).toBe(false);
+  });
+});
+
+// Resume (P5, V1): one verify and one status read per entry per pass.
+describe('settleVerdict', () => {
+  const definitive: Verified = { verified: false, status: 'failed', provider_status: 'failed' };
+  const soft: Verified = { verified: false, status: 'failed', provider_status: 'abandoned' };
+  const ongoing: Verified = { verified: false, status: 'pending', provider_status: 'ongoing' };
+
+  it('a fulfilled status is paid, whatever verify said', () => {
+    expect(settleVerdict(null, state('completed', true))).toBe('paid');
+    expect(settleVerdict(ongoing, state('completed', true))).toBe('paid');
+  });
+
+  it('a definitive verify failure is failed, with or without a status answer', () => {
+    expect(settleVerdict(definitive, state('failed', false))).toBe('failed');
+    expect(settleVerdict(definitive, null)).toBe('failed');
+  });
+
+  it('a failed status without a definitive verify is left for later', () => {
+    expect(settleVerdict(null, state('failed', false))).toBe('unknown');
+    expect(settleVerdict(soft, state('failed', false))).toBe('unknown');
+  });
+
+  it('pending, in progress or no answers settle nothing', () => {
+    expect(settleVerdict(ongoing, state('pending', false))).toBe('unknown');
+    expect(settleVerdict(null, null)).toBe('unknown');
+    expect(settleVerdict(null, state('completed', false))).toBe('unknown');
   });
 });

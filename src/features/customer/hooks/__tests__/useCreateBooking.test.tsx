@@ -203,7 +203,7 @@ describe('useCreateBooking — stays', () => {
     expect(stayMock.mock.calls[0]?.[2]).toMatchObject({ room_type_id: ROOM, hotel_id: HOTEL });
   });
 
-  it('busy retries three times then mints a new key', async () => {
+  it('busy waits three times, then 60 s once more, always with the same key (V5)', async () => {
     stayMock.mockResolvedValue(inProgress);
     const { result } = await renderHook(() => useCreateBooking(USER, 'hotel', HOTEL));
     let done: Promise<void> = Promise.resolve();
@@ -217,12 +217,43 @@ describe('useCreateBooking — stays', () => {
     await advance(2000);
     await advance(2000);
     await advance(2000);
-    await act(() => done);
+    // The server's stuck-key window is 60 s (web #223): one last wait with the same key.
+    expect(result.current.state).toEqual({ phase: 'busy', waitSeconds: 60 });
     expect(keysSent()).toEqual(['k1', 'k1', 'k1', 'k1']);
-    expect(result.current.state.phase).toBe('failed');
+    await advance(59_999);
+    expect(stayMock).toHaveBeenCalledTimes(4);
+    await advance(1);
+    await act(() => done);
+    expect(keysSent()).toEqual(['k1', 'k1', 'k1', 'k1', 'k1']);
+    expect(result.current.state).toEqual({
+      phase: 'failed',
+      words: 'Still working on your last try. Try again in a moment',
+    });
+    // No new key for in_progress: the next Continue replays the same one.
     stayMock.mockResolvedValue(stayCreated);
     await act(() => result.current.submit(stay(), ctx));
-    expect(keysSent()).toEqual(['k1', 'k1', 'k1', 'k1', 'k2']);
+    expect(keysSent()).toEqual(['k1', 'k1', 'k1', 'k1', 'k1', 'k1']);
+    expect(result.current.created).toEqual({ bookingId: 'hb1' });
+  });
+
+  it('the 60 s wait ends as soon as the server answers', async () => {
+    stayMock
+      .mockResolvedValueOnce(inProgress)
+      .mockResolvedValueOnce(inProgress)
+      .mockResolvedValueOnce(inProgress)
+      .mockResolvedValueOnce(inProgress)
+      .mockResolvedValue(stayCreated);
+    const { result } = await renderHook(() => useCreateBooking(USER, 'hotel', HOTEL));
+    let done: Promise<void> = Promise.resolve();
+    await act(async () => {
+      done = result.current.submit(stay(), ctx);
+      await Promise.resolve();
+    });
+    await advance(6000);
+    await advance(60_000);
+    await act(() => done);
+    expect(keysSent()).toEqual(['k1', 'k1', 'k1', 'k1', 'k1']);
+    expect(result.current.created).toEqual({ bookingId: 'hb1' });
   });
 
   it('a refusal clears the key: the re-send is a new request, not a cached replay', async () => {

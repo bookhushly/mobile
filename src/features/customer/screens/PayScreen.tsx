@@ -265,7 +265,7 @@ function Pay({
         chargeQ.fetchStatus === 'paused' || (chargeQ.isPending && chargeQ.failureCount > 0)
       }
       payInApp={CHECKOUT_PAYMENTS_ENABLED}
-      recentAttempt={p.recentAttempt}
+      providerPending={p.providerPending}
       startError={
         failure === null
           ? null

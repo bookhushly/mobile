@@ -50,8 +50,10 @@ export type CreateCtx = {
   eventDate?: string;
 };
 
-/** 409 in_progress is waited out this many times with the same key before a fresh key (P12). */
+/** 409 in_progress is waited out this many times with the same key (P12)… */
 export const BUSY_RETRIES = 3;
+/** …then once more for the server's whole stuck-key window (60 s since web #223, V5). */
+export const BUSY_LAST_WAIT_SECONDS = 60;
 /** The event lookup starts this long before the create was sent (P12; server-clock drift). */
 export const EVENT_LOOKBACK_MS = 5000;
 /** A key this old is replaced even for the same selection: the server forgets it at 10 min (A6). */
@@ -232,6 +234,8 @@ export function useCreateBooking(
         idem.current = { fingerprint, key: Crypto.randomUUID(), busyRetries: 0, mintedAt: now };
       }
       const k = idem.current;
+      // Each send gets its own waits; an in_progress key is never replaced (V5).
+      k.busyRetries = 0;
       const body =
         kind === 'hotel'
           ? hotelBody(ctx.roomTypeId ?? '', listingId, s)
@@ -248,18 +252,19 @@ export function useCreateBooking(
           return;
         }
         const o = stayCreateOutcome(r.error, kind);
-        if (o.kind === 'busy' && k.busyRetries < BUSY_RETRIES) {
-          // 409 in_progress: the same key is still being worked on; wait it out (P12).
+        if (o.kind === 'busy' && k.busyRetries <= BUSY_RETRIES) {
+          // 409 in_progress: the same key is still being worked on; wait it out (P12), the last
+          // time for the server's whole 60 s window (V5).
+          const seconds = k.busyRetries < BUSY_RETRIES ? o.seconds : BUSY_LAST_WAIT_SECONDS;
           k.busyRetries += 1;
-          show({ phase: 'busy', waitSeconds: o.seconds });
-          await sleep(o.seconds);
+          show({ phase: 'busy', waitSeconds: seconds });
+          await sleep(seconds);
           if (!alive()) return;
           continue;
         }
         inFlight.current = false;
         if (o.kind === 'busy') {
-          // The earlier try may still land; the next Continue uses a fresh key (P12).
-          idem.current = null;
+          // The earlier try may still land: the key is kept, so the next send is a replay (V5).
           show({ phase: 'failed', words: STILL_WORKING });
           return;
         }

@@ -30,8 +30,8 @@ type Props = {
   chargeChecking: boolean;
   /** CHECKOUT_PAYMENTS_ENABLED: off keeps the 4a web hand-off in place of Pay. */
   payInApp: boolean;
-  /** An earlier payment on this booking started under 15 min ago: warn before Pay (A1d). */
-  recentAttempt: boolean;
+  /** The latest verify says Paystack is still clearing a payment for this booking (V4). */
+  providerPending: boolean;
   /** A start error's words, and what its button does (none for a refusal). */
   startError: { words: string; action: { label: string; onPress: () => void } | null } | null;
   onPay: () => void;
@@ -53,7 +53,7 @@ export function PayReview({
   chargeUnknown,
   chargeChecking,
   payInApp,
-  recentAttempt,
+  providerPending,
   startError,
   onPay,
   onCancel,
@@ -82,12 +82,12 @@ export function PayReview({
               testID="pay-start-error"
             />
           ) : null}
-          {recentAttempt ? (
+          {providerPending ? (
             <Banner
               tone="warning"
-              message="If you already paid by bank transfer or USSD, wait a few minutes — paying again could charge you twice."
+              message="A bank transfer or USSD payment for this booking is still processing — paying again could charge you twice."
               announceOnMount={false}
-              testID="pay-recent-attempt"
+              testID="pay-provider-pending"
             />
           ) : null}
           <Text variant="bodySm" tone="textSecondary">
