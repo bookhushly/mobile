@@ -825,6 +825,77 @@ describe('usePayment', () => {
     expect(await checkoutStore.get(USER, 'hotel', BOOKING)).not.toBeNull();
   });
 
+  it('cancelNow runs check-status, cancels and drops the entry, and says cancelled (G1)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(noPayment);
+    cancelMock.mockResolvedValue(ok({ refunded: false, refundMessage: null }));
+    const { result, invalidate } = await setup();
+    let r: string | undefined;
+    await act(async () => {
+      r = await result.current.cancelNow();
+    });
+    expect(r).toBe('cancelled');
+    expect(checkMock).toHaveBeenCalledWith({}, 'hotel', BOOKING);
+    expect(cancelMock).toHaveBeenCalledWith({}, 'hotel', BOOKING);
+    expect(await checkoutStore.get(USER, 'hotel', BOOKING)).toBeNull();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: customerKeys.bookings(USER) });
+  });
+
+  it('cancelNow keeps a booking with a payment and stops offering Cancel booking (G1)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(pendingRef('ref9', new Date(NOW - MIN).toISOString()));
+    const { result } = await setup();
+    expect(result.current.willCancelOnLeave).toBe(true);
+    let r: string | undefined;
+    await act(async () => {
+      r = await result.current.cancelNow();
+    });
+    expect(r).toBe('paymentInProgress');
+    expect(cancelMock).not.toHaveBeenCalled();
+    expect(result.current.willCancelOnLeave).toBe(false);
+  });
+
+  it.each([
+    ['a lost check-status', err<ApiError>({ kind: 'network' }), null],
+    ['a lost cancel', noPayment, err<ApiError>({ kind: 'unavailable', status: 503 })],
+  ])('cancelNow after %s is notDone, never a refusal (G1)', async (_n, check, cancel) => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(check);
+    if (cancel !== null) cancelMock.mockResolvedValue(cancel);
+    const { result } = await setup();
+    let r: string | undefined;
+    await act(async () => {
+      r = await result.current.cancelNow();
+    });
+    expect(r).toBe('notDone');
+    expect(await checkoutStore.get(USER, 'hotel', BOOKING)).not.toBeNull();
+  });
+
+  it('cancelNow refused by the server says refused (G1)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(noPayment);
+    cancelMock.mockResolvedValue(err<ApiError>({ kind: 'conflict', code: 'check_in_passed' }));
+    const { result } = await setup();
+    let r: string | undefined;
+    await act(async () => {
+      r = await result.current.cancelNow();
+    });
+    expect(r).toBe('refused');
+  });
+
+  it('cancelNow from a Review not reached from Select never cancels (G1)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(noPayment);
+    const { result } = await setup(entry(), 'hotel', { fromSelect: false });
+    let r: string | undefined;
+    await act(async () => {
+      r = await result.current.cancelNow();
+    });
+    expect(r).toBe('paymentInProgress');
+    expect(checkMock).not.toHaveBeenCalled();
+    expect(cancelMock).not.toHaveBeenCalled();
+  });
+
   it('leave from a Review not reached from Select never cancels, even with an entry (I1)', async () => {
     withPlatform('ios');
     checkMock.mockResolvedValue(noPayment);
