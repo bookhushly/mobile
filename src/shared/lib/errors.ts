@@ -6,7 +6,7 @@ export type ApiError =
   | { kind: 'notFound'; code?: string }
   | { kind: 'conflict'; code: string; body?: unknown }
   | { kind: 'rateLimited'; retryAfterSec?: number }
-  | { kind: 'unavailable'; status: number; code?: string }
+  | { kind: 'unavailable'; status: number; code?: string; body?: unknown }
   | { kind: 'validation' }
   | { kind: 'aborted' }
   | { kind: 'unknown'; status?: number; code?: string; body?: unknown };
@@ -35,7 +35,9 @@ export function errorFromResponse(status: number, body: unknown, headers: Header
       : { kind: 'rateLimited' };
   }
   if (status >= 500) {
-    return code ? { kind: 'unavailable', status, code } : { kind: 'unavailable', status };
+    return code
+      ? { kind: 'unavailable', status, code, body }
+      : { kind: 'unavailable', status, body };
   }
   return code ? { kind: 'unknown', status, code, body } : { kind: 'unknown', status, body };
 }

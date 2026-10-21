@@ -118,6 +118,11 @@ describe('eventBody', () => {
     expect(answers.q3).toHaveLength(500);
   });
 
+  it('omits custom_answers when there are no non-blank answers', () => {
+    const body = eventBody('l-1', event({ answers: { q1: '  ' } }), false);
+    expect(Object.keys(body)).not.toContain('custom_answers');
+  });
+
   it('free orders add contact_name and drop the promo', () => {
     const body = eventBody('l-1', event(), true);
     expect(body).toMatchObject({ contact_name: 'Ada Obi' });

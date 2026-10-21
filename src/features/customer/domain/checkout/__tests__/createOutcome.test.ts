@@ -100,14 +100,38 @@ describe('stayCreateOutcome', () => {
     });
   });
 
-  it('503 booking_failed and addons_failed are failed; the client keeps no 5xx body so no stray id', () => {
+  it('503 booking_failed and addons_failed are failed with the stray booking id', () => {
     for (const code of ['booking_failed', 'addons_failed']) {
-      expect(stayCreateOutcome({ kind: 'unavailable', status: 503, code }, 'hotel')).toEqual({
-        kind: 'failed',
-        words: "Couldn't book. Try again",
-        strayBookingId: null,
-      });
+      expect(
+        stayCreateOutcome(
+          { kind: 'unavailable', status: 503, code, body: { code, booking_id: 'b-9' } },
+          'hotel',
+        ),
+      ).toEqual({ kind: 'failed', words: "Couldn't book. Try again", strayBookingId: 'b-9' });
     }
+    expect(
+      stayCreateOutcome({ kind: 'unavailable', status: 503, code: 'booking_failed' }, 'hotel'),
+    ).toMatchObject({ kind: 'failed', strayBookingId: null });
+  });
+
+  it('uses number-free words when min_nights or max_guests is missing', () => {
+    expect(stayCreateOutcome(conflict('min_nights'), 'hotel')).toMatchObject({
+      words: 'Choose more nights',
+    });
+    expect(stayCreateOutcome(bad('max_guests'), 'hotel')).toMatchObject({
+      words: 'Too many guests',
+    });
+  });
+
+  it('forbidden is refused with a generic line', () => {
+    expect(stayCreateOutcome({ kind: 'forbidden' }, 'hotel')).toEqual({
+      kind: 'refused',
+      words: "This can't be booked right now",
+    });
+    expect(eventCreateOutcome({ kind: 'forbidden' })).toEqual({
+      kind: 'refused',
+      words: "This can't be booked right now",
+    });
   });
 
   it('429 waits', () => {

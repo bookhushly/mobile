@@ -70,10 +70,20 @@ function stayCode(e: ApiError, kind: 'hotel' | 'apartment'): CreateOutcome | nul
   switch (code ?? '') {
     case 'dates_invalid':
       return refused('Choose check-out after check-in, from today', 'dates');
-    case 'min_nights':
-      return refused(`At least ${String(num(body, 'min_nights') ?? 1)} nights`, 'minNights');
-    case 'max_guests':
-      return refused(`Up to ${String(num(body, 'max_guests') ?? 1)} guests`, 'maxGuests');
+    case 'min_nights': {
+      const n = num(body, 'min_nights');
+      return refused(
+        n === undefined ? 'Choose more nights' : `At least ${String(n)} nights`,
+        'minNights',
+      );
+    }
+    case 'max_guests': {
+      const n = num(body, 'max_guests');
+      return refused(
+        n === undefined ? 'Too many guests' : `Up to ${String(n)} guests`,
+        'maxGuests',
+      );
+    }
     case 'unavailable':
       return refused(
         kind === 'hotel'
@@ -97,8 +107,7 @@ export function stayCreateOutcome(e: ApiError, kind: 'hotel' | 'apartment'): Cre
     return {
       kind: 'failed',
       words: "Couldn't book. Try again",
-      // ApiError 'unavailable' keeps no body, so a stray booking id is unreachable here.
-      strayBookingId: null,
+      strayBookingId: text(e.body, 'booking_id') ?? null,
     };
   }
   if (transient(e)) return { kind: 'unsure' };

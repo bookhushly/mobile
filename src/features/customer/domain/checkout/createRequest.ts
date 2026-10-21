@@ -68,7 +68,7 @@ export function eventBody(listingId: string, s: EventSelection, free: boolean): 
   };
   if (free) out.contact_name = s.guest.name;
   out.ticket_details = ticketLines(s.qty);
-  out.custom_answers = answers;
+  if (Object.keys(answers).length > 0) out.custom_answers = answers;
   if (!free && s.promo !== null) out.promo_code_id = s.promo.codeId;
   return out;
 }
