@@ -162,7 +162,9 @@ describe('flow', () => {
   });
 
   it('pay from startError starts again', () => {
-    expect(flow({ step: 'startError', words: 'x' }, { type: 'pay' })).toEqual({ step: 'starting' });
+    expect(flow({ step: 'startError', words: 'x', action: 'tryAgain' }, { type: 'pay' })).toEqual({
+      step: 'starting',
+    });
   });
 
   it('a double pay from starting stays starting', () => {
@@ -196,12 +198,13 @@ describe('flow', () => {
   });
 
   it('startFailed moves starting to startError', () => {
-    expect(flow({ step: 'starting' }, { type: 'startFailed', words: 'Booking not found' })).toEqual(
-      {
-        step: 'startError',
-        words: 'Booking not found',
-      },
-    );
+    expect(
+      flow({ step: 'starting' }, { type: 'startFailed', words: 'Booking not found', action: null }),
+    ).toEqual({
+      step: 'startError',
+      words: 'Booking not found',
+      action: null,
+    });
   });
 
   it('paid from starting checks the status poll, never done by itself', () => {
@@ -284,7 +287,7 @@ describe('flow', () => {
     { step: 'failed' },
     { step: 'stillChecking', reference: 'ref_1' },
     { step: 'pendingElsewhere' },
-    { step: 'startError', words: 'x' },
+    { step: 'startError', words: 'x', action: 'tryAgain' },
   ])('retry from $step goes back to review', (s) => {
     expect(flow(s, { type: 'retry' })).toEqual({ step: 'review' });
   });
@@ -301,7 +304,9 @@ describe('flow', () => {
 
   it('holdExpired moves review and startError to holdEnded', () => {
     expect(flow(review, { type: 'holdExpired' })).toEqual({ step: 'holdEnded' });
-    expect(flow({ step: 'startError', words: 'x' }, { type: 'holdExpired' })).toEqual({
+    expect(
+      flow({ step: 'startError', words: 'x', action: 'tryAgain' }, { type: 'holdExpired' }),
+    ).toEqual({
       step: 'holdEnded',
     });
   });

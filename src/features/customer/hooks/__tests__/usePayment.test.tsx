@@ -441,6 +441,7 @@ describe('usePayment', () => {
     expect(result.current.state).toEqual({
       step: 'startError',
       words: "Couldn't start payment. Try again",
+      action: 'tryAgain',
     });
     expect(initMock).toHaveBeenCalledTimes(1);
     checkMock.mockResolvedValue(pendingRef('ref1', new Date(NOW - 10_000).toISOString()));
@@ -542,6 +543,38 @@ describe('usePayment', () => {
       result.current.leave();
     });
     expect(cancelMock).not.toHaveBeenCalled();
+  });
+
+  it('willCancelOnLeave matches what leave would do', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(noPayment);
+    initMock.mockResolvedValue(err<ApiError>({ kind: 'network' }));
+    const made = await setup();
+    expect(made.result.current.willCancelOnLeave).toBe(true);
+    // A payment may exist once initialise was sent: leaving keeps the booking.
+    await act(() => {
+      made.result.current.pay();
+    });
+    await flush();
+    expect(made.result.current.state.step).toBe('startError');
+    expect(made.result.current.willCancelOnLeave).toBe(false);
+    await made.unmount();
+
+    await checkoutStore.wipe();
+    const fromBookings = await setup(null);
+    expect(fromBookings.result.current.willCancelOnLeave).toBe(false);
+    await fromBookings.unmount();
+
+    await checkoutStore.wipe();
+    const started = await setup(entry({ paymentEverStarted: true }));
+    expect(started.result.current.willCancelOnLeave).toBe(false);
+  });
+
+  it('willCancelOnLeave is false before the entry read lands', async () => {
+    withPlatform('ios');
+    jest.spyOn(checkoutStore, 'get').mockReturnValue(new Promise(() => undefined));
+    const { result } = await setup(null);
+    expect(result.current.willCancelOnLeave).toBe(false);
   });
 
   it('leave with a stored payment from an earlier session never cancels', async () => {

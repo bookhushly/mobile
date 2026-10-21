@@ -35,3 +35,13 @@ export function startErrorWords(e: ApiError): string {
   if (e.kind === 'notFound') return 'Booking not found';
   return TRY_AGAIN;
 }
+
+/** What a start error's button does: rebook from Select, run Pay again, or nothing (a refusal). */
+export type StartErrorAction = 'startAgain' | 'tryAgain' | null;
+
+/** The button beside `startErrorWords(e)` (P14). */
+export function startErrorAction(e: ApiError): StartErrorAction {
+  if (e.kind === 'conflict' && e.code === 'booking_total_invalid') return 'startAgain';
+  if (e.kind === 'forbidden' || e.kind === 'notFound') return null;
+  return 'tryAgain';
+}

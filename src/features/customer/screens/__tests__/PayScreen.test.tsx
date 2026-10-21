@@ -22,6 +22,19 @@ const mockCue = jest.fn();
 jest.mock('@/shared/platform/feedback', () => ({
   createFeedback: () => ({ cue: mockCue }),
 }));
+const mockFlags = { payments: true };
+jest.mock('@/shared/config/features', () => ({
+  get CHECKOUT_PAYMENTS_ENABLED() {
+    return mockFlags.payments;
+  },
+}));
+const mockOpenWeb = jest.fn();
+jest.mock('@/features/customer/ui/links', () => ({
+  WEB_DASHBOARD: 'https://bookhushly.com/dashboard/customer',
+  openWeb: (url: string) => {
+    mockOpenWeb(url);
+  },
+}));
 type Removal = { preventDefault: jest.Mock };
 const mockListeners = new Map<string, (e: Removal) => void>();
 jest.mock('expo-router', () => ({
@@ -118,12 +131,21 @@ function setPayment(state: FlowState, over: Partial<Pay> = {}) {
     pay: jest.fn(),
     checkAgain: jest.fn(),
     leave: jest.fn(),
+    willCancelOnLeave: true,
     holdEndsAt: null,
     canPay: true,
     entry: null,
     ...over,
   };
   mockPayment.mockImplementation(() => pay);
+}
+
+function setCharge(q: { data?: unknown; isPending?: boolean; isError?: boolean }) {
+  mockCharge.mockReturnValue({
+    isPending: false,
+    isError: false,
+    ...q,
+  } as unknown as ReturnType<typeof useServiceCharge>);
 }
 
 function setRow(row: unknown) {
@@ -173,9 +195,10 @@ function removeScreen(): Removal {
 beforeEach(() => {
   jest.clearAllMocks();
   mockListeners.clear();
-  mockCharge.mockReturnValue({
+  mockFlags.payments = true;
+  setCharge({
     data: { charge_type: 'percentage', charge_value: 2.5, enabled: true, label: null },
-  } as unknown as ReturnType<typeof useServiceCharge>);
+  });
   setRow(HOTEL_ROW);
   setPayment({ step: 'review' });
 });
@@ -202,7 +225,7 @@ it('review shows the server total and a Pay label that includes the service char
 });
 
 it('total-only layout without cached pricing', async () => {
-  mockCharge.mockReturnValue({ data: null } as unknown as ReturnType<typeof useServiceCharge>);
+  setCharge({ data: null });
   await renderPay('hotel');
   expect(screen.getByText('Booking total')).toBeTruthy();
   expect(screen.queryByText('Room')).toBeNull();
@@ -216,9 +239,9 @@ it('the hold line shows for a hotel', async () => {
   expect(screen.getByText('We’re holding this for you until 10:25 am')).toBeTruthy();
 });
 
-it('no hold line for an event', async () => {
+it('no hold line for an event, even if the hook reports a hold end', async () => {
   setRow(EVENT_ROW);
-  setPayment({ step: 'review' });
+  setPayment({ step: 'review' }, { holdEndsAt: Date.parse('2026-10-21T09:25:00Z') });
   await renderPay('event');
   expect(screen.queryByTestId('pay-hold')).toBeNull();
   expect(screen.getByText('Lagos Jazz Night')).toBeTruthy();
@@ -338,20 +361,137 @@ it('Cancel booking leaves once, then goes back', async () => {
 });
 
 it('a 503 start error reads try-again words, and Try again re-runs Pay', async () => {
-  setPayment({ step: 'startError', words: 'Couldn’t start payment. Try again' });
+  setPayment({
+    step: 'startError',
+    words: 'Couldn’t start payment. Try again',
+    action: 'tryAgain',
+  });
   await renderPay('hotel');
   expect(screen.getByText('Couldn’t start payment. Try again')).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
   expect(pay.checkAgain).toHaveBeenCalledTimes(1);
 });
 
-it('free=1 shows Done directly and never cancels on leaving', async () => {
-  setRow(undefined);
+it('a price that could not be confirmed offers Start again', async () => {
+  setPayment({
+    step: 'startError',
+    words: "This booking's price couldn't be confirmed. Start again",
+    action: 'startAgain',
+  });
+  await renderPay('hotel');
+  await fireEvent.press(screen.getByRole('button', { name: 'Start again' }));
+  expect(handlers.onStartAgain).toHaveBeenCalledWith({
+    kind: 'hotel',
+    listingId: 'h1',
+    roomTypeId: 'rt1',
+  });
+});
+
+it('a refusal has no button beside its words', async () => {
+  setPayment({ step: 'startError', words: 'Booking not found', action: null });
+  await renderPay('hotel');
+  expect(screen.getByText('Booking not found')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Start again' })).toBeNull();
+});
+
+const FREE_ROW = eventBookingRow.parse({
+  ...EVENT_ROW,
+  status: 'confirmed',
+  payment_status: 'completed',
+  total_amount: 0,
+});
+
+it('free=1 shows Done once the row says paid, and never cancels on leaving', async () => {
+  setRow(FREE_ROW);
   await renderPay('event', { free: true });
   expect(screen.getByText('You’re booked')).toBeTruthy();
+  expect(mockCue).toHaveBeenCalledWith('success');
   expect(mockDrop).toHaveBeenCalledWith('u1', 'event', ID);
   removeScreen();
   expect(pay.leave).not.toHaveBeenCalled();
+});
+
+it('free=1 waits for the row before saying anything', async () => {
+  setRow(undefined);
+  await renderPay('event', { free: true });
+  expect(screen.queryByText('You’re booked')).toBeNull();
+  expect(screen.queryByTestId('pay-button')).toBeNull();
+  expect(mockCue).not.toHaveBeenCalled();
+  expect(mockDrop).not.toHaveBeenCalled();
+});
+
+it.each(['pending', 'failed'] as const)(
+  'free=1 on a %s booking is reviewed, never booked',
+  async (status) => {
+    setRow(eventBookingRow.parse({ ...EVENT_ROW, payment_status: status }));
+    await renderPay('event', { free: true });
+    expect(screen.queryByText('You’re booked')).toBeNull();
+    expect(screen.getByTestId('pay-button')).toBeTruthy();
+    expect(mockDrop).not.toHaveBeenCalled();
+    expect(mockCue).not.toHaveBeenCalled();
+  },
+);
+
+it('free=1 on a null payment status is reviewed, never booked', async () => {
+  setRow(eventBookingRow.parse({ ...EVENT_ROW, payment_status: null }));
+  await renderPay('event', { free: true });
+  expect(screen.queryByText('You’re booked')).toBeNull();
+  expect(mockDrop).not.toHaveBeenCalled();
+});
+
+it('free=1 on a booking not on this account reads Booking not found', async () => {
+  setRow(null);
+  await renderPay('event', { free: true });
+  expect(screen.getByText('Booking not found')).toBeTruthy();
+  expect(screen.queryByText('You’re booked')).toBeNull();
+  expect(mockDrop).not.toHaveBeenCalled();
+});
+
+it('payments switched off keep the web hand-off in place of Pay', async () => {
+  mockFlags.payments = false;
+  await renderPay('hotel');
+  expect(screen.queryByTestId('pay-button')).toBeNull();
+  expect(screen.getByText('Finish paying on bookhushly.com')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Pay on bookhushly.com' }));
+  expect(mockOpenWeb).toHaveBeenCalledWith('https://bookhushly.com/dashboard/customer');
+});
+
+it('payments switched off still show Checking and Check again', async () => {
+  mockFlags.payments = false;
+  setPayment({ step: 'stillChecking', reference: 'r1' });
+  await renderPay('hotel');
+  await fireEvent.press(screen.getByRole('button', { name: 'Check again' }));
+  expect(pay.checkAgain).toHaveBeenCalledTimes(1);
+});
+
+it('payments switched on show Pay, not the hand-off', async () => {
+  await renderPay('hotel');
+  expect(screen.getByTestId('pay-button')).toBeTruthy();
+  expect(screen.queryByText('Finish paying on bookhushly.com')).toBeNull();
+});
+
+it('Not now replaces Cancel booking when leaving would not cancel', async () => {
+  setPayment({ step: 'review' }, { willCancelOnLeave: false });
+  await renderPay('hotel');
+  expect(screen.queryByRole('button', { name: 'Cancel booking' })).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Not now' }));
+  expect(handlers.onBack).toHaveBeenCalledTimes(1);
+  expect(pay.leave).not.toHaveBeenCalled();
+});
+
+it('Pay waits while the service charge loads', async () => {
+  setCharge({ isPending: true });
+  await renderPay('hotel');
+  expect(screen.getByTestId('pay-button')).toBeDisabled();
+});
+
+it('a failed service charge read shows the total with a note, and Pay works', async () => {
+  setCharge({ isError: true });
+  await renderPay('hotel');
+  expect(screen.getByText('plus any service charge shown on Paystack')).toBeTruthy();
+  const button = screen.getByRole('button', { name: 'Pay ₦100,000' });
+  expect(button).toBeEnabled();
 });
 
 it('off-shape params read Booking not found', async () => {

@@ -8,6 +8,7 @@ import {
 } from '@/features/customer/domain/checkout/reviewText';
 import { BookingSummary } from '@/features/customer/ui/BookingSummary';
 import { DetailRows } from '@/features/customer/ui/DetailRows';
+import { openWeb, WEB_DASHBOARD } from '@/features/customer/ui/links';
 import { PriceDetails } from '@/features/customer/ui/checkout/PriceDetails';
 import { space } from '@/shared/theme';
 import { Banner, Button, formatNaira, Header, IconButton, Screen, Text } from '@/shared/ui';
@@ -23,10 +24,15 @@ type Props = {
   holdUntil: string | null;
   starting: boolean;
   canPay: boolean;
+  /** The service charge couldn't be read: the total is shown without it. */
+  chargeUnknown: boolean;
+  /** CHECKOUT_PAYMENTS_ENABLED: off keeps the 4a web hand-off in place of Pay. */
+  payInApp: boolean;
   /** A start error's words, and what its button does (none for a refusal). */
   startError: { words: string; action: { label: string; onPress: () => void } | null } | null;
   onPay: () => void;
-  onCancel: () => void;
+  /** Cancel booking, when leaving would cancel it (P7); null offers Not now (back). */
+  onCancel: (() => void) | null;
   onBack: () => void;
 };
 
@@ -40,6 +46,8 @@ export function PayReview({
   holdUntil,
   starting,
   canPay,
+  chargeUnknown,
+  payInApp,
   startError,
   onPay,
   onCancel,
@@ -58,32 +66,59 @@ export function PayReview({
   );
   const footer = (
     <View style={{ gap: space.s3 }} testID="pay-footer">
-      {startError !== null ? (
+      {payInApp ? (
+        <>
+          {startError !== null ? (
+            <Banner
+              tone="neutral"
+              message={startError.words}
+              {...(startError.action !== null ? { action: startError.action } : {})}
+              testID="pay-start-error"
+            />
+          ) : null}
+          <Text variant="bodySm" tone="textSecondary">
+            You’ll pay on Paystack’s secure page. We confirm the payment with Paystack before
+            booking it.
+          </Text>
+          <Button
+            label={`Pay ${formatNaira(payable)}`}
+            loading={starting}
+            disabled={!canPay}
+            onPress={onPay}
+            testID="pay-button"
+          />
+        </>
+      ) : (
+        // P2: payments switched off: the 4a hand-off, as on the booking details screen.
         <Banner
-          tone="neutral"
-          message={startError.words}
-          {...(startError.action !== null ? { action: startError.action } : {})}
-          testID="pay-start-error"
+          tone="info"
+          message="Finish paying on bookhushly.com"
+          action={{
+            label: 'Pay on bookhushly.com',
+            onPress: () => {
+              openWeb(WEB_DASHBOARD);
+            },
+          }}
+          testID="pay-on-web"
         />
-      ) : null}
-      <Text variant="bodySm" tone="textSecondary">
-        You’ll pay on Paystack’s secure page. We confirm the payment with Paystack before booking
-        it.
-      </Text>
-      <Button
-        label={`Pay ${formatNaira(payable)}`}
-        loading={starting}
-        disabled={!canPay}
-        onPress={onPay}
-        testID="pay-button"
-      />
-      <Button
-        label="Cancel booking"
-        variant="ghost"
-        disabled={starting}
-        onPress={onCancel}
-        testID="pay-cancel"
-      />
+      )}
+      {onCancel !== null ? (
+        <Button
+          label="Cancel booking"
+          variant="ghost"
+          disabled={starting}
+          onPress={onCancel}
+          testID="pay-cancel"
+        />
+      ) : (
+        <Button
+          label="Not now"
+          variant="secondary"
+          disabled={starting}
+          onPress={onBack}
+          testID="pay-not-now"
+        />
+      )}
     </View>
   );
   return (
@@ -100,6 +135,7 @@ export function PayReview({
         discountIncluded={price?.discountIncluded ?? null}
         total={total}
         charge={charge}
+        chargeUnknown={chargeUnknown}
         testID="price-details"
       />
       {holdUntil !== null ? (

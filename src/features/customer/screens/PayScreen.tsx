@@ -21,6 +21,7 @@ import { NoticeScreen } from '@/features/customer/screens/NoticeScreen';
 import { BookedDone } from '@/features/customer/ui/checkout/BookedDone';
 import { PayReview } from '@/features/customer/ui/checkout/PayReview';
 import { PayStates } from '@/features/customer/ui/checkout/PayStates';
+import { CHECKOUT_PAYMENTS_ENABLED } from '@/shared/config/features';
 import { lagosClock12 } from '@/shared/lib/lagosDay';
 import { ErrorState, Header, Screen, SkeletonRows } from '@/shared/ui';
 
@@ -84,8 +85,10 @@ function Pay({
   const { leave } = p;
   const chargeQ = useServiceCharge(kind);
   const step = p.state.step;
-  // Free events land here registered and paid; an unpaid row behind `?free=1` is reviewed.
-  const freeDone = free && kind === 'event' && row?.payment_status !== 'pending';
+  // Free events land here registered (web /free writes 'completed'). `?free=1` is only a hint:
+  // Done waits for the row to say paid, and anything else is reviewed like any booking.
+  const freeEvent = free && kind === 'event';
+  const freeDone = freeEvent && row?.payment_status === 'completed';
   /** Cancel booking already ran leave(): the removal that follows must not run it again. */
   const left = useRef(false);
 
@@ -164,7 +167,7 @@ function Pay({
   }
 
   const total = entry?.total ?? (typeof row?.total_amount === 'number' ? row.total_amount : null);
-  if (total === null) {
+  if (total === null || (freeEvent && row === undefined)) {
     if (row === null) {
       return (
         <NoticeScreen
@@ -192,7 +195,7 @@ function Pay({
     );
   }
 
-  const words = p.state.step === 'startError' ? p.state.words : null;
+  const failure = p.state.step === 'startError' ? p.state : null;
   const charge = chargeEstimate(total, chargeQ.data ?? null);
   return (
     <PayReview
@@ -201,27 +204,41 @@ function Pay({
       price={priceLines(kind, entry?.pricing ?? null)}
       total={total}
       charge={charge}
-      holdUntil={p.holdEndsAt === null ? null : lagosClock12(new Date(p.holdEndsAt).toISOString())}
+      // Events have no hold (P8), whatever the hook says.
+      holdUntil={
+        kind === 'event' || p.holdEndsAt === null
+          ? null
+          : lagosClock12(new Date(p.holdEndsAt).toISOString())
+      }
       starting={BUSY.has(step)}
-      canPay={p.canPay}
+      // The label must carry the charge: Pay waits for the estimate (or its failure).
+      canPay={p.canPay && !chargeQ.isPending}
+      chargeUnknown={chargeQ.isError}
+      payInApp={CHECKOUT_PAYMENTS_ENABLED}
       startError={
-        words === null
+        failure === null
           ? null
           : {
-              words,
-              action: words.endsWith('Start again')
-                ? { label: 'Start again', onPress: startAgain }
-                : words.endsWith('Try again')
-                  ? { label: 'Try again', onPress: p.checkAgain }
-                  : null,
+              words: failure.words,
+              action:
+                failure.action === 'startAgain'
+                  ? { label: 'Start again', onPress: startAgain }
+                  : failure.action === 'tryAgain'
+                    ? { label: 'Try again', onPress: p.checkAgain }
+                    : null,
             }
       }
       onPay={p.pay}
-      onCancel={() => {
-        left.current = true;
-        leave();
-        onBack();
-      }}
+      // P7: only a booking leaving would cancel is offered as Cancel booking; else Not now.
+      onCancel={
+        p.willCancelOnLeave
+          ? () => {
+              left.current = true;
+              leave();
+              onBack();
+            }
+          : null
+      }
       onBack={onBack}
     />
   );

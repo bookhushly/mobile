@@ -21,6 +21,7 @@ import {
 import {
   fromPaymentState,
   fromVerified,
+  startErrorAction,
   startErrorWords,
   type PayVerdict,
 } from '@/features/customer/domain/checkout/paymentStatus';
@@ -48,6 +49,23 @@ const LEAVE_CANCELS: ReadonlySet<FlowState['step']> = new Set([
   'holdEnded',
 ]);
 
+/** P7: leaving cancels only a booking made here, read from disk, never paid for, ever. */
+function cancelsOnLeave(
+  step: FlowState['step'],
+  sawPayment: boolean,
+  entryLoaded: boolean,
+  e: CheckoutEntry | null,
+): boolean {
+  return (
+    LEAVE_CANCELS.has(step) &&
+    !sawPayment &&
+    entryLoaded &&
+    e !== null &&
+    !e.paymentEverStarted &&
+    e.payment === null
+  );
+}
+
 export function usePayment(
   userId: string,
   kind: PayKind,
@@ -66,6 +84,8 @@ export function usePayment(
   pay: () => void;
   checkAgain: () => void;
   leave: () => void;
+  /** leave() would cancel the booking now (P7): Review offers Cancel booking only then. */
+  willCancelOnLeave: boolean;
   /** Stays: when Pay stops (epoch ms, server clock). Null for events, or while unknown. */
   holdEndsAt: number | null;
   /** Pay can start: the stay's age is known and its hold hasn't ended. */
@@ -82,6 +102,9 @@ export function usePayment(
   const entryLoaded = useRef(false);
   /** This mount saw a reference, or sent initialise: leaving must never cancel (P7). */
   const sawPayment = useRef(false);
+  // Render-time copies of the two refs above, for `willCancelOnLeave`.
+  const [sawPay, setSawPay] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const appSub = useRef<NativeEventSubscription | null>(null);
   const now = useServerNow();
   // A call, not a read: TypeScript would keep `live.current` narrowed across an await.
@@ -109,6 +132,7 @@ export function usePayment(
         if (!on) return;
         entryRef.current = e;
         entryLoaded.current = true;
+        setLoaded(true);
         setEntry(e);
       })
       .catch(() => undefined);
@@ -195,18 +219,19 @@ export function usePayment(
 
   const initialize = useCallback(async () => {
     if (holdOver()) {
-      send({ type: 'startFailed', words: HOLD_ENDED_WORDS });
+      send({ type: 'startFailed', words: HOLD_ENDED_WORDS, action: 'startAgain' });
       send({ type: 'holdExpired' });
       return;
     }
     const to = email;
     if (to === null || to === '') {
-      send({ type: 'startFailed', words: "Couldn't start payment. Try again" });
+      send({ type: 'startFailed', words: "Couldn't start payment. Try again", action: 'tryAgain' });
       return;
     }
     // R8: the booking is on disk, marked started, before initialise is sent: its answer may be
     // lost while a payment exists. With no cached entry, a minimal one is written from the row.
     sawPayment.current = true;
+    setSawPay(true);
     const startedEntry = await recordStart(to);
     entryRef.current = startedEntry;
     if (alive()) setEntry(startedEntry);
@@ -214,7 +239,11 @@ export function usePayment(
     // Sent once: the client never re-sends it, and a lost answer is settled by check-status.
     const r = await initializePayment(api, kind, bookingId, to);
     if (!r.ok) {
-      send({ type: 'startFailed', words: startErrorWords(r.error) });
+      send({
+        type: 'startFailed',
+        words: startErrorWords(r.error),
+        action: startErrorAction(r.error),
+      });
       return;
     }
     const { reference, payment_url } = r.value.payment;
@@ -233,7 +262,11 @@ export function usePayment(
     const c = await checkPayment(api, kind, bookingId);
     if (!alive()) return;
     if (!c.ok) {
-      send({ type: 'startFailed', words: startErrorWords(c.error) });
+      send({
+        type: 'startFailed',
+        words: startErrorWords(c.error),
+        action: startErrorAction(c.error),
+      });
       return;
     }
     const check = c.value;
@@ -243,7 +276,10 @@ export function usePayment(
       .catch(() => null);
     if (!alive()) return;
     const plan = planPay(check, stored, clock.serverNow());
-    if (plan.do !== 'initialize') sawPayment.current = true;
+    if (plan.do !== 'initialize') {
+      sawPayment.current = true;
+      setSawPay(true);
+    }
     switch (plan.do) {
       case 'check':
         send({ type: 'paid', reference: plan.reference, now: clock.serverNow() });
@@ -304,11 +340,18 @@ export function usePayment(
   }, [send, stepNow, pay, holdOver, start]);
 
   const leave = useCallback(() => {
-    if (!LEAVE_CANCELS.has(current.current.step) || sawPayment.current) return;
     // Only a booking made here, never paid for: its entry is read and has no payment, ever.
     // Opened from Bookings (no entry), or before the read lands, nothing is cancelled.
-    const e = entryRef.current;
-    if (!entryLoaded.current || e === null || e.paymentEverStarted || e.payment !== null) return;
+    if (
+      !cancelsOnLeave(
+        current.current.step,
+        sawPayment.current,
+        entryLoaded.current,
+        entryRef.current,
+      )
+    ) {
+      return;
+    }
     // P7: best effort; a lost cancel is freed by the server's sweep.
     void cancelBooking(api, kind, bookingId).catch(() => undefined);
     void checkoutStore.drop(userId, kind, bookingId).catch(() => undefined);
@@ -361,5 +404,7 @@ export function usePayment(
     void qc.invalidateQueries({ queryKey: customerKeys.wallet(userId) });
   }, [state.step, userId, kind, bookingId, qc]);
 
-  return { state, pay, checkAgain, leave, holdEndsAt, canPay, entry };
+  const willCancelOnLeave = cancelsOnLeave(state.step, sawPay, loaded, entry);
+
+  return { state, pay, checkAgain, leave, willCancelOnLeave, holdEndsAt, canPay, entry };
 }

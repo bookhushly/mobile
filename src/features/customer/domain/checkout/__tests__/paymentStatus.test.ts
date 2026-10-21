@@ -1,6 +1,11 @@
 import type { PaymentState, Verified } from '@/features/customer/schemas/checkout';
 import type { ApiError } from '@/shared/lib/errors';
-import { fromPaymentState, fromVerified, startErrorWords } from '../paymentStatus';
+import {
+  fromPaymentState,
+  fromVerified,
+  startErrorAction,
+  startErrorWords,
+} from '../paymentStatus';
 
 const state = (status: string, fulfilled: boolean): PaymentState => ({
   payment: { reference: 'ref_1', status, fulfilled, request_type: 'event' },
@@ -88,5 +93,21 @@ describe('startErrorWords', () => {
     { kind: 'conflict', code: 'something_else' },
   ])('$kind gives the try-again text', (e) => {
     expect(startErrorWords(e)).toBe(TRY_AGAIN);
+  });
+});
+
+describe('startErrorAction', () => {
+  it('a price that could not be confirmed starts again', () => {
+    expect(startErrorAction({ kind: 'conflict', code: 'booking_total_invalid' })).toBe(
+      'startAgain',
+    );
+  });
+  it('a refusal has no button', () => {
+    expect(startErrorAction({ kind: 'forbidden' })).toBeNull();
+    expect(startErrorAction({ kind: 'notFound' })).toBeNull();
+  });
+  it('anything transient tries again', () => {
+    expect(startErrorAction({ kind: 'unavailable', status: 503 })).toBe('tryAgain');
+    expect(startErrorAction({ kind: 'network' })).toBe('tryAgain');
   });
 });

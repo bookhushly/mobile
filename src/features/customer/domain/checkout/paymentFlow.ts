@@ -1,5 +1,5 @@
 import type { CheckStatus } from '@/features/customer/schemas/checkout';
-import type { PayVerdict } from './paymentStatus';
+import type { PayVerdict, StartErrorAction } from './paymentStatus';
 
 // ── Polling after the browser closes (P6) ───────────────────────────────────────────────────────
 
@@ -97,7 +97,7 @@ export type FlowState =
   | { step: 'failed' }
   | { step: 'stillChecking'; reference: string }
   | { step: 'holdEnded' }
-  | { step: 'startError'; words: string }
+  | { step: 'startError'; words: string; action: StartErrorAction }
   | { step: 'pendingElsewhere' };
 
 export type FlowEvent =
@@ -105,7 +105,7 @@ export type FlowEvent =
   | { type: 'opened'; reference: string }
   | { type: 'returned'; now: number }
   | { type: 'verdict'; verdict: PayVerdict; now: number }
-  | { type: 'startFailed'; words: string }
+  | { type: 'startFailed'; words: string; action: StartErrorAction }
   | { type: 'holdExpired' }
   | { type: 'checkAgain'; now: number }
   | { type: 'paid'; reference: string; now: number }
@@ -132,7 +132,9 @@ export function flow(state: FlowState, ev: FlowEvent): FlowState {
     case 'opened':
       return state.step === 'starting' ? { step: 'inBrowser', reference: ev.reference } : state;
     case 'startFailed':
-      return state.step === 'starting' ? { step: 'startError', words: ev.words } : state;
+      return state.step === 'starting'
+        ? { step: 'startError', words: ev.words, action: ev.action }
+        : state;
     case 'paid':
       // check-status or verify said paid; Done still waits for a fulfilled status poll.
       return state.step === 'starting' ? startChecking(ev.reference, ev.now) : state;

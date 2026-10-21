@@ -13,6 +13,8 @@ type Props = {
   total: number;
   /** The service charge estimate, when there is one. */
   charge: PriceLine | null;
+  /** The charge couldn't be read: the total is shown without it, with a line saying so. */
+  chargeUnknown?: boolean;
   testID?: string;
 };
 
@@ -37,7 +39,14 @@ function Row({ line, strong }: { line: PriceLine; strong?: boolean }) {
 }
 
 // Mobbin §3 (Airbnb, Tripadvisor): Price details, server numbers only, a bold Total last.
-export function PriceDetails({ lines, discountIncluded, total, charge, testID }: Props) {
+export function PriceDetails({
+  lines,
+  discountIncluded,
+  total,
+  charge,
+  chargeUnknown = false,
+  testID,
+}: Props) {
   const payable = payableTotal(total, charge);
   return (
     <Card>
@@ -67,6 +76,11 @@ export function PriceDetails({ lines, discountIncluded, total, charge, testID }:
         >
           <Row line={{ label: 'Total', amount: payable }} strong />
         </View>
+        {chargeUnknown ? (
+          <Text variant="bodySm" tone="textSecondary" testID="charge-unknown">
+            plus any service charge shown on Paystack
+          </Text>
+        ) : null}
       </View>
     </Card>
   );
