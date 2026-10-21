@@ -43,6 +43,18 @@ export const discoverKeys = {
     ['discover', 'reviews', kind, id, pageSize] as const,
 };
 
+// Checkout reads (Phase 4c). Listing extras and prices are public, so not per user; never
+// persisted. Availability is short-lived: it is re-read for each date pair.
+export const checkoutKeys = {
+  all: ['checkout'] as const,
+  questions: (listingId: string) => ['checkout', 'questions', listingId] as const,
+  hotelExtras: (hotelId: string) => ['checkout', 'hotelExtras', hotelId] as const,
+  apartmentExtras: (apartmentId: string) => ['checkout', 'apartmentExtras', apartmentId] as const,
+  availability: (roomTypeId: string, checkIn: string, checkOut: string) =>
+    ['checkout', 'availability', roomTypeId, checkIn, checkOut] as const,
+  serviceCharge: (type: string) => ['checkout', 'serviceCharge', type] as const,
+};
+
 // Carries the typed ApiError (has `kind`) so the query retry policy can classify it.
 export class CustomerLoadError extends Error {
   readonly kind: ApiError['kind'];
