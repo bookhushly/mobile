@@ -2,10 +2,18 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react-
 
 import { TourScreen } from '@/features/customer/screens/TourScreen';
 
+const mockSwitches = { events: false };
+jest.mock('@/shared/config/features', () => ({
+  get CHECKOUT_EVENTS_ENABLED() {
+    return mockSwitches.events;
+  },
+}));
+
 // Fake timers: the pager FlatList's batching timer must never fire after a test (outside act()).
 // Each test unmounts and flushes its pending timers before the next one starts.
 beforeEach(() => {
   jest.useFakeTimers();
+  mockSwitches.events = false;
 });
 
 afterEach(async () => {
@@ -62,6 +70,17 @@ it('shows the three scenes with serif headlines', async () => {
     ).toBeTruthy();
   for (const h of ['Find your place', 'Pay in naira', 'Show up'])
     expect(screen.getByRole('header', { name: h })).toBeTruthy();
+});
+
+it('says booking and payment happen in the app too once events checkout is on (P2)', async () => {
+  mockSwitches.events = true;
+  await render(<TourScreen onDone={jest.fn()} />);
+  expect(
+    screen.getByText(
+      'Book and pay in the app or on bookhushly.com. You see the full price before you pay.',
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByText(/For now/)).toBeNull();
 });
 
 it('says payment happens on bookhushly.com for now (D15)', async () => {

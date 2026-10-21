@@ -12,7 +12,12 @@ import { ReadMoreText } from '@/features/customer/ui/ReadMoreText';
 import { RoomTypeCard, roomFacts } from '@/features/customer/ui/RoomTypeCard';
 import { space } from '@/shared/theme';
 
-type Props = { listing: HotelListing; onShowAmenities: () => void };
+type Props = {
+  listing: HotelListing;
+  onShowAmenities: () => void;
+  /** Where the Rooms section starts in the scroll content (the footer's "Choose a room"). */
+  onRoomsAt?: (y: number) => void;
+};
 
 const at = (word: string, t: string | null) => {
   const c = clockLabel(t);
@@ -20,7 +25,7 @@ const at = (word: string, t: string | null) => {
 };
 
 // Spec §3 hotel: facts (breakfast, power, transfer), amenities, room types, times, policies.
-export function HotelBody({ listing, onShowAmenities }: Props) {
+export function HotelBody({ listing, onShowAmenities, onRoomsAt }: Props) {
   const { hotel: h, roomTypes, rates } = listing;
   const facts = hotelFacts(h);
   const policies = [plainText(h.policies), plainText(h.checkout_policy)]
@@ -39,21 +44,28 @@ export function HotelBody({ listing, onShowAmenities }: Props) {
         </DetailSection>
       ) : null}
       {roomTypes.length > 0 ? (
-        <DetailSection label="Rooms" testID="rooms">
-          <View style={{ gap: space.s3 }}>
-            {roomTypes.map((t) => (
-              <RoomTypeCard
-                key={t.id}
-                room={{
-                  id: t.id,
-                  name: t.name?.trim() || 'Room',
-                  facts: roomFacts(t.max_occupancy, defaultBeds(t.id, rates), t.size_sqm),
-                  from: roomTypeFrom(t, rates),
-                }}
-              />
-            ))}
-          </View>
-        </DetailSection>
+        <View
+          onLayout={(e) => {
+            onRoomsAt?.(e.nativeEvent.layout.y);
+          }}
+        >
+          <DetailSection label="Rooms" testID="rooms">
+            <View style={{ gap: space.s3 }}>
+              {roomTypes.map((t) => (
+                <RoomTypeCard
+                  key={t.id}
+                  hotelId={h.id}
+                  room={{
+                    id: t.id,
+                    name: t.name?.trim() || 'Room',
+                    facts: roomFacts(t.max_occupancy, defaultBeds(t.id, rates), t.size_sqm),
+                    from: roomTypeFrom(t, rates),
+                  }}
+                />
+              ))}
+            </View>
+          </DetailSection>
+        </View>
       ) : null}
       <DetailRows
         rows={[

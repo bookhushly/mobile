@@ -1,8 +1,10 @@
+import { router } from 'expo-router';
 import { View } from 'react-native';
 
 import { PriceTag } from '@/features/customer/ui/PriceTag';
+import { CHECKOUT_PAYMENTS_ENABLED, CHECKOUT_STAYS_ENABLED } from '@/shared/config/features';
 import { borderWidth, color, radius, space } from '@/shared/theme';
-import { Text } from '@/shared/ui';
+import { Button, Text } from '@/shared/ui';
 
 export type RoomTypeModel = {
   id: string;
@@ -31,9 +33,11 @@ export function roomFacts(
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
-// Mobbin §4 (Booking.com, Shopee): name, guests, beds, size, "From ₦… / night". Display only:
-// room status can't be read, so the label says "From" (D5).
-export function RoomTypeCard({ room }: { room: RoomTypeModel }) {
+// Mobbin §4 (Booking.com, Shopee): name, guests, beds, size, "From ₦… / night". Room status can't
+// be read, so the label says "From" (D5). With stays checkout on (P2), Select opens checkout for
+// this room type; Select checks availability once dates are chosen (P11).
+export function RoomTypeCard({ room, hotelId }: { room: RoomTypeModel; hotelId: string }) {
+  const selectable = CHECKOUT_STAYS_ENABLED && CHECKOUT_PAYMENTS_ENABLED;
   return (
     <View
       testID={`room-${room.id}`}
@@ -59,6 +63,20 @@ export function RoomTypeCard({ room }: { room: RoomTypeModel }) {
             : { amount: room.from, unit: 'night', prefix: 'From' }
         }
       />
+      {selectable ? (
+        <Button
+          label="Select"
+          accessibilityLabel={`Select ${room.name}`}
+          variant="secondary"
+          onPress={() => {
+            router.push({
+              pathname: '/checkout/[kind]/[listingId]',
+              params: { kind: 'hotel', listingId: hotelId, roomType: room.id },
+            });
+          }}
+          testID={`room-select-${room.id}`}
+        />
+      ) : null}
     </View>
   );
 }

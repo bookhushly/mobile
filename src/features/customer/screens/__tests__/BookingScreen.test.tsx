@@ -3,6 +3,7 @@ import { openBrowserAsync } from 'expo-web-browser';
 import { Linking } from 'react-native';
 
 import { fromEvent } from '@/features/customer/domain/myBookings';
+import { checkoutStore } from '@/features/customer/offline/checkoutStore';
 import { useBooking } from '@/features/customer/hooks/useBooking';
 import type { WalletEntry } from '@/features/customer/offline/wallet';
 import { sentNotice } from '@/features/customer/hooks/sentNotice';
@@ -27,6 +28,44 @@ jest.mock('@/features/customer/ui/BookingActions', () => {
 jest.mock('expo-web-browser', () => ({
   openBrowserAsync: jest.fn(() => Promise.resolve({ type: 'opened' })),
 }));
+jest.mock('expo-router', () => ({
+  useIsFocused: () => true,
+  router: {
+    push: (...a: unknown[]) => {
+      mockPush(...a);
+    },
+  },
+}));
+// Off unless a test turns one on: the 4a/4b web hand-off tests run with payments off.
+const mockSwitches = { stays: false, events: false, payments: false };
+jest.mock('@/shared/config/features', () => ({
+  get CHECKOUT_STAYS_ENABLED() {
+    return mockSwitches.stays;
+  },
+  get CHECKOUT_EVENTS_ENABLED() {
+    return mockSwitches.events;
+  },
+  get CHECKOUT_PAYMENTS_ENABLED() {
+    return mockSwitches.payments;
+  },
+}));
+jest.mock('@/shared/platform/storage', () => {
+  const m = new Map<string, string>();
+  return {
+    plainKv: {
+      get: (k: string) => Promise.resolve(m.get(k) ?? null),
+      set: (k: string, v: string) => {
+        m.set(k, v);
+        return Promise.resolve();
+      },
+      delete: (k: string) => {
+        m.delete(k);
+        return Promise.resolve();
+      },
+    },
+  };
+});
+const mockPush = jest.fn();
 
 const mockBooking = jest.mocked(useBooking);
 const ID = '0b6f1f4e-2c1a-4f6e-9a39-6f0e7d2b9c11';
@@ -58,8 +97,10 @@ async function show(kind: 'event' | 'hotel' | 'apartment') {
 }
 
 let openURL: jest.SpyInstance;
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
+  Object.assign(mockSwitches, { stays: false, events: false, payments: false });
+  await checkoutStore.wipe();
   openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
 });
 
@@ -252,4 +293,100 @@ it('just transferred away: "not found" is the transfer working, never "not yours
       sentNotice.clear();
     });
   }
+});
+
+describe('pending payment (P21)', () => {
+  // The mocked server clock reads 2026-10-13 11:00Z.
+  const PENDING_EVENT = { id: ID, payment_status: 'pending', status: 'pending' } as const;
+
+  it('pending event booking shows Pay now', async () => {
+    mockSwitches.payments = true;
+    loaded({ row: ev(PENDING_EVENT) });
+    await show('event');
+    await fireEvent.press(await screen.findByRole('button', { name: 'Pay now' }));
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/pay/[kind]/[bookingId]',
+      params: { kind: 'event', bookingId: ID },
+    });
+    expect(screen.queryByText('Pay on bookhushly.com')).toBeNull();
+    expect(openBrowserAsync).not.toHaveBeenCalled();
+  });
+
+  it('a pending stay inside its hold shows Pay now', async () => {
+    mockSwitches.payments = true;
+    loaded({
+      row: ho({
+        id: ID,
+        payment_status: 'pending',
+        booking_status: 'confirmed',
+        created_at: '2026-10-13T10:50:00+00:00',
+      }),
+    });
+    await show('hotel');
+    await fireEvent.press(await screen.findByRole('button', { name: 'Pay now' }));
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/pay/[kind]/[bookingId]',
+      params: { kind: 'hotel', bookingId: ID },
+    });
+  });
+
+  it('stale pending stay shows hold ended', async () => {
+    mockSwitches.payments = true;
+    loaded({
+      row: ho({
+        id: ID,
+        payment_status: 'pending',
+        booking_status: 'confirmed',
+        // 25 min after this is 10:35Z, before the clock's 11:00Z.
+        created_at: '2026-10-13T10:10:00+00:00',
+      }),
+    });
+    await show('hotel');
+    expect(await screen.findByText('This hold has ended')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Pay now' })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Book again' }));
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/listing/[kind]/[id]',
+      params: { kind: 'hotel', id: 'ho1' },
+    });
+  });
+
+  it('a stale stay whose listing is hidden has no Book again', async () => {
+    mockSwitches.payments = true;
+    loaded({
+      row: ho({
+        id: ID,
+        payment_status: 'pending',
+        booking_status: 'confirmed',
+        created_at: '2026-10-13T10:10:00+00:00',
+        hotel: null,
+      }),
+    });
+    await show('hotel');
+    expect(await screen.findByText('This hold has ended')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Book again' })).toBeNull();
+  });
+
+  it('booking with a stored payment shows Checking your payment', async () => {
+    mockSwitches.payments = true;
+    await checkoutStore.put({
+      userId: 'u1',
+      kind: 'event',
+      bookingId: ID,
+      listingId: 'l1',
+      title: 'Afrobeats night',
+      createdAt: '2026-10-13T10:50:00+00:00',
+      total: 45000,
+      pricing: null,
+      summary: {},
+      guestEmail: 'me@example.com',
+      payment: { reference: 'ref1', paymentUrl: 'https://checkout.paystack.com/x', startedAt: 1 },
+      paymentEverStarted: true,
+    });
+    loaded({ row: ev(PENDING_EVENT) });
+    await show('event');
+    expect(await screen.findByText('Checking your payment…')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Pay now' })).toBeNull();
+    expect(screen.queryByText('Pay on bookhushly.com')).toBeNull();
+  });
 });

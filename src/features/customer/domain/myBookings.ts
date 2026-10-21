@@ -35,6 +35,8 @@ export type MyBooking = {
   next: string;
   imageUrl: string | null;
   createdAt: string | null;
+  /** The listing, hotel or apartment booked, when RLS shows it ("Book again", P21). Not kept offline. */
+  listingId?: string | null;
 };
 
 const PAY_NEXT = 'Finish paying on bookhushly.com';
@@ -175,6 +177,7 @@ export function fromEvent(row: EventBookingRow, today: IsoDate): MyBooking {
     next,
     imageUrl: firstUrl(l?.media_urls),
     createdAt: row.created_at,
+    listingId: l?.id ?? null,
   };
 }
 
@@ -188,6 +191,7 @@ type Stay = {
   checkInTime: string | null;
   imageUrl: string | null;
   createdAt: string | null;
+  listingId: string | null;
   paid: boolean;
   /** Booking-level word before the payment rule; null = confirmed-like. */
   terminal: 'Cancelled' | 'Checked out' | 'No-show' | 'Refunded' | null;
@@ -235,6 +239,7 @@ function fromStay(s: Stay, today: IsoDate): MyBooking {
     next,
     imageUrl: s.imageUrl,
     createdAt: s.createdAt,
+    listingId: s.listingId,
   };
 }
 
@@ -252,6 +257,7 @@ export function fromHotel(row: HotelBookingRow, today: IsoDate): MyBooking {
       checkInTime: h?.check_in_time ?? null,
       imageUrl: firstUrl(h?.image_urls),
       createdAt: row.created_at,
+      listingId: h?.id ?? null,
       paid: row.payment_status === 'completed',
       terminal:
         st === 'cancelled'
@@ -283,6 +289,7 @@ export function fromApartment(row: ApartmentBookingRow, today: IsoDate): MyBooki
       checkInTime: a?.check_in_time ?? null,
       imageUrl: firstUrl(a?.image_urls),
       createdAt: row.created_at,
+      listingId: a?.id ?? null,
       paid: row.payment_status === 'paid',
       terminal:
         st === 'cancelled'

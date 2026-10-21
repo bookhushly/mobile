@@ -54,6 +54,14 @@ jest.mock('@/features/customer/hooks/useTourSeen', () => ({
   useTourSeen: (userId: string | null) => mockTour(userId),
 }));
 
+// Resume has its own tests (hooks/__tests__); here only that the layout mounts it for the account.
+const mockResume = jest.fn();
+jest.mock('@/features/customer/hooks/useResumePayments', () => ({
+  useResumePayments: (userId: string) => {
+    mockResume(userId);
+  },
+}));
+
 // The details screen is stubbed: this test is about the booking the route hands it.
 const mockScreen: { booking?: unknown } = {};
 jest.mock('@/features/customer/screens/BookingScreen', () => ({
@@ -167,6 +175,8 @@ it('shows tickets and the check-in code full screen and drops customer data on l
     </QueryClientProvider>,
   );
   expect(mockNav.stack['tickets/[bookingId]']).toEqual({ presentation: 'fullScreenModal' });
+  // Spec P5: open payments are resumed for the signed-in customer.
+  expect(mockResume).toHaveBeenCalledWith('u1');
   expect(mockNav.stack['check-in-code/[bookingId]']).toEqual({ presentation: 'fullScreenModal' });
   expect(qc.getQueryData(['customer', 'u1', 'bookings'])).toBeDefined();
   await unmount();

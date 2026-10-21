@@ -12,6 +12,8 @@ import type { IsoDate } from '@/shared/lib/lagosDay';
 import { Button } from '@/shared/ui';
 
 type Props = {
+  /** The signed-in customer (the pending-payment banner, P21). */
+  userId: string;
   row: HotelBookingRow;
   today: IsoDate;
   onBack: () => void;
@@ -23,13 +25,22 @@ type Props = {
 
 // C12 hotel: address (→ Maps), check-in/out with the hotel's times, room type, guests, payment.
 // No room number: customers can't read rooms.
-export function HotelDetails({ row, today, onBack, onRefresh, manage, onShowCheckInCode }: Props) {
+export function HotelDetails({
+  row,
+  userId,
+  today,
+  onBack,
+  onRefresh,
+  manage,
+  onShowCheckInCode,
+}: Props) {
   const b = fromHotel(row, today);
   const h = row.hotel;
   const address = joinAddress([h?.address, h?.city, h?.state]);
   return (
     <BookingFrame
       booking={b}
+      userId={userId}
       onBack={onBack}
       onRefresh={onRefresh}
       manage={manage}

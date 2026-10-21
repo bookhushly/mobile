@@ -16,16 +16,26 @@ type Props = {
   /** Why the button is off ("Sold out"); it then reads the reason (D12). */
   blocked: string | null;
   onBook: () => void;
+  /** The button leaves the app (4b hand-off): it carries the external-link icon. */
+  external?: boolean;
   /** Floats above the row (Undo, the sign-in note); never part of it. */
   notice?: ReactNode;
 };
 
 export const WEB_NOTE = 'You may need to sign in on the website.';
 
-// Spec §3, D11, final UX review U1: one row, the price summary on the left and the hand-off on
-// the right (the button takes the row only when there is no summary). The label never promises
-// booking in the app. No urgency copy.
-export function ListingFooter({ price, when, label, blocked, onBook, notice }: Props) {
+// Spec §3, D11, final UX review U1: one row, the price summary on the left and the action on the
+// right (the button takes the row only when there is no summary). A hand-off label never promises
+// booking in the app (P2: in-app checkout drops the link icon). No urgency copy.
+export function ListingFooter({
+  price,
+  when,
+  label,
+  blocked,
+  onBook,
+  external = true,
+  notice,
+}: Props) {
   const hasWhen = when !== undefined && when !== null;
   const summary = price !== null || hasWhen;
   return (
@@ -48,7 +58,7 @@ export function ListingFooter({ price, when, label, blocked, onBook, notice }: P
         <View style={summary ? { flexShrink: 0, maxWidth: '60%' } : { flex: 1 }}>
           <Button
             label={blocked ?? label}
-            icon={blocked === null ? ExternalLink : undefined}
+            icon={blocked === null && external ? ExternalLink : undefined}
             disabled={blocked !== null}
             onPress={onBook}
             testID="listing-book"

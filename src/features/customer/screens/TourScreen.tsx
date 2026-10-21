@@ -8,6 +8,7 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 
+import { CHECKOUT_EVENTS_ENABLED } from '@/shared/config/features';
 import { color, radius, space } from '@/shared/theme';
 import {
   Button,
@@ -21,6 +22,12 @@ import {
 
 type Page = { scene: IllustrationName; headline: string; body: string };
 
+// D15: booking and payment handed off to the website until in-app checkout (Phase 4c, P2).
+const PAY_ON_WEB =
+  'For now you book and pay on bookhushly.com. You see the full price before you pay.';
+const PAY_IN_APP =
+  'Book and pay in the app or on bookhushly.com. You see the full price before you pay.';
+
 const PAGES: readonly Page[] = [
   {
     scene: 'find',
@@ -30,8 +37,10 @@ const PAGES: readonly Page[] = [
   {
     scene: 'pay',
     headline: 'Pay in naira',
-    // D15: booking and payment hand off to the website until in-app checkout lands.
-    body: 'For now you book and pay on bookhushly.com. You see the full price before you pay.',
+    // Read when shown, so the switch decides (and a test can flip it).
+    get body() {
+      return CHECKOUT_EVENTS_ENABLED ? PAY_IN_APP : PAY_ON_WEB;
+    },
   },
   {
     scene: 'showUp',

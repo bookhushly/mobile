@@ -13,6 +13,8 @@ import type { IsoDate } from '@/shared/lib/lagosDay';
 import { Banner, Button } from '@/shared/ui';
 
 type Props = {
+  /** The signed-in customer (the pending-payment banner, P21). */
+  userId: string;
   row: EventBookingRow;
   today: IsoDate;
   onBack: () => void;
@@ -23,13 +25,22 @@ type Props = {
 };
 
 // C12 event: date and time, venue (→ Maps), packages, payment, tickets, Show tickets.
-export function EventDetails({ row, today, onBack, onRefresh, manage, onShowTickets }: Props) {
+export function EventDetails({
+  row,
+  userId,
+  today,
+  onBack,
+  onRefresh,
+  manage,
+  onShowTickets,
+}: Props) {
   const b = fromEvent(row, today);
   const tickets = canShowTickets(row);
   const place = b.place;
   return (
     <BookingFrame
       booking={b}
+      userId={userId}
       onBack={onBack}
       onRefresh={onRefresh}
       manage={manage}

@@ -1,5 +1,7 @@
+import { router } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import type { ScrollView } from 'react-native';
 
 import { webListingUrl, type ListingKind } from '@/features/customer/domain/discover';
 import { minuteOf } from '@/features/customer/domain/listingCard';
@@ -30,6 +32,11 @@ import {
 } from '@/features/customer/ui/ReviewsSection';
 import { SavedBanner, savedBannerShown } from '@/features/customer/ui/SavedBanner';
 import { clock } from '@/shared/api/instance';
+import {
+  CHECKOUT_EVENTS_ENABLED,
+  CHECKOUT_PAYMENTS_ENABLED,
+  CHECKOUT_STAYS_ENABLED,
+} from '@/shared/config/features';
 import { Banner, ErrorState, Header, IconButton, Screen, Sheet, SkeletonRows } from '@/shared/ui';
 
 const KIND_WORD: Record<ListingKind, string> = {
@@ -49,8 +56,18 @@ type Props = {
 // One Modal at a time: the photo viewer, all amenities, or all reviews.
 type Open = { to: 'photos'; index: number } | { to: 'amenities' } | { to: 'reviews' } | null;
 
+/**
+ * Spec P2: whether this listing books in the app. Each kind needs its switch, and payments, except
+ * a free event (every tier ₦0), which needs no payment.
+ */
+function inApp(kind: ListingKind, free: boolean): boolean {
+  if (kind === 'event') return CHECKOUT_EVENTS_ENABLED && (CHECKOUT_PAYMENTS_ENABLED || free);
+  return CHECKOUT_STAYS_ENABLED && CHECKOUT_PAYMENTS_ENABLED;
+}
+
 // Spec §3 Listing, D4, D5, D10–D14: gallery, overview, the kind's sections, description,
-// reviews (stays only), and a sticky footer handing off to bookhushly.com.
+// reviews (stays only), and a sticky footer: in-app checkout behind its switch (P2), else the
+// hand-off to bookhushly.com.
 export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props) {
   const listing = useListing(kind, id);
   // Perf review P5: reviews start with the detail (the id is already a valid UUID here), one
@@ -64,6 +81,8 @@ export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props
   const [open, setOpen] = useState<Open>(null);
   // The one-time sign-in note, shown on the first tap of the hand-off (U1).
   const [noteOpen, setNoteOpen] = useState(false);
+  const scroll = useRef<ScrollView>(null);
+  const roomsY = useRef<number | null>(null);
   const close = () => {
     setOpen(null);
   };
@@ -102,8 +121,26 @@ export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props
       </Screen>
     );
 
+  const free = s.price !== null && 'text' in s.price && s.price.text === 'Free';
+  // A hotel books per room type: with no rooms to choose, it stays on the hand-off.
+  const checkout = inApp(kind, free) && !('hotel' in data && data.roomTypes.length === 0);
+  const label = !checkout
+    ? s.action.label
+    : kind === 'event'
+      ? 'Get tickets'
+      : kind === 'hotel'
+        ? 'Choose a room'
+        : 'Book';
   const book = () => {
     if (s.action.blocked !== null) return;
+    if (checkout) {
+      if (kind === 'hotel') {
+        if (roomsY.current !== null) scroll.current?.scrollTo({ y: roomsY.current });
+        return;
+      }
+      router.push({ pathname: '/checkout/[kind]/[listingId]', params: { kind, listingId: id } });
+      return;
+    }
     if (note.show && !noteOpen) {
       setNoteOpen(true);
       return;
@@ -144,15 +181,16 @@ export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props
     <ListingFooter
       price={s.price}
       when={s.when}
-      label={s.action.label}
+      label={label}
       blocked={s.action.blocked}
       onBook={book}
+      external={!checkout}
       notice={notice}
     />
   );
 
   return (
-    <Screen scroll header={header} footer={footer}>
+    <Screen scroll scrollRef={scroll} header={header} footer={footer}>
       <Gallery
         kind={kind}
         title={s.title}
@@ -164,7 +202,13 @@ export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props
       <ListingOverview summary={s} showArea={kind !== 'event'} />
       {stay !== null ? about : null}
       {'hotel' in data ? (
-        <HotelBody listing={data} onShowAmenities={showAmenities} />
+        <HotelBody
+          listing={data}
+          onShowAmenities={showAmenities}
+          onRoomsAt={(y) => {
+            roomsY.current = y;
+          }}
+        />
       ) : 'apartment' in data ? (
         <ApartmentBody listing={data} onShowAmenities={showAmenities} />
       ) : (

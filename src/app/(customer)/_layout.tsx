@@ -1,6 +1,8 @@
 import { Stack } from 'expo-router';
 
+import { useAuth } from '@/features/auth/hooks/useAuth';
 import { useCustomerSession } from '@/features/customer/hooks/useCustomerSession';
+import { useResumePayments } from '@/features/customer/hooks/useResumePayments';
 import { DensityProvider } from '@/shared/ui/DensityProvider';
 
 export { ScreenError as ErrorBoundary } from '@/shared/ui/ScreenError';
@@ -10,6 +12,10 @@ export const unstable_settings = { initialRouteName: '(tabs)' };
 export default function CustomerLayout() {
   // Leaving customer mode drops the cached bookings, tickets and profile from memory.
   useCustomerSession();
+  // Spec P5: payments left open when the app was killed are settled quietly, once per mount and
+  // on each return to the foreground. Its import also registers the checkout store's sign-out wipe.
+  const state = useAuth((s) => s.state);
+  useResumePayments(state.status === 'signedIn' ? state.userId : '');
   return (
     <DensityProvider density="customer">
       <Stack screenOptions={{ headerShown: false }}>

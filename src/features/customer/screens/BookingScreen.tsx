@@ -99,6 +99,7 @@ function EventBooking(p: One) {
   return settle(b, h, (row) => (
     <EventDetails
       row={row}
+      userId={userId}
       today={b.today}
       onBack={h.onBack}
       onRefresh={b.refetch}
@@ -114,6 +115,7 @@ function HotelBooking(p: One) {
   return settle(b, h, (row) => (
     <HotelDetails
       row={row}
+      userId={userId}
       today={b.today}
       onBack={h.onBack}
       onRefresh={b.refetch}
@@ -129,6 +131,7 @@ function ApartmentBooking(p: One) {
   return settle(b, h, (row) => (
     <ApartmentDetails
       row={row}
+      userId={userId}
       today={b.today}
       onBack={h.onBack}
       onRefresh={b.refetch}
