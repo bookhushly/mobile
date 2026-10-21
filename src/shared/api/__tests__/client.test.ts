@@ -88,7 +88,7 @@ describe('api client', () => {
       maxRetries: 2,
     });
     const r = await client.request('/api/x', { schema });
-    expect(r).toEqual({ ok: false, error: { kind: 'unavailable', status: 503 } });
+    expect(r).toEqual({ ok: false, error: { kind: 'unavailable', status: 503, body: {} } });
     expect(fetchFn).toHaveBeenCalledTimes(3);
   });
 
@@ -212,7 +212,12 @@ describe('api client', () => {
     const r = await client.request('/api/x', { method: 'POST', body: {}, schema });
     expect(r).toEqual({
       ok: false,
-      error: { kind: 'unavailable', status: 503, code: 'lookup_failed' },
+      error: {
+        kind: 'unavailable',
+        status: 503,
+        code: 'lookup_failed',
+        body: { code: 'lookup_failed' },
+      },
     });
     expect(calls).toHaveLength(1);
   });
