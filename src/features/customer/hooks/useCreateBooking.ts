@@ -86,7 +86,7 @@ function stayEntry(
       checkIn: b.check_in_date,
       checkOut: b.check_out_date,
       guests: s.adults + s.children,
-      ...(b.room_type ? { roomName: b.room_type.name } : {}),
+      ...(b.room_type?.name != null ? { roomName: b.room_type.name } : {}),
     },
     guestEmail: b.guest_email,
     payment: null,
@@ -185,6 +185,8 @@ export function useCreateBooking(
           );
           return;
         case 'unsure':
+          // An idempotency mismatch: this key can't be replayed, so Check again sends a new one.
+          if (o.freshKey === true) idem.current = null;
           show({ phase: 'unsure' });
           return;
         case 'wait':

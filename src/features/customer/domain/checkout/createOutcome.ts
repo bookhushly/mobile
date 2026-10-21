@@ -4,7 +4,8 @@ import type { StayProblem } from './selection';
 export type CreateOutcome =
   | { kind: 'created' }
   | { kind: 'refused'; words: string; field?: StayProblem }
-  | { kind: 'unsure' }
+  /** `freshKey`: the server refused this key for another body; the next send needs a new one. */
+  | { kind: 'unsure'; freshKey?: true }
   | { kind: 'wait'; seconds: number }
   | { kind: 'busy'; seconds: number }
   | { kind: 'failed'; words: string; strayBookingId: string | null };
@@ -34,12 +35,16 @@ function num(body: unknown, key: string): number | undefined {
   return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
 }
 
+/** Web sends `details` as `{ field: sentence }` (contract check M1); an array is also read. */
 function firstDetail(body: unknown): string | undefined {
   const details = field(body, 'details');
-  if (!Array.isArray(details) || details.length === 0) return undefined;
-  const first: unknown = details[0];
-  if (typeof first === 'string' && first.trim() !== '') return first;
-  return text(first, 'message');
+  if (Array.isArray(details)) {
+    const first: unknown = details[0];
+    if (typeof first === 'string' && first.trim() !== '') return first;
+    return text(first, 'message');
+  }
+  if (typeof details !== 'object' || details === null) return undefined;
+  return Object.values(details).find((v): v is string => typeof v === 'string' && v.trim() !== '');
 }
 
 function busyOrWait(e: ApiError): CreateOutcome | null {
@@ -49,7 +54,10 @@ function busyOrWait(e: ApiError): CreateOutcome | null {
   if (e.kind === 'conflict' && e.code === 'in_progress') {
     return { kind: 'busy', seconds: num(e.body, 'retry_after') ?? DEFAULT_BUSY_SECONDS };
   }
-  if (e.kind === 'conflict' && e.code === 'idempotency_mismatch') return { kind: 'unsure' };
+  // 422 arrives as `unknown` (contract check M3). Never a refusal; the next send gets a new key.
+  if ((e.kind === 'unknown' || e.kind === 'conflict') && e.code === 'idempotency_mismatch') {
+    return { kind: 'unsure', freshKey: true };
+  }
   return null;
 }
 
@@ -85,9 +93,12 @@ function stayCode(e: ApiError, kind: 'hotel' | 'apartment'): CreateOutcome | nul
       );
     }
     case 'unavailable':
+      // Hotel 409 also covers `invalid_total` ("can't be booked right now"): the server's words
+      // win. Apartment `reason: 'locked'` is another guest mid-checkout (contract check M5).
+      if (kind === 'hotel') return refused(text(body, 'error') ?? 'No rooms left for these dates');
       return refused(
-        kind === 'hotel'
-          ? 'No rooms left for these dates'
+        field(body, 'reason') === 'locked'
+          ? 'Someone is booking these dates right now. Try again in a few minutes.'
           : 'These dates were just booked. Try other dates',
       );
     case 'not_found':

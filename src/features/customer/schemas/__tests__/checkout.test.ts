@@ -47,6 +47,20 @@ describe('stayCreated', () => {
   it('fails without the payment hand-off', () => {
     expect(stayCreated.safeParse({ booking: stay.booking }).success).toBe(false);
   });
+  it('accepts null names for hotel, room type and apartment (C3)', () => {
+    const r = stayCreated.parse({
+      ...stay,
+      booking: {
+        ...stay.booking,
+        hotel: { id: 'h1', name: null },
+        room_type: { id: 'rt1', name: null },
+        apartment: { id: 'a1', name: null },
+      },
+    });
+    expect(r.booking.hotel?.name).toBeNull();
+    expect(r.booking.room_type?.name).toBeNull();
+    expect(r.booking.apartment?.name).toBeNull();
+  });
 });
 
 describe('eventCreated', () => {

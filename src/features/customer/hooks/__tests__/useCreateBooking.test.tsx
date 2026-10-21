@@ -136,6 +136,44 @@ describe('useCreateBooking — stays', () => {
     expect(await checkoutStore.get(USER, 'hotel', 'hb1')).toBeNull();
   });
 
+  it('an idempotency mismatch (422) is unsure and Check again sends a new key (C2)', async () => {
+    stayMock.mockResolvedValueOnce(
+      err<ApiError>({
+        kind: 'unknown',
+        status: 422,
+        code: 'idempotency_mismatch',
+        body: { code: 'idempotency_mismatch' },
+      }),
+    );
+    stayMock.mockResolvedValue(stayCreated);
+    const { result } = await renderHook(() => useCreateBooking(USER, 'hotel', HOTEL));
+    await act(() => result.current.submit(stay(), ctx));
+    expect(result.current.state).toEqual({ phase: 'unsure' });
+    await act(() => result.current.checkAgain());
+    expect(keysSent()).toEqual(['k1', 'k2']);
+    expect(result.current.created).toEqual({ bookingId: 'hb1' });
+  });
+
+  it('a created stay with null names still lands, without a room name (C3)', async () => {
+    const value = stayCreated.ok ? stayCreated.value : null;
+    if (value === null) throw new Error('fixture');
+    stayMock.mockResolvedValue(
+      ok<StayCreated>({
+        ...value,
+        booking: {
+          ...value.booking,
+          hotel: { id: HOTEL, name: null },
+          room_type: { id: ROOM, name: null },
+        },
+      }),
+    );
+    const { result } = await renderHook(() => useCreateBooking(USER, 'hotel', HOTEL));
+    await act(() => result.current.submit(stay(), ctx));
+    const saved = await checkoutStore.get(USER, 'hotel', 'hb1');
+    expect(saved?.title).toBe('');
+    expect(saved?.summary.roomName).toBeUndefined();
+  });
+
   it('a key 9 minutes old is replaced even for the same selection (A6)', async () => {
     stayMock.mockResolvedValue(lost);
     const { result } = await renderHook(() => useCreateBooking(USER, 'hotel', HOTEL));

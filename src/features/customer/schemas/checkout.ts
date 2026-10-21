@@ -2,13 +2,14 @@ import { z } from 'zod';
 
 import { numeric } from '@/features/customer/schemas/listings';
 
-// Response bodies for in-app booking and payment (Phase 4c; BACKEND_STATUS §5, §7b — open web PRs
-// 221 and 219, not merged as of 2026-10-21). Strict only on what the app reads; extra keys are
-// stripped. Amounts are server-computed and shown, never trusted for pricing.
+// Response bodies for in-app booking and payment (Phase 4c; BACKEND_STATUS §5, §7b; web #219 and
+// #221, live since 2026-10-21). Strict only on what the app reads; extra keys are stripped.
+// Amounts are server-computed and shown, never trusted for pricing.
 
 const amount = numeric.refine(Number.isFinite);
 const id = z.string().min(1);
-const named = z.object({ id, name: z.string() });
+// `name` is null when the join comes back empty (contract check M4): never fail a created booking.
+const named = z.object({ id, name: z.string().nullable() });
 
 // ── POST /api/bookings/{hotel,apartment} → 201 (200 + replayed on an idempotent replay) ──────────
 

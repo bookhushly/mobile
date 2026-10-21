@@ -44,6 +44,31 @@ describe('stayCreateOutcome', () => {
       kind: 'refused',
       words: 'These dates were just booked. Try other dates',
     });
+    expect(stayCreateOutcome(conflict('unavailable', { reason: 'overlap' }), 'apartment')).toEqual({
+      kind: 'refused',
+      words: 'These dates were just booked. Try other dates',
+    });
+  });
+
+  it('apartment locked says someone is booking now (C4)', () => {
+    expect(
+      stayCreateOutcome(
+        conflict('unavailable', { reason: 'locked', locked_until: '2026-10-21T12:15:00Z' }),
+        'apartment',
+      ),
+    ).toEqual({
+      kind: 'refused',
+      words: 'Someone is booking these dates right now. Try again in a few minutes.',
+    });
+  });
+
+  it('hotel unavailable uses the server words when present (C4)', () => {
+    expect(
+      stayCreateOutcome(
+        conflict('unavailable', { error: 'This room can’t be booked right now' }),
+        'hotel',
+      ),
+    ).toEqual({ kind: 'refused', words: 'This room can’t be booked right now' });
   });
 
   it('maps 404 and not_found', () => {
@@ -66,10 +91,14 @@ describe('stayCreateOutcome', () => {
     });
   });
 
-  it('idempotency_mismatch is unsure', () => {
-    expect(stayCreateOutcome(conflict('idempotency_mismatch'), 'hotel')).toEqual({
-      kind: 'unsure',
-    });
+  it('idempotency_mismatch (422, unknown) is unsure with a fresh key (C2)', () => {
+    const e: ApiError = {
+      kind: 'unknown',
+      status: 422,
+      code: 'idempotency_mismatch',
+      body: { code: 'idempotency_mismatch' },
+    };
+    expect(stayCreateOutcome(e, 'hotel')).toEqual({ kind: 'unsure', freshKey: true });
   });
 
   it('invalid_input uses the first details message, else a fallback', () => {
@@ -84,6 +113,27 @@ describe('stayCreateOutcome', () => {
       words: 'Plain text',
     });
     expect(stayCreateOutcome(bad('invalid_input'), 'hotel')).toEqual({
+      kind: 'refused',
+      words: 'Check your details',
+    });
+  });
+
+  it('invalid_input reads web’s details object, first sentence (C1)', () => {
+    expect(
+      stayCreateOutcome(
+        bad('invalid_input', {
+          details: { check_in_date: 'Check-in must be today or later', adults: 'Too many' },
+        }),
+        'hotel',
+      ),
+    ).toEqual({ kind: 'refused', words: 'Check-in must be today or later' });
+    expect(
+      stayCreateOutcome(
+        bad('invalid_input', { details: { a: 3, b: ' ', c: 'Real one' } }),
+        'hotel',
+      ),
+    ).toEqual({ kind: 'refused', words: 'Real one' });
+    expect(stayCreateOutcome(bad('invalid_input', { details: {} }), 'hotel')).toEqual({
       kind: 'refused',
       words: 'Check your details',
     });
@@ -193,7 +243,10 @@ describe('eventCreateOutcome', () => {
       kind: 'busy',
       seconds: 4,
     });
-    expect(eventCreateOutcome(conflict('idempotency_mismatch'))).toEqual({ kind: 'unsure' });
+    expect(eventCreateOutcome(conflict('idempotency_mismatch'))).toEqual({
+      kind: 'unsure',
+      freshKey: true,
+    });
   });
 
   it('429 waits; transient and invalid responses are unsure; auth is refused', () => {
