@@ -35,6 +35,9 @@ const entrySchema = z.object({
   payment: z
     .object({ reference: z.string(), paymentUrl: z.string(), startedAt: z.number() })
     .nullable(),
+  // Ruling R8: a payment was (or may have been) started for this booking, ever. Survives
+  // clearPayment, so leaving Review never cancels a booking that could be paid (P7).
+  paymentEverStarted: z.boolean().default(false),
 });
 
 export type CheckoutEntry = z.infer<typeof entrySchema>;
@@ -82,6 +85,18 @@ export function createCheckoutStore(kv: KeyValue, now: () => number = Date.now) 
     }
   };
 
+  const update = (
+    userId: string,
+    kind: CheckoutKind,
+    bookingId: string,
+    change: (e: CheckoutEntry) => CheckoutEntry,
+  ): Promise<void> =>
+    enqueue(async () => {
+      const key = keyOf(userId, kind, bookingId);
+      const entry = await read(key);
+      if (entry) await kv.set(key, JSON.stringify(change(entry)));
+    });
+
   return {
     /** Resolves only after the write is on disk. */
     put(e: CheckoutEntry): Promise<void> {
@@ -97,18 +112,22 @@ export function createCheckoutStore(kv: KeyValue, now: () => number = Date.now) 
     get(userId: string, kind: CheckoutKind, bookingId: string): Promise<CheckoutEntry | null> {
       return enqueue(() => read(keyOf(userId, kind, bookingId)));
     },
-    /** Resolves only after the write; a missing entry is left missing. */
+    /** Resolves only after the write; a missing entry is left missing. Marks it started. */
     setPayment(
       userId: string,
       kind: CheckoutKind,
       bookingId: string,
       payment: CheckoutPayment,
     ): Promise<void> {
-      return enqueue(async () => {
-        const key = keyOf(userId, kind, bookingId);
-        const entry = await read(key);
-        if (entry) await kv.set(key, JSON.stringify({ ...entry, payment }));
-      });
+      return update(userId, kind, bookingId, (e) => ({ ...e, payment, paymentEverStarted: true }));
+    },
+    /** Before initialise is sent: its answer may be lost, but a payment may exist. */
+    markStarted(userId: string, kind: CheckoutKind, bookingId: string): Promise<void> {
+      return update(userId, kind, bookingId, (e) => ({ ...e, paymentEverStarted: true }));
+    },
+    /** A failed payment: the entry (and its breakdown) stays for Try again; the flag stays. */
+    clearPayment(userId: string, kind: CheckoutKind, bookingId: string): Promise<void> {
+      return update(userId, kind, bookingId, (e) => ({ ...e, payment: null }));
     },
     drop(userId: string, kind: CheckoutKind, bookingId: string): Promise<void> {
       return enqueue(() => removeKey(keyOf(userId, kind, bookingId)));

@@ -86,6 +86,7 @@ function stayEntry(
     },
     guestEmail: b.guest_email,
     payment: null,
+    paymentEverStarted: false,
   };
 }
 
@@ -109,6 +110,7 @@ function eventEntry(
     summary: { tickets, ...(ctx.eventDate !== undefined ? { eventDate: ctx.eventDate } : {}) },
     guestEmail: s.guest.email,
     payment: null,
+    paymentEverStarted: false,
   };
 }
 
@@ -133,12 +135,17 @@ export function useCreateBooking(
   // A call, not a read: TypeScript would keep `live.current` narrowed across an await.
   const alive = useCallback(() => live.current, []);
   const busyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const busyWake = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     live.current = true;
     return () => {
       live.current = false;
       if (busyTimer.current !== null) clearTimeout(busyTimer.current);
+      busyTimer.current = null;
+      // The waiting send wakes, sees it is unmounted, and stops.
+      busyWake.current?.();
+      busyWake.current = null;
     };
   }, []);
 
@@ -164,6 +171,8 @@ export function useCreateBooking(
         case 'created':
           return;
         case 'refused':
+          // The server answered: a re-send after a fix is a new request, not a cached replay.
+          idem.current = null;
           show(
             o.field === undefined
               ? { phase: 'refused', words: o.words }
@@ -194,8 +203,10 @@ export function useCreateBooking(
   const sleep = useCallback(
     (seconds: number) =>
       new Promise<void>((resolve) => {
+        busyWake.current = resolve;
         busyTimer.current = setTimeout(() => {
           busyTimer.current = null;
+          busyWake.current = null;
           resolve();
         }, seconds * 1000);
       }),

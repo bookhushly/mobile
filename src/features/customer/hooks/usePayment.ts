@@ -57,6 +57,9 @@ export function usePayment(
     createdAt: string | null;
     /** Where Paystack sends the receipt; the cached entry's guest email wins. */
     email: string | null;
+    /** For the entry written when none is cached (Pay now from Bookings, an adopted event). */
+    title?: string;
+    total?: number;
   },
 ): {
   state: FlowState;
@@ -65,6 +68,8 @@ export function usePayment(
   leave: () => void;
   /** Stays: when Pay stops (epoch ms, server clock). Null for events, or while unknown. */
   holdEndsAt: number | null;
+  /** Pay can start: the stay's age is known and its hold hasn't ended. */
+  canPay: boolean;
   entry: CheckoutEntry | null;
 } {
   const qc = useQueryClient();
@@ -73,8 +78,10 @@ export function usePayment(
   const [entry, setEntry] = useState<CheckoutEntry | null>(null);
   const entryRef = useRef<CheckoutEntry | null>(null);
   const live = useRef(true);
-  /** A reference exists (or may) for this booking: leaving must never cancel it (P7). */
-  const started = useRef(false);
+  /** The cached entry has been read (it may be null). Until then leaving never cancels. */
+  const entryLoaded = useRef(false);
+  /** This mount saw a reference, or sent initialise: leaving must never cancel (P7). */
+  const sawPayment = useRef(false);
   const appSub = useRef<NativeEventSubscription | null>(null);
   const now = useServerNow();
   // A call, not a read: TypeScript would keep `live.current` narrowed across an await.
@@ -101,7 +108,7 @@ export function usePayment(
       .then((e) => {
         if (!on) return;
         entryRef.current = e;
-        if (e?.payment) started.current = true;
+        entryLoaded.current = true;
         setEntry(e);
       })
       .catch(() => undefined);
@@ -118,6 +125,8 @@ export function usePayment(
   // A stay whose age is unknown is not payable yet: on doubt we don't take money (P8).
   const holdUnknown = kind !== 'event' && createdAt === null;
   const email = entry?.guestEmail ?? booking.email;
+  const canPay = !holdUnknown && !(holdEndsAt !== null && now >= holdEndsAt);
+  const { title, total } = booking;
 
   const holdOver = useCallback(
     () => holdEndsAt !== null && clock.serverNow() >= holdEndsAt,
@@ -157,6 +166,33 @@ export function usePayment(
     [send],
   );
 
+  const recordStart = useCallback(
+    async (to: string): Promise<CheckoutEntry> => {
+      const onDisk = await checkoutStore.get(userId, kind, bookingId).catch(() => null);
+      if (onDisk !== null) {
+        await checkoutStore.markStarted(userId, kind, bookingId).catch(() => undefined);
+        return { ...onDisk, paymentEverStarted: true };
+      }
+      const minimal: CheckoutEntry = {
+        userId,
+        kind,
+        bookingId,
+        listingId: '',
+        title: title ?? '',
+        createdAt: createdAt ?? new Date(clock.serverNow()).toISOString(),
+        total: total ?? 0,
+        pricing: null,
+        summary: {},
+        guestEmail: to,
+        payment: null,
+        paymentEverStarted: true,
+      };
+      await checkoutStore.put(minimal).catch(() => undefined);
+      return minimal;
+    },
+    [userId, kind, bookingId, title, total, createdAt],
+  );
+
   const initialize = useCallback(async () => {
     if (holdOver()) {
       send({ type: 'startFailed', words: HOLD_ENDED_WORDS });
@@ -168,8 +204,14 @@ export function usePayment(
       send({ type: 'startFailed', words: "Couldn't start payment. Try again" });
       return;
     }
+    // R8: the booking is on disk, marked started, before initialise is sent: its answer may be
+    // lost while a payment exists. With no cached entry, a minimal one is written from the row.
+    sawPayment.current = true;
+    const startedEntry = await recordStart(to);
+    entryRef.current = startedEntry;
+    if (alive()) setEntry(startedEntry);
+    if (!alive()) return;
     // Sent once: the client never re-sends it, and a lost answer is settled by check-status.
-    started.current = true;
     const r = await initializePayment(api, kind, bookingId, to);
     if (!r.ok) {
       send({ type: 'startFailed', words: startErrorWords(r.error) });
@@ -180,13 +222,11 @@ export function usePayment(
     // P5: on disk before the browser opens. A failed write still opens: the server has the
     // reference, and check-status reuses it on the next Pay.
     await checkoutStore.setPayment(userId, kind, bookingId, payment).catch(() => undefined);
-    if (entryRef.current !== null) {
-      entryRef.current = { ...entryRef.current, payment };
-      if (alive()) setEntry(entryRef.current);
-    }
+    entryRef.current = { ...startedEntry, payment };
     if (!alive()) return;
+    setEntry(entryRef.current);
     await openBrowser(reference, payment_url);
-  }, [holdOver, email, send, kind, bookingId, userId, openBrowser, alive]);
+  }, [holdOver, email, send, kind, bookingId, userId, openBrowser, alive, recordStart]);
 
   /** In `starting`: check-status, then the pay plan (P4, P26). Never initialises on doubt. */
   const start = useCallback(async () => {
@@ -203,7 +243,7 @@ export function usePayment(
       .catch(() => null);
     if (!alive()) return;
     const plan = planPay(check, stored, clock.serverNow());
-    if (plan.do !== 'initialize') started.current = true;
+    if (plan.do !== 'initialize') sawPayment.current = true;
     switch (plan.do) {
       case 'check':
         send({ type: 'paid', reference: plan.reference, now: clock.serverNow() });
@@ -264,7 +304,11 @@ export function usePayment(
   }, [send, stepNow, pay, holdOver, start]);
 
   const leave = useCallback(() => {
-    if (!LEAVE_CANCELS.has(current.current.step) || started.current) return;
+    if (!LEAVE_CANCELS.has(current.current.step) || sawPayment.current) return;
+    // Only a booking made here, never paid for: its entry is read and has no payment, ever.
+    // Opened from Bookings (no entry), or before the read lands, nothing is cancelled.
+    const e = entryRef.current;
+    if (!entryLoaded.current || e === null || e.paymentEverStarted || e.payment !== null) return;
     // P7: best effort; a lost cancel is freed by the server's sweep.
     void cancelBooking(api, kind, bookingId).catch(() => undefined);
     void checkoutStore.drop(userId, kind, bookingId).catch(() => undefined);
@@ -299,14 +343,23 @@ export function usePayment(
     };
   }, [state, send]);
 
-  // A settled payment: the entry goes, and bookings, this booking and the tickets reload.
+  // A settled payment: bookings, this booking and the tickets reload. Paid drops the entry; a
+  // failed one keeps it, payment cleared, for Try again (R8).
   useEffect(() => {
     if (state.step !== 'done' && state.step !== 'failed') return;
-    void checkoutStore.drop(userId, kind, bookingId).catch(() => undefined);
+    if (state.step === 'done') {
+      void checkoutStore.drop(userId, kind, bookingId).catch(() => undefined);
+    } else {
+      void checkoutStore.clearPayment(userId, kind, bookingId).catch(() => undefined);
+      if (entryRef.current !== null) {
+        entryRef.current = { ...entryRef.current, payment: null };
+        setEntry(entryRef.current);
+      }
+    }
     void qc.invalidateQueries({ queryKey: customerKeys.bookings(userId) });
     void qc.invalidateQueries({ queryKey: customerKeys.booking(userId, kind, bookingId) });
     void qc.invalidateQueries({ queryKey: customerKeys.wallet(userId) });
   }, [state.step, userId, kind, bookingId, qc]);
 
-  return { state, pay, checkAgain, leave, holdEndsAt, entry };
+  return { state, pay, checkAgain, leave, holdEndsAt, canPay, entry };
 }

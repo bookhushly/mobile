@@ -47,6 +47,7 @@ function entry(bookingId: string, reference: string | null): CheckoutEntry {
       reference === null
         ? null
         : { reference, paymentUrl: 'https://checkout.paystack.com/x', startedAt: NOW - 60_000 },
+    paymentEverStarted: reference !== null,
   };
 }
 
@@ -136,7 +137,7 @@ describe('useResumePayments', () => {
     expect(order).toEqual(['verify:ref1', 'status:ref1', 'verify:ref2', 'status:ref2']);
   });
 
-  it('a failed payment is dropped; an unanswered one is kept', async () => {
+  it('a failed payment keeps its entry with the payment cleared; an unanswered one is kept', async () => {
     await checkoutStore.put(entry('b1', 'ref1'));
     await checkoutStore.put(entry('b2', 'ref2'));
     stateMock.mockImplementation((_c, ref) =>
@@ -153,8 +154,11 @@ describe('useResumePayments', () => {
       { wrapper: wrapper(makeQueryClient()) },
     );
     await flush();
-    expect(await checkoutStore.get(USER, 'event', 'b1')).toBeNull();
-    expect(await checkoutStore.get(USER, 'event', 'b2')).not.toBeNull();
+    expect(await checkoutStore.get(USER, 'event', 'b1')).toEqual({
+      ...entry('b1', null),
+      paymentEverStarted: true,
+    });
+    expect(await checkoutStore.get(USER, 'event', 'b2')).toEqual(entry('b2', 'ref2'));
   });
 
   it('checks again when the app comes back to the foreground', async () => {

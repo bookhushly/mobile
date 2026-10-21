@@ -162,6 +162,34 @@ describe('useCreateBooking — stays', () => {
     expect(keysSent()).toEqual(['k1', 'k1', 'k1', 'k1', 'k2']);
   });
 
+  it('a refusal clears the key: the re-send is a new request, not a cached replay', async () => {
+    stayMock.mockResolvedValueOnce(
+      err<ApiError>({ kind: 'conflict', code: 'unavailable', body: {} }),
+    );
+    const { result } = await renderHook(() => useCreateBooking(USER, 'hotel', HOTEL));
+    await act(() => result.current.submit(stay(), ctx));
+    expect(result.current.state.phase).toBe('refused');
+    stayMock.mockResolvedValue(stayCreated);
+    await act(() => result.current.submit(stay(), ctx));
+    expect(keysSent()).toEqual(['k1', 'k2']);
+  });
+
+  it('unmounting while waiting out a busy answer stops the retries', async () => {
+    stayMock.mockResolvedValue(inProgress);
+    const { result, unmount } = await renderHook(() => useCreateBooking(USER, 'hotel', HOTEL));
+    let done: Promise<void> = Promise.resolve();
+    await act(async () => {
+      done = result.current.submit(stay(), ctx);
+      await Promise.resolve();
+    });
+    expect(result.current.state.phase).toBe('busy');
+    await unmount();
+    // The waiting send settles (it would hang forever otherwise) and posts nothing more.
+    await done;
+    await advance(10_000);
+    expect(stayMock).toHaveBeenCalledTimes(1);
+  });
+
   it('writes the entry before created is set', async () => {
     stayMock.mockResolvedValue(stayCreated);
     const { result } = await renderHook(() => useCreateBooking(USER, 'hotel', HOTEL));

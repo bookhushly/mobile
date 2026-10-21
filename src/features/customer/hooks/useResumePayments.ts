@@ -16,7 +16,7 @@ import { api } from '@/shared/api/instance';
 /**
  * Spec P5: a payment left open when the app was killed or backgrounded is settled quietly. On
  * mount and each return to the foreground, every stored entry with a payment gets verify, then
- * one status read, one entry at a time. Paid or failed drops the entry; anything else is left for
+ * one status read, one entry at a time. Paid drops the entry, failed clears its payment; anything else is left for
  * the next pass. It never initialises.
  */
 export function useResumePayments(userId: string): void {
@@ -46,7 +46,9 @@ export function useResumePayments(userId: string): void {
         const verdict = await settleOne(e.payment.reference);
         if (!live()) return;
         if (verdict !== 'paid' && verdict !== 'failed') continue;
-        await checkoutStore.drop(userId, e.kind, e.bookingId);
+        // Paid drops the entry; failed keeps it, payment cleared, for Try again (R8).
+        if (verdict === 'paid') await checkoutStore.drop(userId, e.kind, e.bookingId);
+        else await checkoutStore.clearPayment(userId, e.kind, e.bookingId);
         void qc.invalidateQueries({ queryKey: customerKeys.bookings(userId) });
         void qc.invalidateQueries({ queryKey: customerKeys.booking(userId, e.kind, e.bookingId) });
         if (verdict === 'paid')

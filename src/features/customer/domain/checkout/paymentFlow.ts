@@ -81,11 +81,12 @@ export function afterPendingVerify(
 
 // ── The flow reducer ─────────────────────────────────────────────────────────────────────────────
 //
-// Checking: on entry the caller verifies once (P6) and schedules the first status poll after
-// `nextDelayMs`. Verify counts as attempt 0 and its answer is not dispatched here; only status
-// poll answers (`fromPaymentState`) are sent as `verdict`. Each pending/unknown verdict computes
-// the next delay; when there is none left the same transition moves to stillChecking, so the
-// caller schedules purely from state and can never stall.
+// Checking: on entry (attempt 0) the caller verifies once (P6) and dispatches its answer as a
+// `verdict`, with verify's 'paid' sent as 'pending' (verify doesn't report `fulfilled`, P15). That
+// verdict moves to attempt 1, so the first status poll (`fromPaymentState`) follows at 3 s, then
+// 5, 8, 13 and every 15 s. Each pending/unknown verdict computes the next delay; when there is
+// none left the same transition moves to stillChecking, so the caller schedules purely from state
+// and can never stall.
 
 export type FlowState =
   | { step: 'review' }

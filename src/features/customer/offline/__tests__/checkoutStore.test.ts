@@ -26,6 +26,7 @@ function entry(over: Partial<CheckoutEntry> = {}): CheckoutEntry {
     summary: { checkIn: '2026-11-01', checkOut: '2026-11-03', guests: 2 },
     guestEmail: 'a@b.co',
     payment: null,
+    paymentEverStarted: false,
     ...over,
   };
 }
@@ -48,7 +49,43 @@ describe('checkout store', () => {
     await store.put(entry());
     const payment = { reference: 'ref1', paymentUrl: 'https://pay.test/x', startedAt: NOW };
     await store.setPayment('u1', 'hotel', 'b1', payment);
-    expect(await store.get('u1', 'hotel', 'b1')).toEqual(entry({ payment }));
+    expect(await store.get('u1', 'hotel', 'b1')).toEqual(
+      entry({ payment, paymentEverStarted: true }),
+    );
+  });
+
+  it('clearPayment keeps the entry and that a payment was started', async () => {
+    const { store } = make();
+    await store.put(entry());
+    const payment = { reference: 'ref1', paymentUrl: 'https://pay.test/x', startedAt: NOW };
+    await store.setPayment('u1', 'hotel', 'b1', payment);
+    await store.clearPayment('u1', 'hotel', 'b1');
+    expect(await store.get('u1', 'hotel', 'b1')).toEqual(
+      entry({ payment: null, paymentEverStarted: true }),
+    );
+  });
+
+  it('markStarted sets the flag only', async () => {
+    const { store } = make();
+    await store.put(entry());
+    await store.markStarted('u1', 'hotel', 'b1');
+    expect(await store.get('u1', 'hotel', 'b1')).toEqual(entry({ paymentEverStarted: true }));
+  });
+
+  it('reads an entry saved before the started flag existed as not started', async () => {
+    const { store, kv } = make();
+    await store.put(entry());
+    const key = 'bh.checkout.u1.hotel.b1';
+    const { paymentEverStarted: _, ...old } = entry();
+    await kv.set(key, JSON.stringify(old));
+    expect(await store.get('u1', 'hotel', 'b1')).toEqual(entry());
+  });
+
+  it('clearPayment and markStarted on a missing entry create nothing', async () => {
+    const { store, kv } = make();
+    await store.clearPayment('u1', 'hotel', 'b1');
+    await store.markStarted('u1', 'hotel', 'b1');
+    expect(kv.dump()).toEqual({});
   });
 
   it('setPayment on a missing entry creates nothing', async () => {
