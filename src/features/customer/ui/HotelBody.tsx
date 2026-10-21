@@ -17,6 +17,8 @@ type Props = {
   onShowAmenities: () => void;
   /** Where the Rooms section starts in the scroll content (the footer's "Choose a room"). */
   onRoomsAt?: (y: number) => void;
+  /** With stays checkout on (P2): a room type's Select. Absent → the rooms are display only. */
+  onSelectRoom?: (roomTypeId: string) => void;
 };
 
 const at = (word: string, t: string | null) => {
@@ -25,7 +27,7 @@ const at = (word: string, t: string | null) => {
 };
 
 // Spec §3 hotel: facts (breakfast, power, transfer), amenities, room types, times, policies.
-export function HotelBody({ listing, onShowAmenities, onRoomsAt }: Props) {
+export function HotelBody({ listing, onShowAmenities, onRoomsAt, onSelectRoom }: Props) {
   const { hotel: h, roomTypes, rates } = listing;
   const facts = hotelFacts(h);
   const policies = [plainText(h.policies), plainText(h.checkout_policy)]
@@ -54,7 +56,13 @@ export function HotelBody({ listing, onShowAmenities, onRoomsAt }: Props) {
               {roomTypes.map((t) => (
                 <RoomTypeCard
                   key={t.id}
-                  hotelId={h.id}
+                  onSelect={
+                    onSelectRoom === undefined
+                      ? undefined
+                      : () => {
+                          onSelectRoom(t.id);
+                        }
+                  }
                   room={{
                     id: t.id,
                     name: t.name?.trim() || 'Room',

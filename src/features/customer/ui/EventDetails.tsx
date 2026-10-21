@@ -5,7 +5,7 @@ import { eventWhen, packagesLine } from '@/features/customer/domain/detailText';
 import { fromEvent } from '@/features/customer/domain/myBookings';
 import { canShowTickets, ticketsOf } from '@/features/customer/domain/tickets';
 import type { EventBookingRow } from '@/features/customer/schemas/bookings';
-import { BookingFrame } from '@/features/customer/ui/BookingFrame';
+import { BookingFrame, type PayHandlers } from '@/features/customer/ui/BookingFrame';
 import { DetailRows } from '@/features/customer/ui/DetailRows';
 import { openMaps } from '@/features/customer/ui/links';
 import { TicketList } from '@/features/customer/ui/TicketList';
@@ -15,6 +15,8 @@ import { Banner, Button } from '@/shared/ui';
 type Props = {
   /** The signed-in customer (the pending-payment banner, P21). */
   userId: string;
+  /** Pay now / Book again on a pending booking (P21). */
+  pay: PayHandlers;
   row: EventBookingRow;
   today: IsoDate;
   onBack: () => void;
@@ -28,6 +30,7 @@ type Props = {
 export function EventDetails({
   row,
   userId,
+  pay,
   today,
   onBack,
   onRefresh,
@@ -41,6 +44,7 @@ export function EventDetails({
     <BookingFrame
       booking={b}
       userId={userId}
+      pay={pay}
       onBack={onBack}
       onRefresh={onRefresh}
       manage={manage}

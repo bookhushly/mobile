@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import type { ScrollView } from 'react-native';
@@ -45,10 +44,15 @@ const KIND_WORD: Record<ListingKind, string> = {
   event: 'Event',
 };
 
+/** Where in-app checkout starts (P22): Select for the listing, or a hotel's room type. */
+export type CheckoutTarget = { kind: ListingKind; listingId: string; roomTypeId?: string };
+
 type Props = {
   kind: ListingKind;
   id: string;
   userId: string;
+  /** Opens checkout's Select step (P2, behind the kind's switch). */
+  onCheckout: (to: CheckoutTarget) => void;
   onBack: () => void;
   onSignInAgain: () => void;
 };
@@ -68,7 +72,7 @@ function inApp(kind: ListingKind, free: boolean): boolean {
 // Spec §3 Listing, D4, D5, D10–D14: gallery, overview, the kind's sections, description,
 // reviews (stays only), and a sticky footer: in-app checkout behind its switch (P2), else the
 // hand-off to bookhushly.com.
-export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props) {
+export function ListingScreen({ kind, id, userId, onCheckout, onBack, onSignInAgain }: Props) {
   const listing = useListing(kind, id);
   // Perf review P5: reviews start with the detail (the id is already a valid UUID here), one
   // query shared by the section and the sheet. Events have none in 4b.
@@ -121,9 +125,8 @@ export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props
       </Screen>
     );
 
-  const free = s.price !== null && 'text' in s.price && s.price.text === 'Free';
   // A hotel books per room type: with no rooms to choose, it stays on the hand-off.
-  const checkout = inApp(kind, free) && !('hotel' in data && data.roomTypes.length === 0);
+  const checkout = inApp(kind, s.free) && !('hotel' in data && data.roomTypes.length === 0);
   const label = !checkout
     ? s.action.label
     : kind === 'event'
@@ -135,10 +138,12 @@ export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props
     if (s.action.blocked !== null) return;
     if (checkout) {
       if (kind === 'hotel') {
+        // Rooms not laid out yet: they sit near the end of the page.
         if (roomsY.current !== null) scroll.current?.scrollTo({ y: roomsY.current });
+        else scroll.current?.scrollToEnd();
         return;
       }
-      router.push({ pathname: '/checkout/[kind]/[listingId]', params: { kind, listingId: id } });
+      onCheckout({ kind, listingId: id });
       return;
     }
     if (note.show && !noteOpen) {
@@ -208,6 +213,13 @@ export function ListingScreen({ kind, id, userId, onBack, onSignInAgain }: Props
           onRoomsAt={(y) => {
             roomsY.current = y;
           }}
+          onSelectRoom={
+            checkout
+              ? (roomTypeId) => {
+                  onCheckout({ kind: 'hotel', listingId: id, roomTypeId });
+                }
+              : undefined
+          }
         />
       ) : 'apartment' in data ? (
         <ApartmentBody listing={data} onShowAmenities={showAmenities} />

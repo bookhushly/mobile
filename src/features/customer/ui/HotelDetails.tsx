@@ -5,7 +5,7 @@ import { showCheckInCode } from '@/features/customer/domain/checkInCode';
 import { dayAt, guestsLine, joinAddress } from '@/features/customer/domain/detailText';
 import { fromHotel } from '@/features/customer/domain/myBookings';
 import type { HotelBookingRow } from '@/features/customer/schemas/bookings';
-import { BookingFrame } from '@/features/customer/ui/BookingFrame';
+import { BookingFrame, type PayHandlers } from '@/features/customer/ui/BookingFrame';
 import { DetailRows } from '@/features/customer/ui/DetailRows';
 import { openMaps } from '@/features/customer/ui/links';
 import type { IsoDate } from '@/shared/lib/lagosDay';
@@ -14,6 +14,8 @@ import { Button } from '@/shared/ui';
 type Props = {
   /** The signed-in customer (the pending-payment banner, P21). */
   userId: string;
+  /** Pay now / Book again on a pending booking (P21). */
+  pay: PayHandlers;
   row: HotelBookingRow;
   today: IsoDate;
   onBack: () => void;
@@ -28,6 +30,7 @@ type Props = {
 export function HotelDetails({
   row,
   userId,
+  pay,
   today,
   onBack,
   onRefresh,
@@ -41,6 +44,7 @@ export function HotelDetails({
     <BookingFrame
       booking={b}
       userId={userId}
+      pay={pay}
       onBack={onBack}
       onRefresh={onRefresh}
       manage={manage}

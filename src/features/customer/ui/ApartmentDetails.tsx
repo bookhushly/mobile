@@ -8,7 +8,7 @@ import {
 } from '@/features/customer/domain/detailText';
 import { fromApartment } from '@/features/customer/domain/myBookings';
 import type { ApartmentBookingRow } from '@/features/customer/schemas/bookings';
-import { BookingFrame } from '@/features/customer/ui/BookingFrame';
+import { BookingFrame, type PayHandlers } from '@/features/customer/ui/BookingFrame';
 import { DetailRows } from '@/features/customer/ui/DetailRows';
 import { openMaps } from '@/features/customer/ui/links';
 import { daysBetween, stayRange, type IsoDate } from '@/shared/lib/lagosDay';
@@ -16,6 +16,8 @@ import { daysBetween, stayRange, type IsoDate } from '@/shared/lib/lagosDay';
 type Props = {
   /** The signed-in customer (the pending-payment banner, P21). */
   userId: string;
+  /** Pay now / Book again on a pending booking (P21). */
+  pay: PayHandlers;
   row: ApartmentBookingRow;
   today: IsoDate;
   onBack: () => void;
@@ -25,14 +27,21 @@ type Props = {
 };
 
 // C12 apartment: area, address (→ Maps), dates and nights, check-in/out times, guests, payment.
-export function ApartmentDetails({ row, userId, today, onBack, onRefresh, manage }: Props) {
+export function ApartmentDetails({ row, userId, pay, today, onBack, onRefresh, manage }: Props) {
   const b = fromApartment(row, today);
   const a = row.apartment;
   const address = joinAddress([a?.address, a?.area, a?.city]);
   const nights = row.number_of_nights ?? daysBetween(row.check_in_date, row.check_out_date);
   const dates = stayRange(row.check_in_date, row.check_out_date);
   return (
-    <BookingFrame booking={b} userId={userId} onBack={onBack} onRefresh={onRefresh} manage={manage}>
+    <BookingFrame
+      booking={b}
+      userId={userId}
+      pay={pay}
+      onBack={onBack}
+      onRefresh={onRefresh}
+      manage={manage}
+    >
       <DetailRows
         rows={[
           { label: 'Area', value: b.place ?? '' },

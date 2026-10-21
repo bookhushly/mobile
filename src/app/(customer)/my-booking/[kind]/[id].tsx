@@ -25,6 +25,12 @@ export default function MyBookingRoute() {
       onShowCheckInCode={(bookingId) => {
         router.push({ pathname: '/check-in-code/[bookingId]', params: { bookingId } });
       }}
+      onPay={(kind, bookingId) => {
+        router.push({ pathname: '/pay/[kind]/[bookingId]', params: { kind, bookingId } });
+      }}
+      onBookAgain={(kind, listingId) => {
+        router.push({ pathname: '/listing/[kind]/[id]', params: { kind, id: listingId } });
+      }}
       onTransferred={() => {
         // Spec E7: the booking is no longer this user's; Bookings says where the tickets went.
         router.dismissTo('/bookings');

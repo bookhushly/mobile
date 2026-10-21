@@ -1,10 +1,10 @@
-import { router, useIsFocused } from 'expo-router';
+import { useIsFocused } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { useEffect, useState, type ReactNode } from 'react';
 import { RefreshControl, View } from 'react-native';
 
 import { holdEndsAt } from '@/features/customer/domain/checkout/paymentFlow';
-import { kindWord, type MyBooking } from '@/features/customer/domain/myBookings';
+import { kindWord, type BookingKind, type MyBooking } from '@/features/customer/domain/myBookings';
 import { useServerNow } from '@/features/customer/hooks/useServerNow';
 import { checkoutStore } from '@/features/customer/offline/checkoutStore';
 import { HIDDEN_LINE } from '@/features/customer/ui/BookingRow';
@@ -14,11 +14,23 @@ import { CHECKOUT_PAYMENTS_ENABLED } from '@/shared/config/features';
 import { space } from '@/shared/theme';
 import { Banner, Header, IconButton, refreshColors, Screen, StatusPill, Text } from '@/shared/ui';
 
+/** P21: where the pending banner's actions go (supplied by the route). */
+export type PayHandlers = {
+  /** Opens Review for this booking (`/pay/{kind}/{bookingId}`). */
+  onPay: (kind: BookingKind, bookingId: string) => void;
+  /** A stay past its hold: the listing, to book again. */
+  onBookAgain: (kind: BookingKind, listingId: string) => void;
+};
+
 type Props = {
   /** Absent while loading or after a failed load. */
   booking?: MyBooking;
   /** The signed-in customer: a payment this device started shows as being checked (P21). */
   userId?: string;
+  /** Pay now / Book again; absent → the pending banner hands off to the website. */
+  pay?: PayHandlers;
+  /** A saved (offline) copy: its pending flag may be stale, so never Pay now. */
+  saved?: boolean;
   onBack: () => void;
   onRefresh?: () => Promise<unknown>;
   /** Banners under the title (saved data, tickets being issued). */
@@ -35,6 +47,8 @@ type Props = {
 export function BookingFrame({
   booking: b,
   userId = '',
+  pay,
+  saved = false,
   onBack,
   onRefresh,
   notice,
@@ -81,7 +95,9 @@ export function BookingFrame({
           <StatusPill tone={chipTone(b.tone)} label={b.status} />
         </View>
       ) : null}
-      {b?.pending === true ? <PendingBanner booking={b} userId={userId} /> : null}
+      {b?.pending === true ? (
+        <PendingBanner booking={b} userId={userId} pay={saved ? undefined : pay} />
+      ) : null}
       {notice}
       {children}
       {manage}
@@ -117,22 +133,39 @@ function useStoredPayment(userId: string, b: MyBooking): boolean | null {
 
 // Spec P21, P8: a stored payment is being checked; else Pay now (events always, stays within
 // the hold, on the server clock); else a stay past its hold can be booked again; else the web.
-function PendingBanner({ booking: b, userId }: { booking: MyBooking; userId: string }) {
+// A saved copy comes without `pay`: checking or the web, never Pay now.
+function PendingBanner({
+  booking: b,
+  userId,
+  pay,
+}: {
+  booking: MyBooking;
+  userId: string;
+  pay: PayHandlers | undefined;
+}) {
   const stored = useStoredPayment(userId, b);
   // No flash of Pay now before a stored payment is found.
   if (stored === null) return null;
   if (stored) return <Banner tone="info" message="Checking your payment…" />;
-  if (!CHECKOUT_PAYMENTS_ENABLED || (b.kind !== 'event' && b.createdAt === null))
-    return <WebPayBanner />;
-  if (b.kind === 'event') return <PayNowBanner booking={b} />;
-  return <StayPayBanner booking={b} createdAt={b.createdAt ?? ''} />;
+  if (pay === undefined || !CHECKOUT_PAYMENTS_ENABLED) return <WebPayBanner />;
+  if (b.kind === 'event') return <PayNowBanner booking={b} pay={pay} />;
+  if (b.createdAt === null) return <WebPayBanner />;
+  return <StayPayBanner booking={b} createdAt={b.createdAt} pay={pay} />;
 }
 
 // Its own component: only a pending stay re-renders on the second tick.
-function StayPayBanner({ booking: b, createdAt }: { booking: MyBooking; createdAt: string }) {
+function StayPayBanner({
+  booking: b,
+  createdAt,
+  pay,
+}: {
+  booking: MyBooking;
+  createdAt: string;
+  pay: PayHandlers;
+}) {
   const now = useServerNow();
   const ends = holdEndsAt(b.kind, createdAt);
-  if (ends !== null && now < ends) return <PayNowBanner booking={b} />;
+  if (ends !== null && now < ends) return <PayNowBanner booking={b} pay={pay} />;
   const listingId = b.listingId ?? null;
   return (
     <Banner
@@ -144,10 +177,7 @@ function StayPayBanner({ booking: b, createdAt }: { booking: MyBooking; createdA
           : {
               label: 'Book again',
               onPress: () => {
-                router.push({
-                  pathname: '/listing/[kind]/[id]',
-                  params: { kind: b.kind, id: listingId },
-                });
+                pay.onBookAgain(b.kind, listingId);
               },
             }
       }
@@ -155,7 +185,7 @@ function StayPayBanner({ booking: b, createdAt }: { booking: MyBooking; createdA
   );
 }
 
-function PayNowBanner({ booking: b }: { booking: MyBooking }) {
+function PayNowBanner({ booking: b, pay }: { booking: MyBooking; pay: PayHandlers }) {
   return (
     <Banner
       tone="info"
@@ -163,10 +193,7 @@ function PayNowBanner({ booking: b }: { booking: MyBooking }) {
       action={{
         label: 'Pay now',
         onPress: () => {
-          router.push({
-            pathname: '/pay/[kind]/[bookingId]',
-            params: { kind: b.kind, bookingId: b.id },
-          });
+          pay.onPay(b.kind, b.id);
         },
       }}
     />

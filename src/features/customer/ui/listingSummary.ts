@@ -2,6 +2,7 @@ import type { ApartmentListing, HotelListing } from '@/features/customer/api/lis
 import { joinAddress } from '@/features/customer/domain/detailText';
 import {
   apartmentPriceLabel,
+  eventIsFree,
   eventPriceLabel,
   eventStock,
   hotelPriceLabel,
@@ -36,6 +37,8 @@ export type ListingSummary = {
   /** Events: D12; null for stays. */
   stock: EventStock | null;
   action: { label: string; blocked: string | null };
+  /** Events: costs nothing (P2: books in the app without payments). Stays: false. */
+  free: boolean;
   /** Plain text (never HTML), or null. */
   description: string | null;
   amenities: string[];
@@ -64,6 +67,7 @@ export function listingSummary(data: AnyListing, nowMs: number): ListingSummary 
       when: null,
       stock: null,
       action: handoff('hotel', null),
+      free: false,
       description: plainText(h.description),
       amenities: h.amenities,
     };
@@ -80,6 +84,7 @@ export function listingSummary(data: AnyListing, nowMs: number): ListingSummary 
       when: null,
       stock: null,
       action: handoff('apartment', null),
+      free: false,
       description: plainText(a.description),
       amenities: a.amenities,
     };
@@ -95,6 +100,7 @@ export function listingSummary(data: AnyListing, nowMs: number): ListingSummary 
     when: eventDay(data.event_date),
     stock,
     action: handoff('event', stock),
+    free: eventIsFree(data, nowMs),
     description: plainText(data.description),
     amenities: [],
   };

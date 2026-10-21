@@ -2,6 +2,7 @@ import {
   apartmentPriceLabel,
   buildListingParams,
   effectivePackagePrice,
+  eventIsFree,
   eventPriceLabel,
   eventStarted,
   eventStock,
@@ -431,6 +432,16 @@ describe('prices', () => {
         NOW,
       ),
     ).toEqual({ text: 'Free' });
+  });
+
+  it('event: free only when every tier costs nothing now, or a tierless price is 0 (P2)', () => {
+    const tiers = (...prices: number[]) =>
+      prices.map((price, i) => ({ name: `T${String(i)}`, price }));
+    expect(eventIsFree({ price: null, ticket_packages: tiers(0, 0) }, NOW)).toBe(true);
+    expect(eventIsFree({ price: null, ticket_packages: tiers(0, 5000) }, NOW)).toBe(false);
+    expect(eventIsFree({ price: 0, ticket_packages: [] }, NOW)).toBe(true);
+    expect(eventIsFree({ price: 5000, ticket_packages: [] }, NOW)).toBe(false);
+    expect(eventIsFree({ price: null, ticket_packages: [] }, NOW)).toBe(false);
   });
 
   it('event: a single tier has no From', () => {
