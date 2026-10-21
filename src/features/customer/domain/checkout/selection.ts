@@ -72,13 +72,13 @@ function phoneOk(phone: string): boolean {
   return phone.length <= MAX_PHONE_LENGTH && parseNigerianPhone(phone).ok;
 }
 
-function datesOk(s: StaySelection, today: string): boolean {
+function stayNights(s: StaySelection, today: string): number | null {
   const { checkIn, checkOut } = s;
-  if (checkIn === null || checkOut === null) return false;
-  if (!isIsoDate(checkIn) || !isIsoDate(checkOut)) return false;
-  if (checkIn < today) return false;
+  if (checkIn === null || checkOut === null) return null;
+  if (!isIsoDate(checkIn) || !isIsoDate(checkOut)) return null;
+  if (checkIn < today) return null;
   const n = nights(checkIn, checkOut);
-  return n >= 1 && n <= MAX_NIGHTS;
+  return n >= 1 && n <= MAX_NIGHTS ? n : null;
 }
 
 export function stayProblems(
@@ -91,9 +91,9 @@ export function stayProblems(
   },
 ): StayProblem[] {
   const out: StayProblem[] = [];
-  if (!datesOk(s, rules.today)) out.push('dates');
-  else if (nights(s.checkIn as string, s.checkOut as string) < rules.minNights)
-    out.push('minNights');
+  const n = stayNights(s, rules.today);
+  if (n === null) out.push('dates');
+  else if (n < rules.minNights) out.push('minNights');
   if (rules.maxGuests !== null && s.adults + s.children > rules.maxGuests) out.push('maxGuests');
   if (s.guest.name.trim() === '') out.push('guestName');
   if (!emailOk(s.guest.email)) out.push('guestEmail');
@@ -110,6 +110,17 @@ export function ticketLines(qty: Record<string, number>): Record<string, number>
   return out;
 }
 
+/** Valid ticket lines; with packages, keys matching no package are dropped. */
+function validLines(
+  qty: Record<string, number>,
+  packages: TicketPackage[],
+): Record<string, number> {
+  const lines = ticketLines(qty);
+  if (packages.length === 0) return lines;
+  const names = new Set(packages.map((p) => p.name));
+  return Object.fromEntries(Object.entries(lines).filter(([k]) => names.has(k)));
+}
+
 export function eventProblems(
   s: EventSelection,
   packages: TicketPackage[],
@@ -117,7 +128,7 @@ export function eventProblems(
   free: boolean,
 ): EventProblem[] {
   const out: EventProblem[] = [];
-  const lines = ticketLines(s.qty);
+  const lines = validLines(s.qty, packages);
   const total = Object.values(lines).reduce((a, b) => a + b, 0);
   if (total === 0) out.push('noTickets');
   if (total > MAX_TICKETS) out.push('tooMany');
@@ -155,6 +166,7 @@ export function isFreeOrder(
   listingPrice: number,
 ): boolean {
   if (packages.length === 0 && listingPrice > 0) return false;
+  if (Object.keys(validLines(s.qty, packages)).length === 0) return false;
   const subtotal = eventSubtotal(s.qty, packages, listingPrice);
   return Math.max(0, subtotal - (s.promo?.discount ?? 0)) === 0;
 }

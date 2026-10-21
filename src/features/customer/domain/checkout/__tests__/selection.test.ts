@@ -185,6 +185,15 @@ describe('isFreeOrder and eventSubtotal', () => {
     const s = event({ qty: { A: 1 }, promo: { codeId: 'p', discount: 500 } });
     expect(isFreeOrder(s, [pkg('A', 2000)], 0)).toBe(false);
   });
+  it('is not free for an empty selection', () => {
+    expect(isFreeOrder(event({ qty: {} }), [], 0)).toBe(false);
+    expect(isFreeOrder(event({ qty: { A: 0 } }), [pkg('A', 0)], 0)).toBe(false);
+  });
+  it('ignores quantities for unknown packages', () => {
+    const s = event({ qty: { Z: 4 } });
+    expect(isFreeOrder(s, [pkg('A', 0)], 0)).toBe(false);
+    expect(eventProblems(s, [pkg('A', 0)], [], true)).toContain('noTickets');
+  });
   it('sums package prices by quantity', () => {
     expect(eventSubtotal({ A: 2, B: 1, Z: 4 }, [pkg('A', 1000), pkg('B', 500)], 0)).toBe(2500);
   });
