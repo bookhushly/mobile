@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactNode, type Ref } from 'react';
 import { TextInput, View, type TextInputProps } from 'react-native';
 
 import { borderWidth, color, radius, space, typeVariants } from '@/shared/theme';
@@ -16,9 +16,22 @@ type Props = TextInputProps & {
   left?: ReactNode;
   /** Trailing slot (clear, password reveal). */
   right?: ReactNode;
+  /** Lets a form move focus to the first field with a problem. */
+  ref?: Ref<TextInput>;
 };
 
-export function Input({ label, error, hint, left, right, onFocus, onBlur, style, ...rest }: Props) {
+export function Input({
+  label,
+  error,
+  hint,
+  left,
+  right,
+  ref,
+  onFocus,
+  onBlur,
+  style,
+  ...rest
+}: Props) {
   const v = typeVariants.body;
   const d = useDensity();
   const [focused, setFocused] = useState(false);
@@ -45,6 +58,7 @@ export function Input({ label, error, hint, left, right, onFocus, onBlur, style,
       >
         {left}
         <TextInput
+          ref={ref}
           accessibilityLabel={label}
           accessibilityHint={error ?? hint}
           placeholderTextColor={color.textMuted}

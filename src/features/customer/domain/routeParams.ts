@@ -48,6 +48,33 @@ export function listingRefParams(
   return k.success && i.success ? { kind: k.data, id: i.data } : null;
 }
 
+export type CheckoutRef = {
+  kind: ListingKind;
+  listingId: string;
+  roomTypeId: string | null;
+  rateId: string | null;
+};
+
+/**
+ * `/checkout/[kind]/[listingId]?roomType=&rate=`: null when the kind or listing id is off-shape;
+ * an off-shape room type or rate is dropped (no room type → the screen's "isn't available").
+ */
+export function checkoutParams(p: {
+  kind?: unknown;
+  listingId?: unknown;
+  roomType?: unknown;
+  rate?: unknown;
+}): CheckoutRef | null {
+  const ref = listingRefParams(p.kind, p.listingId);
+  if (ref === null) return null;
+  return {
+    kind: ref.kind,
+    listingId: ref.id,
+    roomTypeId: bookingIdParam(p.roomType),
+    rateId: bookingIdParam(p.rate),
+  };
+}
+
 export function categoryParam(raw: unknown): Category | null {
   const c = categoryEnum.safeParse(raw);
   return c.success ? c.data : null;
