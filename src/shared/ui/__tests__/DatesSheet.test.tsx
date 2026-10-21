@@ -69,3 +69,11 @@ it('minNights 2 keeps Choose disabled for one night and shows the hint', async (
   await fireEvent.press(day('2026-10-23'));
   expect(screen.getByRole('button', { name: 'Choose · 2 nights' })).toBeTruthy();
 });
+
+it('a range can span two months', async () => {
+  await setup();
+  await fireEvent.press(day('2026-10-30'));
+  await fireEvent.press(day('2026-11-02'));
+  expect(screen.getByRole('button', { name: 'Choose · 3 nights' })).toBeTruthy();
+  expect(screen.getByLabelText('Monday 2 November, check-out')).toBeTruthy();
+});

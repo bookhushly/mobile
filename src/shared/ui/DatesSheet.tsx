@@ -1,10 +1,11 @@
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, View } from 'react-native';
 
-import { daysBetween, longDate, shortDate, type IsoDate } from '@/shared/lib/lagosDay';
+import { MONTHS_LONG, daysBetween, longDate, shortDate, type IsoDate } from '@/shared/lib/lagosDay';
 import { color, radius, space } from '@/shared/theme';
 
 import { Button } from './Button';
+import { useDensity } from './DensityProvider';
 import { Sheet } from './Sheet';
 import { Text } from './Text';
 
@@ -22,20 +23,6 @@ type Props = {
 
 type MonthData = { key: string; title: string; lead: number; days: IsoDate[] };
 
-const MONTH_NAMES = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
 const WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const two = (n: number) => String(n).padStart(2, '0');
 
@@ -49,7 +36,7 @@ function buildMonths(today: IsoDate, count: number): MonthData[] {
     const length = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
     return {
       key: `${String(y)}-${two(m + 1)}`,
-      title: `${MONTH_NAMES[m] ?? ''} ${String(y)}`,
+      title: `${MONTHS_LONG[m] ?? ''} ${String(y)}`,
       lead: (first.getUTCDay() + 6) % 7, // Monday first
       days: Array.from({ length }, (_d, d) => `${String(y)}-${two(m + 1)}-${two(d + 1)}`),
     };
@@ -107,6 +94,7 @@ function Day({
   checkOut: IsoDate | null;
   onPick: (d: IsoDate) => void;
 }) {
+  const { minTarget } = useDensity();
   const past = day < today;
   const isIn = day === checkIn;
   const isOut = day === checkOut;
@@ -124,7 +112,7 @@ function Day({
         onPick(day);
       }}
       style={{
-        height: 44,
+        height: minTarget,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: edge ? color.actionFill : between ? color.selectedWash : 'transparent',
@@ -158,7 +146,8 @@ export function DatesSheet({
     setWasVisible(visible);
     if (visible) setRange(initial); // reopening starts from what the caller holds
   }
-  const [data] = useState(() => buildMonths(today, months));
+  // Stable list data across renders; rebuilt only when the window changes.
+  const data = useMemo(() => buildMonths(today, months), [today, months]);
 
   // Stable identity so memoised months are not invalidated by a parent render.
   const pick = useCallback((d: IsoDate) => {

@@ -24,7 +24,8 @@ export function Stepper({ label, value, min, max, onChange, testID }: Props) {
       accessible
       accessibilityRole="adjustable"
       accessibilityLabel={`${label}, ${String(value)}`}
-      accessibilityValue={{ min, max, now: value }}
+      // text only: TalkBack reads min/max/now as a percentage, not the count.
+      accessibilityValue={{ text: String(value) }}
       accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
       onAccessibilityAction={(e) => {
         if (e.nativeEvent.actionName === 'increment' && !atMax) onChange(value + 1);

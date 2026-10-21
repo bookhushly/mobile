@@ -38,3 +38,17 @@ it('is adjustable, labelled with its value, and handles increment/decrement acti
   expect(onChange).toHaveBeenNthCalledWith(1, 3);
   expect(onChange).toHaveBeenNthCalledWith(2, 1);
 });
+
+it('announces the count as accessibility text', async () => {
+  await render(<Stepper label="Rooms" value={2} min={1} max={5} onChange={jest.fn()} />);
+  expect(screen.getByLabelText('Rooms, 2').props.accessibilityValue).toMatchObject({ text: '2' });
+});
+
+it('ignores increment at max and decrement at min', async () => {
+  const onChange = jest.fn();
+  await render(<Stepper label="A" value={5} min={5} max={5} onChange={onChange} />);
+  const node = screen.getByLabelText('A, 5');
+  await fireEvent(node, 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
+  await fireEvent(node, 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } });
+  expect(onChange).not.toHaveBeenCalled();
+});

@@ -2,7 +2,7 @@
 const LAGOS_OFFSET_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const MONTHS_LONG = [
+export const MONTHS_LONG = [
   'January',
   'February',
   'March',
