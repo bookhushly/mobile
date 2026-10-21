@@ -23,7 +23,7 @@ export const EVENT_COLUMNS =
 const text = z.string().nullable().catch(null);
 const flag = z.boolean().nullable().catch(null);
 // `numeric` arrives as a number; a numeric string (or the route's parseFloat) is tolerated.
-const numeric = z.union([
+export const numeric = z.union([
   z.number(),
   z
     .string()
