@@ -25,9 +25,11 @@ import { checkoutStore, type CheckoutEntry } from '@/features/customer/offline/c
 import type { EventCreated, StayCreated } from '@/features/customer/schemas/checkout';
 import { api, clock } from '@/shared/api/instance';
 
-// Spec P12, P28. Stays carry an Idempotency-Key kept while the selection is unchanged, so any
-// re-send is a safe replay. Events have none: a lost answer is never re-posted, it is settled by
-// reading this user's pending booking back (RLS).
+// Spec P12, P28. Stays carry an Idempotency-Key kept while the selection is unchanged and the key
+// is under 9 min old (the server keeps it 10 min, contract check M6), so a re-send is a safe
+// replay. The client never re-sends a stay create by itself (A5): only Continue or Check again
+// does. Events have none: a lost answer is never re-posted, it is settled by reading this user's
+// pending or confirmed booking back (RLS).
 
 export type CreateKind = 'hotel' | 'apartment' | 'event';
 
@@ -52,11 +54,13 @@ export type CreateCtx = {
 export const BUSY_RETRIES = 3;
 /** The event lookup starts this long before the create was sent (P12; server-clock drift). */
 export const EVENT_LOOKBACK_MS = 5000;
+/** A key this old is replaced even for the same selection: the server forgets it at 10 min (A6). */
+export const KEY_MAX_AGE_MS = 9 * 60_000;
 
 const IDLE: CreateState = { phase: 'idle' };
 const STILL_WORKING = 'Still working on your last try. Try again in a moment';
 
-type IdemKey = { fingerprint: string; key: string; busyRetries: number };
+type IdemKey = { fingerprint: string; key: string; busyRetries: number; mintedAt: number };
 type Sent = { selection: StaySelection | EventSelection; ctx: CreateCtx };
 
 function isEvent(s: StaySelection | EventSelection): s is EventSelection {
@@ -217,8 +221,12 @@ export function useCreateBooking(
     async (s: StaySelection, ctx: CreateCtx): Promise<void> => {
       if (kind === 'event') return;
       const fingerprint = selectionFingerprint(kind, listingId, ctx.roomTypeId ?? null, s);
-      if (idem.current?.fingerprint !== fingerprint) {
-        idem.current = { fingerprint, key: Crypto.randomUUID(), busyRetries: 0 };
+      const now = clock.serverNow();
+      if (
+        idem.current?.fingerprint !== fingerprint ||
+        now - idem.current.mintedAt >= KEY_MAX_AGE_MS
+      ) {
+        idem.current = { fingerprint, key: Crypto.randomUUID(), busyRetries: 0, mintedAt: now };
       }
       const k = idem.current;
       const body =

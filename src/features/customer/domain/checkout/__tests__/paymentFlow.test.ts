@@ -5,12 +5,15 @@ import {
   type FlowState,
   HOLD_MS,
   holdEndsAt,
+  isFreshPayment,
+  isPaymentUrl,
   nextPollDelay,
   PENDING_REINIT_MS,
   planPay,
   POLL_EVERY_MS,
   POLL_MAX_MS,
   POLL_SCHEDULE_MS,
+  rowPayState,
   URL_MAX_AGE_MS,
 } from '../paymentFlow';
 
@@ -68,21 +71,107 @@ describe('holdEndsAt', () => {
   });
 });
 
+describe('rowPayState', () => {
+  it('is null while the row is loading or missing', () => {
+    expect(rowPayState('event', undefined)).toBeNull();
+    expect(rowPayState('hotel', null)).toBeNull();
+  });
+
+  it('reads events from status and payment_status', () => {
+    expect(rowPayState('event', { status: 'pending', payment_status: 'pending' })).toBe('unpaid');
+    expect(rowPayState('event', { status: 'confirmed', payment_status: 'completed' })).toBe('paid');
+    expect(rowPayState('event', { status: 'cancelled', payment_status: 'completed' })).toBe(
+      'cancelled',
+    );
+    expect(rowPayState('event', { status: 'confirmed', payment_status: 'pending' })).toBe('other');
+  });
+
+  it('reads hotels from payment_status, apartments paid as paid', () => {
+    expect(rowPayState('hotel', { booking_status: 'confirmed', payment_status: 'pending' })).toBe(
+      'unpaid',
+    );
+    expect(rowPayState('hotel', { booking_status: 'confirmed', payment_status: 'completed' })).toBe(
+      'paid',
+    );
+    expect(rowPayState('hotel', { booking_status: 'cancelled', payment_status: 'pending' })).toBe(
+      'cancelled',
+    );
+    expect(rowPayState('apartment', { booking_status: 'pending', payment_status: 'paid' })).toBe(
+      'paid',
+    );
+    expect(rowPayState('apartment', { booking_status: 'pending', payment_status: 'pending' })).toBe(
+      'unpaid',
+    );
+    expect(
+      rowPayState('apartment', { booking_status: 'confirmed', payment_status: 'completed' }),
+    ).toBe('other');
+    expect(rowPayState('hotel', { booking_status: 'confirmed', payment_status: 'failed' })).toBe(
+      'other',
+    );
+  });
+});
+
+describe('isFreshPayment', () => {
+  it('is fresh under 15 min, and when the start is unknown', () => {
+    expect(isFreshPayment(0, 15 * MIN - 1)).toBe(true);
+    expect(isFreshPayment(0, 15 * MIN)).toBe(false);
+    expect(isFreshPayment(NaN, HOUR)).toBe(true);
+  });
+});
+
+describe('isPaymentUrl', () => {
+  it.each([
+    'https://checkout.paystack.com/abc',
+    'https://paystack.com/pay/x',
+    'https://standard.paystack.co/charge?x=1',
+    'https://CHECKOUT.PAYSTACK.COM/abc',
+  ])('accepts %s', (u) => {
+    expect(isPaymentUrl(u)).toBe(true);
+  });
+
+  it.each([
+    'http://checkout.paystack.com/abc',
+    'https://checkout.paystack.com.evil.test/abc',
+    'https://evilpaystack.com/abc',
+    'https://checkout.paystack.com@evil.test/abc',
+    'https://paystack.co/abc',
+    'https://nowpayments.io/x',
+    'javascript:alert(1)',
+    '',
+  ])('rejects %s', (u) => {
+    expect(isPaymentUrl(u)).toBe(false);
+  });
+});
+
 describe('planPay', () => {
   const now = Date.parse('2026-10-21T12:00:00.000Z');
-  const payment = { reference: 'ref_1', status: 'pending', created_at: '2026-10-21T11:50:00Z' };
+  // Started 20 min ago: old enough to verify (A1).
+  const payment = { reference: 'ref_1', status: 'pending', created_at: '2026-10-21T11:40:00Z' };
   const paid: CheckStatus = { hasPaid: true, payment: { ...payment, status: 'completed' } };
   const pending: CheckStatus = { hasPaid: false, hasPending: true, payment };
   const none: CheckStatus = { hasPaid: false, hasPending: false };
-  const stored = (reference: string, ageMs: number) => ({
+  const stored = (
+    reference: string,
+    ageMs: number,
+    paymentUrl = 'https://checkout.paystack.com/abc',
+  ) => ({
     reference,
-    paymentUrl: 'https://checkout.paystack.com/abc',
+    paymentUrl,
     startedAt: now - ageMs,
   });
+  const created = Date.parse(payment.created_at);
 
   it('hasPaid checks the status poll, never done by itself', () => {
-    expect(planPay(paid, stored('ref_1', MIN), now)).toEqual({ do: 'check', reference: 'ref_1' });
-    expect(planPay(paid, null, now)).toEqual({ do: 'check', reference: 'ref_1' });
+    expect(planPay(paid, stored('ref_1', MIN), now)).toEqual({
+      do: 'check',
+      reference: 'ref_1',
+      paymentStartedAt: created,
+    });
+    expect(planPay(paid, null, now)).toEqual({
+      do: 'check',
+      reference: 'ref_1',
+      paymentStartedAt: created,
+    });
   });
 
   it('pending with a fresh stored URL for that reference reopens it', () => {
@@ -90,6 +179,14 @@ describe('planPay', () => {
       do: 'open',
       reference: 'ref_1',
       url: 'https://checkout.paystack.com/abc',
+      paymentStartedAt: now - 23 * HOUR,
+    });
+  });
+
+  it('a stored URL off the Paystack allowlist is never reopened', () => {
+    expect(planPay(pending, stored('ref_1', MIN, 'https://evil.test/pay'), now)).toEqual({
+      do: 'verifyPending',
+      reference: 'ref_1',
     });
   });
 
@@ -109,6 +206,21 @@ describe('planPay', () => {
 
   it('pending with nothing stored verifies', () => {
     expect(planPay(pending, null, now)).toEqual({ do: 'verifyPending', reference: 'ref_1' });
+  });
+
+  it('a pending reference under 15 min old with no URL waits: never verified (A1)', () => {
+    const fresh: CheckStatus = {
+      hasPaid: false,
+      hasPending: true,
+      payment: { ...payment, created_at: '2026-10-21T11:46:00Z' },
+    };
+    expect(planPay(fresh, null, now)).toEqual({ do: 'wait' });
+    const unreadable: CheckStatus = {
+      hasPaid: false,
+      hasPending: true,
+      payment: { ...payment, created_at: 'garbage' },
+    };
+    expect(planPay(unreadable, null, now)).toEqual({ do: 'wait' });
   });
 
   it('neither paid nor pending initialises', () => {
@@ -149,13 +261,23 @@ describe('afterPendingVerify', () => {
 
 describe('flow', () => {
   const review: FlowState = { step: 'review' };
-  const checking = (startedAt: number, attempt: number, nextDelayMs: number): FlowState => ({
+  // The payment itself started at 0 unless a test says otherwise.
+  const checking = (
+    startedAt: number,
+    attempt: number,
+    nextDelayMs: number,
+    paymentStartedAt = 0,
+  ): FlowState => ({
     step: 'checking',
     reference: 'ref_1',
+    paymentStartedAt,
     startedAt,
     attempt,
     nextDelayMs,
   });
+  const inBrowser: FlowState = { step: 'inBrowser', reference: 'ref_1', paymentStartedAt: 0 };
+  const still: FlowState = { step: 'stillChecking', reference: 'ref_1', paymentStartedAt: 0 };
+  const unconfirmed: FlowState = { step: 'unconfirmed', reference: 'ref_1', paymentStartedAt: 0 };
 
   it('pay from review starts', () => {
     expect(flow(review, { type: 'pay' })).toEqual({ step: 'starting' });
@@ -173,28 +295,26 @@ describe('flow', () => {
   });
 
   it.each<FlowState>([
-    { step: 'inBrowser', reference: 'ref_1' },
+    inBrowser,
     checking(0, 0, 2000),
-    { step: 'done' },
-    { step: 'failed' },
-    { step: 'stillChecking', reference: 'ref_1' },
+    { step: 'done', reference: 'ref_1' },
+    { step: 'failed', reference: 'ref_1' },
+    unconfirmed,
+    still,
     { step: 'holdEnded' },
     { step: 'pendingElsewhere' },
-  ])('pay is ignored in $step', (s) => {
+  ])('pay is ignored in $step (Try again goes back to Review first)', (s) => {
     expect(flow(s, { type: 'pay' })).toBe(s);
   });
 
   it('opened moves starting to inBrowser', () => {
-    expect(flow({ step: 'starting' }, { type: 'opened', reference: 'ref_1' })).toEqual({
-      step: 'inBrowser',
-      reference: 'ref_1',
-    });
+    expect(
+      flow({ step: 'starting' }, { type: 'opened', reference: 'ref_1', paymentStartedAt: 0 }),
+    ).toEqual(inBrowser);
   });
 
-  it('returned moves inBrowser to checking from attempt 0', () => {
-    expect(flow({ step: 'inBrowser', reference: 'ref_1' }, { type: 'returned', now: 500 })).toEqual(
-      checking(500, 0, 2000),
-    );
+  it('returned moves inBrowser to checking: the first status poll is 2 s later', () => {
+    expect(flow(inBrowser, { type: 'returned', now: 500 })).toEqual(checking(500, 0, 2000));
   });
 
   it('startFailed moves starting to startError', () => {
@@ -208,14 +328,17 @@ describe('flow', () => {
   });
 
   it('paid from starting checks the status poll, never done by itself', () => {
-    expect(flow({ step: 'starting' }, { type: 'paid', reference: 'ref_1', now: 700 })).toEqual(
-      checking(700, 0, 2000),
-    );
+    expect(
+      flow(
+        { step: 'starting' },
+        { type: 'paid', reference: 'ref_1', paymentStartedAt: 0, now: 700 },
+      ),
+    ).toEqual(checking(700, 0, 2000));
   });
 
   it('paid outside starting is ignored', () => {
     const s: FlowState = { step: 'review' };
-    expect(flow(s, { type: 'paid', reference: 'ref_1', now: 1 })).toBe(s);
+    expect(flow(s, { type: 'paid', reference: 'ref_1', paymentStartedAt: 0, now: 1 })).toBe(s);
   });
 
   it('pendingElsewhere ends starting', () => {
@@ -227,13 +350,23 @@ describe('flow', () => {
   it('verdict paid is done', () => {
     expect(flow(checking(0, 2, 5000), { type: 'verdict', verdict: 'paid', now: 9000 })).toEqual({
       step: 'done',
+      reference: 'ref_1',
     });
   });
 
-  it('verdict failed is failed', () => {
-    expect(flow(checking(0, 2, 5000), { type: 'verdict', verdict: 'failed', now: 9000 })).toEqual({
-      step: 'failed',
-    });
+  it('verdict failed on a payment 15 min old or more is failed', () => {
+    expect(
+      flow(checking(0, 2, 5000), { type: 'verdict', verdict: 'failed', now: 15 * MIN }),
+    ).toEqual({ step: 'failed', reference: 'ref_1' });
+  });
+
+  it('verdict failed on a payment under 15 min old is unconfirmed, never failed (A1b)', () => {
+    expect(
+      flow(checking(0, 2, 5000), { type: 'verdict', verdict: 'failed', now: 15 * MIN - 1 }),
+    ).toEqual(unconfirmed);
+    expect(
+      flow(checking(0, 2, 5000, NaN), { type: 'verdict', verdict: 'failed', now: HOUR }),
+    ).toEqual({ step: 'unconfirmed', reference: 'ref_1', paymentStartedAt: NaN });
   });
 
   it.each(['pending', 'unknown'] as const)(
@@ -245,7 +378,7 @@ describe('flow', () => {
     },
   );
 
-  it('the first status poll after entering checking counts as attempt 1, 3 s later', () => {
+  it('the second status poll comes 3 s after the first', () => {
     expect(flow(checking(0, 0, 2000), { type: 'verdict', verdict: 'pending', now: 2000 })).toEqual(
       checking(0, 1, 3000),
     );
@@ -260,21 +393,19 @@ describe('flow', () => {
   it('exhausting polls becomes stillChecking', () => {
     expect(
       flow(checking(0, 12, 15000), { type: 'verdict', verdict: 'pending', now: 170000 }),
-    ).toEqual({
-      step: 'stillChecking',
-      reference: 'ref_1',
-    });
+    ).toEqual(still);
   });
 
   it('verdict outside checking is ignored', () => {
-    const s: FlowState = { step: 'inBrowser', reference: 'ref_1' };
-    expect(flow(s, { type: 'verdict', verdict: 'paid', now: 1 })).toBe(s);
+    expect(flow(inBrowser, { type: 'verdict', verdict: 'paid', now: 1 })).toBe(inBrowser);
   });
 
   it('checkAgain from stillChecking restarts checking', () => {
-    expect(
-      flow({ step: 'stillChecking', reference: 'ref_1' }, { type: 'checkAgain', now: 200000 }),
-    ).toEqual(checking(200000, 0, 2000));
+    expect(flow(still, { type: 'checkAgain', now: 200000 })).toEqual(checking(200000, 0, 2000));
+  });
+
+  it('checkAgain from unconfirmed polls the same reference again', () => {
+    expect(flow(unconfirmed, { type: 'checkAgain', now: 9000 })).toEqual(checking(9000, 0, 2000));
   });
 
   it('checkAgain from pendingElsewhere runs the pay plan again', () => {
@@ -284,8 +415,8 @@ describe('flow', () => {
   });
 
   it.each<FlowState>([
-    { step: 'failed' },
-    { step: 'stillChecking', reference: 'ref_1' },
+    { step: 'failed', reference: 'ref_1' },
+    still,
     { step: 'pendingElsewhere' },
     { step: 'startError', words: 'x', action: 'tryAgain' },
   ])('retry from $step goes back to review', (s) => {
@@ -294,9 +425,10 @@ describe('flow', () => {
 
   it.each<FlowState>([
     { step: 'starting' },
-    { step: 'inBrowser', reference: 'ref_1' },
+    inBrowser,
     checking(0, 1, 3000),
-    { step: 'done' },
+    { step: 'done', reference: 'ref_1' },
+    unconfirmed,
     { step: 'holdEnded' },
   ])('retry in $step is ignored', (s) => {
     expect(flow(s, { type: 'retry' })).toBe(s);
@@ -318,9 +450,10 @@ describe('flow', () => {
 
   it.each<FlowState>([
     { step: 'starting' },
-    { step: 'inBrowser', reference: 'ref_1' },
-    { step: 'stillChecking', reference: 'ref_1' },
-    { step: 'done' },
+    inBrowser,
+    still,
+    unconfirmed,
+    { step: 'done', reference: 'ref_1' },
   ])('holdExpired in $step is ignored', (s) => {
     expect(flow(s, { type: 'holdExpired' })).toBe(s);
   });

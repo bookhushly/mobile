@@ -184,6 +184,27 @@ describe('eventProblems', () => {
   });
 });
 
+describe('an unreadable event price (A7)', () => {
+  it('blocks a package-less listing and is never free', () => {
+    const s = event({ qty: { x: 1 } });
+    expect(eventProblems(s, [], [], false, null)).toContain('priceUnavailable');
+    expect(isFreeOrder(s, [], null)).toBe(false);
+    expect(eventSubtotal({ x: 2 }, [], null)).toBe(0);
+  });
+
+  it('does not matter when the listing has packages', () => {
+    expect(eventProblems(event(), [pkg('A', 1000, 5)], [], false, null)).not.toContain(
+      'priceUnavailable',
+    );
+  });
+
+  it('a readable zero price is free and not flagged', () => {
+    expect(eventProblems(event({ qty: { x: 1 } }), [], [], true, 0)).not.toContain(
+      'priceUnavailable',
+    );
+  });
+});
+
 describe('isFreeOrder and eventSubtotal', () => {
   it('is free when all selected packages cost 0', () => {
     expect(isFreeOrder(event({ qty: { A: 2, B: 1 } }), [pkg('A', 0), pkg('B', 0)], 0)).toBe(true);

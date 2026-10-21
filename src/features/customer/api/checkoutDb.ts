@@ -36,7 +36,11 @@ const HOTEL_EXTRA_COLUMNS =
   'breakfast_offered, airport_transfer_enabled, airport_prices, airport_transfer_fee';
 const BREAKFAST_COLUMNS = 'id, name, price_per_person, is_available';
 const APARTMENT_EXTRA_COLUMNS = 'airport_transfer_enabled, airport_prices, minimum_stay';
-const RECENT_COLUMNS = 'id, created_at';
+const RECENT_COLUMNS = 'id, created_at, status';
+/** Newest rows read for the lost-answer lookup; the status filter runs here (A3). */
+const RECENT_LIMIT = 5;
+/** A paid create writes `pending`; the free route writes `confirmed` (web /event/free). */
+const RECENT_STATUSES: ReadonlySet<string> = new Set(['pending', 'confirmed']);
 
 const questionsRow = z.object({ custom_questions: z.unknown() }).nullable();
 // An unusable price (a string like "TBA", null) is dropped, not coerced to 0.
@@ -75,7 +79,9 @@ const apartmentRow = z
     minimum_stay: numeric.nullable().catch(null),
   })
   .nullable();
-const recentRows = z.array(z.object({ id: z.string(), created_at: z.string() }));
+const recentRows = z.array(
+  z.object({ id: z.string(), created_at: z.string(), status: z.string().nullable() }),
+);
 
 // A failed read throws: an empty list would let the form skip required questions or extras.
 function unwrap<T>(r: Result<T, { kind: string }>): T {
@@ -138,21 +144,25 @@ export function createCheckoutDb(client: SupabaseLike): CheckoutDb {
         minimumStay: row?.minimum_stay != null && row.minimum_stay >= 1 ? row.minimum_stay : 1,
       };
     },
-    // Newest pending event booking since `sinceIso`: how a create that timed out is recovered.
+    // Newest pending or confirmed (free) event booking since `sinceIso`: how a create that
+    // timed out is recovered (A3: a free registration is `confirmed`, so it is found too).
     async findRecentEventBooking(userId, listingId, sinceIso) {
       const q = client
         .from('event_bookings')
         .select(RECENT_COLUMNS)
         .eq('customer_id', userId)
         .eq('listing_id', listingId)
-        .eq('status', 'pending')
         .order('created_at', { ascending: false })
-        .limit(1);
-      // `since` is applied here (the query slice has no `gte`): the newest row decides, so it is
-      // equivalent. Compared as instants: Postgres and the client format timestamps differently.
+        .limit(RECENT_LIMIT);
+      // `since` and the status are applied here (the query slice has no `gte` or `in`), newest
+      // first. Compared as instants: Postgres and the client format timestamps differently.
       const since = Date.parse(sinceIso);
-      const newest = unwrap(await read(q, recentRows))[0];
-      return newest !== undefined && Date.parse(newest.created_at) >= since ? newest : null;
+      const found = unwrap(await read(q, recentRows)).find(
+        (r) => r.status !== null && RECENT_STATUSES.has(r.status),
+      );
+      return found !== undefined && Date.parse(found.created_at) >= since
+        ? { id: found.id, created_at: found.created_at }
+        : null;
     },
   };
 }

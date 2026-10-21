@@ -10,6 +10,8 @@ import {
   verifyPayment,
 } from '@/features/customer/api/checkoutApi';
 import { customerKeys } from '@/features/customer/hooks/customerKeys';
+import { isPayScreenOpen } from '@/features/customer/hooks/openPayScreens';
+import type { RowPayState } from '@/features/customer/domain/checkout/paymentFlow';
 import { usePayment } from '@/features/customer/hooks/usePayment';
 import { checkoutStore, type CheckoutEntry } from '@/features/customer/offline/checkoutStore';
 import type {
@@ -47,6 +49,7 @@ const cancelMock = jest.mocked(cancelBooking);
 const openMock = jest.mocked(WebBrowser.openBrowserAsync);
 
 const NOW = Date.parse('2026-10-21T12:00:00Z');
+const MIN = 60_000;
 const URL1 = 'https://checkout.paystack.com/abc';
 const BOOKING = 'b1';
 
@@ -133,7 +136,13 @@ const advance = (ms: number) =>
 async function setup(
   e: CheckoutEntry | null = entry(),
   kind: 'hotel' | 'event' = 'hotel',
-  row: { createdAt?: string | null; title?: string; total?: number } = {},
+  row: {
+    createdAt?: string | null;
+    title?: string;
+    total?: number;
+    rowState?: RowPayState | null;
+    fromSelect?: boolean;
+  } = {},
 ) {
   if (e !== null) await checkoutStore.put(e);
   const qc = makeQueryClient();
@@ -147,6 +156,8 @@ async function setup(
         email: 'ada@example.com',
         ...(row.title !== undefined ? { title: row.title } : {}),
         ...(row.total !== undefined ? { total: row.total } : {}),
+        rowState: row.rowState === undefined ? 'unpaid' : row.rowState,
+        fromSelect: row.fromSelect ?? true,
       }),
     { wrapper: wrapper(qc) },
   );
@@ -175,7 +186,11 @@ describe('usePayment', () => {
     expect(checkMock).toHaveBeenCalledTimes(1);
     expect(initMock).toHaveBeenCalledTimes(1);
     expect(initMock).toHaveBeenCalledWith({}, 'hotel', BOOKING, 'ada@example.com');
-    expect(result.current.state).toEqual({ step: 'inBrowser', reference: 'ref1' });
+    expect(result.current.state).toEqual({
+      step: 'inBrowser',
+      reference: 'ref1',
+      paymentStartedAt: NOW,
+    });
   });
 
   it('pending reference with fresh stored url reopens it without initialise', async () => {
@@ -191,7 +206,11 @@ describe('usePayment', () => {
     expect(initMock).not.toHaveBeenCalled();
     expect(verifyMock).not.toHaveBeenCalled();
     expect(openMock).toHaveBeenCalledWith(URL1, { createTask: false, showInRecents: false });
-    expect(result.current.state).toEqual({ step: 'inBrowser', reference: 'ref1' });
+    expect(result.current.state).toEqual({
+      step: 'inBrowser',
+      reference: 'ref1',
+      paymentStartedAt: NOW - 120_000,
+    });
   });
 
   it('entry is written before the browser opens', async () => {
@@ -242,8 +261,10 @@ describe('usePayment', () => {
     });
     await flush();
     expect(result.current.state.step).toBe('checking');
-    expect(verifyMock).toHaveBeenCalledTimes(1);
-    expect(verifyMock).toHaveBeenCalledWith({}, 'ref1');
+    // A1: never verify a payment the customer may still be making; status polls only.
+    await advance(2000);
+    expect(stateMock).toHaveBeenCalledWith({}, 'ref1');
+    expect(verifyMock).not.toHaveBeenCalled();
   });
 
   it('android starts checking on AppState active', async () => {
@@ -262,13 +283,16 @@ describe('usePayment', () => {
     await act(() => {
       onAppState?.('background');
     });
-    expect(verifyMock).not.toHaveBeenCalled();
+    await advance(5000);
+    expect(stateMock).not.toHaveBeenCalled();
     await act(() => {
       onAppState?.('active');
     });
     await flush();
     expect(result.current.state.step).toBe('checking');
-    expect(verifyMock).toHaveBeenCalledTimes(1);
+    await advance(2000);
+    expect(stateMock).toHaveBeenCalledTimes(1);
+    expect(verifyMock).not.toHaveBeenCalled();
   });
 
   it('polls status on the schedule and ends done only when fulfilled', async () => {
@@ -276,8 +300,7 @@ describe('usePayment', () => {
     checkMock.mockResolvedValue(noPayment);
     initMock.mockResolvedValue(initialized('ref1'));
     openMock.mockResolvedValue({ type: WebBrowser.WebBrowserResultType.CANCEL });
-    // Verify says completed, which is not fulfilled: Done waits for the status poll.
-    verifyMock.mockResolvedValue(verified(true, 'completed'));
+    // Completed but not fulfilled: Done waits for a fulfilled status poll.
     stateMock
       .mockResolvedValueOnce(polled('completed', false))
       .mockResolvedValueOnce(polled('completed', true));
@@ -286,16 +309,17 @@ describe('usePayment', () => {
       result.current.pay();
     });
     await flush();
-    expect(result.current.state).toMatchObject({ step: 'checking', attempt: 1 });
+    expect(result.current.state).toMatchObject({ step: 'checking', attempt: 0 });
     expect(stateMock).not.toHaveBeenCalled();
-    await advance(2999);
+    await advance(1999);
     expect(stateMock).not.toHaveBeenCalled();
     await advance(1);
     expect(stateMock).toHaveBeenCalledTimes(1);
-    expect(result.current.state).toMatchObject({ step: 'checking', attempt: 2 });
-    await advance(5000);
+    expect(result.current.state).toMatchObject({ step: 'checking', attempt: 1 });
+    await advance(3000);
     expect(stateMock).toHaveBeenCalledTimes(2);
-    expect(result.current.state).toEqual({ step: 'done' });
+    expect(verifyMock).not.toHaveBeenCalled();
+    expect(result.current.state).toEqual({ step: 'done', reference: 'ref1' });
     expect(await checkoutStore.get(USER, 'hotel', BOOKING)).toBeNull();
     expect(invalidate).toHaveBeenCalledWith({ queryKey: customerKeys.bookings(USER) });
     expect(invalidate).toHaveBeenCalledWith({
@@ -304,24 +328,67 @@ describe('usePayment', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: customerKeys.wallet(USER) });
   });
 
-  it('failed verdict shows failed and keeps the entry with its payment cleared', async () => {
+  it('a failed verdict on a fresh payment is unconfirmed: payment kept, Check again polls (A1b)', async () => {
     withPlatform('ios');
     checkMock.mockResolvedValue(noPayment);
     initMock.mockResolvedValue(initialized('ref1'));
     openMock.mockResolvedValue({ type: WebBrowser.WebBrowserResultType.CANCEL });
     stateMock.mockResolvedValue(polled('failed', false));
-    const { result, invalidate } = await setup();
+    const { result } = await setup();
     await act(() => {
       result.current.pay();
     });
     await flush();
-    await advance(3000);
-    expect(result.current.state).toEqual({ step: 'failed' });
+    await advance(2000);
+    expect(result.current.state).toEqual({
+      step: 'unconfirmed',
+      reference: 'ref1',
+      paymentStartedAt: NOW,
+    });
+    expect((await checkoutStore.get(USER, 'hotel', BOOKING))?.payment?.reference).toBe('ref1');
+    // Pay does nothing here: the customer checks again or goes to Bookings.
+    result.current.pay();
+    await flush();
+    expect(initMock).toHaveBeenCalledTimes(1);
+    stateMock.mockResolvedValue(polled('pending', false));
+    await act(() => {
+      result.current.checkAgain();
+    });
+    expect(result.current.state.step).toBe('checking');
+    await advance(2000);
+    expect(stateMock).toHaveBeenCalledTimes(2);
+    expect(verifyMock).not.toHaveBeenCalled();
+  });
+
+  it('failed on a payment 15 min old: entry kept, payment cleared; Try again goes to Review (A1d)', async () => {
+    withPlatform('ios');
+    const started = NOW - 20 * MIN;
+    checkMock.mockResolvedValue(pendingRef('ref1', new Date(started).toISOString()));
+    openMock.mockResolvedValue({ type: WebBrowser.WebBrowserResultType.CANCEL });
+    stateMock.mockResolvedValue(polled('failed', false));
+    const stored = { reference: 'ref1', paymentUrl: URL1, startedAt: started };
+    const { result, invalidate } = await setup(
+      entry({ payment: stored, paymentEverStarted: true }),
+    );
+    await act(() => {
+      result.current.pay();
+    });
+    await flush();
+    await advance(2000);
+    expect(result.current.state).toEqual({ step: 'failed', reference: 'ref1' });
     expect(await checkoutStore.get(USER, 'hotel', BOOKING)).toEqual(
       entry({ payment: null, paymentEverStarted: true }),
     );
     expect(invalidate).toHaveBeenCalledWith({ queryKey: customerKeys.bookings(USER) });
-    // Try again: the new payment is on disk before the browser opens.
+    // Try again: back to Review, nothing sent until Pay is tapped.
+    await act(() => {
+      result.current.retry();
+    });
+    expect(result.current.state).toEqual({ step: 'review' });
+    expect(checkMock).toHaveBeenCalledTimes(1);
+    expect(initMock).not.toHaveBeenCalled();
+    // Pay: the new payment is on disk before the browser opens.
+    checkMock.mockResolvedValue(noPayment);
     initMock.mockResolvedValue(initialized('ref2'));
     const seen: (string | null)[] = [];
     openMock.mockImplementation(async () => {
@@ -333,8 +400,35 @@ describe('usePayment', () => {
       result.current.pay();
     });
     await flush();
-    expect(initMock).toHaveBeenCalledTimes(2);
+    expect(initMock).toHaveBeenCalledTimes(1);
     expect(seen).toEqual(['ref2']);
+  });
+
+  it('recentAttempt: a payment started under 15 min ago warns on Review', async () => {
+    withPlatform('ios');
+    const stored = { reference: 'ref1', paymentUrl: URL1, startedAt: NOW - MIN };
+    const { result } = await setup(entry({ payment: stored, paymentEverStarted: true }));
+    expect(result.current.recentAttempt).toBe(true);
+    await advance(14 * MIN);
+    expect(result.current.recentAttempt).toBe(false);
+    await checkoutStore.wipe();
+    const none = await setup(entry());
+    expect(none.result.current.recentAttempt).toBe(false);
+  });
+
+  it('a cancelled or paid row never pays', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(noPayment);
+    for (const rowState of ['cancelled', 'paid'] as const) {
+      const h = await setup(entry(), 'hotel', { rowState });
+      expect(h.result.current.canPay).toBe(false);
+      await act(() => {
+        h.result.current.pay();
+      });
+      await flush();
+      await h.unmount();
+    }
+    expect(checkMock).not.toHaveBeenCalled();
   });
 
   it('no entry: an entry with the payment is written before the browser opens', async () => {
@@ -414,7 +508,8 @@ describe('usePayment', () => {
       result.current.pay();
     });
     await flush();
-    expect(verifyMock).toHaveBeenCalledWith({}, 'ref9');
+    // A1: a reference under 15 min old is never verified.
+    expect(verifyMock).not.toHaveBeenCalled();
     expect(initMock).not.toHaveBeenCalled();
     expect(result.current.state).toEqual({ step: 'pendingElsewhere' });
     // Check again re-runs check-status before anything else.
@@ -468,16 +563,68 @@ describe('usePayment', () => {
     expect(initMock).not.toHaveBeenCalled();
   });
 
-  it('leave on review cancels the unpaid booking', async () => {
+  it('leave on review cancels the unpaid booking once check-status shows no payment', async () => {
     withPlatform('ios');
+    checkMock.mockResolvedValue(noPayment);
     const { result } = await setup();
     await act(() => {
       result.current.leave();
     });
     await flush();
+    expect(checkMock).toHaveBeenCalledWith({}, 'hotel', BOOKING);
     expect(cancelMock).toHaveBeenCalledWith({}, 'hotel', BOOKING);
     expect(await checkoutStore.get(USER, 'hotel', BOOKING)).toBeNull();
   });
+
+  it.each([
+    ['a pending payment', pendingRef('ref9', new Date(NOW - MIN).toISOString())],
+    [
+      'a paid one',
+      ok<CheckStatus>({
+        hasPaid: true,
+        payment: { reference: 'ref9', status: 'completed', created_at: '2026-10-21T11:00:00Z' },
+      }),
+    ],
+    ['no answer', err<ApiError>({ kind: 'timeout' })],
+  ])('leave never cancels when check-status shows %s (A2a)', async (_name, answer) => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(answer);
+    const { result } = await setup();
+    await act(() => {
+      result.current.leave();
+    });
+    await flush();
+    expect(cancelMock).not.toHaveBeenCalled();
+    expect(await checkoutStore.get(USER, 'hotel', BOOKING)).not.toBeNull();
+  });
+
+  it('leave from a Review not reached from Select never cancels, even with an entry (I1)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(noPayment);
+    const { result } = await setup(entry(), 'hotel', { fromSelect: false });
+    expect(result.current.willCancelOnLeave).toBe(false);
+    await act(() => {
+      result.current.leave();
+    });
+    await flush();
+    expect(checkMock).not.toHaveBeenCalled();
+    expect(cancelMock).not.toHaveBeenCalled();
+  });
+
+  it.each<RowPayState | null>(['paid', 'cancelled', 'other', null])(
+    'leave never cancels when the row reads %s (A2a)',
+    async (rowState) => {
+      withPlatform('ios');
+      checkMock.mockResolvedValue(noPayment);
+      const { result } = await setup(entry(), 'hotel', { rowState });
+      expect(result.current.willCancelOnLeave).toBe(false);
+      await act(() => {
+        result.current.leave();
+      });
+      await flush();
+      expect(cancelMock).not.toHaveBeenCalled();
+    },
+  );
 
   it('leave after payment started never cancels', async () => {
     withPlatform('ios');
@@ -585,6 +732,14 @@ describe('usePayment', () => {
       result.current.leave();
     });
     expect(cancelMock).not.toHaveBeenCalled();
+  });
+
+  it('marks its booking open for resume while mounted', async () => {
+    withPlatform('ios');
+    const { unmount } = await setup();
+    expect(isPayScreenOpen(USER, 'hotel', BOOKING)).toBe(true);
+    await unmount();
+    expect(isPayScreenOpen(USER, 'hotel', BOOKING)).toBe(false);
   });
 
   it('clears the poll timer on unmount', async () => {

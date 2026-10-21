@@ -85,16 +85,24 @@ export function createCheckoutStore(kv: KeyValue, now: () => number = Date.now) 
     }
   };
 
+  /**
+   * A settle for `expected` applies only while the entry still holds that reference (or none): a
+   * newer payment written meanwhile is never cleared by an older one's answer (R8, A4).
+   */
+  const holds = (e: CheckoutEntry, expected: string | undefined) =>
+    expected === undefined || e.payment === null || e.payment.reference === expected;
+
   const update = (
     userId: string,
     kind: CheckoutKind,
     bookingId: string,
     change: (e: CheckoutEntry) => CheckoutEntry,
+    expected?: string,
   ): Promise<void> =>
     enqueue(async () => {
       const key = keyOf(userId, kind, bookingId);
       const entry = await read(key);
-      if (entry) await kv.set(key, JSON.stringify(change(entry)));
+      if (entry && holds(entry, expected)) await kv.set(key, JSON.stringify(change(entry)));
     });
 
   return {
@@ -125,12 +133,33 @@ export function createCheckoutStore(kv: KeyValue, now: () => number = Date.now) 
     markStarted(userId: string, kind: CheckoutKind, bookingId: string): Promise<void> {
       return update(userId, kind, bookingId, (e) => ({ ...e, paymentEverStarted: true }));
     },
-    /** A failed payment: the entry (and its breakdown) stays for Try again; the flag stays. */
-    clearPayment(userId: string, kind: CheckoutKind, bookingId: string): Promise<void> {
-      return update(userId, kind, bookingId, (e) => ({ ...e, payment: null }));
+    /**
+     * A failed payment: the entry (and its breakdown) stays for Try again; the flag stays. With
+     * `expectedReference`, only while the entry still holds that payment.
+     */
+    clearPayment(
+      userId: string,
+      kind: CheckoutKind,
+      bookingId: string,
+      expectedReference?: string,
+    ): Promise<void> {
+      return update(userId, kind, bookingId, (e) => ({ ...e, payment: null }), expectedReference);
     },
-    drop(userId: string, kind: CheckoutKind, bookingId: string): Promise<void> {
-      return enqueue(() => removeKey(keyOf(userId, kind, bookingId)));
+    /** With `expectedReference`, only while the entry holds that payment (or none). */
+    drop(
+      userId: string,
+      kind: CheckoutKind,
+      bookingId: string,
+      expectedReference?: string,
+    ): Promise<void> {
+      return enqueue(async () => {
+        const key = keyOf(userId, kind, bookingId);
+        if (expectedReference !== undefined) {
+          const entry = await read(key);
+          if (entry && !holds(entry, expectedReference)) return;
+        }
+        await removeKey(key);
+      });
     },
     /** This user's live entries; older than 24 h (or unreadable) are deleted, not returned. */
     list(userId: string): Promise<CheckoutEntry[]> {

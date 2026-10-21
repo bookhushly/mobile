@@ -5,8 +5,10 @@ import type { ReactElement, ReactNode } from 'react';
 import CustomerTabsLayout from '@/app/(customer)/(tabs)/_layout';
 import CustomerLayout, { unstable_settings } from '@/app/(customer)/_layout';
 import CheckInCodeRoute from '@/app/(customer)/check-in-code/[bookingId]';
+import CheckoutRoute from '@/app/(customer)/checkout/[kind]/[listingId]';
 import ListingRoute from '@/app/(customer)/listing/[kind]/[id]';
 import MyBookingRoute from '@/app/(customer)/my-booking/[kind]/[id]';
+import PayRoute from '@/app/(customer)/pay/[kind]/[bookingId]';
 import TicketsRoute from '@/app/(customer)/tickets/[bookingId]';
 import type { CheckoutTarget } from '@/features/customer/screens/ListingScreen';
 import type { PayHandlers } from '@/features/customer/ui/BookingFrame';
@@ -101,6 +103,24 @@ jest.mock('@/features/customer/screens/TicketsScreen', () => ({
 jest.mock('@/features/customer/screens/CheckInCodeScreen', () => ({
   CheckInCodeScreen: (p: { userId: string; bookingId: string | null }) => {
     mockCodes.checkIn = { userId: p.userId, bookingId: p.bookingId };
+    return null;
+  },
+}));
+
+// Select and Pay too: the routes only hand over where Pay was reached from (A2a).
+const mockCheckout: {
+  onCreated?: (bookingId: string, free: boolean) => void;
+  pay?: { free: boolean; fromSelect: boolean };
+} = {};
+jest.mock('@/features/customer/screens/SelectScreen', () => ({
+  SelectScreen: (p: { onCreated: (bookingId: string, free: boolean) => void }) => {
+    mockCheckout.onCreated = p.onCreated;
+    return null;
+  },
+}));
+jest.mock('@/features/customer/screens/PayScreen', () => ({
+  PayScreen: (p: { free: boolean; fromSelect: boolean }) => {
+    mockCheckout.pay = { free: p.free, fromSelect: p.fromSelect };
     return null;
   },
 }));
@@ -214,6 +234,31 @@ it('hands the details screen a parsed booking', async () => {
   mockNav.params = { kind: 'hotel', id: ID };
   await render(<MyBookingRoute />);
   expect(mockScreen.booking).toEqual({ kind: 'hotel', id: ID });
+});
+
+it('Select hands a paid booking to Pay with from=select; a free one with free=1 only (A2a)', async () => {
+  const { router } = jest.requireMock<{ router: { replace: jest.Mock } }>('expo-router');
+  mockNav.params = { kind: 'event', listingId: ID };
+  await render(<CheckoutRoute />);
+  mockCheckout.onCreated?.('b1', false);
+  expect(router.replace).toHaveBeenLastCalledWith({
+    pathname: '/pay/[kind]/[bookingId]',
+    params: { kind: 'event', bookingId: 'b1', from: 'select' },
+  });
+  mockCheckout.onCreated?.('b2', true);
+  expect(router.replace).toHaveBeenLastCalledWith({
+    pathname: '/pay/[kind]/[bookingId]',
+    params: { kind: 'event', bookingId: 'b2', free: '1' },
+  });
+});
+
+it('Pay reads from=select; anything else is not from Select (A2a)', async () => {
+  mockNav.params = { kind: 'hotel', bookingId: ID, from: 'select' };
+  await render(<PayRoute />);
+  expect(mockCheckout.pay).toEqual({ free: false, fromSelect: true });
+  mockNav.params = { kind: 'hotel', bookingId: ID, from: 'bookings' };
+  await render(<PayRoute />);
+  expect(mockCheckout.pay).toEqual({ free: false, fromSelect: false });
 });
 
 it('Pay now opens Review and Book again opens the listing (P21)', async () => {

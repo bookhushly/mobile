@@ -30,12 +30,12 @@ describe('checkoutApi', () => {
     });
   });
 
-  it('createStay sends Idempotency-Key and idempotent:true', async () => {
+  it('createStay sends Idempotency-Key and is never auto-retried (A5)', async () => {
     const { client, calls } = fakeRequester({ error: { kind: 'network' } });
     await createStay(client, 'apartment', { a: 1 }, 'key-1');
     expect(calls[0]?.path).toBe('/api/bookings/apartment');
     expect(calls[0]?.opts.method).toBe('POST');
-    expect(calls[0]?.opts.idempotent).toBe(true);
+    expect(calls[0]?.opts.idempotent).toBe(false);
     expect(calls[0]?.opts.headers).toEqual({ 'Idempotency-Key': 'key-1' });
     expect(calls[0]?.opts.body).toEqual({ a: 1 });
   });

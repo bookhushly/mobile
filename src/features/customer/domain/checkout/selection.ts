@@ -37,6 +37,8 @@ export type EventProblem =
   | { question: string }
   /** A paid order whose promo covers it: /create refuses ₦0 and /free ignores promos (P19). */
   | 'promoZero'
+  /** A package-less event whose price couldn't be read: never treated as free (A7). */
+  | 'priceUnavailable'
   | 'guestName'
   | 'guestEmail'
   | 'guestPhone';
@@ -128,10 +130,11 @@ export function eventProblems(
   packages: TicketPackage[],
   questions: CustomQuestion[],
   free: boolean,
-  /** A package-less listing's ticket price, for the promo check. */
-  listingPrice = 0,
+  /** A package-less listing's ticket price, for the promo check; null when unreadable. */
+  listingPrice: number | null = 0,
 ): EventProblem[] {
   const out: EventProblem[] = [];
+  if (packages.length === 0 && listingPrice === null) out.push('priceUnavailable');
   const lines = validLines(s.qty, packages);
   const total = Object.values(lines).reduce((a, b) => a + b, 0);
   if (total === 0) out.push('noTickets');
@@ -154,29 +157,33 @@ export function eventProblems(
   return out;
 }
 
-/** Preview only; the server recomputes. A package-less listing prices every ticket at `listingPrice`. */
+/**
+ * Preview only; the server recomputes. A package-less listing prices every ticket at
+ * `listingPrice` (an unreadable price previews as 0, but is never free: see `isFreeOrder`).
+ */
 export function eventSubtotal(
   qty: Record<string, number>,
   packages: TicketPackage[],
-  listingPrice: number,
+  listingPrice: number | null,
 ): number {
   const lines = ticketLines(qty);
   if (packages.length === 0) {
-    return Object.values(lines).reduce((a, b) => a + b, 0) * listingPrice;
+    return Object.values(lines).reduce((a, b) => a + b, 0) * (listingPrice ?? 0);
   }
   return packages.reduce((sum, p) => sum + (lines[p.name] ?? 0) * p.price, 0);
 }
 
 /**
  * Free means the subtotal before any promo is 0 (P19 amended 2026-10-21: the free route ignores
- * promos and refuses paid packages). A priced package-less listing never is.
+ * promos and refuses paid packages). A priced package-less listing never is, nor one whose price
+ * couldn't be read (A7: `/free` doesn't check the price).
  */
 export function isFreeOrder(
   s: EventSelection,
   packages: TicketPackage[],
-  listingPrice: number,
+  listingPrice: number | null,
 ): boolean {
-  if (packages.length === 0 && listingPrice > 0) return false;
+  if (packages.length === 0 && (listingPrice === null || listingPrice > 0)) return false;
   if (Object.keys(validLines(s.qty, packages)).length === 0) return false;
   return eventSubtotal(s.qty, packages, listingPrice) === 0;
 }

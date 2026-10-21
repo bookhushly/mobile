@@ -122,30 +122,56 @@ describe('checkoutDb.eventQuestions', () => {
 });
 
 describe('checkoutDb.findRecentEventBooking', () => {
-  it('filters by user, listing, pending and since', async () => {
+  it('filters by user and listing, newest first, and keeps pending or confirmed since', async () => {
     const { db, logs } = fake({
-      event_bookings: { data: [{ id: 'e1', created_at: '2026-10-21T10:00:00.123+00:00' }] },
+      event_bookings: {
+        data: [{ id: 'e1', created_at: '2026-10-21T10:00:00.123+00:00', status: 'pending' }],
+      },
     });
     expect(await db.findRecentEventBooking('u1', 'l1', '2026-10-21T09:59:00.000Z')).toEqual({
       id: 'e1',
       created_at: '2026-10-21T10:00:00.123+00:00',
     });
-    expect(logs[0]?.columns).toBe('id, created_at');
+    expect(logs[0]?.columns).toBe('id, created_at, status');
     expect(logs[0]?.calls).toEqual([
       ['eq', 'customer_id', 'u1'],
       ['eq', 'listing_id', 'l1'],
-      ['eq', 'status', 'pending'],
       ['order', 'created_at', { ascending: false }],
-      ['limit', 1],
+      ['limit', 5],
     ]);
   });
 
-  it('is null when the newest pending booking predates since, or none exist', async () => {
+  it('finds a free registration, which is written confirmed (A3)', async () => {
+    const { db } = fake({
+      event_bookings: {
+        data: [
+          { id: 'e2', created_at: '2026-10-21T10:00:01+00:00', status: 'cancelled' },
+          { id: 'e1', created_at: '2026-10-21T10:00:00+00:00', status: 'confirmed' },
+        ],
+      },
+    });
+    expect(await db.findRecentEventBooking('u', 'l', '2026-10-21T09:59:00.000Z')).toEqual({
+      id: 'e1',
+      created_at: '2026-10-21T10:00:00+00:00',
+    });
+  });
+
+  it('is null when the newest match predates since, or none match', async () => {
     const old = fake({
-      event_bookings: { data: [{ id: 'e1', created_at: '2026-10-21T09:00:00+00:00' }] },
+      event_bookings: {
+        data: [{ id: 'e1', created_at: '2026-10-21T09:00:00+00:00', status: 'pending' }],
+      },
     });
     expect(await old.db.findRecentEventBooking('u', 'l', '2026-10-21T09:59:00.000Z')).toBeNull();
     const none = fake({ event_bookings: { data: [] } });
     expect(await none.db.findRecentEventBooking('u', 'l', '2026-10-21T09:59:00.000Z')).toBeNull();
+    const cancelled = fake({
+      event_bookings: {
+        data: [{ id: 'e1', created_at: '2026-10-21T10:00:00+00:00', status: 'cancelled' }],
+      },
+    });
+    expect(
+      await cancelled.db.findRecentEventBooking('u', 'l', '2026-10-21T09:59:00.000Z'),
+    ).toBeNull();
   });
 });

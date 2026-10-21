@@ -102,6 +102,24 @@ describe('checkout store', () => {
     expect(await store.list('u1')).toEqual([]);
   });
 
+  it('clearPayment and drop with a reference skip an entry holding a newer payment (A4)', async () => {
+    const { store } = make();
+    const ref2 = {
+      reference: 'ref2',
+      paymentUrl: 'https://checkout.paystack.com/b',
+      startedAt: NOW,
+    };
+    await store.put(entry({ payment: ref2, paymentEverStarted: true }));
+    await store.clearPayment('u1', 'hotel', 'b1', 'ref1');
+    await store.drop('u1', 'hotel', 'b1', 'ref1');
+    expect((await store.get('u1', 'hotel', 'b1'))?.payment).toEqual(ref2);
+    await store.clearPayment('u1', 'hotel', 'b1', 'ref2');
+    expect((await store.get('u1', 'hotel', 'b1'))?.payment).toBeNull();
+    // No payment left to protect: a settle for any reference may drop it.
+    await store.drop('u1', 'hotel', 'b1', 'ref1');
+    expect(await store.get('u1', 'hotel', 'b1')).toBeNull();
+  });
+
   it('list drops and deletes a 25-hour-old entry, keeps a fresh one', async () => {
     const { store, kv } = make();
     await store.put(entry({ bookingId: 'old', createdAt: hoursAgo(25) }));

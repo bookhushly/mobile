@@ -93,7 +93,8 @@ export function EventSelect({ event: e, userId, guest, header, onCreated, onRefu
   const lines = ticketLinesOf(e);
   const threshold = lowStockThreshold(e.low_stock_threshold);
   const blocked = BLOCKED[eventStock(e, clock.serverNow())] ?? null;
-  const listingPrice = e.price ?? 0;
+  // Null when unreadable: never free, and Continue stays off (A7).
+  const listingPrice = e.price;
   const chosen = ticketLines(sel.qty);
   const total = Object.values(chosen).reduce((a, b) => a + b, 0);
   const subtotal = eventSubtotal(sel.qty, e.ticket_packages, listingPrice);
@@ -104,10 +105,13 @@ export function EventSelect({ event: e, userId, guest, header, onCreated, onRefu
   const problems = eventProblems(selection, e.ticket_packages, questions, free, listingPrice);
   const shown = tried ? problems : [];
   const missing = new Set(shown.flatMap((p) => (typeof p === 'object' ? [p.question] : [])));
-  // A covering promo is said at once (it blocks Continue); the rest after Continue.
-  const ticketProblem = problems.includes('promoZero')
-    ? 'promoZero'
-    : shown.find((p) => p === 'noTickets' || p === 'tooMany' || p === 'overStock');
+  // An unreadable price or a covering promo is said at once (it blocks Continue); the rest after
+  // Continue.
+  const ticketProblem = problems.includes('priceUnavailable')
+    ? 'priceUnavailable'
+    : problems.includes('promoZero')
+      ? 'promoZero'
+      : shown.find((p) => p === 'noTickets' || p === 'tooMany' || p === 'overStock');
   const refused = create.state.phase === 'refused' ? create.state : null;
   const hasPrices = lines.some((l) => l.price > 0);
 

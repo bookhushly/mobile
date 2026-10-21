@@ -4,15 +4,21 @@ import { useAuth } from '@/features/auth/hooks/useAuth';
 import { bookingRefParams } from '@/features/customer/domain/routeParams';
 import { PayScreen } from '@/features/customer/screens/PayScreen';
 
-// Spec P22: `/pay/{hotel|apartment|event}/{bookingId}[?free=1]`. Anything off-shape is "Booking
-// not found", without a query.
+// Spec P22: `/pay/{hotel|apartment|event}/{bookingId}[?free=1][&from=select]`. Anything off-shape
+// is "Booking not found", without a query. `from=select` is set only by Select's hand-off (A2a).
 export default function PayRoute() {
-  const params = useLocalSearchParams<{ kind: string; bookingId: string; free?: string }>();
+  const params = useLocalSearchParams<{
+    kind: string;
+    bookingId: string;
+    free?: string;
+    from?: string;
+  }>();
   const state = useAuth((s) => s.state);
   return (
     <PayScreen
       booking={bookingRefParams(params.kind, params.bookingId)}
       free={params.free === '1'}
+      fromSelect={params.from === 'select'}
       userId={state.status === 'signedIn' ? state.userId : ''}
       email={state.status === 'signedIn' ? state.email : ''}
       onBack={() => {

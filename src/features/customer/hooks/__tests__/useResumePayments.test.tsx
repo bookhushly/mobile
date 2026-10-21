@@ -7,6 +7,7 @@ import {
   verifyPayment,
 } from '@/features/customer/api/checkoutApi';
 import { customerKeys } from '@/features/customer/hooks/customerKeys';
+import { holdPayScreen } from '@/features/customer/hooks/openPayScreens';
 import { useResumePayments } from '@/features/customer/hooks/useResumePayments';
 import { checkoutStore, type CheckoutEntry } from '@/features/customer/offline/checkoutStore';
 import type { PaymentState, Verified } from '@/features/customer/schemas/checkout';
@@ -31,7 +32,11 @@ const stateMock = jest.mocked(paymentState);
 
 const NOW = Date.parse('2026-10-21T12:00:00Z');
 
-function entry(bookingId: string, reference: string | null): CheckoutEntry {
+const MIN = 60_000;
+/** Old enough to verify (A1: verify only for payments started 15 min ago or more). */
+const OLD = 20 * MIN;
+
+function entry(bookingId: string, reference: string | null, ageMs = MIN): CheckoutEntry {
   return {
     userId: USER,
     kind: 'event',
@@ -46,7 +51,7 @@ function entry(bookingId: string, reference: string | null): CheckoutEntry {
     payment:
       reference === null
         ? null
-        : { reference, paymentUrl: 'https://checkout.paystack.com/x', startedAt: NOW - 60_000 },
+        : { reference, paymentUrl: 'https://checkout.paystack.com/x', startedAt: NOW - ageMs },
     paymentEverStarted: reference !== null,
   };
 }
@@ -86,7 +91,17 @@ const flush = () =>
   });
 
 describe('useResumePayments', () => {
-  it('resume after kill verifies and never initialises', async () => {
+  const mount = async (qc = makeQueryClient()) => {
+    await renderHook(
+      () => {
+        useResumePayments(USER);
+      },
+      { wrapper: wrapper(qc) },
+    );
+    await flush();
+  };
+
+  it("resume after kill reads a fresh payment's status, never verifies it, never initialises", async () => {
     await checkoutStore.put(entry('b1', 'ref1'));
     await checkoutStore.put(entry('b2', null));
     await checkoutStore.put(entry('b3', 'ref3'));
@@ -95,14 +110,8 @@ describe('useResumePayments', () => {
     );
     const qc = makeQueryClient();
     const invalidate = jest.spyOn(qc, 'invalidateQueries');
-    await renderHook(
-      () => {
-        useResumePayments(USER);
-      },
-      { wrapper: wrapper(qc) },
-    );
-    await flush();
-    expect(verifyMock.mock.calls.map((c) => c[1])).toEqual(['ref1', 'ref3']);
+    await mount(qc);
+    expect(verifyMock).not.toHaveBeenCalled();
     expect(stateMock.mock.calls.map((c) => c[1])).toEqual(['ref1', 'ref3']);
     expect(initMock).not.toHaveBeenCalled();
     // Paid: dropped and the lists reload. Still pending, or never paid: left as is.
@@ -115,9 +124,9 @@ describe('useResumePayments', () => {
     });
   });
 
-  it('runs one entry at a time: verify then one status read each', async () => {
-    await checkoutStore.put(entry('b1', 'ref1'));
-    await checkoutStore.put(entry('b2', 'ref2'));
+  it('runs one entry at a time: an older payment gets verify then one status read', async () => {
+    await checkoutStore.put(entry('b1', 'ref1', OLD));
+    await checkoutStore.put(entry('b2', 'ref2', OLD));
     const order: string[] = [];
     verifyMock.mockImplementation((_c, ref) => {
       order.push(`verify:${ref}`);
@@ -127,19 +136,13 @@ describe('useResumePayments', () => {
       order.push(`status:${ref}`);
       return Promise.resolve(polled('pending', false));
     });
-    await renderHook(
-      () => {
-        useResumePayments(USER);
-      },
-      { wrapper: wrapper(makeQueryClient()) },
-    );
-    await flush();
+    await mount();
     expect(order).toEqual(['verify:ref1', 'status:ref1', 'verify:ref2', 'status:ref2']);
   });
 
-  it('a failed payment keeps its entry with the payment cleared; an unanswered one is kept', async () => {
-    await checkoutStore.put(entry('b1', 'ref1'));
-    await checkoutStore.put(entry('b2', 'ref2'));
+  it('an older failed payment keeps its entry with the payment cleared; an unanswered one is kept', async () => {
+    await checkoutStore.put(entry('b1', 'ref1', OLD));
+    await checkoutStore.put(entry('b2', 'ref2', OLD));
     stateMock.mockImplementation((_c, ref) =>
       Promise.resolve(
         ref === 'ref1'
@@ -147,30 +150,56 @@ describe('useResumePayments', () => {
           : err<ApiError>({ kind: 'unavailable', status: 503 }),
       ),
     );
-    await renderHook(
-      () => {
-        useResumePayments(USER);
-      },
-      { wrapper: wrapper(makeQueryClient()) },
-    );
-    await flush();
+    await mount();
     expect(await checkoutStore.get(USER, 'event', 'b1')).toEqual({
       ...entry('b1', null),
       paymentEverStarted: true,
     });
-    expect(await checkoutStore.get(USER, 'event', 'b2')).toEqual(entry('b2', 'ref2'));
+    expect(await checkoutStore.get(USER, 'event', 'b2')).toEqual(entry('b2', 'ref2', OLD));
+  });
+
+  it('a fresh payment that reads failed is kept: a transfer or USSD may still land (A1)', async () => {
+    await checkoutStore.put(entry('b1', 'ref1', 14 * MIN));
+    stateMock.mockResolvedValue(polled('failed', false));
+    await mount();
+    expect(verifyMock).not.toHaveBeenCalled();
+    expect(await checkoutStore.get(USER, 'event', 'b1')).toEqual(entry('b1', 'ref1', 14 * MIN));
+  });
+
+  it('skips a booking whose Pay screen is open', async () => {
+    await checkoutStore.put(entry('b1', 'ref1', OLD));
+    await checkoutStore.put(entry('b2', 'ref2', OLD));
+    stateMock.mockResolvedValue(polled('pending', false));
+    const release = holdPayScreen(USER, 'event', 'b1');
+    try {
+      await mount();
+    } finally {
+      release();
+    }
+    expect(verifyMock.mock.calls.map((c) => c[1])).toEqual(['ref2']);
+    expect(stateMock.mock.calls.map((c) => c[1])).toEqual(['ref2']);
+  });
+
+  it('settling an older reference never clears a newer one written meanwhile (A4)', async () => {
+    await checkoutStore.put(entry('b1', 'ref1', OLD));
+    const ref2 = {
+      reference: 'ref2',
+      paymentUrl: 'https://checkout.paystack.com/y',
+      startedAt: NOW,
+    };
+    stateMock.mockImplementation(async () => {
+      // The Pay screen started a new payment while ref1's answer was on its way.
+      await checkoutStore.setPayment(USER, 'event', 'b1', ref2);
+      return polled('failed', false);
+    });
+    await mount();
+    expect((await checkoutStore.get(USER, 'event', 'b1'))?.payment).toEqual(ref2);
   });
 
   it('checks again when the app comes back to the foreground', async () => {
     await checkoutStore.put(entry('b1', 'ref1'));
     stateMock.mockResolvedValue(polled('pending', false));
-    await renderHook(
-      () => {
-        useResumePayments(USER);
-      },
-      { wrapper: wrapper(makeQueryClient()) },
-    );
-    await flush();
+    await mount();
     expect(stateMock).toHaveBeenCalledTimes(1);
     await act(() => {
       onAppState?.('background');
@@ -182,6 +211,7 @@ describe('useResumePayments', () => {
     });
     await flush();
     expect(stateMock).toHaveBeenCalledTimes(2);
+    expect(verifyMock).not.toHaveBeenCalled();
     expect(initMock).not.toHaveBeenCalled();
   });
 });

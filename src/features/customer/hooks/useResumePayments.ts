@@ -3,21 +3,28 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
 import { paymentState, verifyPayment } from '@/features/customer/api/checkoutApi';
+import { isFreshPayment } from '@/features/customer/domain/checkout/paymentFlow';
 import {
   fromPaymentState,
   fromVerified,
   type PayVerdict,
 } from '@/features/customer/domain/checkout/paymentStatus';
 import { customerKeys } from '@/features/customer/hooks/customerKeys';
+import { isPayScreenOpen } from '@/features/customer/hooks/openPayScreens';
 // Importing the store registers its sign-out wipe (P5): the customer layout mounts this hook.
 import { checkoutStore } from '@/features/customer/offline/checkoutStore';
-import { api } from '@/shared/api/instance';
+import { api, clock } from '@/shared/api/instance';
 
 /**
  * Spec P5: a payment left open when the app was killed or backgrounded is settled quietly. On
- * mount and each return to the foreground, every stored entry with a payment gets verify, then
- * one status read, one entry at a time. Paid drops the entry, failed clears its payment; anything else is left for
- * the next pass. It never initialises.
+ * mount and each return to the foreground, every stored entry with a payment is read, one entry
+ * at a time, skipping a booking whose Pay screen is open (that screen settles it).
+ *
+ * A1: a payment started under 15 min ago gets one status read only, never verify (web marks a
+ * transfer or USSD still in progress as failed), and only 'paid' settles it: its 'failed' may
+ * still complete. An older one gets verify, then a status read. Paid drops the entry, failed
+ * clears its payment, each only while the entry still holds that reference (A4); anything else is
+ * left for the next pass. It never initialises.
  */
 export function useResumePayments(userId: string): void {
   const qc = useQueryClient();
@@ -30,7 +37,12 @@ export function useResumePayments(userId: string): void {
     const live = () => on;
     const rerun = () => again;
 
-    const settleOne = async (reference: string): Promise<PayVerdict> => {
+    const settleOne = async (reference: string, startedAt: number): Promise<PayVerdict> => {
+      if (isFreshPayment(startedAt, clock.serverNow())) {
+        const s = await paymentState(api, reference);
+        const v = s.ok ? fromPaymentState(s.value) : 'unknown';
+        return v === 'paid' ? 'paid' : 'unknown';
+      }
       const v = await verifyPayment(api, reference);
       const s = await paymentState(api, reference);
       if (s.ok) return fromPaymentState(s.value);
@@ -43,12 +55,14 @@ export function useResumePayments(userId: string): void {
       for (const e of entries) {
         if (!live()) return;
         if (e.payment === null) continue;
-        const verdict = await settleOne(e.payment.reference);
+        if (isPayScreenOpen(userId, e.kind, e.bookingId)) continue;
+        const { reference } = e.payment;
+        const verdict = await settleOne(reference, e.payment.startedAt);
         if (!live()) return;
         if (verdict !== 'paid' && verdict !== 'failed') continue;
         // Paid drops the entry; failed keeps it, payment cleared, for Try again (R8).
-        if (verdict === 'paid') await checkoutStore.drop(userId, e.kind, e.bookingId);
-        else await checkoutStore.clearPayment(userId, e.kind, e.bookingId);
+        if (verdict === 'paid') await checkoutStore.drop(userId, e.kind, e.bookingId, reference);
+        else await checkoutStore.clearPayment(userId, e.kind, e.bookingId, reference);
         void qc.invalidateQueries({ queryKey: customerKeys.bookings(userId) });
         void qc.invalidateQueries({ queryKey: customerKeys.booking(userId, e.kind, e.bookingId) });
         if (verdict === 'paid')

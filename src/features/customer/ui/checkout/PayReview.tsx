@@ -30,6 +30,8 @@ type Props = {
   chargeChecking: boolean;
   /** CHECKOUT_PAYMENTS_ENABLED: off keeps the 4a web hand-off in place of Pay. */
   payInApp: boolean;
+  /** An earlier payment on this booking started under 15 min ago: warn before Pay (A1d). */
+  recentAttempt: boolean;
   /** A start error's words, and what its button does (none for a refusal). */
   startError: { words: string; action: { label: string; onPress: () => void } | null } | null;
   onPay: () => void;
@@ -51,6 +53,7 @@ export function PayReview({
   chargeUnknown,
   chargeChecking,
   payInApp,
+  recentAttempt,
   startError,
   onPay,
   onCancel,
@@ -77,6 +80,14 @@ export function PayReview({
               message={startError.words}
               {...(startError.action !== null ? { action: startError.action } : {})}
               testID="pay-start-error"
+            />
+          ) : null}
+          {recentAttempt ? (
+            <Banner
+              tone="warning"
+              message="If you already paid by bank transfer or USSD, wait a few minutes — paying again could charge you twice."
+              announceOnMount={false}
+              testID="pay-recent-attempt"
             />
           ) : null}
           <Text variant="bodySm" tone="textSecondary">

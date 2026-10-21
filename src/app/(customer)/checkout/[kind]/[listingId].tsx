@@ -33,10 +33,13 @@ export default function CheckoutRoute() {
       email={state.status === 'signedIn' ? state.email : ''}
       onBack={back}
       onCreated={(bookingId, free) => {
-        // Select is left behind: Back from Pay never re-creates the booking.
+        // Select is left behind: Back from Pay never re-creates the booking. `from=select` lets
+        // Back from Review cancel this booking (A2a); Pay now and links never carry it.
         router.replace({
           pathname: '/pay/[kind]/[bookingId]',
-          params: free ? { kind: ref.kind, bookingId, free: '1' } : { kind: ref.kind, bookingId },
+          params: free
+            ? { kind: ref.kind, bookingId, free: '1' }
+            : { kind: ref.kind, bookingId, from: 'select' },
         });
       }}
     />

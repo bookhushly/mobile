@@ -126,6 +126,21 @@ const advance = (ms: number) =>
   });
 
 describe('useCreateBooking — stays', () => {
+  it('a key 9 minutes old is replaced even for the same selection (A6)', async () => {
+    stayMock.mockResolvedValue(lost);
+    const { result } = await renderHook(() => useCreateBooking(USER, 'hotel', HOTEL));
+    await act(() => result.current.submit(stay(), ctx));
+    await advance(9 * 60_000 - 1);
+    await act(() => result.current.checkAgain());
+    expect(keysSent()).toEqual(['k1', 'k1']);
+    await advance(1);
+    await act(() => result.current.checkAgain());
+    expect(keysSent()).toEqual(['k1', 'k1', 'k2']);
+    // The new key is kept from then on.
+    await act(() => result.current.submit(stay(), ctx));
+    expect(keysSent()).toEqual(['k1', 'k1', 'k2', 'k2']);
+  });
+
   it('stay create reuses the idempotency key for the same selection and mints a new one when it changes', async () => {
     stayMock.mockResolvedValue(lost);
     const { result } = await renderHook(() => useCreateBooking(USER, 'hotel', HOTEL));

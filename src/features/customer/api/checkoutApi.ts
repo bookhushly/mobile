@@ -29,7 +29,11 @@ export type StayKind = 'hotel' | 'apartment';
 
 // ── Create ───────────────────────────────────────────────────────────────────────────────────────
 
-/** Stay creation is the only booking POST the client may re-send: the key makes a replay safe. */
+/**
+ * Never auto-retried by the client (contract check M2): web releases the key on a 503 that has
+ * already written a booking, so a blind re-send would make a second one. The key stays, so a
+ * Check again after a lost answer is a server-side replay.
+ */
 export function createStay(
   c: Requester,
   kind: StayKind,
@@ -40,7 +44,7 @@ export function createStay(
     method: 'POST',
     body,
     schema: stayCreated,
-    idempotent: true,
+    idempotent: false,
     headers: { 'Idempotency-Key': idemKey },
   });
 }

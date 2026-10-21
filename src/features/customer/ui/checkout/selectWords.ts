@@ -13,6 +13,8 @@ export const NO_ROOMS = 'No rooms left for these dates';
 export const QUESTION_WORDS = 'Answer this question';
 export const PROMO_ZERO =
   "This code makes your order free, which can't be booked in the app yet. Remove the code or book on bookhushly.com.";
+export const PRICE_UNAVAILABLE =
+  'This event’s price isn’t available. Try again later or book on bookhushly.com.';
 
 const GUEST_WORDS = {
   guestName: 'Enter your name',
@@ -68,6 +70,8 @@ export function eventWords(p: EventProblem): string {
       return 'Not enough tickets left';
     case 'promoZero':
       return PROMO_ZERO;
+    case 'priceUnavailable':
+      return PRICE_UNAVAILABLE;
     case 'guestName':
     case 'guestEmail':
     case 'guestPhone':

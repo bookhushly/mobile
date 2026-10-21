@@ -14,9 +14,11 @@ import {
   afterPendingVerify,
   flow,
   holdEndsAt as holdEnd,
+  isFreshPayment,
   planPay,
   type FlowEvent,
   type FlowState,
+  type RowPayState,
 } from '@/features/customer/domain/checkout/paymentFlow';
 import {
   fromPaymentState,
@@ -26,13 +28,15 @@ import {
   type PayVerdict,
 } from '@/features/customer/domain/checkout/paymentStatus';
 import { customerKeys } from '@/features/customer/hooks/customerKeys';
+import { holdPayScreen } from '@/features/customer/hooks/openPayScreens';
 import { useServerNow } from '@/features/customer/hooks/useServerNow';
 import { checkoutStore, type CheckoutEntry } from '@/features/customer/offline/checkoutStore';
 import { api, clock } from '@/shared/api/instance';
 
 // Spec P4–P8, P26, P29. Money rules: one initialise per tap, only after check-status says there
 // is no reusable reference; the reference is on disk before the browser opens; Done only from a
-// fulfilled status poll; a hold past 25 min on the server clock never initialises.
+// fulfilled status poll; a hold past 25 min on the server clock never initialises. A payment
+// started under 15 min ago is never verified and its failure is never final (A1).
 
 export type PayKind = 'hotel' | 'apartment' | 'event';
 
@@ -40,8 +44,8 @@ export const BROWSER_OPTIONS = { createTask: false, showInRecents: false } as co
 
 const HOLD_ENDED_WORDS = 'This hold has ended. Start again';
 
-/** Steps where Pay (re)starts P4: Try again after a failure goes back through Review. */
-const PAYABLE: ReadonlySet<FlowState['step']> = new Set(['review', 'startError', 'failed']);
+/** Steps where Pay (re)starts P4. Try again after a failure goes back to Review first (A1d). */
+const PAYABLE: ReadonlySet<FlowState['step']> = new Set(['review', 'startError']);
 /** Steps that leave an unpaid booking behind when the user walks away (P7). */
 const LEAVE_CANCELS: ReadonlySet<FlowState['step']> = new Set([
   'review',
@@ -49,14 +53,22 @@ const LEAVE_CANCELS: ReadonlySet<FlowState['step']> = new Set([
   'holdEnded',
 ]);
 
-/** P7: leaving cancels only a booking made here, read from disk, never paid for, ever. */
+/**
+ * P7 (amended A2a), the synchronous part: leaving cancels only a booking made on Select in this
+ * session, read from disk, never paid for, ever, whose row still reads unpaid. leave() then asks
+ * check-status before it cancels.
+ */
 function cancelsOnLeave(
+  fromSelect: boolean,
+  rowState: RowPayState | null,
   step: FlowState['step'],
   sawPayment: boolean,
   entryLoaded: boolean,
   e: CheckoutEntry | null,
 ): boolean {
   return (
+    fromSelect &&
+    rowState === 'unpaid' &&
     LEAVE_CANCELS.has(step) &&
     !sawPayment &&
     entryLoaded &&
@@ -78,18 +90,26 @@ export function usePayment(
     /** For the entry written when none is cached (Pay now from Bookings, an adopted event). */
     title?: string;
     total?: number;
+    /** What the loaded row says (A2): cancelled or paid never pays; only unpaid may cancel. */
+    rowState: RowPayState | null;
+    /** Reached from Select in this session (`?from=select`): only then may leaving cancel. */
+    fromSelect: boolean;
   },
 ): {
   state: FlowState;
   pay: () => void;
+  /** Failed → Review: Pay needs a fresh tap (A1d). */
+  retry: () => void;
   checkAgain: () => void;
   leave: () => void;
   /** leave() would cancel the booking now (P7): Review offers Cancel booking only then. */
   willCancelOnLeave: boolean;
   /** Stays: when Pay stops (epoch ms, server clock). Null for events, or while unknown. */
   holdEndsAt: number | null;
-  /** Pay can start: the stay's age is known and its hold hasn't ended. */
+  /** Pay can start: the stay's age is known, its hold hasn't ended, the row isn't paid or cancelled. */
   canPay: boolean;
+  /** An earlier payment on this booking started under 15 min ago: Review warns before Pay (A1d). */
+  recentAttempt: boolean;
   entry: CheckoutEntry | null;
 } {
   const qc = useQueryClient();
@@ -105,6 +125,8 @@ export function usePayment(
   // Render-time copies of the two refs above, for `willCancelOnLeave`.
   const [sawPay, setSawPay] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  /** When the latest payment on this booking was started (server clock), if known. */
+  const [attemptAt, setAttemptAt] = useState<number | null>(null);
   const appSub = useRef<NativeEventSubscription | null>(null);
   const now = useServerNow();
   // A call, not a read: TypeScript would keep `live.current` narrowed across an await.
@@ -134,6 +156,10 @@ export function usePayment(
         entryLoaded.current = true;
         setLoaded(true);
         setEntry(e);
+        if (e?.payment) {
+          const at = e.payment.startedAt;
+          setAttemptAt((a) => (a === null ? at : Math.max(a, at)));
+        }
       })
       .catch(() => undefined);
     return () => {
@@ -144,13 +170,18 @@ export function usePayment(
     };
   }, [userId, kind, bookingId]);
 
+  // Resume (P5) leaves this booking to this screen while it is open (A1).
+  useEffect(() => holdPayScreen(userId, kind, bookingId), [userId, kind, bookingId]);
+
   const createdAt = entry?.createdAt ?? booking.createdAt;
   const holdEndsAt = kind === 'event' || createdAt === null ? null : holdEnd(kind, createdAt);
   // A stay whose age is unknown is not payable yet: on doubt we don't take money (P8).
   const holdUnknown = kind !== 'event' && createdAt === null;
   const email = entry?.guestEmail ?? booking.email;
-  const canPay = !holdUnknown && !(holdEndsAt !== null && now >= holdEndsAt);
-  const { title, total } = booking;
+  const { title, total, rowState, fromSelect } = booking;
+  const rowSettled = rowState === 'paid' || rowState === 'cancelled';
+  const canPay = !holdUnknown && !rowSettled && !(holdEndsAt !== null && now >= holdEndsAt);
+  const recentAttempt = attemptAt !== null && isFreshPayment(attemptAt, now);
 
   const holdOver = useCallback(
     () => holdEndsAt !== null && clock.serverNow() >= holdEndsAt,
@@ -163,8 +194,10 @@ export function usePayment(
   }, [now, holdEndsAt, send]);
 
   const openBrowser = useCallback(
-    async (reference: string, url: string) => {
-      send({ type: 'opened', reference });
+    async (reference: string, url: string, paymentStartedAt: number) => {
+      send({ type: 'opened', reference, paymentStartedAt });
+      if (alive())
+        setAttemptAt((a) => (a === null ? paymentStartedAt : Math.max(a, paymentStartedAt)));
       if (Platform.OS === 'android') {
         // The Custom Tab promise resolves 'opened' at once; coming back is the app turning active.
         appSub.current?.remove();
@@ -187,7 +220,7 @@ export function usePayment(
         send({ type: 'returned', now: clock.serverNow() });
       }
     },
-    [send],
+    [send, alive],
   );
 
   const recordStart = useCallback(
@@ -247,14 +280,15 @@ export function usePayment(
       return;
     }
     const { reference, payment_url } = r.value.payment;
-    const payment = { reference, paymentUrl: payment_url, startedAt: clock.serverNow() };
+    const startedAt = clock.serverNow();
+    const payment = { reference, paymentUrl: payment_url, startedAt };
     // P5: on disk before the browser opens. A failed write still opens: the server has the
     // reference, and check-status reuses it on the next Pay.
     await checkoutStore.setPayment(userId, kind, bookingId, payment).catch(() => undefined);
     entryRef.current = { ...startedEntry, payment };
     if (!alive()) return;
     setEntry(entryRef.current);
-    await openBrowser(reference, payment_url);
+    await openBrowser(reference, payment_url, startedAt);
   }, [holdOver, email, send, kind, bookingId, userId, openBrowser, alive, recordStart]);
 
   /** In `starting`: check-status, then the pay plan (P4, P26). Never initialises on doubt. */
@@ -282,23 +316,38 @@ export function usePayment(
     }
     switch (plan.do) {
       case 'check':
-        send({ type: 'paid', reference: plan.reference, now: clock.serverNow() });
+        send({
+          type: 'paid',
+          reference: plan.reference,
+          paymentStartedAt: plan.paymentStartedAt,
+          now: clock.serverNow(),
+        });
         return;
       case 'open':
-        await openBrowser(plan.reference, plan.url);
+        await openBrowser(plan.reference, plan.url, plan.paymentStartedAt);
         return;
       case 'initialize':
         await initialize();
         return;
+      case 'wait':
+        // A reference under 15 min old with no URL here: never verified, never replaced (A1).
+        send({ type: 'pendingElsewhere' });
+        return;
       case 'verifyPending': {
+        // Only references 15 min old or more reach verify (P26).
         const v = await verifyPayment(api, plan.reference);
         if (!alive()) return;
         const verdict: PayVerdict = v.ok ? fromVerified(v.value) : 'unknown';
         const createdAtIso = 'payment' in check ? check.payment.created_at : '';
         const next = afterPendingVerify(verdict, createdAtIso, clock.serverNow());
-        if (next === 'done')
-          send({ type: 'paid', reference: plan.reference, now: clock.serverNow() });
-        else if (next === 'wait') send({ type: 'pendingElsewhere' });
+        if (next === 'done') {
+          send({
+            type: 'paid',
+            reference: plan.reference,
+            paymentStartedAt: Date.parse(createdAtIso),
+            now: clock.serverNow(),
+          });
+        } else if (next === 'wait') send({ type: 'pendingElsewhere' });
         else await initialize();
         return;
       }
@@ -307,21 +356,24 @@ export function usePayment(
 
   const pay = useCallback(() => {
     if (!PAYABLE.has(current.current.step)) return;
-    if (holdUnknown) return;
+    if (holdUnknown || rowSettled) return;
     if (holdOver()) {
       send({ type: 'retry' });
       send({ type: 'holdExpired' });
       return;
     }
-    if (current.current.step === 'failed') send({ type: 'retry' });
     send({ type: 'pay' });
     if (stepNow() !== 'starting') return;
     void start();
-  }, [holdUnknown, holdOver, send, stepNow, start]);
+  }, [holdUnknown, rowSettled, holdOver, send, stepNow, start]);
+
+  const retry = useCallback(() => {
+    send({ type: 'retry' });
+  }, [send]);
 
   const checkAgain = useCallback(() => {
     const step = current.current.step;
-    if (step === 'stillChecking') {
+    if (step === 'stillChecking' || step === 'unconfirmed') {
       send({ type: 'checkAgain', now: clock.serverNow() });
       return;
     }
@@ -340,10 +392,13 @@ export function usePayment(
   }, [send, stepNow, pay, holdOver, start]);
 
   const leave = useCallback(() => {
-    // Only a booking made here, never paid for: its entry is read and has no payment, ever.
-    // Opened from Bookings (no entry), or before the read lands, nothing is cancelled.
+    // Only a booking made on Select in this session, never paid for: its entry is read and has
+    // no payment, ever, and its row reads unpaid. Opened from Bookings or a link, or before the
+    // read lands, nothing is cancelled.
     if (
       !cancelsOnLeave(
+        fromSelect,
+        rowState,
         current.current.step,
         sawPayment.current,
         entryLoaded.current,
@@ -352,59 +407,71 @@ export function usePayment(
     ) {
       return;
     }
-    // P7: best effort; a lost cancel is freed by the server's sweep.
-    void cancelBooking(api, kind, bookingId).catch(() => undefined);
-    void checkoutStore.drop(userId, kind, bookingId).catch(() => undefined);
-  }, [kind, bookingId, userId]);
+    // A2a: the server must also say there is no payment, paid or pending. Any doubt keeps it.
+    // P7: best effort; a lost cancel is freed by the server's sweep. Runs after the screen goes.
+    void (async () => {
+      const c = await checkPayment(api, kind, bookingId);
+      if (!c.ok || c.value.hasPaid || c.value.hasPending) return;
+      await cancelBooking(api, kind, bookingId).catch(() => undefined);
+      await checkoutStore.drop(userId, kind, bookingId);
+    })().catch(() => undefined);
+  }, [fromSelect, rowState, kind, bookingId, userId]);
 
-  // P6: verify once on entering Checking, then status polls on the state's own schedule.
+  // P6 (amended A1): status polls only, on the state's own schedule; the first 2 s after entry.
   useEffect(() => {
     if (state.step !== 'checking') return;
     let on = true;
-    let timer: ReturnType<typeof setTimeout> | null = null;
     const { reference } = state;
-    const answer = (verdict: PayVerdict) => {
-      if (on) send({ type: 'verdict', verdict, now: clock.serverNow() });
-    };
-    if (state.attempt === 0) {
-      void verifyPayment(api, reference).then((r) => {
-        const v: PayVerdict = r.ok ? fromVerified(r.value) : 'unknown';
-        // Verify doesn't report `fulfilled`: its 'paid' waits for a status poll (P15).
-        answer(v === 'paid' ? 'pending' : v);
+    const timer = setTimeout(() => {
+      void paymentState(api, reference).then((r) => {
+        if (on) {
+          send({
+            type: 'verdict',
+            verdict: r.ok ? fromPaymentState(r.value) : 'unknown',
+            now: clock.serverNow(),
+          });
+        }
       });
-    } else {
-      timer = setTimeout(() => {
-        timer = null;
-        void paymentState(api, reference).then((r) => {
-          answer(r.ok ? fromPaymentState(r.value) : 'unknown');
-        });
-      }, state.nextDelayMs);
-    }
+    }, state.nextDelayMs);
     return () => {
       on = false;
-      if (timer !== null) clearTimeout(timer);
+      clearTimeout(timer);
     };
   }, [state, send]);
 
   // A settled payment: bookings, this booking and the tickets reload. Paid drops the entry; a
-  // failed one keeps it, payment cleared, for Try again (R8).
+  // failed one keeps it, payment cleared, for Try again (R8). Either only while the entry still
+  // holds this reference (A4).
   useEffect(() => {
     if (state.step !== 'done' && state.step !== 'failed') return;
+    const { reference } = state;
     if (state.step === 'done') {
-      void checkoutStore.drop(userId, kind, bookingId).catch(() => undefined);
+      void checkoutStore.drop(userId, kind, bookingId, reference).catch(() => undefined);
     } else {
-      void checkoutStore.clearPayment(userId, kind, bookingId).catch(() => undefined);
-      if (entryRef.current !== null) {
-        entryRef.current = { ...entryRef.current, payment: null };
+      void checkoutStore.clearPayment(userId, kind, bookingId, reference).catch(() => undefined);
+      const e = entryRef.current;
+      if (e !== null && (e.payment === null || e.payment.reference === reference)) {
+        entryRef.current = { ...e, payment: null };
         setEntry(entryRef.current);
       }
     }
     void qc.invalidateQueries({ queryKey: customerKeys.bookings(userId) });
     void qc.invalidateQueries({ queryKey: customerKeys.booking(userId, kind, bookingId) });
     void qc.invalidateQueries({ queryKey: customerKeys.wallet(userId) });
-  }, [state.step, userId, kind, bookingId, qc]);
+  }, [state, userId, kind, bookingId, qc]);
 
-  const willCancelOnLeave = cancelsOnLeave(state.step, sawPay, loaded, entry);
+  const willCancelOnLeave = cancelsOnLeave(fromSelect, rowState, state.step, sawPay, loaded, entry);
 
-  return { state, pay, checkAgain, leave, willCancelOnLeave, holdEndsAt, canPay, entry };
+  return {
+    state,
+    pay,
+    retry,
+    checkAgain,
+    leave,
+    willCancelOnLeave,
+    holdEndsAt,
+    canPay,
+    recentAttempt,
+    entry,
+  };
 }

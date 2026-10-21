@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  Ban,
   CircleX,
   Clock,
   Hourglass,
@@ -15,10 +16,17 @@ import { space } from '@/shared/theme';
 import { Button, Header, Icon, IconButton, Screen, Spinner, Text } from '@/shared/ui';
 
 export type PayStateKind =
-  'checking' | 'failed' | 'stillChecking' | 'holdEnded' | 'pendingElsewhere';
+  | 'checking'
+  | 'failed'
+  | 'unconfirmed'
+  | 'stillChecking'
+  | 'holdEnded'
+  | 'pendingElsewhere'
+  | 'cancelled';
 
 type Props = {
   state: PayStateKind;
+  /** Failed: back to Review, where Pay needs a fresh tap (A1d). */
   onTryAgain: () => void;
   onCheckAgain: () => void;
   onBookings: () => void;
@@ -29,12 +37,27 @@ type Props = {
 
 type Look = { icon: LucideIcon; tone: ColorRole; title: string; message: string | null };
 
-// Spec P14, P26, P8 words; Mobbin §4: plain words, one main action, no upsells.
+// Spec P14, P26, P8 words; Mobbin §4: plain words, one main action, no upsells. A failure never
+// says "you weren't charged": a transfer or USSD can still land (A1c).
 const LOOK: Record<Exclude<PayStateKind, 'checking'>, Look> = {
   failed: {
     icon: CircleX,
     tone: 'dangerFg',
-    title: 'Payment didn’t go through. You weren’t charged.',
+    title: 'Payment didn’t go through.',
+    message: 'If money left your account, it’ll be confirmed or refunded — check Bookings.',
+  },
+  // A1b: a failure for a payment started under 15 min ago is not final.
+  unconfirmed: {
+    icon: Clock,
+    tone: 'neutralFg',
+    title: 'We couldn’t confirm this payment yet.',
+    message:
+      'If you paid by bank transfer or USSD it can take a few minutes. Check Bookings before paying again.',
+  },
+  cancelled: {
+    icon: Ban,
+    tone: 'neutralFg',
+    title: 'This booking was cancelled.',
     message: null,
   },
   stillChecking: {
@@ -68,6 +91,7 @@ function Actions({ state, onTryAgain, onCheckAgain, onBookings, onStartAgain }: 
           <Button label="Go to Bookings" variant="secondary" onPress={onBookings} />
         </>
       );
+    case 'unconfirmed':
     case 'stillChecking':
       return (
         <>
@@ -79,6 +103,8 @@ function Actions({ state, onTryAgain, onCheckAgain, onBookings, onStartAgain }: 
       return <Button label="Start again" onPress={onStartAgain} />;
     case 'pendingElsewhere':
       return <Button label="Check again" onPress={onCheckAgain} />;
+    case 'cancelled':
+      return <Button label="Go to Bookings" onPress={onBookings} />;
   }
 }
 
@@ -123,7 +149,7 @@ export function PayStates(props: Props) {
               Checking your payment
             </Text>
             <Text variant="body" tone="textSecondary">
-              This can take up to a minute
+              This can take a few minutes
             </Text>
           </>
         ) : (

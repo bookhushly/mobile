@@ -337,6 +337,28 @@ describe('events', () => {
     expect(submit.mock.calls[0]?.[1]).toMatchObject({ title: 'Afrobeats night', free: true });
   });
 
+  it('a package-less event with an unreadable price blocks Continue and is never free (A7)', async () => {
+    given(
+      eventDetail.parse({
+        id: ID,
+        title: 'Afrobeats night',
+        active: true,
+        availability: 'available',
+        event_date: '2026-11-07T00:00:00',
+        event_time: '2026-11-07T18:00:00+00:00',
+        price: 'TBA',
+        ticket_packages: [],
+      }),
+    );
+    await open('event');
+    await screen.findByTestId('tickets');
+    expect(screen.getByTestId('select-problem')).toHaveTextContent(
+      'This event’s price isn’t available. Try again later or book on bookhushly.com.',
+    );
+    await fireEvent.press(continueButton());
+    expect(submit).not.toHaveBeenCalled();
+  });
+
   it('no tickets reads its words above Continue', async () => {
     given(PAID);
     await open('event');

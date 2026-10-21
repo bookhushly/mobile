@@ -129,11 +129,13 @@ function setPayment(state: FlowState, over: Partial<Pay> = {}) {
   pay = {
     state,
     pay: jest.fn(),
+    retry: jest.fn(),
     checkAgain: jest.fn(),
     leave: jest.fn(),
     willCancelOnLeave: true,
     holdEndsAt: null,
     canPay: true,
+    recentAttempt: false,
     entry: null,
     ...over,
   };
@@ -179,13 +181,17 @@ const handlers = {
   onDone: jest.fn(),
 };
 
-async function renderPay(kind: 'hotel' | 'event', opts: { free?: boolean } = {}) {
+async function renderPay(
+  kind: 'hotel' | 'event',
+  opts: { free?: boolean; fromSelect?: boolean } = {},
+) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await render(
     <QueryClientProvider client={qc}>
       <PayScreen
         booking={{ kind, id: ID }}
         free={opts.free ?? false}
+        fromSelect={opts.fromSelect ?? true}
         userId="u1"
         email="signed.in@example.com"
         {...handlers}
@@ -227,6 +233,8 @@ it('review shows the server total and a Pay label that includes the service char
     email: 'signed.in@example.com',
     title: 'Harbour Suites',
     total: 100000,
+    rowState: 'unpaid',
+    fromSelect: true,
   });
   await fireEvent.press(screen.getByRole('button', { name: 'Pay ₦102,500' }));
   expect(pay.pay).toHaveBeenCalledTimes(1);
@@ -284,13 +292,14 @@ it('checking blocks back and has nothing to press', async () => {
   setPayment({
     step: 'checking',
     reference: 'r1',
+    paymentStartedAt: 0,
     startedAt: 0,
     attempt: 0,
     nextDelayMs: 2000,
   });
   await renderPay('hotel');
   expect(screen.getByText('Checking your payment')).toBeTruthy();
-  expect(screen.getByText('This can take up to a minute')).toBeTruthy();
+  expect(screen.getByText('This can take a few minutes')).toBeTruthy();
   expect(screen.queryAllByRole('button')).toHaveLength(0);
   expect(back.handler?.()).toBe(true);
   expect(removeScreen().preventDefault).toHaveBeenCalled();
@@ -298,19 +307,43 @@ it('checking blocks back and has nothing to press', async () => {
   spy.mockRestore();
 });
 
-it('failed says you weren’t charged and offers Try again', async () => {
-  setPayment({ step: 'failed' });
+it('failed never says you weren’t charged; Try again goes back to Review (A1c, A1d)', async () => {
+  setPayment({ step: 'failed', reference: 'r1' });
   await renderPay('hotel');
-  expect(screen.getByText('Payment didn’t go through. You weren’t charged.')).toBeTruthy();
+  expect(screen.getByText('Payment didn’t go through.')).toBeTruthy();
+  expect(
+    screen.getByText(
+      'If money left your account, it’ll be confirmed or refunded — check Bookings.',
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByText(/weren’t charged/)).toBeNull();
   expect(mockCue).toHaveBeenCalledWith('error');
   await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
-  expect(pay.pay).toHaveBeenCalledTimes(1);
+  expect(pay.retry).toHaveBeenCalledTimes(1);
+  expect(pay.pay).not.toHaveBeenCalled();
   await fireEvent.press(screen.getByRole('button', { name: 'Go to Bookings' }));
   expect(handlers.onBookings).toHaveBeenCalledTimes(1);
 });
 
+it('an unconfirmed payment says it may take minutes; Check again or Go to Bookings (A1b)', async () => {
+  setPayment({ step: 'unconfirmed', reference: 'r1', paymentStartedAt: 0 });
+  await renderPay('hotel');
+  expect(screen.getByText('We couldn’t confirm this payment yet.')).toBeTruthy();
+  expect(
+    screen.getByText(
+      'If you paid by bank transfer or USSD it can take a few minutes. Check Bookings before paying again.',
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Check again' }));
+  expect(pay.checkAgain).toHaveBeenCalledTimes(1);
+  await fireEvent.press(screen.getByRole('button', { name: 'Go to Bookings' }));
+  expect(handlers.onBookings).toHaveBeenCalledTimes(1);
+  expect(mockCue).not.toHaveBeenCalled();
+});
+
 it('still checking offers Check again', async () => {
-  setPayment({ step: 'stillChecking', reference: 'r1' });
+  setPayment({ step: 'stillChecking', reference: 'r1', paymentStartedAt: 0 });
   await renderPay('hotel');
   expect(
     screen.getByText('We’re still checking. If you paid, it’ll show in Bookings shortly.'),
@@ -330,7 +363,7 @@ it('a payment open elsewhere offers Check again', async () => {
 
 it('done shows View tickets for an event', async () => {
   setRow(EVENT_ROW);
-  setPayment({ step: 'done' });
+  setPayment({ step: 'done', reference: 'r1' });
   await renderPay('event');
   expect(screen.getByText('You’re booked')).toBeTruthy();
   expect(screen.getByText('Confirmation sent to s•••n@example.com')).toBeTruthy();
@@ -342,13 +375,59 @@ it('done shows View tickets for an event', async () => {
 });
 
 it('done shows View booking for a hotel, to the guest email', async () => {
-  setPayment({ step: 'done' }, { entry: ENTRY });
+  setPayment({ step: 'done', reference: 'r1' }, { entry: ENTRY });
   await renderPay('hotel');
   expect(screen.getByText('Harbour Suites')).toBeTruthy();
   expect(screen.getByText('24–27 Oct · 3 nights')).toBeTruthy();
   expect(screen.getByText('Confirmation sent to a•••e@example.com')).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'View booking' }));
   expect(handlers.onViewBooking).toHaveBeenCalledWith('hotel', ID);
+});
+
+it('a cancelled booking shows it was cancelled, with Go to Bookings and no Pay (A2b)', async () => {
+  setRow(hotelBookingRow.parse({ ...HOTEL_ROW, booking_status: 'cancelled' }));
+  await renderPay('hotel');
+  expect(screen.getByText('This booking was cancelled.')).toBeTruthy();
+  expect(screen.queryByTestId('pay-button')).toBeNull();
+  expect(mockPayment).toHaveBeenCalledWith(
+    'u1',
+    'hotel',
+    ID,
+    expect.objectContaining({ rowState: 'cancelled' }),
+  );
+  await fireEvent.press(screen.getByRole('button', { name: 'Go to Bookings' }));
+  expect(handlers.onBookings).toHaveBeenCalledTimes(1);
+});
+
+it('a row that already reads paid is Done, and the entry is dropped (A2b)', async () => {
+  setRow(hotelBookingRow.parse({ ...HOTEL_ROW, payment_status: 'completed' }));
+  await renderPay('hotel');
+  expect(screen.getByText('You’re booked')).toBeTruthy();
+  expect(screen.queryByTestId('pay-button')).toBeNull();
+  expect(mockDrop).toHaveBeenCalledWith('u1', 'hotel', ID);
+});
+
+it('a recent payment attempt warns above Pay (A1d)', async () => {
+  setPayment({ step: 'review' }, { recentAttempt: true });
+  await renderPay('hotel');
+  expect(
+    screen.getByText(
+      'If you already paid by bank transfer or USSD, wait a few minutes — paying again could charge you twice.',
+    ),
+  ).toBeTruthy();
+  setPayment({ step: 'review' }, { recentAttempt: false });
+  await renderPay('hotel');
+  expect(screen.queryByTestId('pay-recent-attempt')).toBeNull();
+});
+
+it('passes whether Review was reached from Select to the hook (A2a)', async () => {
+  await renderPay('hotel', { fromSelect: false });
+  expect(mockPayment).toHaveBeenCalledWith(
+    'u1',
+    'hotel',
+    ID,
+    expect.objectContaining({ fromSelect: false }),
+  );
 });
 
 it('back from review calls leave', async () => {
@@ -467,7 +546,7 @@ it('payments switched off keep the web hand-off in place of Pay', async () => {
 
 it('payments switched off still show Checking and Check again', async () => {
   mockFlags.payments = false;
-  setPayment({ step: 'stillChecking', reference: 'r1' });
+  setPayment({ step: 'stillChecking', reference: 'r1', paymentStartedAt: 0 });
   await renderPay('hotel');
   await fireEvent.press(screen.getByRole('button', { name: 'Check again' }));
   expect(pay.checkAgain).toHaveBeenCalledTimes(1);
@@ -535,7 +614,14 @@ it('a failed service charge read shows the total with a note, and Pay works', as
 it('off-shape params read Booking not found', async () => {
   await render(
     <QueryClientProvider client={new QueryClient()}>
-      <PayScreen booking={null} free={false} userId="u1" email="" {...handlers} />
+      <PayScreen
+        booking={null}
+        free={false}
+        fromSelect={false}
+        userId="u1"
+        email=""
+        {...handlers}
+      />
     </QueryClientProvider>,
   );
   expect(screen.getByText('Booking not found')).toBeTruthy();

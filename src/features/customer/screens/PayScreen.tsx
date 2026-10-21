@@ -4,7 +4,7 @@ import { ReceiptText } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
 import { BackHandler } from 'react-native';
 
-import type { FlowState } from '@/features/customer/domain/checkout/paymentFlow';
+import { rowPayState, type FlowState } from '@/features/customer/domain/checkout/paymentFlow';
 import {
   chargeEstimate,
   priceLines,
@@ -30,6 +30,8 @@ type Props = {
   booking: { kind: PayKind; id: string } | null;
   /** `?free=1`: a free event registered on Select; Done directly (P1). */
   free: boolean;
+  /** `?from=select`: reached straight from Select in this session; only then may leaving cancel (A2a). */
+  fromSelect: boolean;
   userId: string;
   /** The signed-in email: the receipt address when no checkout entry is cached. */
   email: string;
@@ -62,6 +64,7 @@ export function PayScreen(props: Props) {
 function Pay({
   booking: { kind, id },
   free,
+  fromSelect,
   userId,
   email,
   onBack,
@@ -76,19 +79,24 @@ function Pay({
   const b = useBooking(userId, kind, id);
   const row = b.row;
   const pre = reviewSummary(kind, null, row, b.today);
+  // A2: the row is server truth. Paid is Done; cancelled never pays; only unpaid may cancel.
+  const rowState = rowPayState(kind, row);
   const p = usePayment(userId, kind, id, {
     createdAt: row?.created_at ?? null,
     email: email === '' ? null : email,
     title: pre.title,
     ...(typeof row?.total_amount === 'number' ? { total: row.total_amount } : {}),
+    rowState,
+    fromSelect,
   });
   const { leave } = p;
   const chargeQ = useServiceCharge(kind);
   const step = p.state.step;
   // Free events land here registered (web /free writes 'completed'). `?free=1` is only a hint:
-  // Done waits for the row to say paid, and anything else is reviewed like any booking.
+  // Done waits for the row to say paid, and anything else is reviewed like any booking. A row
+  // that already reads paid (paid elsewhere, or settled meanwhile) is Done the same way (A2b).
   const freeEvent = free && kind === 'event';
-  const freeDone = freeEvent && row?.payment_status === 'completed';
+  const rowPaid = rowState === 'paid';
   /** Cancel booking already ran leave(): the removal that follows must not run it again. */
   const left = useRef(false);
 
@@ -116,15 +124,15 @@ function Pay({
     };
   }, [step]);
 
-  // A free registration has no payment to settle: drop its entry (or Bookings reads it as being
-  // checked, P21) and reload bookings and tickets (P20).
+  // A paid row (a free registration included) has no payment left to settle: drop its entry (or
+  // Bookings reads it as being checked, P21) and reload bookings and tickets (P20).
   useEffect(() => {
-    if (!freeDone) return;
+    if (!rowPaid) return;
     void checkoutStore.drop(userId, kind, id).catch(() => undefined);
     void qc.invalidateQueries({ queryKey: customerKeys.bookings(userId) });
     void qc.invalidateQueries({ queryKey: customerKeys.booking(userId, kind, id) });
     void qc.invalidateQueries({ queryKey: customerKeys.wallet(userId) });
-  }, [freeDone, userId, kind, id, qc]);
+  }, [rowPaid, userId, kind, id, qc]);
 
   const entry = p.entry;
   const summary = reviewSummary(kind, entry, row, b.today);
@@ -133,7 +141,7 @@ function Pay({
     onStartAgain(startAgainTarget(kind, entry, row));
   };
 
-  if (step === 'done' || freeDone) {
+  if (step === 'done' || rowPaid) {
     return (
       <BookedDone
         isEvent={kind === 'event'}
@@ -148,9 +156,23 @@ function Pay({
       />
     );
   }
+  // A2b: a cancelled booking is never paid for. Nothing is interrupted while a payment is busy.
+  if (rowState === 'cancelled' && !BUSY.has(step)) {
+    return (
+      <PayStates
+        state="cancelled"
+        onTryAgain={p.retry}
+        onCheckAgain={p.checkAgain}
+        onBookings={onBookings}
+        onStartAgain={startAgain}
+        onBack={onBack}
+      />
+    );
+  }
   if (
     step === 'checking' ||
     step === 'failed' ||
+    step === 'unconfirmed' ||
     step === 'stillChecking' ||
     step === 'holdEnded' ||
     step === 'pendingElsewhere'
@@ -158,7 +180,7 @@ function Pay({
     return (
       <PayStates
         state={step}
-        onTryAgain={p.pay}
+        onTryAgain={p.retry}
         onCheckAgain={p.checkAgain}
         onBookings={onBookings}
         onStartAgain={startAgain}
@@ -220,6 +242,7 @@ function Pay({
         chargeQ.fetchStatus === 'paused' || (chargeQ.isPending && chargeQ.failureCount > 0)
       }
       payInApp={CHECKOUT_PAYMENTS_ENABLED}
+      recentAttempt={p.recentAttempt}
       startError={
         failure === null
           ? null
