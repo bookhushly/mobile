@@ -293,7 +293,7 @@ describe('useCreateBooking — stays', () => {
     );
     const { result } = await renderHook(() => useCreateBooking(USER, 'hotel', HOTEL));
     await act(() => result.current.submit(stay(), ctx));
-    expect(result.current.state).toEqual({ phase: 'failed', words: "Couldn't book. Try again" });
+    expect(result.current.state).toEqual({ phase: 'failed', words: 'Couldn’t book. Try again' });
     expect(cancelMock).toHaveBeenCalledWith({}, 'hotel', 'stray1');
     stayMock.mockResolvedValue(stayCreated);
     await act(() => result.current.submit(stay(), ctx));

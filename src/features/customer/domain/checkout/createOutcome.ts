@@ -10,7 +10,7 @@ export type CreateOutcome =
   | { kind: 'busy'; seconds: number }
   | { kind: 'failed'; words: string; strayBookingId: string | null };
 
-const NOT_AVAILABLE = "This listing isn't available any more";
+const NOT_AVAILABLE = 'This listing isn’t available any more';
 const SIGN_IN = 'Sign in again to book';
 const DEFAULT_BUSY_SECONDS = 2;
 const DEFAULT_WAIT_SECONDS = 5;
@@ -117,7 +117,7 @@ export function stayCreateOutcome(e: ApiError, kind: 'hotel' | 'apartment'): Cre
   if (e.kind === 'unavailable' && (e.code === 'booking_failed' || e.code === 'addons_failed')) {
     return {
       kind: 'failed',
-      words: "Couldn't book. Try again",
+      words: 'Couldn’t book. Try again',
       strayBookingId: text(e.body, 'booking_id') ?? null,
     };
   }
@@ -126,12 +126,12 @@ export function stayCreateOutcome(e: ApiError, kind: 'hotel' | 'apartment'): Cre
   const coded = stayCode(e, kind);
   if (coded !== null) return coded;
   if (e.kind === 'conflict') {
-    return refused(text(e.body, 'error') ?? "This can't be booked right now");
+    return refused(text(e.body, 'error') ?? 'This can’t be booked right now');
   }
   if (e.kind === 'unknown' && e.status === 400) {
     return refused(firstDetail(e.body) ?? 'Check your details');
   }
-  if (e.kind === 'forbidden') return refused("This can't be booked right now");
+  if (e.kind === 'forbidden') return refused('This can’t be booked right now');
   return { kind: 'unsure' };
 }
 
@@ -145,6 +145,6 @@ export function eventCreateOutcome(e: ApiError): CreateOutcome {
   if (e.kind === 'unknown' && e.status === 400) {
     return refused(text(e.body, 'error') ?? 'Check your tickets');
   }
-  if (e.kind === 'forbidden') return refused("This can't be booked right now");
+  if (e.kind === 'forbidden') return refused('This can’t be booked right now');
   return { kind: 'unsure' };
 }

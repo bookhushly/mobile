@@ -64,15 +64,15 @@ describe('fromVerified', () => {
 });
 
 describe('startErrorWords', () => {
-  const TRY_AGAIN = "Couldn't start payment. Try again";
+  const TRY_AGAIN = 'Couldn’t start payment. Try again';
 
   it('maps 409 booking_total_invalid', () => {
     const e: ApiError = { kind: 'conflict', code: 'booking_total_invalid' };
-    expect(startErrorWords(e)).toBe("This booking's price couldn't be confirmed. Start again");
+    expect(startErrorWords(e)).toBe('This booking’s price couldn’t be confirmed. Start again');
   });
 
   it('maps 403', () => {
-    expect(startErrorWords({ kind: 'forbidden' })).toBe("This booking isn't on your account");
+    expect(startErrorWords({ kind: 'forbidden' })).toBe('This booking isn’t on your account');
   });
 
   it('maps 404', () => {

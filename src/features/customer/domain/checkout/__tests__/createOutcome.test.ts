@@ -72,7 +72,7 @@ describe('stayCreateOutcome', () => {
   });
 
   it('maps 404 and not_found', () => {
-    const words = "This listing isn't available any more";
+    const words = 'This listing isn’t available any more';
     expect(stayCreateOutcome({ kind: 'notFound' }, 'hotel')).toEqual({ kind: 'refused', words });
     expect(stayCreateOutcome({ kind: 'notFound', code: 'not_found' }, 'hotel')).toEqual({
       kind: 'refused',
@@ -146,7 +146,7 @@ describe('stayCreateOutcome', () => {
     });
     expect(stayCreateOutcome({ kind: 'conflict', code: 'conflict' }, 'hotel')).toEqual({
       kind: 'refused',
-      words: "This can't be booked right now",
+      words: 'This can’t be booked right now',
     });
   });
 
@@ -157,7 +157,7 @@ describe('stayCreateOutcome', () => {
           { kind: 'unavailable', status: 503, code, body: { code, booking_id: 'b-9' } },
           'hotel',
         ),
-      ).toEqual({ kind: 'failed', words: "Couldn't book. Try again", strayBookingId: 'b-9' });
+      ).toEqual({ kind: 'failed', words: 'Couldn’t book. Try again', strayBookingId: 'b-9' });
     }
     expect(
       stayCreateOutcome({ kind: 'unavailable', status: 503, code: 'booking_failed' }, 'hotel'),
@@ -176,11 +176,11 @@ describe('stayCreateOutcome', () => {
   it('forbidden is refused with a generic line', () => {
     expect(stayCreateOutcome({ kind: 'forbidden' }, 'hotel')).toEqual({
       kind: 'refused',
-      words: "This can't be booked right now",
+      words: 'This can’t be booked right now',
     });
     expect(eventCreateOutcome({ kind: 'forbidden' })).toEqual({
       kind: 'refused',
-      words: "This can't be booked right now",
+      words: 'This can’t be booked right now',
     });
   });
 
@@ -223,7 +223,7 @@ describe('eventCreateOutcome', () => {
   it('404 is not available', () => {
     expect(eventCreateOutcome({ kind: 'notFound' })).toEqual({
       kind: 'refused',
-      words: "This listing isn't available any more",
+      words: 'This listing isn’t available any more',
     });
   });
 

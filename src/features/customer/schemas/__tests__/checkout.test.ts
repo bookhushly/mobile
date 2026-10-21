@@ -188,7 +188,25 @@ describe('parseCustomQuestions', () => {
     expect(parseCustomQuestions(null)).toEqual([]);
     expect(parseCustomQuestions({})).toEqual([]);
   });
-  it('skips an item with an unknown type', () => {
-    expect(parseCustomQuestions([{ id: 'x', label: 'L', type: 'date' }, { id: 'y', label: 'M', type: 'text' }]).map((q) => q.id)).toEqual(['y']);
+  it('reads an unknown or missing type as text, never dropping the question (D1)', () => {
+    const r = parseCustomQuestions([
+      { id: 'x', label: 'L', type: 'date', required: true },
+      { id: 'y', label: 'M' },
+    ]);
+    expect(r).toEqual([
+      { id: 'x', label: 'L', type: 'text', options: [], required: true },
+      { id: 'y', label: 'M', type: 'text', options: [], required: false },
+    ]);
+  });
+  it('accepts required as true or "true" only (D1)', () => {
+    const r = parseCustomQuestions([
+      { id: 'a', label: 'A', type: 'text', required: 'true' },
+      { id: 'b', label: 'B', type: 'text', required: 'false' },
+      { id: 'c', label: 'C', type: 'text', required: 1 },
+    ]);
+    expect(r.map((q) => q.required)).toEqual([true, false, false]);
+  });
+  it('an empty question falls back to label (D1)', () => {
+    expect(parseCustomQuestions([{ id: 'a', question: '', label: 'Diet', type: 'text' }])[0]?.label).toBe('Diet');
   });
 });

@@ -78,6 +78,34 @@ describe('checkoutDb.hotelExtras', () => {
     ]);
   });
 
+  it('skips one bad breakfast row and drops non-finite fees and prices (D2)', async () => {
+    const { db } = fake({
+      hotels: {
+        data: {
+          breakfast_offered: 'paid',
+          airport_transfer_enabled: true,
+          airport_prices: { lagos: Infinity, ph: NaN, abuja: 4000 },
+          airport_transfer_fee: Infinity,
+        },
+      },
+      hotel_breakfast_options: {
+        data: [
+          { id: 'b1', name: 'Continental', price_per_person: 3000, is_available: true },
+          { id: 'b2', name: 'Broken', price_per_person: 'TBA', is_available: true },
+          { id: 'b3', name: 'Infinite', price_per_person: Infinity, is_available: true },
+          { nope: true },
+        ],
+      },
+    });
+    expect(await db.hotelExtras('h1')).toEqual({
+      breakfastOffered: 'paid',
+      breakfast: [{ id: 'b1', name: 'Continental', pricePerPerson: 3000 }],
+      airportEnabled: true,
+      airportPrices: { abuja: 4000 },
+      airportFee: null,
+    });
+  });
+
   it('a failed read throws rather than answering with empty extras', async () => {
     const { db } = fake({ hotels: { data: null, error: { code: '500' } } });
     await expect(db.hotelExtras('h1')).rejects.toThrow();
@@ -97,6 +125,21 @@ describe('checkoutDb.apartmentExtras', () => {
       minimumStay: 1,
     });
     expect(logs[0]?.columns).toBe('airport_transfer_enabled, airport_prices, minimum_stay');
+  });
+});
+
+describe('checkoutDb.apartmentExtras (D2)', () => {
+  it.each([Infinity, NaN, -Infinity])('a minimum stay of %s reads as 1', async (minimum_stay) => {
+    const { db } = fake({
+      serviced_apartments: {
+        data: { airport_transfer_enabled: true, airport_prices: { a: NaN }, minimum_stay },
+      },
+    });
+    expect(await db.apartmentExtras('a1')).toEqual({
+      airportEnabled: true,
+      airportPrices: {},
+      minimumStay: 1,
+    });
   });
 });
 

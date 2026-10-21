@@ -431,7 +431,7 @@ describe('events', () => {
     // Still paid: the free route ignores promos (P19 amended).
     expect(screen.getByTestId('select-estimate')).toHaveTextContent('1 ticket · ₦5,000');
     expect(screen.getByTestId('select-problem')).toHaveTextContent(
-      "This code makes your order free, which can't be booked in the app yet. Remove the code or book on bookhushly.com.",
+      'This code makes your order free, which can’t be booked in the app yet. Remove the code or book on bookhushly.com.',
     );
     await fireEvent.press(continueButton());
     expect(submit).not.toHaveBeenCalled();

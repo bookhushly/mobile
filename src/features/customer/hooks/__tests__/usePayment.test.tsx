@@ -568,7 +568,7 @@ describe('usePayment', () => {
     await flush();
     expect(result.current.state).toEqual({
       step: 'startError',
-      words: "Couldn't start payment. Try again",
+      words: 'Couldn’t start payment. Try again',
       action: 'tryAgain',
     });
     expect(initMock).toHaveBeenCalledTimes(1);

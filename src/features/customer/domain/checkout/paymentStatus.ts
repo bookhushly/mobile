@@ -5,7 +5,7 @@ import type { ApiError } from '@/shared/lib/errors';
 // get (network, 404 or 5xx from status/verify): it is never read as a refusal.
 export type PayVerdict = 'paid' | 'failed' | 'pending' | 'unknown';
 
-const TRY_AGAIN = "Couldn't start payment. Try again";
+const TRY_AGAIN = 'Couldn’t start payment. Try again';
 const FAILED_STATUSES: ReadonlySet<string> = new Set(['failed', 'expired', 'abandoned']);
 
 /** `GET /api/payment/status/{ref}`: paid only once the server has also fulfilled the booking. */
@@ -29,9 +29,9 @@ export function fromVerified(v: Verified): PayVerdict {
 /** Words for a failed `POST /api/payment/initialize` (P14). Anything transient says try again. */
 export function startErrorWords(e: ApiError): string {
   if (e.kind === 'conflict' && e.code === 'booking_total_invalid') {
-    return "This booking's price couldn't be confirmed. Start again";
+    return 'This booking’s price couldn’t be confirmed. Start again';
   }
-  if (e.kind === 'forbidden') return "This booking isn't on your account";
+  if (e.kind === 'forbidden') return 'This booking isn’t on your account';
   if (e.kind === 'notFound') return 'Booking not found';
   return TRY_AGAIN;
 }

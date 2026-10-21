@@ -43,6 +43,8 @@ const RECENT_LIMIT = 5;
 const RECENT_STATUSES: ReadonlySet<string> = new Set(['pending', 'confirmed']);
 
 const questionsRow = z.object({ custom_questions: z.unknown() }).nullable();
+/** NaN and ±Infinity are unusable, never a price or a minimum stay (D2). */
+const finite = numeric.refine(Number.isFinite);
 // An unusable price (a string like "TBA", null) is dropped, not coerced to 0.
 const prices = z
   .record(z.string(), z.unknown())
@@ -61,22 +63,27 @@ const hotelRow = z
     breakfast_offered: z.string().nullable().catch(null),
     airport_transfer_enabled: z.boolean().nullable().catch(null),
     airport_prices: prices,
-    airport_transfer_fee: numeric.nullable().catch(null),
+    airport_transfer_fee: finite.nullable().catch(null),
   })
   .nullable();
-const breakfastRows = z.array(
-  z.object({
-    id: z.string(),
-    name: z.string(),
-    price_per_person: numeric,
-    is_available: z.boolean().nullable().catch(null),
+const breakfastRow = z.object({
+  id: z.string(),
+  name: z.string(),
+  price_per_person: finite,
+  is_available: z.boolean().nullable().catch(null),
+});
+// One unusable option is skipped, not a failed read that would block booking the hotel (D2).
+const breakfastRows = z.array(z.unknown()).transform((rows) =>
+  rows.flatMap((r) => {
+    const p = breakfastRow.safeParse(r);
+    return p.success ? [p.data] : [];
   }),
 );
 const apartmentRow = z
   .object({
     airport_transfer_enabled: z.boolean().nullable().catch(null),
     airport_prices: prices,
-    minimum_stay: numeric.nullable().catch(null),
+    minimum_stay: finite.nullable().catch(null),
   })
   .nullable();
 const recentRows = z.array(
@@ -120,7 +127,7 @@ export function createCheckoutDb(client: SupabaseLike): CheckoutDb {
       return {
         breakfastOffered: hotel?.breakfast_offered ?? null,
         breakfast: options
-          .filter((o) => o.is_available !== false && Number.isFinite(o.price_per_person))
+          .filter((o) => o.is_available !== false)
           .map((o) => ({ id: o.id, name: o.name, pricePerPerson: o.price_per_person })),
         airportEnabled: hotel?.airport_transfer_enabled === true,
         airportPrices: hotel?.airport_prices ?? {},

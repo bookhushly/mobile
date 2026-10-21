@@ -150,8 +150,10 @@ export type PaymentState = z.infer<typeof paymentState>;
 // ── Event listing `custom_questions` ─────────────────────────────────────────────────────────────
 // Web `EventTicketPurchase.jsx` reads `q.id`, `q.label`, `q.type` ('select' | 'textarea' | else
 // text input), `q.options` and `q.required`. The brief also accepts `question`/`text` as label.
+// Like web, an unknown or missing type is a text input (never dropped: a required question must
+// not vanish), `required` may be the string "true", and an empty label falls through.
 
-const questionType = z.enum(['text', 'textarea', 'select']);
+const questionType = z.enum(['text', 'textarea', 'select']).catch('text');
 
 const customQuestionItem = z
   .object({
@@ -161,11 +163,14 @@ const customQuestionItem = z
     text: z.string().optional(),
     type: questionType,
     options: z.array(z.string()).catch([]),
-    required: z.boolean().catch(false),
+    required: z
+      .unknown()
+      .optional()
+      .transform((v) => v === true || v === 'true'),
   })
   .transform((q) => ({
     id: q.id,
-    label: q.question ?? q.label ?? q.text ?? '',
+    label: q.question || q.label || q.text || '',
     type: q.type,
     options: q.options,
     required: q.required,

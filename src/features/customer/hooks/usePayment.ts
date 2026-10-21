@@ -44,7 +44,7 @@ export type PayKind = 'hotel' | 'apartment' | 'event';
 export const BROWSER_OPTIONS = { createTask: false, showInRecents: false } as const;
 
 const HOLD_ENDED_WORDS = 'This hold has ended. Start again';
-const START_FAILED_WORDS = "Couldn't start payment. Try again";
+const START_FAILED_WORDS = 'Couldn’t start payment. Try again';
 
 /** Steps where Pay (re)starts P4. Try again after a failure goes back to Review first (A1d). */
 const PAYABLE: ReadonlySet<FlowState['step']> = new Set(['review', 'startError']);

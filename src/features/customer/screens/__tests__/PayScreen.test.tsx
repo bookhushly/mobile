@@ -462,7 +462,7 @@ it('a 503 start error reads try-again words, and Try again re-runs Pay', async (
 it('a price that could not be confirmed offers Start again', async () => {
   setPayment({
     step: 'startError',
-    words: "This booking's price couldn't be confirmed. Start again",
+    words: 'This booking’s price couldn’t be confirmed. Start again',
     action: 'startAgain',
   });
   await renderPay('hotel');

@@ -12,7 +12,7 @@ export const MAX_TICKETS_LINE = 'Up to 20 tickets per booking';
 export const NO_ROOMS = 'No rooms left for these dates';
 export const QUESTION_WORDS = 'Answer this question';
 export const PROMO_ZERO =
-  "This code makes your order free, which can't be booked in the app yet. Remove the code or book on bookhushly.com.";
+  'This code makes your order free, which can’t be booked in the app yet. Remove the code or book on bookhushly.com.';
 export const PRICE_UNAVAILABLE =
   'This event’s price isn’t available. Try again later or book on bookhushly.com.';
 
