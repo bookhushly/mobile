@@ -158,9 +158,10 @@ export function useCreateBooking(
   }, []);
 
   // P28: the entry is on disk before the screen moves on. A failed write never hides the booking.
+  // `gen` is the store generation when the send began: a sign-out wipe since drops the write (B1).
   const adopt = useCallback(
-    async (entry: CheckoutEntry | null, bookingId: string) => {
-      if (entry !== null) await checkoutStore.put(entry).catch(() => undefined);
+    async (entry: CheckoutEntry | null, bookingId: string, gen: number) => {
+      if (entry !== null) await checkoutStore.put(entry, gen).catch(() => undefined);
       if (!alive()) return;
       setCreated({ bookingId });
       setState(IDLE);
@@ -235,12 +236,13 @@ export function useCreateBooking(
           : apartmentBody(listingId, s);
       inFlight.current = true;
       show({ phase: 'sending' });
+      const gen = checkoutStore.generation();
       for (;;) {
         const r = await createStay(api, kind, body, k.key);
         if (r.ok) {
           inFlight.current = false;
           idem.current = null;
-          await adopt(stayEntry(userId, listingId, r.value.booking, s), r.value.booking.id);
+          await adopt(stayEntry(userId, listingId, r.value.booking, s), r.value.booking.id, gen);
           return;
         }
         const o = stayCreateOutcome(r.error, kind);
@@ -272,6 +274,7 @@ export function useCreateBooking(
       inFlight.current = true;
       show({ phase: 'sending' });
       eventSentAt.current = clock.serverNow();
+      const gen = checkoutStore.generation();
       const r = await createEvent(api, eventBody(listingId, s, free), free);
       inFlight.current = false;
       if (r.ok) {
@@ -280,6 +283,7 @@ export function useCreateBooking(
         await adopt(
           free ? null : eventEntry(userId, listingId, r.value.booking, s, ctx),
           r.value.booking.id,
+          gen,
         );
         return;
       }
@@ -341,7 +345,7 @@ export function useCreateBooking(
     }
     eventSentAt.current = null;
     // The read gives no amounts: no cached breakdown, Review shows the booking's total (P28).
-    await adopt(null, found.id);
+    await adopt(null, found.id, checkoutStore.generation());
   }, [kind, listingId, userId, sendStay, show, adopt]);
 
   return { submit, state, created, checkAgain };

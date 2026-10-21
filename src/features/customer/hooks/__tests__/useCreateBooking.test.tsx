@@ -126,6 +126,16 @@ const advance = (ms: number) =>
   });
 
 describe('useCreateBooking — stays', () => {
+  it('a sign-out wipe while the create is in flight drops its entry (B1)', async () => {
+    stayMock.mockImplementation(async () => {
+      await checkoutStore.wipe();
+      return stayCreated;
+    });
+    const { result } = await renderHook(() => useCreateBooking(USER, 'hotel', HOTEL));
+    await act(() => result.current.submit(stay(), ctx));
+    expect(await checkoutStore.get(USER, 'hotel', 'hb1')).toBeNull();
+  });
+
   it('a key 9 minutes old is replaced even for the same selection (A6)', async () => {
     stayMock.mockResolvedValue(lost);
     const { result } = await renderHook(() => useCreateBooking(USER, 'hotel', HOTEL));

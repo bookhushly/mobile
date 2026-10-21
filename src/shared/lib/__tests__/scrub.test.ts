@@ -152,3 +152,45 @@ describe('path scrubbing', () => {
     expect(t.spans[1]).toEqual({ op: 'ui.load' });
   });
 });
+
+describe('payment references (B2)', () => {
+  it('masks the reference in a payment status path, keeping the route', () => {
+    expect(redactUrl('https://bookhushly.com/api/payment/status/BH_PAY_abc123?x=1')).toBe(
+      'https://bookhushly.com/api/payment/status/[ref]',
+    );
+    expect(redactText('GET /api/payment/status/T123456789 failed')).toBe(
+      'GET /api/payment/status/[ref] failed',
+    );
+  });
+
+  it('masks reference fields in breadcrumb data', () => {
+    const b = scrubBreadcrumb({
+      category: 'fetch',
+      data: {
+        url: 'https://bookhushly.com/api/payment/status/T1',
+        reference: 'T1',
+        method: 'GET',
+      },
+    });
+    expect(b?.data).toEqual({
+      url: 'https://bookhushly.com/api/payment/status/[ref]',
+      reference: '[ref]',
+      method: 'GET',
+    });
+  });
+
+  it('masks reference fields and status paths in spans', () => {
+    const t = scrubTransaction({
+      spans: [
+        {
+          description: 'GET https://bookhushly.com/api/payment/status/T9',
+          data: { 'http.url': 'https://bookhushly.com/api/payment/status/T9', reference: 'T9' },
+        },
+      ],
+    });
+    expect(t.spans[0]).toEqual({
+      description: 'GET https://bookhushly.com/api/payment/status/[ref]',
+      data: { 'http.url': 'https://bookhushly.com/api/payment/status/[ref]', reference: '[ref]' },
+    });
+  });
+});

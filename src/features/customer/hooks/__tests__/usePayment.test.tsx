@@ -213,6 +213,39 @@ describe('usePayment', () => {
     });
   });
 
+  it('an initialise URL off the Paystack allowlist is never opened (B3)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(noPayment);
+    initMock.mockResolvedValue(
+      ok<Initialized>({
+        success: true,
+        payment: {
+          id: 'p1',
+          reference: 'ref1',
+          amount: 50000,
+          base_amount: 50000,
+          service_charge_amount: 0,
+          service_charge_label: null,
+          currency: 'NGN',
+          payment_url: 'https://evil.test/pay',
+        },
+      }),
+    );
+    const { result } = await setup();
+    await act(() => {
+      result.current.pay();
+    });
+    await flush();
+    expect(openMock).not.toHaveBeenCalled();
+    expect(result.current.state.step).toBe('startError');
+    // The reference is kept (no URL): check-status settles it, and leaving never cancels.
+    expect((await checkoutStore.get(USER, 'hotel', BOOKING))?.payment).toMatchObject({
+      reference: 'ref1',
+      paymentUrl: '',
+    });
+    expect(result.current.willCancelOnLeave).toBe(false);
+  });
+
   it('entry is written before the browser opens', async () => {
     withPlatform('ios');
     const order: string[] = [];

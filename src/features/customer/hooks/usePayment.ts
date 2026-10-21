@@ -15,6 +15,7 @@ import {
   flow,
   holdEndsAt as holdEnd,
   isFreshPayment,
+  isPaymentUrl,
   planPay,
   type FlowEvent,
   type FlowState,
@@ -43,6 +44,7 @@ export type PayKind = 'hotel' | 'apartment' | 'event';
 export const BROWSER_OPTIONS = { createTask: false, showInRecents: false } as const;
 
 const HOLD_ENDED_WORDS = 'This hold has ended. Start again';
+const START_FAILED_WORDS = "Couldn't start payment. Try again";
 
 /** Steps where Pay (re)starts P4. Try again after a failure goes back to Review first (A1d). */
 const PAYABLE: ReadonlySet<FlowState['step']> = new Set(['review', 'startError']);
@@ -224,10 +226,10 @@ export function usePayment(
   );
 
   const recordStart = useCallback(
-    async (to: string): Promise<CheckoutEntry> => {
+    async (to: string, gen: number): Promise<CheckoutEntry> => {
       const onDisk = await checkoutStore.get(userId, kind, bookingId).catch(() => null);
       if (onDisk !== null) {
-        await checkoutStore.markStarted(userId, kind, bookingId).catch(() => undefined);
+        await checkoutStore.markStarted(userId, kind, bookingId, gen).catch(() => undefined);
         return { ...onDisk, paymentEverStarted: true };
       }
       const minimal: CheckoutEntry = {
@@ -244,7 +246,7 @@ export function usePayment(
         payment: null,
         paymentEverStarted: true,
       };
-      await checkoutStore.put(minimal).catch(() => undefined);
+      await checkoutStore.put(minimal, gen).catch(() => undefined);
       return minimal;
     },
     [userId, kind, bookingId, title, total, createdAt],
@@ -258,14 +260,16 @@ export function usePayment(
     }
     const to = email;
     if (to === null || to === '') {
-      send({ type: 'startFailed', words: "Couldn't start payment. Try again", action: 'tryAgain' });
+      send({ type: 'startFailed', words: START_FAILED_WORDS, action: 'tryAgain' });
       return;
     }
     // R8: the booking is on disk, marked started, before initialise is sent: its answer may be
     // lost while a payment exists. With no cached entry, a minimal one is written from the row.
+    // A sign-out wipe during this work drops its writes (B1).
+    const gen = checkoutStore.generation();
     sawPayment.current = true;
     setSawPay(true);
-    const startedEntry = await recordStart(to);
+    const startedEntry = await recordStart(to, gen);
     entryRef.current = startedEntry;
     if (alive()) setEntry(startedEntry);
     if (!alive()) return;
@@ -284,10 +288,15 @@ export function usePayment(
     const payment = { reference, paymentUrl: payment_url, startedAt };
     // P5: on disk before the browser opens. A failed write still opens: the server has the
     // reference, and check-status reuses it on the next Pay.
-    await checkoutStore.setPayment(userId, kind, bookingId, payment).catch(() => undefined);
+    await checkoutStore.setPayment(userId, kind, bookingId, payment, gen).catch(() => undefined);
     entryRef.current = { ...startedEntry, payment };
     if (!alive()) return;
     setEntry(entryRef.current);
+    // B3: only Paystack's own pages open. The reference is kept; check-status settles it.
+    if (!isPaymentUrl(payment_url)) {
+      send({ type: 'startFailed', words: START_FAILED_WORDS, action: 'tryAgain' });
+      return;
+    }
     await openBrowser(reference, payment_url, startedAt);
   }, [holdOver, email, send, kind, bookingId, userId, openBrowser, alive, recordStart]);
 

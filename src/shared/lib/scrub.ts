@@ -6,6 +6,10 @@ const BEARER = /Bearer\s+[\w.~+/=-]+/gi;
 // Ticket codes and ids identify a guest's ticket: never let them reach a report.
 const TICKET_CODE = /BH[12]\.[A-Za-z0-9._~-]+/g;
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+// A payment reference (in GET /api/payment/status/<ref>) is enough to read that payment back.
+const PAYMENT_STATUS_REF = /(\/api\/payment\/status\/)[^/?#\s]+/gi;
+/** Data keys holding a payment reference (verify / check-status bodies, our own breadcrumbs). */
+const REFERENCE_KEYS: ReadonlySet<string> = new Set(['reference', 'payment_reference']);
 
 export function stripQuery(url: string): string {
   const cut = url.search(/[?#]/);
@@ -17,6 +21,7 @@ const CHECK_IN_SEGMENT = /\/[0-9A-F]{8}(?=\/|$)/gi;
 
 export function redactText(text: string): string {
   return text
+    .replace(PAYMENT_STATUS_REF, '$1[ref]')
     .replace(TICKET_CODE, '[code]')
     .replace(JWT, '[token]')
     .replace(BEARER, 'Bearer [token]')
@@ -45,6 +50,7 @@ export function scrubBreadcrumb<T extends Breadcrumb>(b: T): T | null {
       const v = data[k];
       if (typeof v === 'string') data[k] = redactUrl(v);
     }
+    for (const k of Object.keys(data)) if (REFERENCE_KEYS.has(k)) data[k] = '[ref]';
     out.data = data;
   }
   return out;
@@ -98,7 +104,8 @@ function scrubSpan<S extends Span>(span: S): S {
     const data: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(out.data)) {
       if (SPAN_DROPPED_KEYS.includes(k)) continue;
-      data[k] = SPAN_URL_KEYS.includes(k) && typeof v === 'string' ? redactUrl(v) : v;
+      if (REFERENCE_KEYS.has(k)) data[k] = '[ref]';
+      else data[k] = SPAN_URL_KEYS.includes(k) && typeof v === 'string' ? redactUrl(v) : v;
     }
     out.data = data;
   }

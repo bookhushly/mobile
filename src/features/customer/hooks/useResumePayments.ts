@@ -11,7 +11,6 @@ import {
 } from '@/features/customer/domain/checkout/paymentStatus';
 import { customerKeys } from '@/features/customer/hooks/customerKeys';
 import { isPayScreenOpen } from '@/features/customer/hooks/openPayScreens';
-// Importing the store registers its sign-out wipe (P5): the customer layout mounts this hook.
 import { checkoutStore } from '@/features/customer/offline/checkoutStore';
 import { api, clock } from '@/shared/api/instance';
 

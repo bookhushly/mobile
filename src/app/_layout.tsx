@@ -13,6 +13,8 @@ import '@/features/customer/offline/wallet';
 import '@/features/customer/offline/recentSearches';
 // And the reviewed / refund-requested marks (spec E6, E8).
 import '@/features/customer/offline/actionMarks';
+// And the checkout entries (4c P5, B1): guest emails and payment links, cleared on every sign-out.
+import '@/features/customer/offline/checkoutStore';
 import { resolveRoute } from '@/features/mode/domain/route';
 import { useModeState } from '@/features/mode/hooks/useModeState';
 import { useRouteStore } from '@/features/mode/hooks/useRouteStore';
