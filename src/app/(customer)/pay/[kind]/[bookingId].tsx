@@ -1,23 +1,54 @@
-import { router } from 'expo-router';
-import { ReceiptText } from 'lucide-react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 
-import { EmptyState, Screen } from '@/shared/ui';
+import { useAuth } from '@/features/auth/hooks/useAuth';
+import { bookingRefParams } from '@/features/customer/domain/routeParams';
+import { PayScreen } from '@/features/customer/screens/PayScreen';
 
-// Placeholder so the Select screen's hand-off is a typed route. Task 11 replaces this file with
-// the Pay screen (Review → Checking → Done, spec P22).
+// Spec P22: `/pay/{hotel|apartment|event}/{bookingId}[?free=1]`. Anything off-shape is "Booking
+// not found", without a query.
 export default function PayRoute() {
+  const params = useLocalSearchParams<{ kind: string; bookingId: string; free?: string }>();
+  const state = useAuth((s) => s.state);
   return (
-    <Screen>
-      <EmptyState
-        icon={ReceiptText}
-        title="Your booking is saved. Open it from Bookings to pay."
-        action={{
-          label: 'Go to Bookings',
-          onPress: () => {
-            router.replace('/bookings');
-          },
-        }}
-      />
-    </Screen>
+    <PayScreen
+      booking={bookingRefParams(params.kind, params.bookingId)}
+      free={params.free === '1'}
+      userId={state.status === 'signedIn' ? state.userId : ''}
+      email={state.status === 'signedIn' ? state.email : ''}
+      onBack={() => {
+        if (router.canGoBack()) router.back();
+        else router.replace('/bookings');
+      }}
+      onBookings={() => {
+        router.dismissTo('/bookings');
+      }}
+      onStartAgain={(to) => {
+        if (to === null) router.dismissTo('/explore');
+        else if (to.kind === 'hotel' && to.roomTypeId === null) {
+          // Select needs the room type: the listing lets the customer choose one.
+          router.replace({
+            pathname: '/listing/[kind]/[id]',
+            params: { kind: to.kind, id: to.listingId },
+          });
+        } else {
+          router.replace({
+            pathname: '/checkout/[kind]/[listingId]',
+            params:
+              to.roomTypeId === null
+                ? { kind: to.kind, listingId: to.listingId }
+                : { kind: to.kind, listingId: to.listingId, roomType: to.roomTypeId },
+          });
+        }
+      }}
+      onViewTickets={(bookingId) => {
+        router.replace({ pathname: '/tickets/[bookingId]', params: { bookingId } });
+      }}
+      onViewBooking={(kind, id) => {
+        router.replace({ pathname: '/my-booking/[kind]/[id]', params: { kind, id } });
+      }}
+      onDone={() => {
+        router.dismissTo('/explore');
+      }}
+    />
   );
 }
