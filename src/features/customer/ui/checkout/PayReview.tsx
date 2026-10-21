@@ -26,6 +26,8 @@ type Props = {
   canPay: boolean;
   /** The service charge couldn't be read: the total is shown without it. */
   chargeUnknown: boolean;
+  /** The charge read is paused (offline) or retrying: Pay waits, and the screen says so. */
+  chargeChecking: boolean;
   /** CHECKOUT_PAYMENTS_ENABLED: off keeps the 4a web hand-off in place of Pay. */
   payInApp: boolean;
   /** A start error's words, and what its button does (none for a refusal). */
@@ -47,6 +49,7 @@ export function PayReview({
   starting,
   canPay,
   chargeUnknown,
+  chargeChecking,
   payInApp,
   startError,
   onPay,
@@ -136,6 +139,7 @@ export function PayReview({
         total={total}
         charge={charge}
         chargeUnknown={chargeUnknown}
+        chargeChecking={chargeChecking}
         testID="price-details"
       />
       {holdUntil !== null ? (

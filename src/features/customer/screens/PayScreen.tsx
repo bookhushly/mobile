@@ -101,10 +101,11 @@ function Pay({
           e.preventDefault();
           return;
         }
-        if (freeDone || left.current) return;
+        // A free registration is never cancelled from here, loaded or not.
+        if (freeEvent || left.current) return;
         leave();
       }),
-    [navigation, step, freeDone, leave],
+    [navigation, step, freeEvent, leave],
   );
 
   useEffect(() => {
@@ -214,6 +215,10 @@ function Pay({
       // The label must carry the charge: Pay waits for the estimate (or its failure).
       canPay={p.canPay && !chargeQ.isPending}
       chargeUnknown={chargeQ.isError}
+      // Offline (paused) or retrying after a failure: say why Pay is waiting.
+      chargeChecking={
+        chargeQ.fetchStatus === 'paused' || (chargeQ.isPending && chargeQ.failureCount > 0)
+      }
       payInApp={CHECKOUT_PAYMENTS_ENABLED}
       startError={
         failure === null

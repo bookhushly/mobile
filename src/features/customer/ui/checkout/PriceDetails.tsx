@@ -15,6 +15,8 @@ type Props = {
   charge: PriceLine | null;
   /** The charge couldn't be read: the total is shown without it, with a line saying so. */
   chargeUnknown?: boolean;
+  /** The charge is still being read (offline or retrying). */
+  chargeChecking?: boolean;
   testID?: string;
 };
 
@@ -45,6 +47,7 @@ export function PriceDetails({
   total,
   charge,
   chargeUnknown = false,
+  chargeChecking = false,
   testID,
 }: Props) {
   const payable = payableTotal(total, charge);
@@ -76,6 +79,11 @@ export function PriceDetails({
         >
           <Row line={{ label: 'Total', amount: payable }} strong />
         </View>
+        {chargeChecking ? (
+          <Text variant="bodySm" tone="textSecondary" testID="charge-checking">
+            Checking the service charge…
+          </Text>
+        ) : null}
         {chargeUnknown ? (
           <Text variant="bodySm" tone="textSecondary" testID="charge-unknown">
             plus any service charge shown on Paystack

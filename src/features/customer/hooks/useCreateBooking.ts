@@ -268,7 +268,11 @@ export function useCreateBooking(
       inFlight.current = false;
       if (r.ok) {
         eventSentAt.current = null;
-        await adopt(eventEntry(userId, listingId, r.value.booking, s, ctx), r.value.booking.id);
+        // A free registration is never paid for: no entry, so nothing can resume or cancel it.
+        await adopt(
+          free ? null : eventEntry(userId, listingId, r.value.booking, s, ctx),
+          r.value.booking.id,
+        );
         return;
       }
       const o = eventCreateOutcome(r.error);

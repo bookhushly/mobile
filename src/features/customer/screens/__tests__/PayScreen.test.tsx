@@ -140,15 +140,23 @@ function setPayment(state: FlowState, over: Partial<Pay> = {}) {
   mockPayment.mockImplementation(() => pay);
 }
 
-function setCharge(q: { data?: unknown; isPending?: boolean; isError?: boolean }) {
+function setCharge(q: {
+  data?: unknown;
+  isPending?: boolean;
+  isError?: boolean;
+  fetchStatus?: 'fetching' | 'paused' | 'idle';
+  failureCount?: number;
+}) {
   mockCharge.mockReturnValue({
     isPending: false,
     isError: false,
+    fetchStatus: 'idle',
+    failureCount: 0,
     ...q,
   } as unknown as ReturnType<typeof useServiceCharge>);
 }
 
-function setRow(row: unknown) {
+function setRow(row: unknown, error = false) {
   mockBooking.mockImplementation(
     () =>
       ({
@@ -156,7 +164,7 @@ function setRow(row: unknown) {
         fromWallet: null,
         savedAt: null,
         today: '2026-10-21',
-        error: false,
+        error,
         refetch: jest.fn(),
       }) as unknown as ReturnType<typeof useBooking>,
   );
@@ -481,9 +489,39 @@ it('Not now replaces Cancel booking when leaving would not cancel', async () => 
 });
 
 it('Pay waits while the service charge loads', async () => {
-  setCharge({ isPending: true });
+  setCharge({ isPending: true, fetchStatus: 'fetching' });
   await renderPay('hotel');
   expect(screen.getByTestId('pay-button')).toBeDisabled();
+  expect(screen.queryByText('Checking the service charge…')).toBeNull();
+});
+
+it('offline, the paused charge read says why Pay waits', async () => {
+  setCharge({ isPending: true, fetchStatus: 'paused' });
+  await renderPay('hotel');
+  expect(screen.getByText('Checking the service charge…')).toBeTruthy();
+  expect(screen.getByTestId('pay-button')).toBeDisabled();
+});
+
+it('a charge read retrying after a failure says why Pay waits', async () => {
+  setCharge({ isPending: true, fetchStatus: 'fetching', failureCount: 1 });
+  await renderPay('hotel');
+  expect(screen.getByText('Checking the service charge…')).toBeTruthy();
+  expect(screen.getByTestId('pay-button')).toBeDisabled();
+});
+
+it('backing out while a free registration loads never cancels it', async () => {
+  setRow(undefined);
+  await renderPay('event', { free: true });
+  removeScreen();
+  expect(pay.leave).not.toHaveBeenCalled();
+});
+
+it('backing out after a free registration failed to load never cancels it', async () => {
+  setRow(undefined, true);
+  await renderPay('event', { free: true });
+  expect(screen.getByText('Couldn’t load this booking')).toBeTruthy();
+  removeScreen();
+  expect(pay.leave).not.toHaveBeenCalled();
 });
 
 it('a failed service charge read shows the total with a note, and Pay works', async () => {

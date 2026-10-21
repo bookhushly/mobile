@@ -272,6 +272,15 @@ describe('useCreateBooking — events', () => {
     });
   });
 
+  it('a free registration writes no checkout entry', async () => {
+    eventMock.mockResolvedValue(eventCreated);
+    const { result } = await renderHook(() => useCreateBooking(USER, 'event', EVENT));
+    await act(() => result.current.submit(tickets(), { title: 'Afrobeats night', free: true }));
+    expect(eventMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), true);
+    expect(result.current.created).toEqual({ bookingId: 'eb1' });
+    expect(await checkoutStore.get(USER, 'event', 'eb1')).toBeNull();
+  });
+
   it('event lookup that fails stays unsure', async () => {
     eventMock.mockResolvedValue(lost);
     findMock.mockRejectedValue(new Error('checkout read failed: network'));
