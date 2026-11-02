@@ -30,7 +30,9 @@ const initMock = jest.mocked(initializePayment);
 const verifyMock = jest.mocked(verifyPayment);
 const stateMock = jest.mocked(paymentState);
 
-const NOW = Date.parse('2026-10-21T12:00:00Z');
+// The real clock: the shared checkoutStore keeps the real Date.now, not the fake timers', so a
+// fixed date here would age past CHECKOUT_TTL_MS and the store would drop every entry.
+const NOW = Date.now();
 
 const MIN = 60_000;
 const OLD = 20 * MIN;
