@@ -54,9 +54,11 @@ it('terms and privacy open the web pages', async () => {
   expect(onOpenLink).toHaveBeenNthCalledWith(1, 'https://bookhushly.com/terms');
 });
 
-it('shows the headline and the welcome illustration', async () => {
+it('states all three categories and the naira line', async () => {
   await render(<WelcomeScreen {...props()} />);
-  expect(screen.getByText('Book stays and events across Nigeria')).toBeTruthy();
-  // Decorative: hidden from screen readers, so the query has to include hidden elements.
-  expect(screen.getByTestId('illustration-welcome', { includeHiddenElements: true })).toBeTruthy();
+  expect(
+    screen.getByRole('header', { name: 'Events, stays and hotels across Nigeria.' }),
+  ).toBeTruthy();
+  expect(screen.getByText('Find it, book it, pay in naira.')).toBeTruthy();
+  expect(screen.getByLabelText('Bookhushly')).toBeTruthy();
 });

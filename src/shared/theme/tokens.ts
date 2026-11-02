@@ -29,6 +29,10 @@ export const palette = {
   gateRetry: '#4A4670',
   // Neutral status ("couldn't reach", lookup/override markers): ink-soft text on wash.
   neutral: '#4A4670',
+  // Legibility fade over auth photos (ink-black); the middle stop sits behind text.
+  scrimClear: 'rgba(10,6,30,0)',
+  scrimMid: 'rgba(10,6,30,0.6)',
+  scrimEnd: 'rgba(10,6,30,0.85)',
 } as const;
 
 export const space = {

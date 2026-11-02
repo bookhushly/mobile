@@ -9,6 +9,8 @@ type Props = {
   onPress: () => void;
   /** `sm`: caption-sized, for links inside a caption line (terms, privacy). */
   size?: 'md' | 'sm';
+  /** `onInverse`: white, for a link over a photo or dark surface. */
+  tone?: 'link' | 'onInverse';
   accessibilityLabel?: string;
   /** Nothing to do right now (e.g. "Mark all as read" with none unread). */
   disabled?: boolean;
@@ -20,6 +22,7 @@ export function TextLink({
   label,
   onPress,
   size = 'md',
+  tone = 'link',
   accessibilityLabel,
   disabled = false,
   testID,
@@ -40,7 +43,7 @@ export function TextLink({
     >
       <Text
         variant={size === 'sm' ? 'labelSm' : 'label'}
-        tone={disabled ? 'textMuted' : 'linkText'}
+        tone={disabled ? 'textMuted' : tone === 'onInverse' ? 'onInverse' : 'linkText'}
       >
         {label}
       </Text>

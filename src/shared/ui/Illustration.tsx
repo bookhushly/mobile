@@ -3,7 +3,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { color } from '@/shared/theme';
 
 export type IllustrationName =
-  'camera' | 'noEvents' | 'offline' | 'search' | 'welcome' | 'find' | 'pay' | 'showUp';
+  'camera' | 'noEvents' | 'offline' | 'search' | 'find' | 'pay' | 'showUp';
 
 // Rounded rectangle as a path (react-native-svg marks Rect's x/y as deprecated transform aliases).
 function roundedRect(x: number, y: number, w: number, h: number, r: number): string {
@@ -80,35 +80,6 @@ export function Illustration({ name, size = 160 }: { name: IllustrationName; siz
         <>
           <Circle cx={72} cy={72} r={26} fill={color.surface} stroke={ink} strokeWidth={5} />
           <Path d="M92 92l22 22" stroke={violet} strokeWidth={8} strokeLinecap="round" />
-        </>
-      ) : null}
-      {name === 'welcome' ? (
-        <>
-          <Path
-            d={roundedRect(38, 40, 60, 80, 8)}
-            fill={color.surface}
-            stroke={ink}
-            strokeWidth={3}
-          />
-          <Path
-            d={[
-              roundedRect(48, 52, 12, 12, 2),
-              roundedRect(66, 52, 12, 12, 2),
-              roundedRect(84, 52, 12, 12, 2),
-              roundedRect(48, 72, 12, 12, 2),
-              roundedRect(66, 72, 12, 12, 2),
-              roundedRect(84, 72, 12, 12, 2),
-            ].join('')}
-            fill={ink}
-          />
-          <Path
-            d={roundedRect(72, 88, 56, 34, 6)}
-            fill={color.surface}
-            stroke={ink}
-            strokeWidth={3}
-          />
-          <Circle cx={72} cy={105} r={6} fill={violet} />
-          <Path d="M88 99h30M88 111h18" stroke={ink} strokeWidth={3} strokeLinecap="round" />
         </>
       ) : null}
       {name === 'find' ? (

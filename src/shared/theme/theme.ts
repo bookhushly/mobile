@@ -17,6 +17,7 @@ export const color = {
   // The scanner's dark surface (camera letterbox, top/bottom bars over the camera).
   inverse: palette.ink,
   onInverse: palette.white,
+  scrim: [palette.scrimClear, palette.scrimMid, palette.scrimEnd] as const,
   status: {
     neutral: { bg: palette.wash, fg: palette.neutral, solid: palette.neutral },
     success: { bg: palette.successWash, fg: palette.successInk, solid: palette.success },
