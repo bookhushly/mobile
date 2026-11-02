@@ -125,3 +125,11 @@ it('a double tap saves once', async () => {
     expect(p.onSaved).toHaveBeenCalledTimes(1);
   });
 });
+
+it('keeps Cancel, not Back', async () => {
+  const p = props();
+  await render(<NewPasswordScreen {...p} />);
+  expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+  expect(p.onLeave).toHaveBeenCalled();
+});

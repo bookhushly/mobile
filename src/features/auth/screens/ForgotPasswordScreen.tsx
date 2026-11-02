@@ -1,12 +1,11 @@
-import { ArrowLeft } from 'lucide-react-native';
 import { useRef, useState } from 'react';
-import { View } from 'react-native';
 
+import { AuthSheet } from '@/features/auth/components/AuthSheet';
 import type { AccountFailure } from '@/features/auth/api/accountApi';
 import { transientMessage } from '@/features/auth/domain/transientMessage';
 import { forgotPasswordSchema } from '@/features/auth/schemas/forgotPassword';
 import type { Result } from '@/shared/lib/result';
-import { Banner, Button, IconButton, Input, Screen, Stack, Text } from '@/shared/ui';
+import { Banner, Button, Input, Stack, Text } from '@/shared/ui';
 
 type Props = {
   /** The address typed on sign-in, if any; the user can still change it. */
@@ -62,15 +61,9 @@ export function ForgotPasswordScreen({ initialEmail, onSubmit, onSent, onBack }:
   }
 
   return (
-    <Screen
-      scroll
-      header={
-        onBack !== undefined ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56 }}>
-            <IconButton icon={ArrowLeft} accessibilityLabel="Back" onPress={onBack} />
-          </View>
-        ) : undefined
-      }
+    <AuthSheet
+      band="tall"
+      onLeave={onBack}
     >
       <Stack gap="s3">
         <Text variant="displaySm" accessibilityRole="header">
@@ -105,6 +98,6 @@ export function ForgotPasswordScreen({ initialEmail, onSubmit, onSent, onBack }:
           }}
         />
       </Stack>
-    </Screen>
+    </AuthSheet>
   );
 }

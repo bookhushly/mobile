@@ -306,3 +306,10 @@ it('Change goes back; Open email app only shows when it can open', async () => {
   expect(p.onOpenMail).toHaveBeenCalledTimes(1);
   expect(screen.getByText(/Check spam or junk/)).toBeTruthy();
 });
+
+it('shows Back and calls onBack', async () => {
+  const onBack = jest.fn();
+  await render(<CodeScreen {...base()} onBack={onBack} />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Back' }));
+  expect(onBack).toHaveBeenCalled();
+});

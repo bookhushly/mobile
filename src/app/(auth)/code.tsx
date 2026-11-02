@@ -63,6 +63,10 @@ export default function CodeRoute() {
         if (recovery) router.replace('/new-password');
       }}
       canOpenMail={canOpenMail}
+      onBack={() => {
+        if (router.canGoBack()) router.back();
+        else router.replace('/welcome');
+      }}
       onOpenMail={() => {
         void Linking.openURL(MAIL_URL);
       }}

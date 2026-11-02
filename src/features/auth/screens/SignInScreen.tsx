@@ -1,17 +1,15 @@
-import { ArrowLeft } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { View } from 'react-native';
 
+import { AuthSheet } from '@/features/auth/components/AuthSheet';
 import { signInCopy, type SignInError } from '@/features/auth/domain/signInErrors';
 import { signInSchema } from '@/features/auth/schemas/signIn';
 import { type StatusTone } from '@/shared/theme';
 import {
   Banner,
   Button,
-  IconButton,
   Input,
   PasswordField,
-  Screen,
   Stack,
   Text,
   TextLink,
@@ -94,15 +92,9 @@ export function SignInScreen({
   }
 
   return (
-    <Screen
-      scroll
-      header={
-        onBack !== undefined ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56 }}>
-            <IconButton icon={ArrowLeft} accessibilityLabel="Back" onPress={onBack} />
-          </View>
-        ) : undefined
-      }
+    <AuthSheet
+      band="medium"
+      onLeave={onBack}
       footer={
         <View style={{ alignItems: 'center' }}>
           <TextLink label="New here? Create account" onPress={onCreateAccount} />
@@ -158,6 +150,6 @@ export function SignInScreen({
           />
         </View>
       </Stack>
-    </Screen>
+    </AuthSheet>
   );
 }

@@ -1,7 +1,7 @@
 import { X } from 'lucide-react-native';
 import { useRef, useState } from 'react';
-import { View } from 'react-native';
 
+import { AuthSheet } from '@/features/auth/components/AuthSheet';
 import type { AccountFailure } from '@/features/auth/api/accountApi';
 import { passwordRules, RULES } from '@/features/auth/domain/passwordRules';
 import { WEAK_PASSWORD_MESSAGE } from '@/features/auth/domain/signUpErrors';
@@ -10,10 +10,8 @@ import type { Result } from '@/shared/lib/result';
 import {
   Banner,
   Button,
-  IconButton,
   PasswordField,
   RuleList,
-  Screen,
   Stack,
   Text,
 } from '@/shared/ui';
@@ -83,13 +81,11 @@ export function NewPasswordScreen({ onSave, onSaved, onLeave }: Props) {
   }
 
   return (
-    <Screen
-      scroll
-      header={
-        <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56 }}>
-          <IconButton icon={X} accessibilityLabel="Cancel" onPress={onLeave} />
-        </View>
-      }
+    <AuthSheet
+      band="tall"
+      onLeave={onLeave}
+      leaveIcon={X}
+      leaveLabel="Cancel"
     >
       <Stack gap="s3">
         <Text variant="displaySm" accessibilityRole="header">
@@ -143,6 +139,6 @@ export function NewPasswordScreen({ onSave, onSaved, onLeave }: Props) {
           }}
         />
       </Stack>
-    </Screen>
+    </AuthSheet>
   );
 }

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { View } from 'react-native';
 
+import { AuthSheet } from '@/features/auth/components/AuthSheet';
 import type { AccountFailure } from '@/features/auth/api/accountApi';
 import { TermsLine } from '@/features/auth/components/TermsLine';
 import { passwordRules, RULES } from '@/features/auth/domain/passwordRules';
@@ -14,7 +15,6 @@ import {
   Input,
   PasswordField,
   RuleList,
-  Screen,
   Stack,
   Text,
   TextLink,
@@ -28,6 +28,7 @@ type Props = {
   onVerifyExisting: (email: string) => Promise<void>;
   onSignIn: () => void;
   onOpenLink: (url: string) => void;
+  onBack?: () => void;
 };
 
 // `emailTaken` is ambiguous (confirmed or not), so both paths are offered (spec §2 decision 8).
@@ -47,6 +48,7 @@ export function SignUpScreen({
   onVerifyExisting,
   onSignIn,
   onOpenLink,
+  onBack,
 }: Props) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -119,8 +121,9 @@ export function SignUpScreen({
   }
 
   return (
-    <Screen
-      scroll
+    <AuthSheet
+      band="short"
+      onLeave={onBack}
       footer={
         <>
           <View style={{ alignItems: 'center' }}>
@@ -209,6 +212,6 @@ export function SignUpScreen({
           }}
         />
       </Stack>
-    </Screen>
+    </AuthSheet>
   );
 }
