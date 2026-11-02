@@ -16,7 +16,7 @@ Read from `../web/tailwind.config.js`, `app/globals.css`, `app/layout.js`.
 | Muted text                  | `#6B6987` (5.26:1 on white)                                                                                       |
 | Radius base                 | 12 px (sm 8, md 10, lg 12, 3xl 16)                                                                                |
 | Type scale (px/line-height) | 12/16, 14/20, 16/24, 18/28, 20/28, 24/32, 32/40, 40/48, 48/56, 64/68, 80/84 (display sizes use negative tracking) |
-| Fonts                       | Radio-Canada (sans), Source Serif 4 (serif, static 500 roman + italic)                                            |
+| Fonts                       | Hanken Grotesk (static 400, 500, 600), for UI and headlines. The web stays on Radio-Canada and Source Serif 4.   |
 | Shadows                     | one quiet system: soft / medium / hard                                                                            |
 | Skeleton                    | shimmer 1.5 s, shown only after 150 ms, none under reduced motion                                                 |
 
@@ -58,26 +58,27 @@ Hand-tuned scale anchored on the web scale (a strict modular ratio gives fractio
 
 | Token        | Size/LH | Weight | Tracking | Font                                       |
 | ------------ | ------- | ------ | -------- | ------------------------------------------ |
-| `caption`    | 12/16   | 400    | +0.2     | Radio-Canada                               |
-| `labelSm`    | 12/16   | 600    | +0.2     | Radio-Canada                               |
-| `label`      | 14/20   | 600    | 0        | Radio-Canada                               |
-| `bodySm`     | 14/20   | 400    | 0        | Radio-Canada                               |
-| `body`       | 16/24   | 400    | 0        | Radio-Canada                               |
-| `bodyStrong` | 16/24   | 600    | 0        | Radio-Canada                               |
-| `headline`   | 18/28   | 600    | 0        | Radio-Canada                               |
-| `title`      | 20/28   | 600    | −0.2     | Radio-Canada                               |
-| `titleLg`    | 24/32   | 600    | −0.3     | Radio-Canada                               |
-| `displaySm`  | 32/40   | 500    | −0.64    | Source Serif 4                             |
-| `display`    | 40/48   | 500    | −1.0     | Source Serif 4                             |
-| `displayLg`  | 48/56   | 500    | −1.44    | Source Serif 4                             |
-| `hero`       | 64/68   | 500    | −2.24    | Source Serif 4 (onboarding only)           |
-| `num`        | 16–24   | 600    | 0        | Radio-Canada, tabular                      |
-| `numXl`      | 48–80   | 600    | −1       | Radio-Canada, tabular (door count, timers) |
+| `caption`    | 12/16   | 400    | +0.2     | Hanken Grotesk                             |
+| `labelSm`    | 12/16   | 600    | +0.2     | Hanken Grotesk                             |
+| `label`      | 14/20   | 600    | 0        | Hanken Grotesk                             |
+| `fieldLabel` | 14/20   | 500    | 0        | Hanken Grotesk (form field labels only)    |
+| `bodySm`     | 14/20   | 400    | 0        | Hanken Grotesk                             |
+| `body`       | 16/24   | 400    | 0        | Hanken Grotesk                             |
+| `bodyStrong` | 16/24   | 600    | 0        | Hanken Grotesk                             |
+| `headline`   | 18/28   | 600    | 0        | Hanken Grotesk                             |
+| `title`      | 20/28   | 600    | −0.2     | Hanken Grotesk                             |
+| `titleLg`    | 24/32   | 600    | −0.3     | Hanken Grotesk                             |
+| `displaySm`  | 32/36   | 600    | −0.64    | Hanken Grotesk                             |
+| `display`    | 40/48   | 600    | −0.8     | Hanken Grotesk                             |
+| `displayLg`  | 48/56   | 600    | −0.96    | Hanken Grotesk                             |
+| `hero`       | 64/68   | 600    | −1.28    | Hanken Grotesk (onboarding only)           |
+| `num`        | 16–24   | 600    | 0        | Hanken Grotesk, tabular                    |
+| `numXl`      | 48–80   | 600    | −1       | Hanken Grotesk, tabular (door count, timers) |
 
-- **Fonts [V]:** static files only (no variable). `@expo-google-fonts/radio-canada` has 300–700 (+italics); `source-serif-4` has 200–900. One **family name per weight** (`RadioCanada_600SemiBold`); **never use `fontWeight`** with custom fonts [U for SDK 57]. Load via the `expo-font` **config plugin** (embedded at build, no first-frame fallback flash).
-- **Glyph gap [V]:** Radio-Canada **lacks `ǹ` (U+01F9)** (falls back to the system font) but has ₦ ẹ ọ ṣ ị ụ and `tnum`. Source Serif 4 has all of them (the web comment claiming `ǹ` in Radio-Canada is wrong). See D7.
-- **Tabular numerals** (`fontVariant: ['tabular-nums']`) on all money, counts, timers, tables so digits don't jitter — test on device [U for RN 0.86].
-- **Source Serif 4:** display/pull numbers only, ≥32 px, weight 500, never on controls, inputs, scan results, or text <24 px.
+- **Fonts [V]:** static files only (no variable), from `@expo-google-fonts/hanken-grotesk`. One **family name per weight** (`HankenGrotesk_600SemiBold`); **never use `fontWeight`** with custom fonts [U for SDK 57]. Load via the `expo-font` **config plugin** (embedded at build, no first-frame fallback flash), so a font change needs a new native build, not an OTA update.
+- **Glyph gap [V]:** Hanken Grotesk **has no ₦ and no ṣ/Ṣ**; phones draw those in the system font. It has ẹ ọ ị ụ, Ẹ Ọ and the combining marks. The owner chose it deliberately on 2026-11-02: the look against the sites Nigerian customers use comes first, and glyph coverage no longer decides the font. Check ₦ beside digits on a device. See D7.
+- **Tabular numerals [V]:** Hanken Grotesk has no `tnum` feature, but its digits are all 560 units wide at 400, 500 and 600, so money, counts and timers don't jitter. The `tabular` prop stays harmless.
+- **No serif in the app.** Headlines are Hanken Grotesk 600 at about −2% letter spacing.
 - **Dynamic Type:** keep `allowFontScaling` on; `maxFontSizeMultiplier`: body/labels 1.6, titles 1.3, display/numXl 1.0–1.15, gate result screens 1.0 (fixed huge layout). Never cap form labels/inputs below 1.3. Test iOS Accessibility 3 / Android 200 %.
 - Money via one `Money` component (₦ + tabular, integer kobo/naira, `Intl en-NG`).
 
@@ -158,6 +159,7 @@ Shadows tinted ink (`26,13,77`), never black; no violet glow.
 
 - **One cross-platform outline icon set** at 1.5–2 px stroke on a 24 grid (candidate: lucide — check what web uses). `expo-symbols` is iOS-only → don't mix (D6). Sizes: 16 inline, 20 rows, 24 default, 96–160 gate results.
 - Image ratios: listing card 4:3, detail gallery 16:10, thumbs 1:1, event poster 4:5; reserve space; `expo-image` + blurhash/`wash` placeholder; **no stock imagery posing as inventory** — no photo = neutral `wash` block + icon.
+- Auth photos (`assets/images/auth/`) are brand imagery behind sign-in only, never inventory or listings. Over them, one **legibility fade** is allowed (`color.scrim`); it is the only gradient in the app and carries the text contrast, not the photo.
 - Loading: skeletons mirroring layout, only after 150 ms, none under Reduce Motion; inline spinners for actions.
 - Empty: icon + one-line reason + one action. Error: what happened, whether data/money is safe, next step, retry; never raw codes.
 
@@ -209,7 +211,7 @@ Mobbin had nothing usable for scanner refused/already-used overlays, receptionis
 - DO `#6D28D9` for small violet text; `#7C3AED` for fills and ≥16 semibold text. DON'T `#9E98BB` or violet-500 for text.
 - DO 3:1 borders on inputs (`lineStrong`); `line` is decorative.
 - DO 44/48 targets; colour + icon + text for every outcome; tabular figures for numbers.
-- DON'T cap font scaling on forms; DON'T use Source Serif <24 px or on controls; DON'T use violet for status or large fills.
+- DON'T cap font scaling on forms; DON'T use violet for status or large fills.
 - DO borders for cards, shadows for floating layers only.
 
 ## 11. Decisions (owner-answered 2026-10-04)
@@ -222,8 +224,8 @@ Mobbin had nothing usable for scanner refused/already-used overlays, receptionis
 | D4  | Body 16 (web parity) vs 17 (iOS)                                                | **16**                                                                                                                                 |
 | D5  | Darker semantic stops than web; file web fix                                    | **Yes**                                                                                                                                |
 | D6  | One cross-platform icon set vs SF Symbols on iOS                                | **One set (lucide)**                                                                                                                   |
-| D7  | Missing `ǹ`: system fallback vs Source Serif 4                                  | **Accept fallback**                                                                                                                    |
-| D8  | Source Serif limited to ≥32 px display                                          | **Yes**                                                                                                                                |
+| D7  | Missing ₦ and ṣ/Ṣ in Hanken Grotesk: system fallback vs another font            | **Accept fallback** (owner, 2026-11-02; ₦ to be checked on a device)                                                                   |
+| D8  | Source Serif limited to ≥32 px display                                          | **Superseded**: no serif in the app (owner, 2026-11-02)                                                                                |
 | D9  | Gate full-screen solid fills break 70/20/10                                     | **Yes**                                                                                                                                |
 | D10 | Tablet two-pane receptionist in v1                                              | **Yes — in v1** (read from the owner's "Yes" on this row; the earlier recommendation was to defer. Confirm if that was not the intent) |
 

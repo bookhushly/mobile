@@ -45,7 +45,7 @@ Bookhushly is a Nigerian marketplace and booking platform. Customers discover an
 
 - **Light UI only.** No dark mode, no dark hero/sections.
 - **Primary** violet-600 `#7C3AED`; ink `#1A0D4D`; tint backgrounds white / `#F8F7FB` / violet wash.
-- **Type:** Radio-Canada (UI) + Source Serif 4 (display accents). Both OFL-licensed, chosen because they carry the **₦ sign, Yoruba/Igbo tone marks (ẹ ọ ṣ ị ụ) and tabular numerals**. The owner does **not** want "typical AI" fonts (Inter, Manrope, Space Grotesk, DM Sans, Plus Jakarta, Poppins, Playfair, Instrument Serif, Bricolage, Fraunces).
+- **Type:** Hanken Grotesk for UI and headlines (OFL-licensed; owner's decision 2026-11-02, replacing Radio-Canada + Source Serif 4 because the look comes first). It has no ₦ or ṣ/Ṣ, which fall back to the system font; digits are tabular by default. The web keeps its own fonts. The owner does **not** want "typical AI" fonts (Inter, Manrope, Space Grotesk, DM Sans, Plus Jakarta, Poppins, Playfair, Instrument Serif, Bricolage, Fraunces).
 - **Type scale:** 12 → 80 px, nothing below 12 px, sentence-case labels (no uppercase letter-spaced eyebrows), semibold headings.
 - **Avoid:** centered-everything heroes, gradient/glow grounds, fake stats, stock imagery posing as inventory, install/review prompts on launch.
 - Verify visual decisions against Mobbin references before settling them.

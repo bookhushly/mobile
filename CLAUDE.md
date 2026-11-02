@@ -27,7 +27,7 @@ Expo (SDK 57) / React Native app for iOS + Android: **customer**, **gate staff**
 
 ## Design
 
-Light UI only. Violet `#7C3AED`, ink `#1A0D4D`, tints `#FFFFFF` / `#F8F7FB`. Fonts: Radio-Canada (UI) + Source Serif 4 (display). Min text 12 px, sentence-case labels, semibold headings, touch targets ≥ 44 pt. Outcomes use colour + icon + text + haptic. Avoid centered-everything heroes, gradients/glows, fake stats, and the banned fonts listed in requirements §1.3. The template's dark-mode/theme scaffolding (`useColorScheme`, themed components) should be replaced, not extended.
+Light UI only. Violet `#7C3AED`, ink `#1A0D4D`, tints `#FFFFFF` / `#F8F7FB`. Font: Hanken Grotesk for UI and headlines (the web keeps Radio-Canada and Source Serif 4). Min text 12 px, sentence-case labels, semibold headings, touch targets ≥ 44 pt. Outcomes use colour + icon + text + haptic. Avoid centered-everything heroes, gradients/glows (one exception: the legibility fade over auth photos), fake stats, and the banned fonts listed in requirements §1.3. The template's dark-mode/theme scaffolding (`useColorScheme`, themed components) should be replaced, not extended.
 
 ## Code conventions
 

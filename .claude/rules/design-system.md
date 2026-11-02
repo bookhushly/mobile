@@ -13,7 +13,7 @@ paths:
 - Small violet text uses `#6D28D9`-level contrast (7.1:1); never violet-500 or muted `#9E98BB` for text. Inputs get 3:1 borders (`lineStrong`).
 - Density: `customer` / `work` (receptionist) / `gate` — gate controls ≥56 pt, ≥16 apart, lower third.
 - Money via `Money` (₦, tabular, integer amounts). Numbers that change (timers, counts) use tabular figures.
-- Source Serif 4 only for display ≥32 px; Radio-Canada everywhere else; weights by family name.
+- Hanken Grotesk everywhere, no serif; headlines 600 at about −2%; weights by family name.
 - States: skeletons mirror layout and appear after 150 ms; empty = icon + reason + one action; errors say what happened, whether money/data is safe, and the next step.
 - Gate outcomes: full-screen solid dark-stop fill + large icon + word (+ haptic/audio); "Couldn't check" is neutral, never red. Copy: sentence case, verb-first, no exclamation marks/blame/jokes.
 - Check the open decisions table (§11) before assuming a value is final; keep values behind tokens.
