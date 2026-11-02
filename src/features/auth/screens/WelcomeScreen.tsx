@@ -16,6 +16,8 @@ const wordmark = require('../../../../assets/images/logo-wordmark.png') as numbe
 // Wordmark file is 319 x 91.
 const WORDMARK_HEIGHT = 24;
 const WORDMARK_WIDTH = (WORDMARK_HEIGHT * 319) / 91;
+// How far above the text the fade starts from clear.
+const FADE_ABOVE_PT = 120;
 
 type Props = {
   notice: AuthNotice;
@@ -39,11 +41,6 @@ export function WelcomeScreen({
   const entering = tier === 'none' ? undefined : FadeIn.duration(motion.duration.moderate);
   return (
     <View style={{ flex: 1 }}>
-      <LinearGradient
-        colors={color.scrim}
-        locations={[0, 0.25, 1]}
-        style={[StyleSheet.absoluteFill, { top: '35%' }]}
-      />
       <View
         accessible
         accessibilityRole="image"
@@ -62,6 +59,7 @@ export function WelcomeScreen({
         />
       </View>
       <Animated.View
+        testID="welcome-content"
         entering={entering}
         style={{
           marginTop: 'auto',
@@ -70,6 +68,22 @@ export function WelcomeScreen({
           gap: space.s5,
         }}
       >
+        {/* Grows with the text, so large type never rises above the fade onto bare photo. */}
+        <LinearGradient
+          colors={[color.scrim[0], color.scrim[1]]}
+          style={{
+            position: 'absolute',
+            top: -FADE_ABOVE_PT,
+            left: 0,
+            right: 0,
+            height: FADE_ABOVE_PT,
+          }}
+        />
+        <LinearGradient
+          testID="welcome-fade"
+          colors={[color.scrim[1], color.scrim[2]]}
+          style={StyleSheet.absoluteFill}
+        />
         {notice === 'accountDeleted' ? (
           <Banner
             tone="info"

@@ -89,3 +89,23 @@ it('skips the slide at tier none', async () => {
   );
   expect(translateY()).toBe(sheetOffset('tall', 0, false));
 });
+
+it('puts the leave button first for screen readers', async () => {
+  await render(
+    <AuthSheet band="short" onLeave={jest.fn()}>
+      <Text>Body</Text>
+    </AuthSheet>,
+  );
+  const root = screen.toJSON() as { children: { props: { testID?: string } }[] };
+  expect(root.children[0]?.props.testID).toBe('auth-leave');
+});
+
+it('opens raised with no slide on a screen that focuses a field on arrival', async () => {
+  tierMock.mockReturnValue('full');
+  await render(
+    <AuthSheet band="tall" startRaised>
+      <Text>Body</Text>
+    </AuthSheet>,
+  );
+  expect(translateY()).toBe(sheetOffset('tall', 0, true));
+});

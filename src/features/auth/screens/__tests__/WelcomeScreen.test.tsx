@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, within } from '@testing-library/react-native';
 
 import { WelcomeScreen } from '@/features/auth/screens/WelcomeScreen';
 
@@ -61,4 +61,11 @@ it('states all three categories and the naira line', async () => {
   ).toBeTruthy();
   expect(screen.getByText('Find it, book it, pay in naira.')).toBeTruthy();
   expect(screen.getByLabelText('Bookhushly')).toBeTruthy();
+});
+
+it('anchors the fade to the text so large text stays on it', async () => {
+  await render(<WelcomeScreen {...props()} />);
+  const content = within(screen.getByTestId('welcome-content'));
+  expect(content.getByTestId('welcome-fade', { includeHiddenElements: true })).toBeTruthy();
+  expect(content.getByRole('header')).toBeTruthy();
 });

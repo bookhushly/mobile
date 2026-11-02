@@ -159,7 +159,7 @@ Shadows tinted ink (`26,13,77`), never black; no violet glow.
 
 - **One cross-platform outline icon set** at 1.5–2 px stroke on a 24 grid (candidate: lucide — check what web uses). `expo-symbols` is iOS-only → don't mix (D6). Sizes: 16 inline, 20 rows, 24 default, 96–160 gate results.
 - Image ratios: listing card 4:3, detail gallery 16:10, thumbs 1:1, event poster 4:5; reserve space; `expo-image` + blurhash/`wash` placeholder; **no stock imagery posing as inventory** — no photo = neutral `wash` block + icon.
-- Auth photos (`assets/images/auth/`) are brand imagery behind sign-in only, never inventory or listings. Over them, one **legibility fade** is allowed (`color.scrim`); it is the only gradient in the app and carries the text contrast, not the photo.
+- Auth photos (`assets/images/auth/`) are brand imagery behind sign-in only, never inventory or listings. Over them, a **legibility fade** is allowed at the top and behind the Welcome text (`color.scrim`); these are the only gradients in the app and they carry the text contrast, not the photo.
 - Loading: skeletons mirroring layout, only after 150 ms, none under Reduce Motion; inline spinners for actions.
 - Empty: icon + one-line reason + one action. Error: what happened, whether data/money is safe, next step, retry; never raw codes.
 

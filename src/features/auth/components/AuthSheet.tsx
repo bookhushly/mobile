@@ -18,6 +18,11 @@ type Props = {
   onLeave?: () => void;
   leaveIcon?: LucideIcon;
   leaveLabel?: string;
+  /**
+   * The screen focuses a field on arrival. Sliding in would put that field under the incoming
+   * keyboard for a moment, and iOS would scroll the form away to reveal it.
+   */
+  startRaised?: boolean;
 };
 
 const SHOW = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -34,16 +39,17 @@ export function AuthSheet({
   onLeave,
   leaveIcon = ArrowLeft,
   leaveLabel = 'Back',
+  startRaised = false,
 }: Props) {
   // Context, not the hook: the hook throws without a provider, which bare unit renders lack.
   const insets = useContext(SafeAreaInsetsContext) ?? { top: 0, bottom: 0 };
   const tier = useMotionTier();
   const { height: windowHeight } = useWindowDimensions();
   const gutter = useWide() ? layout.tabletGutter : layout.phoneGutter;
-  const [keyboardOpen, setKeyboardOpen] = useState(() => Keyboard.isVisible());
+  const [keyboardOpen, setKeyboardOpen] = useState(() => startRaised || Keyboard.isVisible());
   const offset = sheetOffset(band, insets.top, keyboardOpen);
   const still = tier === 'none';
-  const y = useSharedValue(still ? offset : windowHeight);
+  const y = useSharedValue(still || startRaised ? offset : windowHeight);
 
   useEffect(() => {
     const show = Keyboard.addListener(SHOW, () => {
@@ -66,6 +72,15 @@ export function AuthSheet({
 
   return (
     <View style={{ flex: 1 }}>
+      {onLeave !== undefined ? (
+        // First in the tree so screen readers reach it first; zIndex keeps it over the sheet.
+        <View
+          testID="auth-leave"
+          style={{ position: 'absolute', top: insets.top + space.s2, left: space.s3, zIndex: 1 }}
+        >
+          <IconButton icon={leaveIcon} accessibilityLabel={leaveLabel} onPress={onLeave} />
+        </View>
+      ) : null}
       <Animated.View
         testID="auth-sheet"
         style={[
@@ -97,11 +112,6 @@ export function AuthSheet({
           {footer}
         </ScrollView>
       </Animated.View>
-      {onLeave !== undefined ? (
-        <View style={{ position: 'absolute', top: insets.top + space.s2, left: space.s3 }}>
-          <IconButton icon={leaveIcon} accessibilityLabel={leaveLabel} onPress={onLeave} />
-        </View>
-      ) : null}
     </View>
   );
 }

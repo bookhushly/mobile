@@ -191,6 +191,7 @@ export function CodeScreen({
   return (
     <AuthSheet
       band="tall"
+      startRaised
       onLeave={onBack}
       footer={
         <Stack gap="s3">

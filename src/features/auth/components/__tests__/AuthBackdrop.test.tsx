@@ -1,4 +1,5 @@
 import { act, render, screen } from '@testing-library/react-native';
+import { Image } from 'expo-image';
 import { usePathname } from 'expo-router';
 import { AppState } from 'react-native';
 
@@ -10,9 +11,15 @@ import { useMotionTier } from '@/shared/ui/motion';
 jest.mock('expo-image', () => {
   const { createElement } = jest.requireActual<typeof import('react')>('react');
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
-  const Image = (props: object) => createElement(View, props);
-  Image.loadAsync = jest.fn(() => Promise.resolve());
+  const Image = Object.assign((props: object) => createElement(View, props), {
+    loadAsync: jest.fn(() => Promise.resolve()),
+  });
   return { Image };
+});
+jest.mock('expo-linear-gradient', () => {
+  const { createElement } = jest.requireActual<typeof import('react')>('react');
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  return { LinearGradient: (props: object) => createElement(View, props) };
 });
 jest.mock('expo-router', () => ({ usePathname: jest.fn() }));
 jest.mock('@/shared/ui/motion', () => ({ useMotionTier: jest.fn() }));
@@ -89,4 +96,24 @@ it('pauses in the background', async () => {
   });
   await advance(CYCLE_MS);
   expect(shownPhoto()).toBe(AUTH_PHOTOS[1]);
+});
+
+const photoProps = () => screen.getByTestId('auth-photo', { includeHiddenElements: true }).props;
+
+it('keeps decoded photos in memory and does not pre-decode them', async () => {
+  await render(<AuthBackdrop />);
+  expect(photoProps().cachePolicy).toBe('memory');
+  // eslint-disable-next-line @typescript-eslint/unbound-method -- a jest.fn, never called here
+  expect(Image.loadAsync).not.toHaveBeenCalled();
+});
+
+it('skips the crossfade when tier is none', async () => {
+  tierMock.mockReturnValue('none');
+  await render(<AuthBackdrop />);
+  expect(photoProps().transition).toBe(0);
+});
+
+it('darkens the top so the status bar and logo read on pale photos', async () => {
+  await render(<AuthBackdrop />);
+  expect(screen.getByTestId('auth-top-fade', { includeHiddenElements: true })).toBeTruthy();
 });
