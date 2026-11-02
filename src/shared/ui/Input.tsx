@@ -42,7 +42,7 @@ export function Input({
       : color.borderStrong;
   return (
     <Stack gap="s2">
-      <Text variant="label">{label}</Text>
+      <Text variant="fieldLabel">{label}</Text>
       <View
         style={{
           flexDirection: 'row',

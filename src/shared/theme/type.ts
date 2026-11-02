@@ -1,4 +1,4 @@
-export type FontKind = 'sans' | 'serif';
+export type FontKind = 'sans';
 
 export type VariantSpec = {
   font: FontKind;
@@ -27,6 +27,15 @@ export const typeVariants = {
     maxScale: 1.6,
   },
   label: { font: 'sans', weight: 600, size: 14, lineHeight: 20, letterSpacing: 0, maxScale: 1.6 },
+  // Form field labels only; controls and links keep `label`.
+  fieldLabel: {
+    font: 'sans',
+    weight: 500,
+    size: 14,
+    lineHeight: 20,
+    letterSpacing: 0,
+    maxScale: 1.6,
+  },
   bodySm: { font: 'sans', weight: 400, size: 14, lineHeight: 20, letterSpacing: 0, maxScale: 1.6 },
   body: { font: 'sans', weight: 400, size: 16, lineHeight: 24, letterSpacing: 0, maxScale: 1.6 },
   bodyStrong: {
@@ -62,32 +71,32 @@ export const typeVariants = {
     maxScale: 1.3,
   },
   displaySm: {
-    font: 'serif',
-    weight: 500,
+    font: 'sans',
+    weight: 600,
     size: 32,
-    lineHeight: 40,
+    lineHeight: 36,
     letterSpacing: -0.64,
     maxScale: 1.15,
   },
   display: {
-    font: 'serif',
-    weight: 500,
+    font: 'sans',
+    weight: 600,
     size: 40,
     lineHeight: 48,
-    letterSpacing: -1,
+    letterSpacing: -0.8,
     maxScale: 1.15,
   },
   displayLg: {
-    font: 'serif',
-    weight: 500,
+    font: 'sans',
+    weight: 600,
     size: 48,
     lineHeight: 56,
-    letterSpacing: -1.44,
+    letterSpacing: -0.96,
     maxScale: 1.15,
   },
   // Onboarding only.
-  hero: { font: 'serif', weight: 500, size: 64, lineHeight: 68, letterSpacing: -2.24, maxScale: 1 },
-  // Gate result titles: sans, fixed size (DESIGN_SYSTEM §3: serif never on scan results).
+  hero: { font: 'sans', weight: 600, size: 64, lineHeight: 68, letterSpacing: -1.28, maxScale: 1 },
+  // Gate result titles: fixed size.
   outcome: {
     font: 'sans',
     weight: 600,
