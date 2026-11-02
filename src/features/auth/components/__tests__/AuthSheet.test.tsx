@@ -1,0 +1,91 @@
+import { fireEvent, render, screen } from '@testing-library/react-native';
+import { X } from 'lucide-react-native';
+import { Keyboard, StyleSheet } from 'react-native';
+
+import { AuthSheet } from '@/features/auth/components/AuthSheet';
+import { sheetOffset } from '@/features/auth/domain/authBackdrop';
+import { Text } from '@/shared/ui';
+import { useMotionTier } from '@/shared/ui/motion';
+
+jest.mock('@/shared/ui/motion', () => ({ useMotionTier: jest.fn() }));
+const tierMock = jest.mocked(useMotionTier);
+
+function translateY(): number {
+  const flat = StyleSheet.flatten(screen.getByTestId('auth-sheet').props.style) as {
+    transform?: { translateY?: number }[];
+  };
+  return flat.transform?.[0]?.translateY ?? Number.NaN;
+}
+
+beforeEach(() => {
+  tierMock.mockReturnValue('none');
+  jest.spyOn(Keyboard, 'isVisible').mockReturnValue(false);
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
+it('renders children and footer', async () => {
+  await render(
+    <AuthSheet band="medium" footer={<Text>Foot</Text>}>
+      <Text>Body</Text>
+    </AuthSheet>,
+  );
+  expect(screen.getByText('Body')).toBeTruthy();
+  expect(screen.getByText('Foot')).toBeTruthy();
+});
+
+it('shows the leave button only with onLeave', async () => {
+  const onLeave = jest.fn();
+  const view = await render(
+    <AuthSheet band="short">
+      <Text>Body</Text>
+    </AuthSheet>,
+  );
+  expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+  await view.rerender(
+    <AuthSheet band="short" onLeave={onLeave}>
+      <Text>Body</Text>
+    </AuthSheet>,
+  );
+  await fireEvent.press(screen.getByRole('button', { name: 'Back' }));
+  expect(onLeave).toHaveBeenCalled();
+});
+
+it('honours leaveIcon and leaveLabel', async () => {
+  await render(
+    <AuthSheet band="tall" onLeave={jest.fn()} leaveIcon={X} leaveLabel="Cancel">
+      <Text>Body</Text>
+    </AuthSheet>,
+  );
+  expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy();
+});
+
+it('keeps taps working while the keyboard is open', async () => {
+  await render(
+    <AuthSheet band="tall">
+      <Text>Body</Text>
+    </AuthSheet>,
+  );
+  expect(screen.getByTestId('auth-sheet-scroll').props.keyboardShouldPersistTaps).toBe('handled');
+});
+
+it('starts raised when the keyboard is already open', async () => {
+  jest.spyOn(Keyboard, 'isVisible').mockReturnValue(true);
+  await render(
+    <AuthSheet band="tall">
+      <Text>Body</Text>
+    </AuthSheet>,
+  );
+  expect(translateY()).toBe(sheetOffset('tall', 0, true));
+});
+
+it('skips the slide at tier none', async () => {
+  await render(
+    <AuthSheet band="tall">
+      <Text>Body</Text>
+    </AuthSheet>,
+  );
+  expect(translateY()).toBe(sheetOffset('tall', 0, false));
+});
