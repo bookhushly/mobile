@@ -12,7 +12,7 @@ describe('fontFamily', () => {
     expect(fontFamily('sans', 600)).toBe('HankenGrotesk-SemiBold');
   });
   it('recipe B: display variants are sans 600 at -2%', () => {
-    for (const name of ['displaySm', 'display', 'displayLg', 'hero'] as const) {
+    for (const name of ['displaySm', 'displayMd', 'display', 'displayLg', 'hero'] as const) {
       const v = typeVariants[name];
       expect(v.font).toBe('sans');
       expect(v.weight).toBe(600);

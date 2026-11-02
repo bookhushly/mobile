@@ -109,3 +109,11 @@ Hanken Grotesk's lack of ₦ and ṣ/Ṣ reverses the earlier reason for choosin
 - Exact band heights, sheet radius (DESIGN_SYSTEM `r4` is a good start), cycle timing and transition, and which placeholder photos, as long as all three categories are covered.
 - The `notice="accountDeleted"` banner on Welcome must stay and stay readable on the photo; the builder picks its placement.
 - Removing the now-unused Radio Canada and Source Serif packages and font files, and the `welcome` illustration if nothing else uses it.
+
+## Changes after the 2026-11-02 critique (owner approved)
+
+Welcome only: headline 36/40 (`displayMd`) and subline 18/26 at 500 (`lead`); spacing headline, 12, subline, 32, main button, 12, second button, 24, legal; "Sign in" becomes the white outline button; Terms and Privacy links are underlined over the photo; headline, subline and actions enter one after another with a small fade and lift, skipped under Reduce Motion. Hotel placeholder swapped for a brighter photo with its subject in the top half. The top fade holds full strength past the status bar and logo, then eases out, so both read on any photo.
+
+Rejected from the critique because they conflict with owner decisions or the code: Fraunces or Plus Jakarta Sans (banned list), amber or terracotta buttons (violet is the brand), blurhash (photos are bundled), larger buttons on this screen alone (48 pt and 12 pt radius are app-wide).
+
+Browsing without an account was accepted as the **next project**, separate from this one.

@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { usePathname } from 'expo-router';
 import { AppState } from 'react-native';
 
-import { AUTH_PHOTOS, AuthBackdrop } from '@/features/auth/components/AuthBackdrop';
+import { AUTH_PHOTOS, AuthBackdrop, TOP_FADE_HOLD } from '@/features/auth/components/AuthBackdrop';
 import { CYCLE_MS } from '@/features/auth/domain/authBackdrop';
 import { useMotionTier } from '@/shared/ui/motion';
 
@@ -115,5 +115,7 @@ it('skips the crossfade when tier is none', async () => {
 
 it('darkens the top so the status bar and logo read on pale photos', async () => {
   await render(<AuthBackdrop />);
-  expect(screen.getByTestId('auth-top-fade', { includeHiddenElements: true })).toBeTruthy();
+  const fade = screen.getByTestId('auth-top-fade', { includeHiddenElements: true });
+  // Holds full strength past the status bar and logo, so contrast doesn't depend on the photo.
+  expect(fade.props.locations).toEqual([0, TOP_FADE_HOLD, 1]);
 });

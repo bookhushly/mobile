@@ -36,12 +36,7 @@ function look(variant: ButtonVariant, onInverse: 'light' | 'dark' | undefined): 
   if (onInverse === 'light')
     return variant === 'primary'
       ? { bg: color.onInverse, pressed: color.wash, border: null, fg: 'textPrimary' }
-      : {
-          bg: 'transparent',
-          pressed: 'transparent',
-          border: variant === 'ghost' ? null : color.onInverse,
-          fg: 'onInverse',
-        };
+      : { bg: 'transparent', pressed: 'transparent', border: color.onInverse, fg: 'onInverse' };
   if (onInverse === 'dark')
     return variant === 'primary'
       ? { bg: color.textPrimary, pressed: color.textSecondary, border: null, fg: 'onInverse' }

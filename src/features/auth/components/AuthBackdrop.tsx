@@ -17,7 +17,9 @@ export const AUTH_PHOTOS = [
 ];
 
 // Below the safe area: enough to carry the logo and the back button on a pale photo.
-const TOP_FADE_PT = 96;
+const TOP_FADE_PT = 160;
+// Stays at full strength past the status bar and logo, so they read on any photo.
+export const TOP_FADE_HOLD = 0.4;
 
 // Sits behind the auth stack, so the photo stays still as routes change. Brand imagery only.
 export function AuthBackdrop() {
@@ -65,7 +67,8 @@ export function AuthBackdrop() {
       />
       <LinearGradient
         testID="auth-top-fade"
-        colors={[color.scrim[1], color.scrim[0]]}
+        colors={[color.scrim[1], color.scrim[1], color.scrim[0]]}
+        locations={[0, TOP_FADE_HOLD, 1]}
         style={{
           position: 'absolute',
           top: 0,

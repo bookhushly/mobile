@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
 
 import { WelcomeScreen } from '@/features/auth/screens/WelcomeScreen';
+import { color } from '@/shared/theme';
 
 // Fresh mocks per test so no assertion can depend on test order.
 function props() {
@@ -68,4 +69,22 @@ it('anchors the fade to the text so large text stays on it', async () => {
   const content = within(screen.getByTestId('welcome-content'));
   expect(content.getByTestId('welcome-fade', { includeHiddenElements: true })).toBeTruthy();
   expect(content.getByRole('header')).toBeTruthy();
+});
+
+it('sets the headline at 36 and a stronger subline', async () => {
+  await render(<WelcomeScreen {...props()} />);
+  expect(screen.getByRole('header')).toHaveStyle({ fontSize: 36 });
+  expect(screen.getByText('Find it, book it, pay in naira.')).toHaveStyle({ fontSize: 18 });
+});
+
+it('underlines the terms links over the photo', async () => {
+  await render(<WelcomeScreen {...props()} />);
+  expect(screen.getByText('Terms')).toHaveStyle({ textDecorationLine: 'underline' });
+  expect(screen.getByText('Privacy policy')).toHaveStyle({ textDecorationLine: 'underline' });
+});
+
+it('makes Sign in a visibly outlined button', async () => {
+  await render(<WelcomeScreen {...props()} />);
+  const pressable = screen.getByRole('button', { name: 'Sign in' });
+  expect(pressable).toHaveStyle({ borderColor: color.onInverse });
 });

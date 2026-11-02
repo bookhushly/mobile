@@ -44,6 +44,8 @@ export function TextLink({
       <Text
         variant={size === 'sm' ? 'labelSm' : 'label'}
         tone={disabled ? 'textMuted' : tone === 'onInverse' ? 'onInverse' : 'linkText'}
+        // White on a photo has no colour cue left to mark it as a link.
+        style={tone === 'onInverse' ? { textDecorationLine: 'underline' } : undefined}
       >
         {label}
       </Text>

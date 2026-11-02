@@ -2,22 +2,28 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useContext } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 
 import { TermsLine } from '@/features/auth/components/TermsLine';
 import type { AuthNotice } from '@/features/auth/hooks/useAuthNotice';
 import { color, layout, motion, space } from '@/shared/theme';
-import { Banner, Button, Stack, Text } from '@/shared/ui';
+import { Banner, Button, Text } from '@/shared/ui';
 import { useMotionTier } from '@/shared/ui/motion';
 
 const wordmark = require('../../../../assets/images/logo-wordmark.png') as number;
 
 // Wordmark file is 319 x 91.
-const WORDMARK_HEIGHT = 24;
+const WORDMARK_HEIGHT = 28;
 const WORDMARK_WIDTH = (WORDMARK_HEIGHT * 319) / 91;
 // How far above the text the fade starts from clear.
 const FADE_ABOVE_PT = 120;
+// Headline, subline, then actions: a small fade and lift, one after another, no bounce.
+const ENTER = [0, 1, 2].map((step) =>
+  FadeInDown.duration(motion.duration.moderate)
+    .delay(step * motion.duration.fast)
+    .withInitialValues({ transform: [{ translateY: space.s3 }] }),
+);
 
 type Props = {
   notice: AuthNotice;
@@ -37,8 +43,7 @@ export function WelcomeScreen({
   onOpenLink,
 }: Props) {
   const insets = useContext(SafeAreaInsetsContext) ?? { top: 0, bottom: 0 };
-  const tier = useMotionTier();
-  const entering = tier === 'none' ? undefined : FadeIn.duration(motion.duration.moderate);
+  const still = useMotionTier() === 'none';
   return (
     <View style={{ flex: 1 }}>
       <View
@@ -58,14 +63,12 @@ export function WelcomeScreen({
           tintColor={color.onInverse}
         />
       </View>
-      <Animated.View
+      <View
         testID="welcome-content"
-        entering={entering}
         style={{
           marginTop: 'auto',
           paddingHorizontal: layout.phoneGutter,
           paddingBottom: Math.max(insets.bottom, space.s5),
-          gap: space.s5,
         }}
       >
         {/* Grows with the text, so large type never rises above the fade onto bare photo. */}
@@ -85,26 +88,34 @@ export function WelcomeScreen({
           style={StyleSheet.absoluteFill}
         />
         {notice === 'accountDeleted' ? (
-          <Banner
-            tone="info"
-            message="Your account was deleted."
-            action={{ label: 'OK', onPress: onDismissNotice }}
-          />
+          <View style={{ marginBottom: space.s5 }}>
+            <Banner
+              tone="info"
+              message="Your account was deleted."
+              action={{ label: 'OK', onPress: onDismissNotice }}
+            />
+          </View>
         ) : null}
-        <Stack gap="s3">
-          <Text variant="displaySm" tone="onInverse" accessibilityRole="header">
+        <Animated.View entering={still ? undefined : ENTER[0]}>
+          <Text variant="displayMd" tone="onInverse" accessibilityRole="header">
             Events, stays and hotels across Nigeria.
           </Text>
-          <Text variant="body" tone="onInverse">
+        </Animated.View>
+        <Animated.View entering={still ? undefined : ENTER[1]} style={{ marginTop: space.s4 }}>
+          <Text variant="lead" tone="onInverse">
             Find it, book it, pay in naira.
           </Text>
-        </Stack>
-        <Stack gap="s2">
+        </Animated.View>
+        <Animated.View entering={still ? undefined : ENTER[2]} style={{ marginTop: space.s8 }}>
           <Button label="Create account" onInverse="light" onPress={onCreateAccount} />
-          <Button label="Sign in" variant="ghost" onInverse="light" onPress={onSignIn} />
-          <TermsLine inverse onOpenLink={onOpenLink} />
-        </Stack>
-      </Animated.View>
+          <View style={{ marginTop: space.s4 }}>
+            <Button label="Sign in" variant="secondary" onInverse="light" onPress={onSignIn} />
+          </View>
+          <View style={{ marginTop: space.s7 }}>
+            <TermsLine inverse onOpenLink={onOpenLink} />
+          </View>
+        </Animated.View>
+      </View>
     </View>
   );
 }

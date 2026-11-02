@@ -46,6 +46,8 @@ export const typeVariants = {
     letterSpacing: 0,
     maxScale: 1.6,
   },
+  // Subline under a display headline.
+  lead: { font: 'sans', weight: 500, size: 18, lineHeight: 26, letterSpacing: 0, maxScale: 1.3 },
   headline: {
     font: 'sans',
     weight: 600,
@@ -76,6 +78,14 @@ export const typeVariants = {
     size: 32,
     lineHeight: 36,
     letterSpacing: -0.64,
+    maxScale: 1.15,
+  },
+  displayMd: {
+    font: 'sans',
+    weight: 600,
+    size: 36,
+    lineHeight: 40,
+    letterSpacing: -0.72,
     maxScale: 1.15,
   },
   display: {

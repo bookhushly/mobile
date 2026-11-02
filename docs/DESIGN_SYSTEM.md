@@ -65,10 +65,12 @@ Hand-tuned scale anchored on the web scale (a strict modular ratio gives fractio
 | `bodySm`     | 14/20   | 400    | 0        | Hanken Grotesk                             |
 | `body`       | 16/24   | 400    | 0        | Hanken Grotesk                             |
 | `bodyStrong` | 16/24   | 600    | 0        | Hanken Grotesk                             |
+| `lead`       | 18/26   | 500    | 0        | Hanken Grotesk (subline under a headline)  |
 | `headline`   | 18/28   | 600    | 0        | Hanken Grotesk                             |
 | `title`      | 20/28   | 600    | −0.2     | Hanken Grotesk                             |
 | `titleLg`    | 24/32   | 600    | −0.3     | Hanken Grotesk                             |
 | `displaySm`  | 32/36   | 600    | −0.64    | Hanken Grotesk                             |
+| `displayMd`  | 36/40   | 600    | −0.72    | Hanken Grotesk (Welcome headline)          |
 | `display`    | 40/48   | 600    | −0.8     | Hanken Grotesk                             |
 | `displayLg`  | 48/56   | 600    | −0.96    | Hanken Grotesk                             |
 | `hero`       | 64/68   | 600    | −1.28    | Hanken Grotesk (onboarding only)           |
