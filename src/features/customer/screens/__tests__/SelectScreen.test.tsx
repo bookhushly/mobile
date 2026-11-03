@@ -155,6 +155,7 @@ async function open(kind: 'hotel' | 'apartment' | 'event', roomTypeId: string | 
         rateId={null}
         userId="u1"
         email="ada@example.com"
+        modePending={false}
         onBack={jest.fn()}
         onCreated={onCreated}
       />
@@ -528,7 +529,7 @@ describe('browsing without an account', () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false, gcTime: Infinity } },
     });
-    const ui = (userId: string) => (
+    const ui = (userId: string, modePending = false) => (
       <QueryClientProvider client={client}>
         <SelectScreen
           kind={kind}
@@ -537,6 +538,7 @@ describe('browsing without an account', () => {
           rateId={null}
           userId={userId}
           email={userId === '' ? '' : 'ada@example.com'}
+          modePending={modePending}
           onBack={jest.fn()}
           onCreated={onCreated}
         />
@@ -544,8 +546,8 @@ describe('browsing without an account', () => {
     );
     const { rerender } = await render(ui(startAs));
     return {
-      user: async (userId = 'u1') => {
-        await rerender(ui(userId));
+      user: async (userId = 'u1', modePending = false) => {
+        await rerender(ui(userId, modePending));
       },
     };
   }
@@ -681,6 +683,48 @@ describe('browsing without an account', () => {
       await screen.findByTestId('promo-applied');
       await fireEvent.press(continueButton());
       expect(reason()).toBeNull();
+    });
+  });
+
+  describe('signed in while the mode lookup is still running', () => {
+    const waitsForMode = () => {
+      expect(continueButton()).toBeDisabled();
+      expect(continueButton()).toBeBusy();
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('Getting your details…');
+    };
+
+    it('a stay can’t be booked until it’s known to be a customer', async () => {
+      browsing(HOTEL);
+      signedIn = READY;
+      const { user } = await openAs('hotel', ROOM);
+      await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
+
+      await user('u1', true);
+      waitsForMode();
+      await fireEvent.press(continueButton());
+      expect(submit).not.toHaveBeenCalled();
+      expect(reason()).toBeNull();
+
+      await user('u1', false);
+      expect(continueButton()).toBeEnabled();
+      await fireEvent.press(continueButton());
+      expect(submit).toHaveBeenCalledTimes(1);
+    });
+
+    it('an event can’t be booked until it’s known to be a customer', async () => {
+      browsing(PAID);
+      signedIn = READY;
+      const { user } = await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Regular');
+
+      await user('u1', true);
+      waitsForMode();
+      await fireEvent.press(continueButton());
+      expect(submit).not.toHaveBeenCalled();
+
+      await user('u1', false);
+      expect(continueButton()).toBeEnabled();
     });
   });
 

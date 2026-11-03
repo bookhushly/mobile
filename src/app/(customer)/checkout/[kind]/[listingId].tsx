@@ -4,6 +4,7 @@ import { useAuth } from '@/features/auth/hooks/useAuth';
 import { checkoutParams } from '@/features/customer/domain/routeParams';
 import { ListingNotFound } from '@/features/customer/screens/ListingNotFound';
 import { SelectScreen } from '@/features/customer/screens/SelectScreen';
+import { useKnownCustomer } from '@/features/mode/hooks/useKnownCustomer';
 
 const back = () => {
   if (router.canGoBack()) router.back();
@@ -20,6 +21,11 @@ export default function CheckoutRoute() {
     rate?: string;
   }>();
   const state = useAuth((s) => s.state);
+  const recovery = useAuth((s) => s.recovery);
+  const { modePending } = useKnownCustomer(
+    state.status === 'signedIn' ? state.userId : null,
+    recovery,
+  );
   const ref = checkoutParams(params);
   if (ref === null) return <ListingNotFound onBack={back} />;
   return (
@@ -31,6 +37,7 @@ export default function CheckoutRoute() {
       rateId={ref.rateId}
       userId={state.status === 'signedIn' ? state.userId : ''}
       email={state.status === 'signedIn' ? state.email : ''}
+      modePending={modePending}
       onBack={back}
       onCreated={(bookingId, free) => {
         // Select is left behind: Back from Pay never re-creates the booking. `from=select` lets

@@ -6,7 +6,7 @@ import { useCustomerSession } from '@/features/customer/hooks/useCustomerSession
 import { useResumePayments } from '@/features/customer/hooks/useResumePayments';
 import { PendingSaveNotice } from '@/features/customer/ui/PendingSaveNotice';
 import { SignInPromptSheet } from '@/features/customer/ui/SignInPromptSheet';
-import { useBrowseChoice } from '@/features/mode/hooks/useBrowseChoice';
+import { useKnownCustomer } from '@/features/mode/hooks/useKnownCustomer';
 import { DensityProvider } from '@/shared/ui/DensityProvider';
 
 export { ScreenError as ErrorBoundary } from '@/shared/ui/ScreenError';
@@ -20,13 +20,12 @@ export default function CustomerLayout() {
   // on each return to the foreground. Its import also registers the checkout store's sign-out wipe.
   const state = useAuth((s) => s.state);
   useResumePayments(state.status === 'signedIn' ? state.userId : '');
-  // Customer is held while a browsing person's mode loads, and that account may yet be staff.
-  // Browsing ends once the mode has settled, so only then is this known to be a customer.
   const recovery = useAuth((s) => s.recovery);
-  const browsing = useBrowseChoice((s) => s.browsing);
   const signOut = useSignOut();
-  const customerId =
-    state.status === 'signedIn' && !recovery && browsing !== true ? state.userId : '';
+  const { customerId } = useKnownCustomer(
+    state.status === 'signedIn' ? state.userId : null,
+    recovery,
+  );
   return (
     <DensityProvider density="customer">
       <SignInPromptSheet

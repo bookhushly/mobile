@@ -53,6 +53,8 @@ type Props = {
   guest: Guest;
   /** Signed in and the profile has settled: the contact fields can be shown and filled. */
   guestReady: boolean;
+  /** Signed in, but the account may yet be staff: Continue stays off until this clears. */
+  modePending: boolean;
   header: ReactNode;
   onCreated: (bookingId: string) => void;
 };
@@ -66,6 +68,7 @@ export function StaySelect({
   userId,
   guest,
   guestReady,
+  modePending,
   header,
   onCreated,
 }: Props) {
@@ -177,6 +180,7 @@ export function StaySelect({
       problem={null}
       create={create.state}
       refusalShownAtField={refused?.field !== undefined}
+      gettingDetails={modePending}
       disabled={
         sel.checkIn === null ||
         sel.checkOut === null ||

@@ -12,6 +12,7 @@ import PayRoute from '@/app/(customer)/pay/[kind]/[bookingId]';
 import TicketsRoute from '@/app/(customer)/tickets/[bookingId]';
 import type { CheckoutTarget } from '@/features/customer/screens/ListingScreen';
 import type { PayHandlers } from '@/features/customer/ui/BookingFrame';
+import { useBrowseChoice } from '@/features/mode/hooks/useBrowseChoice';
 import { ROUTE_HREF } from '@/features/mode/hooks/useRouteStore';
 import { color } from '@/shared/theme';
 
@@ -119,11 +120,17 @@ jest.mock('@/features/customer/screens/CheckInCodeScreen', () => ({
 // Select and Pay too: the routes only hand over where Pay was reached from (A2a).
 const mockCheckout: {
   onCreated?: (bookingId: string, free: boolean) => void;
+  select?: { userId: string; modePending: boolean };
   pay?: { free: boolean; fromSelect: boolean };
 } = {};
 jest.mock('@/features/customer/screens/SelectScreen', () => ({
-  SelectScreen: (p: { onCreated: (bookingId: string, free: boolean) => void }) => {
+  SelectScreen: (p: {
+    userId: string;
+    modePending: boolean;
+    onCreated: (bookingId: string, free: boolean) => void;
+  }) => {
     mockCheckout.onCreated = p.onCreated;
+    mockCheckout.select = { userId: p.userId, modePending: p.modePending };
     return null;
   },
 }));
@@ -146,6 +153,17 @@ beforeEach(() => {
   mockCodes.tickets = undefined;
   mockCodes.checkIn = undefined;
   mockListing.props = undefined;
+});
+
+it.each([
+  [true, true],
+  [false, false],
+])('Select: browsing %s means the mode is still pending: %s', async (browsing, pending) => {
+  useBrowseChoice.setState({ browsing });
+  mockNav.params = { kind: 'event', listingId: ID };
+  await render(<CheckoutRoute />);
+  expect(mockCheckout.select).toEqual({ userId: 'u1', modePending: pending });
+  useBrowseChoice.setState({ browsing: null });
 });
 
 it('customer mode lands on the Explore tab (4b D1)', () => {

@@ -39,6 +39,8 @@ type Props = {
   guest: Guest;
   /** Signed in and the profile has settled: the contact fields can be shown and filled. */
   guestReady: boolean;
+  /** Signed in, but the account may yet be staff: Continue stays off until this clears. */
+  modePending: boolean;
   header: ReactNode;
   onCreated: (bookingId: string, free: boolean) => void;
   /** Re-reads the listing: after a refusal the stock counts may be stale (P11). */
@@ -59,6 +61,7 @@ export function EventSelect({
   userId,
   guest,
   guestReady,
+  modePending,
   header,
   onCreated,
   onRefused,
@@ -152,6 +155,7 @@ export function EventSelect({
       problem={ticketProblem !== undefined ? eventWords(ticketProblem) : null}
       create={create.state}
       refusalShownAtField={refused?.field !== undefined}
+      gettingDetails={modePending}
       disabled={(!signedOut && !showGuest) || promo.state.phase === 'checking'}
       onContinue={() => {
         setTried(true);

@@ -21,6 +21,8 @@ type Props = {
   userId: string;
   /** The signed-in email: the guest email when the profile has none. */
   email: string;
+  /** Signed in, but the account may yet be staff: nothing can be booked until this clears. */
+  modePending: boolean;
   onBack: () => void;
   onCreated: (bookingId: string, free: boolean) => void;
 };
@@ -34,7 +36,17 @@ export function SelectScreen(props: Props) {
   return <Select {...props} />;
 }
 
-function Select({ kind, listingId, roomTypeId, rateId, userId, email, onBack, onCreated }: Props) {
+function Select({
+  kind,
+  listingId,
+  roomTypeId,
+  rateId,
+  userId,
+  email,
+  modePending,
+  onBack,
+  onCreated,
+}: Props) {
   const listing = useListing(kind, listingId);
   const profile = useProfile(userId);
   // Skeleton only until the profile first settles. The form holds the choices and the create
@@ -86,6 +98,7 @@ function Select({ kind, listingId, roomTypeId, rateId, userId, email, onBack, on
         userId={userId}
         guest={guest}
         guestReady={guestReady}
+        modePending={modePending}
         header={header}
         onCreated={(id) => {
           onCreated(id, false);
@@ -101,6 +114,7 @@ function Select({ kind, listingId, roomTypeId, rateId, userId, email, onBack, on
         userId={userId}
         guest={guest}
         guestReady={guestReady}
+        modePending={modePending}
         header={header}
         onCreated={(id) => {
           onCreated(id, false);
@@ -114,6 +128,7 @@ function Select({ kind, listingId, roomTypeId, rateId, userId, email, onBack, on
       userId={userId}
       guest={guest}
       guestReady={guestReady}
+      modePending={modePending}
       header={header}
       onCreated={onCreated}
       onRefused={() => {

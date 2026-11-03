@@ -246,3 +246,60 @@ describe('deleteAccount', () => {
     });
   });
 });
+
+describe('with no session', () => {
+  function signedOutClient(status: number, body: unknown) {
+    const calls: Call[] = [];
+    const refreshSession = jest.fn((): Promise<RefreshOutcome> =>
+      Promise.resolve({ failure: 'invalid' }),
+    );
+    const c = createApiClient({
+      baseUrl: 'https://bookhushly.com',
+      fetchFn: ((url: string, init: RequestInit) => {
+        calls.push({ url, init });
+        return Promise.resolve(new Response(JSON.stringify(body), { status }));
+      }) as unknown as typeof fetch,
+      getAccessToken: () => Promise.resolve(null),
+      refreshSession,
+      clock: { recordServerDate: () => undefined },
+      appVersion: '1.0.0 (1)',
+      platform: 'ios',
+      sleep: () => Promise.resolve(),
+    });
+    return { c, calls, refreshSession };
+  }
+
+  it('signing up still goes out, with no token and no refresh', async () => {
+    const { c, calls, refreshSession } = signedOutClient(201, {
+      ok: true,
+      user: { id: 'u1', email: 'a@b.co' },
+    });
+    const r = await signUp(c, input);
+    expect(r.ok).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(headersOf(calls[0]).Authorization).toBeUndefined();
+    expect(refreshSession).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['resend', resendConfirmation],
+    ['forgot', forgotPassword],
+  ])('%s still goes out, with no token and no refresh', async (_name, call) => {
+    const { c, calls, refreshSession } = signedOutClient(202, { ok: true });
+    const r = await call(c, 'a@b.co');
+    expect(r.ok).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(headersOf(calls[0]).Authorization).toBeUndefined();
+    expect(refreshSession).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['reset', (c: Parameters<typeof deleteAccount>[0]) => resetPassword(c, 'Abcdefg1!')],
+    ['delete', (c: Parameters<typeof deleteAccount>[0]) => deleteAccount(c)],
+  ])('%s needs a session: nothing goes out', async (_name, call) => {
+    const { c, calls } = signedOutClient(200, { ok: true });
+    const r = await call(c);
+    expect(r).toEqual({ ok: false, error: { kind: 'unauthorized' } });
+    expect(calls).toHaveLength(0);
+  });
+});

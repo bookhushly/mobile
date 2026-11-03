@@ -6,6 +6,8 @@ import { RateLimitWait } from '@/features/customer/ui/RateLimitWait';
 import { space } from '@/shared/theme';
 import { Banner, Button, Text } from '@/shared/ui';
 
+const GETTING_DETAILS = 'Getting your details…';
+
 type Props = {
   /** "3 nights · ₦90,000", "2 tickets · Free", or what is still missing. */
   estimate: string;
@@ -16,6 +18,8 @@ type Props = {
   create: CreateState;
   /** The words beside a field already show this refusal. */
   refusalShownAtField: boolean;
+  /** Just signed in and something is still loading: read in place of the estimate. */
+  gettingDetails: boolean;
   disabled: boolean;
   onContinue: () => void;
   onCheckAgain: () => void;
@@ -29,6 +33,7 @@ export function SelectFooter({
   problem,
   create,
   refusalShownAtField,
+  gettingDetails,
   disabled,
   onContinue,
   onCheckAgain,
@@ -36,6 +41,7 @@ export function SelectFooter({
   const sending =
     create.phase === 'sending' || (create.phase === 'busy' && create.words === undefined);
   const unsure = create.phase === 'unsure';
+  const fetching = gettingDetails && blocked === null;
   // A 429 keeps Continue off until its countdown ends; a new answer starts a new wait.
   const [waitedOut, setWaitedOut] = useState<CreateState | null>(null);
   const waiting = create.phase === 'busy' && create.words !== undefined && waitedOut !== create;
@@ -84,14 +90,14 @@ export function SelectFooter({
             tabular
             testID="select-estimate"
           >
-            {blocked ?? estimate}
+            {blocked ?? (gettingDetails ? GETTING_DETAILS : estimate)}
           </Text>
         </View>
         <View style={{ flexShrink: 0, maxWidth: '60%' }}>
           <Button
             label="Continue"
-            loading={sending}
-            disabled={disabled || unsure || waiting || blocked !== null}
+            loading={sending || fetching}
+            disabled={disabled || gettingDetails || unsure || waiting || blocked !== null}
             onPress={onContinue}
             testID="select-continue"
           />
