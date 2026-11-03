@@ -169,6 +169,8 @@ Shadows tinted ink (`26,13,77`), never black; no violet glow.
 
 **Customer** — progressive disclosure (filters in a sheet; price breakdown collapsible, **total always visible**); primary action pinned in a bottom bar (thumb zone); exact ₦ total before the Paystack handoff; lock countdown; pending state, never fake success. Forms: top labels, one column, per-field `keyboardType`, validate on blur, preserve input on error. Phone: accept `0803…`/`803…`/`+234803…` → E.164 on blur; amounts `₦` + separators, store integers; address = state → area + free-text landmark. Ticket: QR as large as possible, ink on white, auto-brightness, keep awake.
 
+**Customer, signed out** — Explore, listings and Select work with no account. Saved, Bookings and Account show a short sign-in prompt in place of their content. Continue (book) and Save open a sign-in sheet ("Sign in to book" / "Sign in to save"; "Create account", "Sign in", "Not now"): selection stays as chosen, backing out returns to Select.
+
 **Gate** — camera first; result takes the **whole screen** (refusals hold until dismissed), dismiss target large in the lower half; controls in the lower third ≥56 pt, ≥16 apart; no precision gestures; counter + sync state always visible; no undo.
 
 **Receptionist** — scan/type the 8-char code → confirmation summary (guest, room type, dates, payment) → one "Check in" button; blockers shown above it in words. Tablet ≥768: two-pane (list | detail), 24 gutters, `work` density.

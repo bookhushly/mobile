@@ -19,6 +19,7 @@ Expo (SDK 57) / React Native app for iOS + Android: **customer**, **gate staff**
 - **Production Supabase is live.** No destructive calls, no test data left behind. Provision test accounts through real flows. Point dev builds at staging only once Bearer works there (see BACKEND_STATUS §8).
 - **Server-side authorisation is the truth**; hide UI the user can't use, but never rely on it.
 - **Never trust client prices**; send selections, the server recomputes.
+- Signed-out browsing: a person who taps "Browse without an account" gets the customer stack with no session; booking, paying and saving ask for sign-in in a sheet. Their `(customer)` route guard holds through sign-in (see `.claude/rules/routing.md`).
 - **Never render a transient failure (429/503/timeout/network) as a business refusal.** Gate scanning outcomes are: Admitted / Already used / Refused (specific reason) / Couldn't check — try again. No undo for gate staff.
 - **No lost admissions**: write the outbox to disk *before* showing success.
 - Tokens only in `expo-secure-store`; the offline roster (PII) in an encrypted store, wiped on logout once the outbox is empty.
