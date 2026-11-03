@@ -27,7 +27,7 @@
 **Left out of this phase:**
 
 - Crypto (P3).
-- Guest checkout: the app is signed in by construction.
+- Guest checkout: the app is signed in by construction. Replaced 2026-11-03 by `2026-11-03-browse-without-account-design.md`. Mobile still requires an account at booking for now; the web allows guests.
 - Apartment promo codes (P9).
 - Push, and an app return link: both are still missing on web.
 - Trips (`trip_service_id`).
