@@ -8,7 +8,7 @@ import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { TermsLine } from '@/features/auth/components/TermsLine';
 import type { AuthNotice } from '@/features/auth/hooks/useAuthNotice';
 import { color, layout, motion, space } from '@/shared/theme';
-import { Banner, Button, Text } from '@/shared/ui';
+import { Banner, Button, Text, TextLink } from '@/shared/ui';
 import { useMotionTier } from '@/shared/ui/motion';
 
 const wordmark = require('../../../../assets/images/logo-wordmark.png') as number;
@@ -30,16 +30,19 @@ type Props = {
   onDismissNotice: () => void;
   onCreateAccount: () => void;
   onSignIn: () => void;
+  onBrowse: () => void;
   onOpenLink: (url: string) => void;
 };
 
-// Landing screen whenever signed out: create account first, sign in second (spec §2 decision 1).
+// Landing screen when signed out and not browsing: create account first, sign in second
+// (spec §2 decision 1).
 // Draws over AuthBackdrop's photo, so it has no background of its own.
 export function WelcomeScreen({
   notice,
   onDismissNotice,
   onCreateAccount,
   onSignIn,
+  onBrowse,
   onOpenLink,
 }: Props) {
   const insets = useContext(SafeAreaInsetsContext) ?? { top: 0, bottom: 0 };
@@ -110,6 +113,9 @@ export function WelcomeScreen({
           <Button label="Create account" onInverse="light" onPress={onCreateAccount} />
           <View style={{ marginTop: space.s4 }}>
             <Button label="Sign in" variant="secondary" onInverse="light" onPress={onSignIn} />
+          </View>
+          <View style={{ marginTop: space.s2, alignItems: 'center' }}>
+            <TextLink label="Browse without an account" tone="onInverse" onPress={onBrowse} />
           </View>
           <View style={{ marginTop: space.s7 }}>
             <TermsLine inverse onOpenLink={onOpenLink} />

@@ -1,0 +1,143 @@
+import { act, render, screen } from '@testing-library/react-native';
+
+import RootLayout from '@/app/_layout';
+import { useAuth } from '@/features/auth/hooks/useAuth';
+import type { ModeState } from '@/features/mode/domain/route';
+import { useBrowseChoice } from '@/features/mode/hooks/useBrowseChoice';
+import type { memoryKv } from '@/shared/lib/kv';
+
+jest.mock('@sentry/react-native', () => ({ wrap: (c: unknown) => c }));
+jest.mock('@/shared/monitoring', () => ({ initMonitoring: jest.fn() }));
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  getItem: jest.fn(() => Promise.resolve(null)),
+  setItem: jest.fn(() => Promise.resolve()),
+  removeItem: jest.fn(() => Promise.resolve()),
+  getAllKeys: jest.fn(() => Promise.resolve([])),
+  multiRemove: jest.fn(() => Promise.resolve()),
+}));
+jest.mock('@/shared/platform/storage', () => {
+  const { memoryKv: make } =
+    jest.requireActual<typeof import('@/shared/lib/kv')>('@/shared/lib/kv');
+  return { plainKv: make() };
+});
+jest.mock('expo-splash-screen', () => ({
+  preventAutoHideAsync: jest.fn(() => Promise.resolve()),
+  hideAsync: jest.fn(() => Promise.resolve()),
+}));
+jest.mock('@/features/auth/api/session', () => ({
+  startSessionListener: () => () => undefined,
+}));
+jest.mock('@/shared/api/queryClient', () => ({
+  ...jest.requireActual<typeof import('@/shared/api/queryClient')>('@/shared/api/queryClient'),
+  setupQueryManagers: () => () => undefined,
+}));
+jest.mock('@/shared/providers/AppProviders', () => ({
+  AppProviders: ({ children }: { children: unknown }) => children,
+}));
+// Renders only the screens whose guard passes, in declared order.
+jest.mock('expo-router', () => {
+  const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
+  const React = jest.requireActual<typeof import('react')>('react');
+  const Stack = ({ children }: { children: unknown }) => children;
+  Stack.Protected = function Protected({ guard, children }: { guard: boolean; children: unknown }) {
+    return guard ? children : null;
+  };
+  Stack.Screen = function Screen({ name }: { name: string }) {
+    return React.createElement(Text, { testID: 'stack-screen' }, name);
+  };
+  return { Stack };
+});
+let mockMode: ModeState = { status: 'loading' };
+jest.mock('@/features/mode/hooks/useModeState', () => ({
+  useModeState: (userId: string | null) => ({
+    state: userId === null ? { status: 'idle' } : mockMode,
+    chosen: null,
+    choose: () => undefined,
+    retry: () => undefined,
+  }),
+}));
+
+const kv = jest.requireMock<{ plainKv: ReturnType<typeof memoryKv> }>(
+  '@/shared/platform/storage',
+).plainKv;
+
+const customer: ModeState = {
+  status: 'ready',
+  resolution: { kind: 'modes', modes: ['customer'], defaultMode: 'customer' },
+};
+const signedIn = { status: 'signedIn', userId: 'u1', email: 'a@b.co' } as const;
+
+const declared = () => screen.queryAllByTestId('stack-screen').map((s) => String(s.props.children));
+
+beforeEach(async () => {
+  await kv.delete('bh.browse');
+  mockMode = { status: 'loading' };
+  useBrowseChoice.setState({ browsing: null });
+  useAuth.setState({ state: { status: 'signedOut' }, recovery: false });
+});
+
+it('signed out and not browsing: only the auth screens', async () => {
+  await render(<RootLayout />);
+  expect(declared()).toEqual(['(auth)', 'delete-account']);
+});
+
+it('a stored choice opens browsing, with the auth screens declared on top', async () => {
+  await kv.set('bh.browse', '1');
+  await render(<RootLayout />);
+  expect(declared()).toEqual(['(customer)', '(auth)', 'delete-account']);
+});
+
+it('signing in removes the auth screens but holds customer while the mode loads', async () => {
+  await kv.set('bh.browse', '1');
+  await render(<RootLayout />);
+  await act(async () => {
+    useAuth.setState({ state: signedIn });
+    await Promise.resolve();
+  });
+  expect(declared()).toEqual(['(customer)', 'delete-account']);
+  expect(useBrowseChoice.getState().browsing).toBe(true);
+  expect(kv.dump()['bh.browse']).toBe('1');
+});
+
+it('forgets the choice once the signed-in mode is known', async () => {
+  await kv.set('bh.browse', '1');
+  mockMode = customer;
+  await render(<RootLayout />);
+  await act(async () => {
+    useAuth.setState({ state: signedIn });
+    await Promise.resolve();
+  });
+  expect(useBrowseChoice.getState().browsing).toBe(false);
+  expect(kv.dump()['bh.browse']).toBeUndefined();
+  expect(declared()).toEqual(['(customer)', 'delete-account']);
+});
+
+it('a reset started while browsing takes over, then lands in customer without a crash', async () => {
+  await kv.set('bh.browse', '1');
+  await render(<RootLayout />);
+  await act(async () => {
+    useAuth.setState({ state: signedIn, recovery: true });
+    await Promise.resolve();
+  });
+  expect(declared()).toEqual(['(auth)', 'delete-account']);
+  await act(async () => {
+    useAuth.setState({ recovery: false });
+    await Promise.resolve();
+  });
+  expect(declared()).toEqual(['(customer)', 'delete-account']);
+});
+
+it('an abandoned reset goes back to browsing with the auth screens still reachable', async () => {
+  await kv.set('bh.browse', '1');
+  await render(<RootLayout />);
+  await act(async () => {
+    useAuth.setState({ state: signedIn, recovery: true });
+    await Promise.resolve();
+  });
+  await act(async () => {
+    useAuth.setState({ state: { status: 'signedOut' }, recovery: false });
+    await Promise.resolve();
+  });
+  expect(declared()).toEqual(['(customer)', '(auth)', 'delete-account']);
+  expect(useBrowseChoice.getState().browsing).toBe(true);
+});

@@ -15,7 +15,8 @@ import '@/features/customer/offline/recentSearches';
 import '@/features/customer/offline/actionMarks';
 // And the checkout entries (4c P5, B1): guest emails and payment links, cleared on every sign-out.
 import '@/features/customer/offline/checkoutStore';
-import { resolveRoute } from '@/features/mode/domain/route';
+import { authScreensAllowed, resolveRoute } from '@/features/mode/domain/route';
+import { useBrowseChoice } from '@/features/mode/hooks/useBrowseChoice';
 import { useModeState } from '@/features/mode/hooks/useModeState';
 import { useRouteStore } from '@/features/mode/hooks/useRouteStore';
 import { APP_VERSION } from '@/shared/api/instance';
@@ -51,12 +52,24 @@ function Navigator() {
   // No mode lookup mid-reset: the user is signed in by a code only until the new password is saved.
   const userId = auth.status === 'signedIn' && !recovery ? auth.userId : null;
   const { state: mode, chosen } = useModeState(userId);
+  const browsing = useBrowseChoice((s) => s.browsing);
+  const loadBrowsing = useBrowseChoice((s) => s.load);
+  const clearBrowsing = useBrowseChoice((s) => s.clear);
+  useEffect(() => {
+    void loadBrowsing();
+  }, [loadBrowsing]);
+  // Once the account's mode is known browsing is over, so signing out returns to Welcome.
+  const modeKnown = auth.status === 'signedIn' && mode.status === 'ready';
+  useEffect(() => {
+    if (modeKnown) clearBrowsing();
+  }, [modeKnown, clearBrowsing]);
   const route = resolveRoute({
     versionOk: isVersionSupported(APP_VERSION, MIN_SUPPORTED_VERSION),
     auth: auth.status,
     mode,
     chosenMode: chosen,
     recovery,
+    browsing,
   });
 
   const setRoute = useRouteStore((s) => s.setRoute);
@@ -78,9 +91,6 @@ function Navigator() {
       <Stack.Protected guard={route === 'update'}>
         <Stack.Screen name="update-required" />
       </Stack.Protected>
-      <Stack.Protected guard={route === 'auth'}>
-        <Stack.Screen name="(auth)" />
-      </Stack.Protected>
       <Stack.Protected guard={route === 'modeError'}>
         <Stack.Screen name="mode-error" />
       </Stack.Protected>
@@ -95,6 +105,10 @@ function Navigator() {
       </Stack.Protected>
       <Stack.Protected guard={route === 'customer'}>
         <Stack.Screen name="(customer)" />
+      </Stack.Protected>
+      {/* After (customer): a browsing person opens these on top, keeping the stack beneath. */}
+      <Stack.Protected guard={authScreensAllowed(route, auth.status)}>
+        <Stack.Screen name="(auth)" />
       </Stack.Protected>
       {/* Unguarded: it must survive the sign-out that a successful deletion triggers. */}
       <Stack.Screen name="delete-account" options={{ presentation: 'modal' }} />

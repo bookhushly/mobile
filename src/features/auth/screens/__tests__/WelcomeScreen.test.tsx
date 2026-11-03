@@ -10,6 +10,7 @@ function props() {
     onDismissNotice: jest.fn(),
     onCreateAccount: jest.fn(),
     onSignIn: jest.fn(),
+    onBrowse: jest.fn(),
     onOpenLink: jest.fn(),
   };
 }
@@ -87,4 +88,19 @@ it('makes Sign in a visibly outlined button', async () => {
   await render(<WelcomeScreen {...props()} />);
   const pressable = screen.getByRole('button', { name: 'Sign in' });
   expect(pressable).toHaveStyle({ borderColor: color.onInverse });
+});
+
+it('calls onBrowse from Browse without an account', async () => {
+  const onBrowse = jest.fn();
+  await render(<WelcomeScreen {...props()} onBrowse={onBrowse} />);
+  await fireEvent.press(screen.getByRole('link', { name: 'Browse without an account' }));
+  expect(onBrowse).toHaveBeenCalledTimes(1);
+});
+
+it('underlines the browse link over the photo', async () => {
+  await render(<WelcomeScreen {...props()} />);
+  expect(screen.getByText('Browse without an account')).toHaveStyle({
+    textDecorationLine: 'underline',
+    color: color.onInverse,
+  });
 });
