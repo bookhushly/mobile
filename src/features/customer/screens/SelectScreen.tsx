@@ -37,9 +37,11 @@ export function SelectScreen(props: Props) {
 function Select({ kind, listingId, roomTypeId, rateId, userId, email, onBack, onCreated }: Props) {
   const listing = useListing(kind, listingId);
   const profile = useProfile(userId);
-  // The stack stays mounted through sign-in, and the choices live in the form: replacing the form
-  // with a skeleton while the profile loads would lose them.
-  const [startedSignedOut] = useState(userId === '');
+  // Skeleton only until the profile first settles. The form holds the choices and the create
+  // guards (idempotency key, an unsettled event): replacing it later, when a sign-in starts the
+  // profile read or a failed read refetches (TanStack goes back to pending), would lose them.
+  const [settled, setSettled] = useState(userId === '' || !profile.loading);
+  if (!settled && !profile.loading) setSettled(true);
   const guestReady = userId !== '' && !profile.loading;
   const data = listing.data;
   const header = (
@@ -50,7 +52,7 @@ function Select({ kind, listingId, roomTypeId, rateId, userId, email, onBack, on
   );
   if (data === null) return <ListingNotFound onBack={onBack} />;
   // The profile only prefills: a failed read leaves the fields to the user.
-  if (data === undefined || (profile.loading && !startedSignedOut)) {
+  if (data === undefined || !settled) {
     return (
       <Screen header={header}>
         {listing.error ? (

@@ -809,6 +809,61 @@ describe('browsing without an account', () => {
       expect(screen.getByTestId('guest-name')).toHaveDisplayValue('Typed Name');
     });
 
+    it('signed in from the start: a failed profile refetching keeps the live form', async () => {
+      browsing(HOTEL);
+      signedIn = FAILED;
+      const { user } = await openAs('hotel', ROOM, 'u1');
+      await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
+
+      // TanStack goes back to pending when a query with no data refetches. Unmounting here would
+      // also lose useCreateBooking's guards against a second booking.
+      signedIn = PENDING;
+      await user();
+      expect(skeleton()).toBeNull();
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · ₦120,000');
+    });
+
+    it('a profile with gaps shows no event errors until the next Continue', async () => {
+      browsing(PAID);
+      const { user } = await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Regular');
+      await fireEvent.press(continueButton());
+      expect(reason()).toBe('book');
+      signedIn = { ...READY, profile: { ...PROFILE, phone: null } };
+      await user();
+
+      expect(screen.getByTestId('guest-phone')).toHaveDisplayValue('');
+      expect(screen.queryByText('Enter a Nigerian number, like 0803 123 4567')).toBeNull();
+      await fireEvent.press(continueButton());
+      expect(screen.getByText('Enter a Nigerian number, like 0803 123 4567')).toBeTruthy();
+      expect(submit).not.toHaveBeenCalled();
+    });
+
+    it('a failed profile refetching keeps an event’s fields up and what was typed', async () => {
+      browsing(PAID);
+      const { user } = await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Regular');
+      signedIn = FAILED;
+      await user();
+      await fireEvent.changeText(screen.getByTestId('guest-phone'), '0803 123 4567');
+
+      signedIn = PENDING;
+      await user();
+      expect(screen.getByTestId('guest-phone')).toHaveDisplayValue('0803 123 4567');
+      expect(continueButton()).toBeEnabled();
+
+      signedIn = { ...READY, profile: { ...PROFILE, phone: '+2348099999999' } };
+      await user();
+      expect(screen.getByTestId('guest-phone')).toHaveDisplayValue('0803 123 4567');
+      await fireEvent.press(continueButton());
+      expect(submit.mock.calls[0]?.[0]).toMatchObject({
+        qty: { Regular: 1 },
+        guest: { phone: '0803 123 4567' },
+      });
+    });
+
     it('a free event after sign-in validates the name as usual', async () => {
       browsing(FREE);
       const { user } = await openAs('event');
@@ -900,6 +955,9 @@ describe('browsing without an account', () => {
       await user();
       expect(await screen.findByText('This code has been used up')).toBeTruthy();
       expect(screen.queryByTestId('promo-applied')).toBeNull();
+      await fireEvent.press(continueButton());
+      expect(submit).toHaveBeenCalledTimes(1);
+      expect(submit.mock.calls[0]?.[0]).toMatchObject({ qty: { Regular: 1 }, promo: null });
     });
 
     it('Continue waits while the recheck is running, so the code is never dropped', async () => {
