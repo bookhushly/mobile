@@ -109,6 +109,16 @@ export function stayProblems(
   return out;
 }
 
+/**
+ * What stops Continue for someone signed out: the contact fields are hidden until sign-in, when
+ * they fill from the profile and are validated as usual.
+ */
+export function withoutContactProblems<P>(problems: P[]): P[] {
+  return problems.filter(
+    (p: unknown) => p !== 'guestName' && p !== 'guestEmail' && p !== 'guestPhone',
+  );
+}
+
 /** Positive integers only (P18): zero, negative, NaN and fractional quantities are dropped. */
 export function ticketLines(qty: Record<string, number>): Record<string, number> {
   const out: Record<string, number> = {};

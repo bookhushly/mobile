@@ -333,6 +333,8 @@ export function useCreateBooking(
 
   const submit = useCallback(
     async (selection: StaySelection | EventSelection, ctx: CreateCtx): Promise<void> => {
+      // The hard guard: with no session the server would create a booking nobody owns.
+      if (userId === '') return;
       if (inFlight.current) return;
       // An event whose answer was lost is settled by Check again, never by a second post.
       if (kind === 'event' && eventSentAt.current !== null) return;
@@ -343,7 +345,7 @@ export function useCreateBooking(
         await sendStay(selection, ctx);
       }
     },
-    [kind, sendEvent, sendStay],
+    [userId, kind, sendEvent, sendStay],
   );
 
   const checkAgain = useCallback(async (): Promise<void> => {

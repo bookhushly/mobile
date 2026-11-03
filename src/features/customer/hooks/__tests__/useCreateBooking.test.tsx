@@ -428,3 +428,39 @@ describe('useCreateBooking — events', () => {
     expect(result.current.created).toBeNull();
   });
 });
+
+// The hard guard: with no session `createEvent` would answer 201 with `customer_id: null`.
+describe('useCreateBooking — no user', () => {
+  it('submit with no user sends nothing', async () => {
+    const hotel = await renderHook(() => useCreateBooking('', 'hotel', HOTEL));
+    await act(() => hotel.result.current.submit(stay(), ctx));
+    const apartment = await renderHook(() => useCreateBooking('', 'apartment', HOTEL));
+    await act(() => apartment.result.current.submit(stay(), { title: 'Lekki loft' }));
+    const paid = await renderHook(() => useCreateBooking('', 'event', EVENT));
+    await act(() => paid.result.current.submit(tickets(), { title: 'Afrobeats night' }));
+    const free = await renderHook(() => useCreateBooking('', 'event', EVENT));
+    await act(() => free.result.current.submit(tickets(), { title: 'Afrobeats night', free: true }));
+
+    expect(stayMock).not.toHaveBeenCalled();
+    expect(eventMock).not.toHaveBeenCalled();
+    for (const { result } of [hotel, apartment, paid, free]) {
+      expect(result.current.state).toEqual({ phase: 'idle' });
+      expect(result.current.created).toBeNull();
+    }
+  });
+
+  it('a user appearing on the mounted hook lets the next submit through', async () => {
+    stayMock.mockResolvedValueOnce(stayCreated);
+    const { result, rerender } = await renderHook(
+      ({ userId }: { userId: string }) => useCreateBooking(userId, 'hotel', HOTEL),
+      { initialProps: { userId: '' } },
+    );
+    await act(() => result.current.submit(stay(), ctx));
+    expect(stayMock).not.toHaveBeenCalled();
+
+    await rerender({ userId: USER });
+    await act(() => result.current.submit(stay(), ctx));
+    expect(stayMock).toHaveBeenCalledTimes(1);
+    expect(result.current.created).toEqual({ bookingId: 'hb1' });
+  });
+});

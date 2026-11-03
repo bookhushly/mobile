@@ -10,6 +10,8 @@ import {
   selectionFingerprint,
   stayProblems,
   ticketLines,
+  withoutContactProblems,
+  type EventProblem,
   type EventSelection,
   type StaySelection,
 } from '../selection';
@@ -234,6 +236,18 @@ describe('isFreeOrder and eventSubtotal', () => {
   });
   it('sums package prices by quantity', () => {
     expect(eventSubtotal({ A: 2, B: 1, Z: 4 }, [pkg('A', 1000), pkg('B', 500)], 0)).toBe(2500);
+  });
+});
+
+describe('withoutContactProblems', () => {
+  it('drops the contact problems and keeps the rest', () => {
+    expect(withoutContactProblems(['dates', 'guestName', 'guestPhone'])).toEqual(['dates']);
+    expect(withoutContactProblems(['guestEmail'])).toEqual([]);
+  });
+
+  it('keeps an organiser question, which is shown while signed out', () => {
+    const problems: EventProblem[] = [{ question: 'q1' }, 'guestEmail', 'noTickets'];
+    expect(withoutContactProblems(problems)).toEqual([{ question: 'q1' }, 'noTickets']);
   });
 });
 

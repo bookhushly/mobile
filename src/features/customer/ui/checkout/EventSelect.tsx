@@ -6,6 +6,7 @@ import {
   eventSubtotal,
   isFreeOrder,
   ticketLines,
+  withoutContactProblems,
   type EventSelection,
   type Guest,
 } from '@/features/customer/domain/checkout/selection';
@@ -14,6 +15,8 @@ import { useEventQuestions } from '@/features/customer/hooks/useCheckoutData';
 import { useCreateBooking } from '@/features/customer/hooks/useCreateBooking';
 import { loadFailed } from '@/features/customer/hooks/loadState';
 import { promoFor, usePromo } from '@/features/customer/hooks/usePromo';
+import { useRecheckPromoOnSignIn } from '@/features/customer/hooks/useRecheckPromoOnSignIn';
+import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
 import type { EventDetail } from '@/features/customer/schemas/listings';
 import { EventTickets, ticketLinesOf } from '@/features/customer/ui/checkout/EventTickets';
 import { FormLoading } from '@/features/customer/ui/checkout/FormLoading';
@@ -34,6 +37,8 @@ type Props = {
   event: EventDetail;
   userId: string;
   guest: Guest;
+  /** Signed in and the profile has settled: the contact fields can be shown and filled. */
+  guestReady: boolean;
   header: ReactNode;
   onCreated: (bookingId: string, free: boolean) => void;
   /** Re-reads the listing: after a refusal the stock counts may be stale (P11). */
@@ -47,10 +52,30 @@ const BLOCKED: Partial<Record<ReturnType<typeof eventStock>, string>> = {
 };
 
 // Spec §5 Select (events): a stepper per package (P18), the organiser's questions (P17), promo
-// (P9) and contact details (P16). Free orders register straight away (P19).
-export function EventSelect({ event: e, userId, guest, header, onCreated, onRefused }: Props) {
+// (P9) and contact details (P16). Free orders register straight away (P19). Signed out, Continue
+// asks for an account first and the details stay hidden until there is one.
+export function EventSelect({
+  event: e,
+  userId,
+  guest,
+  guestReady,
+  header,
+  onCreated,
+  onRefused,
+}: Props) {
   const [sel, setSel] = useState<EventSelection>({ qty: {}, answers: {}, promo: null, guest });
   const [tried, setTried] = useState(false);
+  // Once only: a later profile refetch must not hide the fields or overwrite what was typed. The
+  // details are new to the person, so they aren't marked wrong until the next Continue.
+  const [guestFilled, setGuestFilled] = useState(guestReady);
+  if (guestReady && !guestFilled) {
+    setGuestFilled(true);
+    setSel((s) => ({ ...s, guest }));
+    setTried(false);
+  }
+  const signedOut = userId === '';
+  const showGuest = !signedOut && guestFilled;
+  const ask = useSignInPrompt((s) => s.ask);
   const nameRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
@@ -58,6 +83,11 @@ export function EventSelect({ event: e, userId, guest, header, onCreated, onRefu
   const questionsQuery = useEventQuestions(e.id);
   const create = useCreateBooking(userId, 'event', e.id);
   const promo = usePromo('event', e.id);
+  // Null when unreadable: never free, and Continue stays off (A7).
+  const listingPrice = e.price;
+  const subtotal = eventSubtotal(sel.qty, e.ticket_packages, listingPrice);
+  const amount = subtotal > 0 ? subtotal : null;
+  useRecheckPromoOnSignIn(userId, promo, amount);
   const sentFree = useRef(false);
   const handed = useRef(false);
   const created = create.created;
@@ -93,12 +123,8 @@ export function EventSelect({ event: e, userId, guest, header, onCreated, onRefu
   const lines = ticketLinesOf(e);
   const threshold = lowStockThreshold(e.low_stock_threshold);
   const blocked = BLOCKED[eventStock(e, clock.serverNow())] ?? null;
-  // Null when unreadable: never free, and Continue stays off (A7).
-  const listingPrice = e.price;
   const chosen = ticketLines(sel.qty);
   const total = Object.values(chosen).reduce((a, b) => a + b, 0);
-  const subtotal = eventSubtotal(sel.qty, e.ticket_packages, listingPrice);
-  const amount = subtotal > 0 ? subtotal : null;
   const { promo: sentPromo, stale } = promoFor(promo.state, amount);
   const selection: EventSelection = { ...sel, promo: sentPromo };
   const free = isFreeOrder(selection, e.ticket_packages, listingPrice);
@@ -126,17 +152,22 @@ export function EventSelect({ event: e, userId, guest, header, onCreated, onRefu
       problem={ticketProblem !== undefined ? eventWords(ticketProblem) : null}
       create={create.state}
       refusalShownAtField={refused?.field !== undefined}
-      disabled={false}
+      disabled={(!signedOut && !showGuest) || promo.state.phase === 'checking'}
       onContinue={() => {
         setTried(true);
-        if (problems.length > 0) {
+        const stopping = signedOut ? withoutContactProblems(problems) : problems;
+        if (stopping.length > 0) {
           focusFirst(
-            problems,
+            stopping,
             { name: nameRef, email: emailRef, phone: phoneRef },
             eventWords,
             (p) =>
               typeof p === 'object' ? { current: answerInputs.current[p.question] ?? null } : null,
           );
+          return;
+        }
+        if (signedOut) {
+          ask('book');
           return;
         }
         sentFree.current = free;
@@ -186,17 +217,19 @@ export function EventSelect({ event: e, userId, guest, header, onCreated, onRefu
           onRemove={promo.remove}
         />
       ) : null}
-      <GuestFields
-        guest={sel.guest}
-        onChange={(g) => {
-          setSel({ ...sel, guest: g });
-        }}
-        errors={guestErrors(shown)}
-        nameRef={nameRef}
-        emailRef={emailRef}
-        phoneRef={phoneRef}
-        showName={free}
-      />
+      {showGuest ? (
+        <GuestFields
+          guest={sel.guest}
+          onChange={(g) => {
+            setSel({ ...sel, guest: g });
+          }}
+          errors={guestErrors(shown)}
+          nameRef={nameRef}
+          emailRef={emailRef}
+          phoneRef={phoneRef}
+          showName={free}
+        />
+      ) : null}
     </Screen>
   );
 }

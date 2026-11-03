@@ -6,6 +6,7 @@ import {
   defaultRate,
   nights,
   stayProblems,
+  withoutContactProblems,
   type Guest,
   type StaySelection,
 } from '@/features/customer/domain/checkout/selection';
@@ -18,6 +19,8 @@ import {
 import { useCreateBooking } from '@/features/customer/hooks/useCreateBooking';
 import { loadFailed } from '@/features/customer/hooks/loadState';
 import { promoFor, usePromo } from '@/features/customer/hooks/usePromo';
+import { useRecheckPromoOnSignIn } from '@/features/customer/hooks/useRecheckPromoOnSignIn';
+import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
 import type { RoomType } from '@/features/customer/schemas/listings';
 import { ExtrasSection, stayExtras } from '@/features/customer/ui/checkout/ExtrasSection';
 import { FormLoading } from '@/features/customer/ui/checkout/FormLoading';
@@ -48,13 +51,24 @@ type Props = {
   requestedRate: string | null;
   userId: string;
   guest: Guest;
+  /** Signed in and the profile has settled: the contact fields can be shown and filled. */
+  guestReady: boolean;
   header: ReactNode;
   onCreated: (bookingId: string) => void;
 };
 
 // Spec §5 Select (stays): room and bed option, dates, guests, extras, promo (P9, amended 4c.1), the
-// guest's details (P16) and, for hotels, special requests. Continue creates the booking (P1).
-export function StaySelect({ stay, requestedRate, userId, guest, header, onCreated }: Props) {
+// guest's details (P16) and, for hotels, special requests. Continue creates the booking (P1), or
+// asks for an account first: the details stay hidden until there is one.
+export function StaySelect({
+  stay,
+  requestedRate,
+  userId,
+  guest,
+  guestReady,
+  header,
+  onCreated,
+}: Props) {
   const hotel = stay.kind === 'hotel' ? stay : null;
   const apt = stay.kind === 'apartment' ? stay.listing.apartment : null;
   const id = hotel !== null ? hotel.listing.hotel.id : (apt?.id ?? '');
@@ -73,6 +87,17 @@ export function StaySelect({ stay, requestedRate, userId, guest, header, onCreat
     specialRequests: '',
   }));
   const [tried, setTried] = useState(false);
+  // Once only: a later profile refetch must not hide the fields or overwrite what was typed. The
+  // details are new to the person, so they aren't marked wrong until the next Continue.
+  const [guestFilled, setGuestFilled] = useState(guestReady);
+  if (guestReady && !guestFilled) {
+    setGuestFilled(true);
+    setSel((s) => ({ ...s, guest }));
+    setTried(false);
+  }
+  const signedOut = userId === '';
+  const showGuest = !signedOut && guestFilled;
+  const ask = useSignInPrompt((s) => s.ask);
   const nameRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
@@ -81,6 +106,15 @@ export function StaySelect({ stay, requestedRate, userId, guest, header, onCreat
   const availability = useRoomAvailability(hotel?.roomType.id ?? null, sel.checkIn, sel.checkOut);
   const create = useCreateBooking(userId, stay.kind, id);
   const promo = usePromo(stay.kind, id);
+  const rate = rates.find((r) => r.id === sel.rateId) ?? null;
+  const perNight =
+    hotel !== null
+      ? (rate?.price_per_night ?? hotel.roomType.base_price)
+      : (apt?.price_per_night ?? null);
+  const n =
+    sel.checkIn !== null && sel.checkOut !== null ? nights(sel.checkIn, sel.checkOut) : null;
+  const amount = n !== null && perNight !== null && n > 0 ? perNight * n : null;
+  useRecheckPromoOnSignIn(userId, promo, amount);
   const created = create.created;
   // Hands over once: the parent's callback may change identity on every render.
   const handed = useRef(false);
@@ -109,14 +143,6 @@ export function StaySelect({ stay, requestedRate, userId, guest, header, onCreat
   const extras = stayExtras(hotel !== null ? he : undefined, hotel === null ? ae : undefined);
   const minNights = hotel !== null ? 1 : Math.max(1, ae?.minimumStay ?? apt?.minimum_stay ?? 1);
   const maxGuests = hotel !== null ? hotel.roomType.max_occupancy : (apt?.max_guests ?? null);
-  const rate = rates.find((r) => r.id === sel.rateId) ?? null;
-  const perNight =
-    hotel !== null
-      ? (rate?.price_per_night ?? hotel.roomType.base_price)
-      : (apt?.price_per_night ?? null);
-  const n =
-    sel.checkIn !== null && sel.checkOut !== null ? nights(sel.checkIn, sel.checkOut) : null;
-  const amount = n !== null && perNight !== null && n > 0 ? perNight * n : null;
   const preview = promoFor(promo.state, amount);
   const stale = preview.stale;
   const selection: StaySelection = { ...sel, promo: preview.promo };
@@ -151,13 +177,23 @@ export function StaySelect({ stay, requestedRate, userId, guest, header, onCreat
       problem={null}
       create={create.state}
       refusalShownAtField={refused?.field !== undefined}
-      disabled={sel.checkIn === null || sel.checkOut === null}
+      disabled={
+        sel.checkIn === null ||
+        sel.checkOut === null ||
+        (!signedOut && !showGuest) ||
+        promo.state.phase === 'checking'
+      }
       onContinue={() => {
         setTried(true);
-        if (problems.length > 0) {
-          focusFirst(problems, { name: nameRef, email: emailRef, phone: phoneRef }, (p) =>
+        const stopping = signedOut ? withoutContactProblems(problems) : problems;
+        if (stopping.length > 0) {
+          focusFirst(stopping, { name: nameRef, email: emailRef, phone: phoneRef }, (p) =>
             stayWords(p, rules),
           );
+          return;
+        }
+        if (signedOut) {
+          ask('book');
           return;
         }
         void create.submit(selection, {
@@ -228,16 +264,18 @@ export function StaySelect({ stay, requestedRate, userId, guest, header, onCreat
         }}
         onRemove={promo.remove}
       />
-      <GuestFields
-        guest={sel.guest}
-        onChange={(g) => {
-          setSel({ ...sel, guest: g });
-        }}
-        errors={guestErrors(shown)}
-        nameRef={nameRef}
-        emailRef={emailRef}
-        phoneRef={phoneRef}
-      />
+      {showGuest ? (
+        <GuestFields
+          guest={sel.guest}
+          onChange={(g) => {
+            setSel({ ...sel, guest: g });
+          }}
+          errors={guestErrors(shown)}
+          nameRef={nameRef}
+          emailRef={emailRef}
+          phoneRef={phoneRef}
+        />
+      ) : null}
       {hotel !== null ? (
         <SpecialRequests
           value={sel.specialRequests}

@@ -1,4 +1,5 @@
 import { ArrowLeft } from 'lucide-react-native';
+import { useState } from 'react';
 
 import type { ListingKind } from '@/features/customer/domain/discover';
 import { useListing } from '@/features/customer/hooks/useListing';
@@ -36,6 +37,10 @@ export function SelectScreen(props: Props) {
 function Select({ kind, listingId, roomTypeId, rateId, userId, email, onBack, onCreated }: Props) {
   const listing = useListing(kind, listingId);
   const profile = useProfile(userId);
+  // The stack stays mounted through sign-in, and the choices live in the form: replacing the form
+  // with a skeleton while the profile loads would lose them.
+  const [startedSignedOut] = useState(userId === '');
+  const guestReady = userId !== '' && !profile.loading;
   const data = listing.data;
   const header = (
     <Header
@@ -45,7 +50,7 @@ function Select({ kind, listingId, roomTypeId, rateId, userId, email, onBack, on
   );
   if (data === null) return <ListingNotFound onBack={onBack} />;
   // The profile only prefills: a failed read leaves the fields to the user.
-  if (data === undefined || profile.loading) {
+  if (data === undefined || (profile.loading && !startedSignedOut)) {
     return (
       <Screen header={header}>
         {listing.error ? (
@@ -78,6 +83,7 @@ function Select({ kind, listingId, roomTypeId, rateId, userId, email, onBack, on
         requestedRate={rateId}
         userId={userId}
         guest={guest}
+        guestReady={guestReady}
         header={header}
         onCreated={(id) => {
           onCreated(id, false);
@@ -92,6 +98,7 @@ function Select({ kind, listingId, roomTypeId, rateId, userId, email, onBack, on
         requestedRate={null}
         userId={userId}
         guest={guest}
+        guestReady={guestReady}
         header={header}
         onCreated={(id) => {
           onCreated(id, false);
@@ -104,6 +111,7 @@ function Select({ kind, listingId, roomTypeId, rateId, userId, email, onBack, on
       event={data}
       userId={userId}
       guest={guest}
+      guestReady={guestReady}
       header={header}
       onCreated={onCreated}
       onRefused={() => {
