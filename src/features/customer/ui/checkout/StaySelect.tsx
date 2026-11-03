@@ -20,6 +20,7 @@ import { useCreateBooking } from '@/features/customer/hooks/useCreateBooking';
 import { loadFailed } from '@/features/customer/hooks/loadState';
 import { promoFor, usePromo } from '@/features/customer/hooks/usePromo';
 import { useRecheckPromoOnSignIn } from '@/features/customer/hooks/useRecheckPromoOnSignIn';
+import { useSelectTotal } from '@/features/customer/hooks/useSelectTotal';
 import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
 import type { RoomType } from '@/features/customer/schemas/listings';
 import { ExtrasSection, stayExtras } from '@/features/customer/ui/checkout/ExtrasSection';
@@ -27,6 +28,7 @@ import { FormLoading } from '@/features/customer/ui/checkout/FormLoading';
 import { GuestFields } from '@/features/customer/ui/checkout/GuestFields';
 import { PromoRow } from '@/features/customer/ui/checkout/PromoRow';
 import { SelectFooter } from '@/features/customer/ui/checkout/SelectFooter';
+import { SignedInNote } from '@/features/customer/ui/checkout/SignedInNote';
 import {
   focusFirst,
   guestErrors,
@@ -100,6 +102,7 @@ export function StaySelect({
   }
   const signedOut = userId === '';
   const showGuest = !signedOut && guestFilled;
+  const [startedSignedOut] = useState(signedOut);
   const ask = useSignInPrompt((s) => s.ask);
   const nameRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
@@ -118,6 +121,11 @@ export function StaySelect({
     sel.checkIn !== null && sel.checkOut !== null ? nights(sel.checkIn, sel.checkOut) : null;
   const amount = n !== null && perNight !== null && n > 0 ? perNight * n : null;
   useRecheckPromoOnSignIn(userId, promo, amount);
+  const preview = promoFor(promo.state, amount);
+  const { total, note } = useSelectTotal(
+    stay.kind,
+    amount === null ? null : Math.max(0, amount - (preview.promo?.discount ?? 0)),
+  );
   const created = create.created;
   // Hands over once: the parent's callback may change identity on every render.
   const handed = useRef(false);
@@ -146,7 +154,6 @@ export function StaySelect({
   const extras = stayExtras(hotel !== null ? he : undefined, hotel === null ? ae : undefined);
   const minNights = hotel !== null ? 1 : Math.max(1, ae?.minimumStay ?? apt?.minimum_stay ?? 1);
   const maxGuests = hotel !== null ? hotel.roomType.max_occupancy : (apt?.max_guests ?? null);
-  const preview = promoFor(promo.state, amount);
   const stale = preview.stale;
   const selection: StaySelection = { ...sel, promo: preview.promo };
   const rules = { minNights, maxGuests };
@@ -166,27 +173,27 @@ export function StaySelect({
   };
   const noRooms = hotel !== null && availability.data?.available === false;
   const title = hotel !== null ? (hotel.listing.hotel.name ?? '') : (apt?.name ?? '');
+  // Priced by the server at create: no helper prices them here, so they're named, not added.
+  const extrasChosen = sel.airport.on || Object.values(sel.breakfast).some((q) => q > 0);
 
   const footer = (
     <SelectFooter
       estimate={
         n === null
           ? 'Add your dates'
-          : amount === null
+          : total === null
             ? nightsWord(n)
-            : `${nightsWord(n)} · ${formatNaira(amount)}`
+            : `${nightsWord(n)} · ${formatNaira(total)}${extrasChosen ? ' + extras' : ''}`
       }
       blocked={noRooms ? NO_ROOMS : null}
       problem={null}
       create={create.state}
       refusalShownAtField={refused?.field !== undefined}
-      gettingDetails={modePending}
-      disabled={
-        sel.checkIn === null ||
-        sel.checkOut === null ||
-        (!signedOut && !showGuest) ||
-        promo.state.phase === 'checking'
+      gettingDetails={
+        modePending || (!signedOut && (!showGuest || promo.state.phase === 'checking'))
       }
+      chargeNote={note}
+      disabled={sel.checkIn === null || sel.checkOut === null || promo.state.phase === 'checking'}
       onContinue={() => {
         setTried(true);
         const stopping = signedOut ? withoutContactProblems(problems) : problems;
@@ -268,6 +275,7 @@ export function StaySelect({
         }}
         onRemove={promo.remove}
       />
+      {showGuest && startedSignedOut ? <SignedInNote /> : null}
       {showGuest ? (
         <GuestFields
           guest={sel.guest}

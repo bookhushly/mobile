@@ -16,6 +16,7 @@ import { useCreateBooking } from '@/features/customer/hooks/useCreateBooking';
 import { loadFailed } from '@/features/customer/hooks/loadState';
 import { promoFor, usePromo } from '@/features/customer/hooks/usePromo';
 import { useRecheckPromoOnSignIn } from '@/features/customer/hooks/useRecheckPromoOnSignIn';
+import { useSelectTotal } from '@/features/customer/hooks/useSelectTotal';
 import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
 import type { EventDetail } from '@/features/customer/schemas/listings';
 import { EventTickets, ticketLinesOf } from '@/features/customer/ui/checkout/EventTickets';
@@ -24,6 +25,7 @@ import { GuestFields } from '@/features/customer/ui/checkout/GuestFields';
 import { PromoRow } from '@/features/customer/ui/checkout/PromoRow';
 import { QuestionFields } from '@/features/customer/ui/checkout/QuestionFields';
 import { SelectFooter } from '@/features/customer/ui/checkout/SelectFooter';
+import { SignedInNote } from '@/features/customer/ui/checkout/SignedInNote';
 import {
   eventWords,
   focusFirst,
@@ -78,6 +80,7 @@ export function EventSelect({
   }
   const signedOut = userId === '';
   const showGuest = !signedOut && guestFilled;
+  const [startedSignedOut] = useState(signedOut);
   const ask = useSignInPrompt((s) => s.ask);
   const nameRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
@@ -91,6 +94,14 @@ export function EventSelect({
   const subtotal = eventSubtotal(sel.qty, e.ticket_packages, listingPrice);
   const amount = subtotal > 0 ? subtotal : null;
   useRecheckPromoOnSignIn(userId, promo, amount);
+  const { promo: sentPromo, stale } = promoFor(promo.state, amount);
+  // A free order (and an unreadable price) has no amount, so no charge either. A code covering a
+  // paid order can't be booked (P19), so it takes nothing off: the footer never reads ₦0 beside that.
+  const discount = sentPromo !== null && amount !== null && sentPromo.discount < amount;
+  const { total: payable, note } = useSelectTotal(
+    'event',
+    amount === null ? null : amount - (discount ? sentPromo.discount : 0),
+  );
   const sentFree = useRef(false);
   const handed = useRef(false);
   const created = create.created;
@@ -128,7 +139,6 @@ export function EventSelect({
   const blocked = BLOCKED[eventStock(e, clock.serverNow())] ?? null;
   const chosen = ticketLines(sel.qty);
   const total = Object.values(chosen).reduce((a, b) => a + b, 0);
-  const { promo: sentPromo, stale } = promoFor(promo.state, amount);
   const selection: EventSelection = { ...sel, promo: sentPromo };
   const free = isFreeOrder(selection, e.ticket_packages, listingPrice);
   const problems = eventProblems(selection, e.ticket_packages, questions, free, listingPrice);
@@ -149,14 +159,17 @@ export function EventSelect({
       estimate={
         total === 0
           ? 'Choose tickets'
-          : `${ticketsWord(total)} · ${free ? 'Free' : formatNaira(subtotal)}`
+          : `${ticketsWord(total)} · ${free ? 'Free' : formatNaira(payable ?? subtotal)}`
       }
       blocked={blocked}
       problem={ticketProblem !== undefined ? eventWords(ticketProblem) : null}
       create={create.state}
       refusalShownAtField={refused?.field !== undefined}
-      gettingDetails={modePending}
-      disabled={(!signedOut && !showGuest) || promo.state.phase === 'checking'}
+      gettingDetails={
+        modePending || (!signedOut && (!showGuest || promo.state.phase === 'checking'))
+      }
+      chargeNote={note}
+      disabled={promo.state.phase === 'checking'}
       onContinue={() => {
         setTried(true);
         const stopping = signedOut ? withoutContactProblems(problems) : problems;
@@ -221,6 +234,7 @@ export function EventSelect({
           onRemove={promo.remove}
         />
       ) : null}
+      {showGuest && startedSignedOut ? <SignedInNote /> : null}
       {showGuest ? (
         <GuestFields
           guest={sel.guest}

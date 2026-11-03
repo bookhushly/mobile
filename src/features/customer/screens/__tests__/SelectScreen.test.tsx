@@ -1,7 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { AccessibilityInfo } from 'react-native';
 
-import { roomAvailability, validatePromo } from '@/features/customer/api/checkoutApi';
+import {
+  roomAvailability,
+  serviceCharge,
+  validatePromo,
+} from '@/features/customer/api/checkoutApi';
 import { checkoutDb } from '@/features/customer/api/checkoutDb';
 import type { ApartmentListing, HotelListing } from '@/features/customer/api/listingDetailDb';
 import { useCreateBooking, type CreateState } from '@/features/customer/hooks/useCreateBooking';
@@ -172,6 +177,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockFlags.stays = true;
   mockFlags.events = true;
+  jest.mocked(serviceCharge).mockReset();
   useSignInPrompt.setState({ reason: null, pendingSave: null });
   createState({ phase: 'idle' });
   mockDb.hotelExtras.mockResolvedValue({
@@ -728,6 +734,180 @@ describe('browsing without an account', () => {
     });
   });
 
+  describe('the footer total', () => {
+    const percent = (value: number) => ({
+      ok: true as const,
+      value: {
+        charge: { charge_type: 'percentage', charge_value: value, enabled: true, label: null },
+      },
+    });
+    const estimateIs = (text: string) =>
+      waitFor(() => {
+        expect(screen.getByTestId('select-estimate')).toHaveTextContent(text);
+      });
+    const applyPromo = async (discount: number, total: number) => {
+      jest.mocked(validatePromo).mockResolvedValueOnce({
+        ok: true,
+        value: {
+          valid: true,
+          code_id: 'c1',
+          code: 'SAVE',
+          discount_amount: discount,
+          discounted_total: total,
+        },
+      });
+      await fireEvent.press(screen.getByTestId('promo-open'));
+      await fireEvent.changeText(screen.getByTestId('promo-input'), 'SAVE');
+      await fireEvent.press(screen.getByTestId('promo-apply'));
+      await screen.findByTestId('promo-applied');
+    };
+
+    it('hotel: adds the service charge', async () => {
+      jest.mocked(serviceCharge).mockResolvedValue(percent(10));
+      browsing(HOTEL);
+      await openAs('hotel', ROOM);
+      await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
+      await estimateIs('2 nights · ₦132,000');
+      expect(serviceCharge).toHaveBeenCalledWith(expect.anything(), 'hotel');
+    });
+
+    it('apartment: takes off the promo, then adds the charge on what is left', async () => {
+      jest.mocked(serviceCharge).mockResolvedValue(percent(10));
+      browsing(APARTMENT);
+      await openAs('apartment');
+      await pickDates('2026-10-23', '2026-10-26', 'Choose · 3 nights');
+      await applyPromo(15000, 135000);
+      await estimateIs('3 nights · ₦148,500');
+      expect(serviceCharge).toHaveBeenCalledWith(expect.anything(), 'apartment');
+    });
+
+    it('event: takes off the promo, then adds the charge on what is left', async () => {
+      jest.mocked(serviceCharge).mockResolvedValue(percent(10));
+      browsing(PAID);
+      await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Regular');
+      await applyPromo(1000, 4000);
+      await estimateIs('1 ticket · ₦4,400');
+      expect(serviceCharge).toHaveBeenCalledWith(expect.anything(), 'event');
+    });
+
+    it('a free event stays Free, with no charge words', async () => {
+      jest.mocked(serviceCharge).mockResolvedValue(percent(10));
+      browsing(FREE);
+      await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Entry');
+      await estimateIs('1 ticket · Free');
+      expect(screen.queryByTestId('charge-checking')).toBeNull();
+      expect(screen.queryByTestId('charge-unknown')).toBeNull();
+    });
+
+    it('extras it can’t price are said, never silently left out', async () => {
+      jest.mocked(serviceCharge).mockResolvedValue(percent(10));
+      mockDb.hotelExtras.mockResolvedValue({
+        breakfastOffered: 'paid',
+        breakfast: [{ id: 'b1', name: 'Continental', pricePerPerson: 5000 }],
+        airportEnabled: false,
+        airportPrices: {},
+        airportFee: null,
+      });
+      browsing(HOTEL);
+      await openAs('hotel', ROOM);
+      await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
+      await estimateIs('2 nights · ₦132,000');
+      await press('Increase Continental');
+      await estimateIs('2 nights · ₦132,000 + extras');
+    });
+
+    it.each([
+      ['hotel', HOTEL, ROOM, '2 nights · ₦120,000'],
+      ['event', PAID, null, '1 ticket · ₦5,000'],
+    ] as const)(
+      '%s: a failed charge read says so beside the total',
+      async (kind, data, room, line) => {
+        jest.mocked(serviceCharge).mockResolvedValue({ ok: false, error: { kind: 'network' } });
+        browsing(data);
+        await openAs(kind, room);
+        if (kind === 'hotel') await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
+        else {
+          await screen.findByTestId('tickets');
+          await press('Increase Regular');
+        }
+        expect(await screen.findByTestId('charge-unknown')).toHaveTextContent(
+          'plus any service charge shown on Paystack',
+        );
+        expect(screen.getByTestId('select-estimate')).toHaveTextContent(line);
+        expect(screen.queryByTestId('charge-checking')).toBeNull();
+      },
+    );
+
+    it('a charge still being read says so', async () => {
+      jest.mocked(serviceCharge).mockReturnValue(new Promise(() => undefined));
+      browsing(PAID);
+      await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Regular');
+      expect(screen.getByTestId('charge-checking')).toHaveTextContent(
+        'Checking the service charge…',
+      );
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('1 ticket · ₦5,000');
+    });
+
+    it('nothing chosen yet: no charge words', async () => {
+      jest.mocked(serviceCharge).mockResolvedValue({ ok: false, error: { kind: 'network' } });
+      browsing(HOTEL);
+      await openAs('hotel', ROOM);
+      await screen.findByTestId('dates-row');
+      expect(screen.queryByTestId('charge-unknown')).toBeNull();
+      expect(screen.queryByTestId('charge-checking')).toBeNull();
+    });
+  });
+
+  describe('after signing in on Select', () => {
+    const WORDS = 'You’re signed in. Check your details, then continue.';
+    let announced: jest.SpyInstance;
+    beforeEach(() => {
+      announced = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    });
+    afterEach(() => {
+      announced.mockRestore();
+    });
+
+    it('a stay says what happened, above the fields, and announces it once', async () => {
+      browsing(HOTEL);
+      const { user } = await openAs('hotel', ROOM);
+      expect(screen.queryByText(WORDS)).toBeNull();
+      await user();
+      expect(screen.queryByText(WORDS)).toBeNull();
+      expect(announced).not.toHaveBeenCalled();
+      signedIn = READY;
+      await user();
+      expect(screen.getByText(WORDS)).toBeTruthy();
+      await user();
+      expect(announced.mock.calls.filter(([m]) => m === WORDS)).toHaveLength(1);
+    });
+
+    it('an event says what happened and announces it', async () => {
+      browsing(PAID);
+      const { user } = await openAs('event');
+      await screen.findByTestId('tickets');
+      signedIn = READY;
+      await user();
+      expect(screen.getByText(WORDS)).toBeTruthy();
+      expect(announced).toHaveBeenCalledWith(WORDS);
+    });
+
+    it('someone signed in from the start is told nothing', async () => {
+      browsing(HOTEL);
+      signedIn = READY;
+      await openAs('hotel', ROOM, 'u1');
+      await screen.findByTestId('guest-fields');
+      expect(screen.queryByText(WORDS)).toBeNull();
+      expect(announced).not.toHaveBeenCalledWith(WORDS);
+    });
+  });
+
   describe('a user appears', () => {
     it('keeps the selection when a user appears (hotel)', async () => {
       browsing(HOTEL);
@@ -736,11 +916,17 @@ describe('browsing without an account', () => {
 
       await user();
       expect(skeleton()).toBeNull();
-      expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · ₦120,000');
-      // Pending: no fields yet, and Continue waits for them.
+      // Pending: no fields yet, and Continue waits for them and says why.
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('Getting your details…');
       expect(screen.queryByTestId('guest-fields')).toBeNull();
       expect(continueButton()).toBeDisabled();
+      expect(continueButton()).toBeBusy();
       expect(submit).not.toHaveBeenCalled();
+
+      signedIn = READY;
+      await user();
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · ₦120,000');
+      expect(continueButton()).not.toBeBusy();
     });
 
     it('keeps the selection when a user appears (event)', async () => {
@@ -751,8 +937,13 @@ describe('browsing without an account', () => {
 
       await user();
       expect(skeleton()).toBeNull();
-      expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 tickets · ₦10,000');
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('Getting your details…');
       expect(continueButton()).toBeDisabled();
+      expect(continueButton()).toBeBusy();
+
+      signedIn = READY;
+      await user();
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 tickets · ₦10,000');
     });
 
     it('fills contact fields from the profile after sign-in (hotel)', async () => {
@@ -1034,11 +1225,13 @@ describe('browsing without an account', () => {
 
       await user();
       expect(continueButton()).toBeDisabled();
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('Getting your details…');
       await act(async () => {
         answer(applied);
         await Promise.resolve();
       });
       expect(continueButton()).toBeEnabled();
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('3 nights · ₦135,000');
     });
   });
 });
