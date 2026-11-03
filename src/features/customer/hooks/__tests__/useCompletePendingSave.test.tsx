@@ -1,11 +1,11 @@
 import type { QueryClient } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react-native';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import { savedDb, type SavedInput } from '@/features/customer/api/savedDb';
 import { customerKeys } from '@/features/customer/hooks/customerKeys';
 import { useCompletePendingSave } from '@/features/customer/hooks/useCompletePendingSave';
 import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
-import { ok } from '@/shared/lib/result';
+import { err, ok } from '@/shared/lib/result';
 
 import { makeQueryClient, USER, wrapper } from './customerTestUtils';
 
@@ -46,15 +46,10 @@ const quiet = () =>
     expect(qc.isFetching()).toBe(0);
   });
 const mount = (userId: string) =>
-  renderHook(
-    (p: { userId: string }) => {
-      useCompletePendingSave(p.userId);
-    },
-    {
-      initialProps: { userId },
-      wrapper: wrapper(qc),
-    },
-  );
+  renderHook((p: { userId: string }) => useCompletePendingSave(p.userId), {
+    initialProps: { userId },
+    wrapper: wrapper(qc),
+  });
 
 it('saves the pending item once a user appears, once only', async () => {
   useSignInPrompt.getState().ask('save', HOTEL);
@@ -102,4 +97,24 @@ it('an item the account already saved stays saved', async () => {
   await unmount();
   expect(unsave).not.toHaveBeenCalled();
   expect(save).not.toHaveBeenCalled();
+});
+
+it('a failed write is reported, not retried, and can be cleared', async () => {
+  save.mockResolvedValue(err({ kind: 'network' }));
+  useSignInPrompt.getState().ask('save', HOTEL);
+  useSignInPrompt.getState().proceed();
+  const { result, rerender, unmount } = await mount(USER);
+  await waitFor(() => {
+    expect(result.current.writeError).toBe('transient');
+  });
+  await quiet();
+  await rerender({ userId: USER });
+  expect(save).toHaveBeenCalledTimes(1);
+  expect(useSignInPrompt.getState().pendingSave).toBeNull();
+  await act(async () => {
+    result.current.clearWriteError();
+    await Promise.resolve();
+  });
+  expect(result.current.writeError).toBeNull();
+  await unmount();
 });

@@ -73,7 +73,7 @@ it('shows the save copy', async () => {
   await mount();
   expect(screen.getByText('Sign in to save')).toBeTruthy();
   expect(
-    screen.getByText("We'll save this to your account as soon as you've signed in."),
+    screen.getByText('We’ll save this to your account as soon as you’ve signed in.'),
   ).toBeTruthy();
 });
 

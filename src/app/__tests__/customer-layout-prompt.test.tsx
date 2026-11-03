@@ -3,20 +3,21 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { router } from 'expo-router';
 import type { ComponentProps, ReactNode } from 'react';
 import { Platform } from 'react-native';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 
 import CustomerLayout from '@/app/(customer)/_layout';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { savedDb, type SavedInput } from '@/features/customer/api/savedDb';
 import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
 import { useBrowseChoice } from '@/features/mode/hooks/useBrowseChoice';
-import { ok } from '@/shared/lib/result';
+import { err, ok } from '@/shared/lib/result';
 
 jest.mock('expo-router', () => {
   const Stack = ({ children }: { children?: ReactNode }) => children ?? null;
   Stack.Screen = function StackScreen() {
     return null;
   };
-  return { Stack, router: { push: jest.fn() } };
+  return { Stack, router: { push: jest.fn() }, useIsFocused: () => true };
 });
 jest.mock('@/shared/platform/storage', () => {
   const { memoryKv: make } =
@@ -31,6 +32,8 @@ jest.mock('@/features/customer/hooks/useResumePayments', () => ({
 jest.mock('@/features/customer/api/savedDb', () => ({
   savedDb: { list: jest.fn(), save: jest.fn(), unsave: jest.fn(), isSaved: jest.fn() },
 }));
+const mockSignOut = jest.fn();
+jest.mock('@/features/auth/hooks/useSignOut', () => ({ useSignOut: () => mockSignOut }));
 const mockSheet: { last: { onDismissed?: () => void } | null } = { last: null };
 jest.mock('@/shared/ui/Sheet', () => {
   const actual = jest.requireActual<typeof import('@/shared/ui/Sheet')>('@/shared/ui/Sheet');
@@ -55,9 +58,11 @@ const save = jest.spyOn(savedDb, 'save');
 let qc: QueryClient;
 const mount = () =>
   render(
-    <QueryClientProvider client={qc}>
-      <CustomerLayout />
-    </QueryClientProvider>,
+    <SafeAreaInsetsContext.Provider value={{ top: 0, bottom: 0, left: 0, right: 0 }}>
+      <QueryClientProvider client={qc}>
+        <CustomerLayout />
+      </QueryClientProvider>
+    </SafeAreaInsetsContext.Provider>,
   );
 const settle = () =>
   act(async () => {
@@ -126,4 +131,47 @@ it('does not save on a reset session, which never counted as signed in', async (
   await settle();
   expect(save).not.toHaveBeenCalled();
   expect(useSignInPrompt.getState().pendingSave).toEqual(HOTEL);
+});
+
+describe('the pending save fails after sign-in', () => {
+  const failWith = async (error: Parameters<typeof err>[0]) => {
+    save.mockResolvedValue(err(error) as Awaited<ReturnType<typeof savedDb.save>>);
+    useSignInPrompt.getState().ask('save', HOTEL);
+    useSignInPrompt.getState().proceed();
+    useBrowseChoice.setState({ browsing: false });
+    useAuth.setState({ state: signedIn });
+    await mount();
+  };
+
+  it('a connection failure says so, is not retried, and can be dismissed', async () => {
+    await failWith({ kind: 'network' });
+    expect(await screen.findByTestId('saved-transient')).toBeTruthy();
+    expect(screen.getByText('Couldn’t save — check your connection and try again.')).toBeTruthy();
+    expect(save).toHaveBeenCalledTimes(1);
+    await fireEvent.press(screen.getByLabelText('Dismiss'));
+    expect(screen.queryByTestId('saved-transient')).toBeNull();
+    await settle();
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it('a stale session offers signing in again', async () => {
+    await failWith({ kind: 'staleSession' });
+    expect(await screen.findByTestId('saved-stale')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Sign in again'));
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('a successful save shows nothing', async () => {
+    useSignInPrompt.getState().ask('save', HOTEL);
+    useSignInPrompt.getState().proceed();
+    useBrowseChoice.setState({ browsing: false });
+    useAuth.setState({ state: signedIn });
+    await mount();
+    await waitFor(() => {
+      expect(save).toHaveBeenCalledTimes(1);
+    });
+    await settle();
+    expect(screen.queryByTestId('saved-transient')).toBeNull();
+    expect(screen.queryByTestId('saved-stale')).toBeNull();
+  });
 });

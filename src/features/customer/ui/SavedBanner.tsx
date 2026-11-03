@@ -6,6 +6,8 @@ type Props = {
   onSignInAgain: () => void;
   /** Shown while the saved list can't load (hearts wait meanwhile); omitted → no note. */
   loadErrorMessage?: string;
+  /** A close button on the write errors, where the banner floats over a screen. */
+  onDismissError?: () => void;
 };
 
 /** Whether SavedBanner has anything to show (a screen keeps its footer area only then). */
@@ -20,13 +22,14 @@ export function savedBannerShown(saved: Saved, loadErrorMessage?: string): boole
 // The hearts' outcome under a list (spec §5): a stale session, a transient failure, Undo after an
 // unsave, or why the hearts are off. Nothing otherwise. `useSavedNotices` times the Undo and
 // transient banners out.
-export function SavedBanner({ saved, onSignInAgain, loadErrorMessage }: Props) {
+export function SavedBanner({ saved, onSignInAgain, loadErrorMessage, onDismissError }: Props) {
   if (saved.writeError === 'stale')
     return (
       <Banner
         tone="neutral"
         message="Couldn’t save. Sign in again if this keeps happening."
         action={{ label: 'Sign in again', onPress: onSignInAgain }}
+        onDismiss={onDismissError}
         testID="saved-stale"
       />
     );
@@ -35,6 +38,7 @@ export function SavedBanner({ saved, onSignInAgain, loadErrorMessage }: Props) {
       <Banner
         tone="neutral"
         message="Couldn’t save — check your connection and try again."
+        onDismiss={onDismissError}
         testID="saved-transient"
       />
     );

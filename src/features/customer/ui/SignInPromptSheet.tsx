@@ -11,7 +11,7 @@ const COPY: Record<SignInReason, { title: string; body: string }> = {
   },
   save: {
     title: 'Sign in to save',
-    body: "We'll save this to your account as soon as you've signed in.",
+    body: 'We’ll save this to your account as soon as you’ve signed in.',
   },
 };
 

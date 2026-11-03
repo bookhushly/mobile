@@ -65,8 +65,8 @@ jest.mock('@/shared/platform/storage', () => {
 });
 
 // Resume has its own tests (hooks/__tests__); here only that the layout mounts it for the account.
-jest.mock('@/features/customer/hooks/useCompletePendingSave', () => ({
-  useCompletePendingSave: () => undefined,
+jest.mock('@/features/customer/ui/PendingSaveNotice', () => ({
+  PendingSaveNotice: () => null,
 }));
 const mockResume = jest.fn();
 jest.mock('@/features/customer/hooks/useResumePayments', () => ({
