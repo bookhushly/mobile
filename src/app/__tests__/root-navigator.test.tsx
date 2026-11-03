@@ -34,6 +34,8 @@ jest.mock('@/shared/api/queryClient', () => ({
 jest.mock('@/shared/providers/AppProviders', () => ({
   AppProviders: ({ children }: { children: unknown }) => children,
 }));
+// Every screen rendered, including commits a test's final state wouldn't show.
+const mockRendered: string[] = [];
 // Renders only the screens whose guard passes, in declared order.
 jest.mock('expo-router', () => {
   const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
@@ -43,6 +45,7 @@ jest.mock('expo-router', () => {
     return guard ? children : null;
   };
   Stack.Screen = function Screen({ name }: { name: string }) {
+    mockRendered.push(name);
     return React.createElement(Text, { testID: 'stack-screen' }, name);
   };
   return { Stack };
@@ -134,10 +137,67 @@ it('an abandoned reset goes back to browsing with the auth screens still reachab
     useAuth.setState({ state: signedIn, recovery: true });
     await Promise.resolve();
   });
+  // abandonRecovery's real order: signed out first, the flag only afterwards.
   await act(async () => {
-    useAuth.setState({ state: { status: 'signedOut' }, recovery: false });
+    useAuth.setState({ state: { status: 'signedOut' } });
+    await Promise.resolve();
+  });
+  await act(async () => {
+    useAuth.setState({ recovery: false });
     await Promise.resolve();
   });
   expect(declared()).toEqual(['(customer)', '(auth)', 'delete-account']);
   expect(useBrowseChoice.getState().browsing).toBe(true);
+});
+
+describe('signing out ends browsing', () => {
+  const signIn = async () => {
+    await kv.set('bh.browse', '1');
+    await render(<RootLayout />);
+    await act(async () => {
+      useAuth.setState({ state: signedIn });
+      await Promise.resolve();
+    });
+  };
+  const signOut = async () => {
+    mockRendered.length = 0;
+    await act(async () => {
+      useAuth.setState({ state: { status: 'signedOut' } });
+      await Promise.resolve();
+    });
+  };
+
+  it('from the mode error screen', async () => {
+    mockMode = { status: 'error' };
+    await signIn();
+    expect(declared()).toEqual(['mode-error', 'delete-account']);
+    await signOut();
+    expect(declared()).toEqual(['(auth)', 'delete-account']);
+    expect(kv.dump()['bh.browse']).toBeUndefined();
+  });
+
+  it('while the mode is still loading, with no render back on customer', async () => {
+    await signIn();
+    expect(declared()).toEqual(['(customer)', 'delete-account']);
+    await signOut();
+    expect(declared()).toEqual(['(auth)', 'delete-account']);
+    expect(kv.dump()['bh.browse']).toBeUndefined();
+    expect(mockRendered).not.toContain('(customer)');
+  });
+
+  it('after a saved reset, once the person counts as signed in', async () => {
+    await kv.set('bh.browse', '1');
+    await render(<RootLayout />);
+    await act(async () => {
+      useAuth.setState({ state: signedIn, recovery: true });
+      await Promise.resolve();
+    });
+    await act(async () => {
+      useAuth.setState({ recovery: false });
+      await Promise.resolve();
+    });
+    await signOut();
+    expect(declared()).toEqual(['(auth)', 'delete-account']);
+    expect(kv.dump()['bh.browse']).toBeUndefined();
+  });
 });

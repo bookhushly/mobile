@@ -58,11 +58,23 @@ function Navigator() {
   useEffect(() => {
     void loadBrowsing();
   }, [loadBrowsing]);
-  // Once the account's mode is known browsing is over, so signing out returns to Welcome.
-  const modeKnown = auth.status === 'signedIn' && mode.status === 'ready';
+  // Once the mode lookup has settled browsing is over, so signing out returns to Welcome.
+  const modeSettled =
+    auth.status === 'signedIn' && (mode.status === 'ready' || mode.status === 'error');
   useEffect(() => {
-    if (modeKnown) clearBrowsing();
-  }, [modeKnown, clearBrowsing]);
+    if (modeSettled) clearBrowsing();
+  }, [modeSettled, clearBrowsing]);
+  // Signing out before it settles (Account is reachable while customer is held). A store listener,
+  // so the choice is gone before the render that would put a signed-out person back on customer.
+  // Not during a reset: that session never counted as signed in, and abandoning it keeps browsing.
+  useEffect(
+    () =>
+      useAuth.subscribe((now, before) => {
+        const wasSignedIn = before.state.status === 'signedIn' && !before.recovery;
+        if (wasSignedIn && now.state.status === 'signedOut' && !now.recovery) clearBrowsing();
+      }),
+    [clearBrowsing],
+  );
   const route = resolveRoute({
     versionOk: isVersionSupported(APP_VERSION, MIN_SUPPORTED_VERSION),
     auth: auth.status,
