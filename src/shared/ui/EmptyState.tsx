@@ -12,13 +12,23 @@ type Props = {
   illustration?: IllustrationName;
   icon?: LucideIcon | undefined;
   title: string;
+  /** For a screen with no other heading: screen readers can jump to the title. */
+  titleRole?: 'header';
   message?: string;
   action?: { label: string; onPress: () => void };
   testID?: string;
 };
 
 // DESIGN_SYSTEM §6: icon (or illustration) + reason + one action.
-export function EmptyState({ illustration, icon, title, message, action, testID }: Props) {
+export function EmptyState({
+  illustration,
+  icon,
+  title,
+  titleRole,
+  message,
+  action,
+  testID,
+}: Props) {
   return (
     <View
       testID={testID}
@@ -29,7 +39,12 @@ export function EmptyState({ illustration, icon, title, message, action, testID 
       ) : icon !== undefined ? (
         <Icon as={icon} size="lg" tone="textMuted" />
       ) : null}
-      <Text variant="headline" align="center" accessibilityLiveRegion="polite">
+      <Text
+        variant="headline"
+        align="center"
+        accessibilityRole={titleRole}
+        accessibilityLiveRegion="polite"
+      >
         {title}
       </Text>
       {message !== undefined ? (

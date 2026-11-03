@@ -2,12 +2,12 @@ import { useRef, useState } from 'react';
 import { Platform } from 'react-native';
 
 import { useSignInPrompt, type SignInReason } from '@/features/customer/hooks/useSignInPrompt';
-import { Button, Sheet, Text, TextLink } from '@/shared/ui';
+import { Button, Sheet, Text, useAnnounce } from '@/shared/ui';
 
 const COPY: Record<SignInReason, { title: string; body: string }> = {
   book: {
     title: 'Sign in to book',
-    body: 'We keep your booking and tickets in your account. Your dates and room stay as you chose them.',
+    body: 'We keep your booking and tickets in your account. Your choices stay as you made them.',
   },
   save: {
     title: 'Sign in to save',
@@ -25,6 +25,7 @@ export function SignInPromptSheet({ onCreateAccount, onSignIn }: Props) {
   const [shown, setShown] = useState<SignInReason>(reason ?? 'save');
   if (reason !== null && reason !== shown) setShown(reason);
   const afterDismiss = useRef<(() => void) | null>(null);
+  useAnnounce(reason === null ? null : COPY[reason].title, true);
 
   // iOS can't present the next screen while this modal is closing; Android has no dismiss event.
   const leaveTo = (navigate: () => void) => {
@@ -60,7 +61,7 @@ export function SignInPromptSheet({ onCreateAccount, onSignIn }: Props) {
               leaveTo(onSignIn);
             }}
           />
-          <TextLink label="Not now" onPress={dismiss} />
+          <Button label="Not now" variant="ghost" onPress={dismiss} />
         </>
       }
     >

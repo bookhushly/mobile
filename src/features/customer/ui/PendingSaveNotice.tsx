@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCompletePendingSave } from '@/features/customer/hooks/useCompletePendingSave';
 import { useSavedNotices } from '@/features/customer/hooks/useSavedNotices';
 import { SavedBanner } from '@/features/customer/ui/SavedBanner';
-import { space } from '@/shared/theme';
+import { color, elevation, layout, radius, space } from '@/shared/theme';
 
 type Props = { userId: string; onSignInAgain: () => void };
 
@@ -17,12 +17,17 @@ export function PendingSaveNotice({ userId, onSignInAgain }: Props) {
   if (saved.writeError === null) return null;
   return (
     <View
+      testID="pending-save-notice"
       pointerEvents="box-none"
       style={{
         position: 'absolute',
         top: top + space.s3,
-        left: space.s4,
-        right: space.s4,
+        left: layout.phoneGutter,
+        right: layout.phoneGutter,
+        // A surface to cast from: Android draws no elevation shadow without one.
+        borderRadius: radius.r3,
+        backgroundColor: color.surface,
+        ...elevation.e3,
       }}
     >
       <SavedBanner

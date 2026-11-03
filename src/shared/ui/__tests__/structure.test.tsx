@@ -261,3 +261,12 @@ it('Inline can centre its children along the row', async () => {
     justifyContent: 'center',
   });
 });
+
+it('a sheet title may take two lines', async () => {
+  await render(
+    <Sheet visible title="A title long enough to wrap" onClose={jest.fn()}>
+      <Text>Body</Text>
+    </Sheet>,
+  );
+  expect(screen.getByRole('header').props.numberOfLines).toBe(2);
+});

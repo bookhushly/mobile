@@ -104,3 +104,22 @@ it('underlines the browse link over the photo', async () => {
     color: color.onInverse,
   });
 });
+
+it('scrolls when it doesn’t fit, sitting at the bottom when it does', async () => {
+  await render(<WelcomeScreen {...props()} notice="accountDeleted" />);
+  const scroll = screen.getByTestId('welcome-scroll');
+  expect(scroll.props.contentContainerStyle).toMatchObject({
+    flexGrow: 1,
+    justifyContent: 'flex-end',
+  });
+  const inside = within(scroll);
+  expect(inside.getByText('Your account was deleted.')).toBeTruthy();
+  expect(inside.getByRole('link', { name: 'Terms' })).toBeTruthy();
+  expect(inside.getByRole('link', { name: 'Privacy policy' })).toBeTruthy();
+  expect(inside.getByTestId('welcome-fade', { includeHiddenElements: true })).toBeTruthy();
+});
+
+it('keeps the browse link 12 pt below Sign in', async () => {
+  await render(<WelcomeScreen {...props()} />);
+  expect(screen.getByTestId('welcome-browse')).toHaveStyle({ marginTop: 12 });
+});

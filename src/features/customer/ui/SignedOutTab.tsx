@@ -2,15 +2,7 @@ import { ExternalLink, Heart, Ticket, UserRound, type LucideIcon } from 'lucide-
 
 import { openWeb } from '@/features/customer/ui/links';
 import { HELP_URL, PRIVACY_URL, TERMS_URL } from '@/shared/config/store';
-import {
-  Button,
-  EmptyState,
-  Icon,
-  ListRow,
-  Screen,
-  SectionHeader,
-  Stack,
-} from '@/shared/ui';
+import { Button, EmptyState, Icon, ListRow, Screen, SectionHeader, Stack } from '@/shared/ui';
 
 export type SignedOutTabName = 'saved' | 'bookings' | 'account';
 
@@ -29,7 +21,7 @@ const COPY: Record<SignedOutTabName, { icon: LucideIcon; title: string; message:
   bookings: {
     icon: Ticket,
     title: 'Your bookings live here',
-    message: 'Booked on the website with this email? We’ll help you add them.',
+    message: 'Booked on the website? Sign in with the same email and we’ll help you add them.',
   },
   account: {
     icon: UserRound,
@@ -50,8 +42,14 @@ export function SignedOutTab({ tab, onSignIn, onCreateAccount }: Props) {
   const { icon, title, message } = COPY[tab];
   return (
     <Screen scroll>
-      <EmptyState testID={`signed-out-${tab}`} icon={icon} title={title} message={message} />
-      <Stack gap="s3">
+      <EmptyState
+        testID={`signed-out-${tab}`}
+        icon={icon}
+        title={title}
+        titleRole="header"
+        message={message}
+      />
+      <Stack gap="s4" testID="signed-out-actions">
         <Button label="Create account" onPress={onCreateAccount} />
         <Button variant="secondary" label="Sign in" onPress={onSignIn} />
       </Stack>

@@ -12,7 +12,9 @@ it('bookings copy mentions adding website bookings', async () => {
   await render(<SignedOutTab tab="bookings" onSignIn={noop} onCreateAccount={noop} />);
   expect(screen.getByText('Your bookings live here')).toBeTruthy();
   expect(
-    screen.getByText('Booked on the website with this email? We’ll help you add them.'),
+    screen.getByText(
+      'Booked on the website? Sign in with the same email and we’ll help you add them.',
+    ),
   ).toBeTruthy();
 });
 
@@ -39,9 +41,21 @@ it('saved and bookings show no help links', async () => {
 it('Sign in and Create account call their handlers', async () => {
   const onSignIn = jest.fn();
   const onCreateAccount = jest.fn();
-  await render(<SignedOutTab tab="bookings" onSignIn={onSignIn} onCreateAccount={onCreateAccount} />);
+  await render(
+    <SignedOutTab tab="bookings" onSignIn={onSignIn} onCreateAccount={onCreateAccount} />,
+  );
   await fireEvent.press(screen.getByText('Sign in'));
   await fireEvent.press(screen.getByText('Create account'));
   expect(onSignIn).toHaveBeenCalledTimes(1);
   expect(onCreateAccount).toHaveBeenCalledTimes(1);
+});
+
+it('the title is a header', async () => {
+  await render(<SignedOutTab tab="saved" onSignIn={noop} onCreateAccount={noop} />);
+  expect(screen.getByRole('header', { name: 'Your saved places live here' })).toBeTruthy();
+});
+
+it('keeps 12 pt between the buttons', async () => {
+  await render(<SignedOutTab tab="saved" onSignIn={noop} onCreateAccount={noop} />);
+  expect(screen.getByTestId('signed-out-actions')).toHaveStyle({ gap: 12 });
 });

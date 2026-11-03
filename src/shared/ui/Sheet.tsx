@@ -72,7 +72,7 @@ export function Sheet({
           <View style={{ minWidth: 88 }}>
             <Button variant="ghost" label={closeLabel} onPress={onClose} disabled={closeDisabled} />
           </View>
-          <Text variant="headline" accessibilityRole="header" numberOfLines={1} style={{ flex: 1 }}>
+          <Text variant="headline" accessibilityRole="header" numberOfLines={2} style={{ flex: 1 }}>
             {title}
           </Text>
           <View style={{ minWidth: 88, alignItems: 'flex-end' }}>{right}</View>

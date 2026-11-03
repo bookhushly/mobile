@@ -11,6 +11,7 @@ import { savedDb, type SavedInput } from '@/features/customer/api/savedDb';
 import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
 import { useBrowseChoice } from '@/features/mode/hooks/useBrowseChoice';
 import { err, ok } from '@/shared/lib/result';
+import { elevation, layout } from '@/shared/theme';
 
 jest.mock('expo-router', () => {
   const Stack = ({ children }: { children?: ReactNode }) => children ?? null;
@@ -152,6 +153,14 @@ describe('the pending save fails after sign-in', () => {
     expect(screen.queryByTestId('saved-transient')).toBeNull();
     await settle();
     expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it('floats on the phone gutter at elevation 3', async () => {
+    await failWith({ kind: 'network' });
+    await screen.findByTestId('saved-transient');
+    const banner = screen.getByTestId('pending-save-notice');
+    expect(banner).toHaveStyle({ left: layout.phoneGutter, right: layout.phoneGutter });
+    expect(banner).toHaveStyle(elevation.e3);
   });
 
   it('a stale session offers signing in again', async () => {

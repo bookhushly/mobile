@@ -47,7 +47,7 @@ A new marketplace asking for an account before showing one listing gives people 
 **Contact fields on Select (Claude's call, owner agreed).** Name, email and phone stay hidden while signed out, and fill from the profile after sign-in as they do today.
 
 **The prompt.** Continue on Select, or the heart, opens a sheet over the current screen, using the shared `Sheet`:
-- "Sign in to book": "We keep your booking and tickets in your account. Your dates and room stay as you chose them."
+- "Sign in to book": "We keep your booking and tickets in your account. Your choices stay as you made them."
 - "Sign in to save": same shape, with copy saying the item will be saved once signed in.
 - Buttons: violet "Create account", outlined "Sign in", text link "Not now". "Not now" closes the sheet and changes nothing.
 
@@ -70,6 +70,7 @@ Backing out of the auth screens at any point returns to browsing as before, with
 - **Guards are mutually exclusive** in `src/app/_layout.tsx`. A browsing person is in the customer group and also needs to reach `(auth)` screens, without losing their stack.
 - **Sign-in passes through `route === 'loading'`** while mode resolves, which drops the customer guard and would discard the stack. The stack must survive this or the pending destination must live outside the navigator. The builder picks, and it must be tested. `redirectTo` doesn't exist in SDK 57 (`.claude/rules/routing.md`).
 - **Hooks with no guard** would query with `userId = ''` and should fail: `useMyBookings`, `useProfile` (through `useExplorePlace`), `useUnreadCount`, `useNotifications`, `useBooking`. `useSavedWallet` is gated only on its `enabled` flag, which a failed load sets. `useSaved`'s `toggle` must not write. Every customer route derives `userId` as `''` or `null` when signed out; today that case never happens.
+- **A mode lookup failure right after sign-in drops the stack (accepted).** `modeError` replaces the held customer group, so the Select selection is lost; retrying lands on the person's mode from the start.
 - **Query keys** are `['customer', userId, ...]`. Guest reads must not share a cache entry with a signed-in user. `discoverKeys` and `checkoutKeys` carry no user and are safe.
 - **Always-wipes** run on `SIGNED_OUT` and on a cold start with no session, so anything guest-owned in those stores is erased on each launch, which is acceptable here (non-goal above). The stored browse choice must not be in a store that gets wiped on a signed-out cold start, or it would never persist.
 - **`useCustomerSession`** removes `['customer']` when the customer layout unmounts, and sign-out previously relied on that layout unmounting. Sign-out needs an explicit destination and cache clear for guests and members alike.

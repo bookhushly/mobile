@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { ComponentProps } from 'react';
 import { act } from 'react';
-import { Platform } from 'react-native';
+import { AccessibilityInfo, Platform } from 'react-native';
 
 import type { SavedInput } from '@/features/customer/api/savedDb';
 import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
@@ -60,7 +60,7 @@ it('shows the book copy', async () => {
   expect(screen.getByText('Sign in to book')).toBeTruthy();
   expect(
     screen.getByText(
-      'We keep your booking and tickets in your account. Your dates and room stay as you chose them.',
+      'We keep your booking and tickets in your account. Your choices stay as you made them.',
     ),
   ).toBeTruthy();
   expect(screen.getByText('Create account')).toBeTruthy();
@@ -122,4 +122,38 @@ it('keeps its title while sliding away', async () => {
   await mount();
   await fireEvent.press(screen.getByText('Not now'));
   expect(mockSheet.last).toMatchObject({ visible: false, title: 'Sign in to save' });
+});
+
+it('announces the title on opening, and again each time it opens', async () => {
+  const announced = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+  await mount();
+  expect(announced).not.toHaveBeenCalled();
+  await act(async () => {
+    useSignInPrompt.getState().ask('book');
+    await Promise.resolve();
+  });
+  expect(announced).toHaveBeenCalledWith('Sign in to book');
+  await act(async () => {
+    useSignInPrompt.getState().dismiss();
+    await Promise.resolve();
+  });
+  await act(async () => {
+    useSignInPrompt.getState().ask('book');
+    await Promise.resolve();
+  });
+  expect(announced).toHaveBeenCalledTimes(2);
+});
+
+it('announces a sheet already open when it mounts', async () => {
+  const announced = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+  useSignInPrompt.getState().ask('save', HOTEL);
+  await mount();
+  expect(announced).toHaveBeenCalledWith('Sign in to save');
+});
+
+it('Not now is a button, not a link', async () => {
+  useSignInPrompt.getState().ask('book');
+  await mount();
+  expect(screen.getByRole('button', { name: 'Not now' })).toBeTruthy();
+  expect(screen.queryByRole('link', { name: 'Not now' })).toBeNull();
 });

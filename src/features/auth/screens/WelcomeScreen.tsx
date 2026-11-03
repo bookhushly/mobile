@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useContext } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 
@@ -66,62 +66,73 @@ export function WelcomeScreen({
           tintColor={color.onInverse}
         />
       </View>
-      <View
-        testID="welcome-content"
-        style={{
-          marginTop: 'auto',
-          paddingHorizontal: layout.phoneGutter,
-          paddingBottom: Math.max(insets.bottom, space.s5),
+      {/* Sits at the bottom until large text or the notice outgrow the screen, then scrolls, so the
+          terms stay reachable. Its top padding keeps the content clear of the wordmark. */}
+      <ScrollView
+        testID="welcome-scroll"
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: 'flex-end',
+          paddingTop: insets.top + space.s4 + WORDMARK_HEIGHT + space.s4,
         }}
       >
-        {/* Grows with the text, so large type never rises above the fade onto bare photo. */}
-        <LinearGradient
-          colors={[color.scrim[0], color.scrim[1]]}
+        <View
+          testID="welcome-content"
           style={{
-            position: 'absolute',
-            top: -FADE_ABOVE_PT,
-            left: 0,
-            right: 0,
-            height: FADE_ABOVE_PT,
+            paddingHorizontal: layout.phoneGutter,
+            paddingBottom: Math.max(insets.bottom, space.s5),
           }}
-        />
-        <LinearGradient
-          testID="welcome-fade"
-          colors={[color.scrim[1], color.scrim[2]]}
-          style={StyleSheet.absoluteFill}
-        />
-        {notice === 'accountDeleted' ? (
-          <View style={{ marginBottom: space.s5 }}>
-            <Banner
-              tone="info"
-              message="Your account was deleted."
-              action={{ label: 'OK', onPress: onDismissNotice }}
-            />
-          </View>
-        ) : null}
-        <Animated.View entering={still ? undefined : ENTER[0]}>
-          <Text variant="displayMd" tone="onInverse" accessibilityRole="header">
-            Events, stays and hotels across Nigeria.
-          </Text>
-        </Animated.View>
-        <Animated.View entering={still ? undefined : ENTER[1]} style={{ marginTop: space.s4 }}>
-          <Text variant="lead" tone="onInverse">
-            Find it, book it, pay in naira.
-          </Text>
-        </Animated.View>
-        <Animated.View entering={still ? undefined : ENTER[2]} style={{ marginTop: space.s8 }}>
-          <Button label="Create account" onInverse="light" onPress={onCreateAccount} />
-          <View style={{ marginTop: space.s4 }}>
-            <Button label="Sign in" variant="secondary" onInverse="light" onPress={onSignIn} />
-          </View>
-          <View style={{ marginTop: space.s2, alignItems: 'center' }}>
-            <TextLink label="Browse without an account" tone="onInverse" onPress={onBrowse} />
-          </View>
-          <View style={{ marginTop: space.s7 }}>
-            <TermsLine inverse onOpenLink={onOpenLink} />
-          </View>
-        </Animated.View>
-      </View>
+        >
+          {/* Grows with the text, so large type never rises above the fade onto bare photo. */}
+          <LinearGradient
+            colors={[color.scrim[0], color.scrim[1]]}
+            style={{
+              position: 'absolute',
+              top: -FADE_ABOVE_PT,
+              left: 0,
+              right: 0,
+              height: FADE_ABOVE_PT,
+            }}
+          />
+          <LinearGradient
+            testID="welcome-fade"
+            colors={[color.scrim[1], color.scrim[2]]}
+            style={StyleSheet.absoluteFill}
+          />
+          {notice === 'accountDeleted' ? (
+            <View style={{ marginBottom: space.s5 }}>
+              <Banner
+                tone="info"
+                message="Your account was deleted."
+                action={{ label: 'OK', onPress: onDismissNotice }}
+              />
+            </View>
+          ) : null}
+          <Animated.View entering={still ? undefined : ENTER[0]}>
+            <Text variant="displayMd" tone="onInverse" accessibilityRole="header">
+              Events, stays and hotels across Nigeria.
+            </Text>
+          </Animated.View>
+          <Animated.View entering={still ? undefined : ENTER[1]} style={{ marginTop: space.s4 }}>
+            <Text variant="lead" tone="onInverse">
+              Find it, book it, pay in naira.
+            </Text>
+          </Animated.View>
+          <Animated.View entering={still ? undefined : ENTER[2]} style={{ marginTop: space.s8 }}>
+            <Button label="Create account" onInverse="light" onPress={onCreateAccount} />
+            <View style={{ marginTop: space.s4 }}>
+              <Button label="Sign in" variant="secondary" onInverse="light" onPress={onSignIn} />
+            </View>
+            <View testID="welcome-browse" style={{ marginTop: space.s4, alignItems: 'center' }}>
+              <TextLink label="Browse without an account" tone="onInverse" onPress={onBrowse} />
+            </View>
+            <View style={{ marginTop: space.s7 }}>
+              <TermsLine inverse onOpenLink={onOpenLink} />
+            </View>
+          </Animated.View>
+        </View>
+      </ScrollView>
     </View>
   );
 }
