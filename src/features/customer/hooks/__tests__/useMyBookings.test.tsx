@@ -457,3 +457,15 @@ describe('signed out (no user id)', () => {
     qc.clear();
   });
 });
+
+it('useMyBookings: returning to the screen reads nothing with no user', async () => {
+  const qc = makeQueryClient();
+  mockFocused = false;
+  const hook = await renderHook(() => useMyBookings(''), { wrapper: wrapper(qc) });
+  mockFocused = true;
+  await hook.rerender({});
+  expect(db.events).not.toHaveBeenCalled();
+  expect(db.hotels).not.toHaveBeenCalled();
+  await hook.unmount();
+  qc.clear();
+});

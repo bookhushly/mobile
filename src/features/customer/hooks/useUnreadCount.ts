@@ -22,6 +22,11 @@ export function useUnreadCount(userId: string): number {
     refetchOnWindowFocus: true,
     enabled: userId !== '',
   });
-  useFocusRefetch(isFocused, q);
+  // TanStack's refetch() ignores `enabled`, so a signed-out focus regain must not reach it.
+  const signedOut = userId === '';
+  useFocusRefetch(isFocused, {
+    isStale: q.isStale,
+    refetch: signedOut ? () => Promise.resolve() : q.refetch,
+  });
   return q.data ?? 0;
 }

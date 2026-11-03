@@ -43,6 +43,8 @@ const listed: Listed = {
   apartment: (rows, id) => rows.apartments.find((r) => r.id === id),
 };
 
+const noRefetch = (): Promise<unknown> => Promise.resolve();
+
 export function useBooking<K extends BookingKind>(
   userId: string,
   kind: K,
@@ -90,6 +92,6 @@ export function useBooking<K extends BookingKind>(
     savedAt: fromWallet === null ? null : (wallet?.savedAt ?? null),
     today,
     error: failed && wallet !== undefined && fromWallet === null,
-    refetch: userId === '' ? () => Promise.resolve() : q.refetch,
+    refetch: userId === '' ? noRefetch : q.refetch,
   };
 }

@@ -65,7 +65,12 @@ export function useNotifications(userId: string): {
     refetchOnWindowFocus: true,
     enabled: userId !== '',
   });
-  useFocusRefetch(isFocused, q);
+  // TanStack's refetch() ignores `enabled`, so a signed-out focus regain must not reach it.
+  const signedOut = userId === '';
+  useFocusRefetch(isFocused, {
+    isStale: q.isStale,
+    refetch: signedOut ? () => Promise.resolve() : q.refetch,
+  });
   const [writeError, setWriteError] = useState<WriteError | null>(null);
   // What the last "Mark all as read" changed, and its write (Undo waits for it).
   const lastMarkedAll = useRef<{ ids: string[]; done: Promise<WriteOutcome> } | null>(null);

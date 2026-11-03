@@ -121,3 +121,14 @@ it('reads nothing with no user', async () => {
   await hook.unmount();
   qc.clear();
 });
+
+it('returning to the screen reads nothing with no user', async () => {
+  const qc = makeQueryClient();
+  mockFocused = false;
+  const hook = await renderHook(() => useUnreadCount(''), { wrapper: wrapper(qc) });
+  mockFocused = true;
+  await hook.rerender({});
+  expect(count).not.toHaveBeenCalled();
+  await hook.unmount();
+  qc.clear();
+});

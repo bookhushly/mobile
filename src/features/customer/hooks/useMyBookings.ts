@@ -147,7 +147,8 @@ export function useMyBookings(userId: string): {
     refetchOnWindowFocus: true,
     enabled: !signedOut,
   });
-  useFocusRefetch(isFocused, q);
+  // TanStack's refetch() ignores `enabled`, so a signed-out focus regain must not reach it.
+  useFocusRefetch(isFocused, { isStale: q.isStale, refetch: signedOut ? noRefetch : q.refetch });
   const failed = useLoadFailed(q, userId);
   const w = useSavedWallet(userId, failed);
 
