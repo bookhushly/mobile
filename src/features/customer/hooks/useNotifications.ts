@@ -63,6 +63,7 @@ export function useNotifications(userId: string): {
     },
     refetchInterval: isFocused ? NOTIFICATIONS_POLL_MS : false,
     refetchOnWindowFocus: true,
+    enabled: userId !== '',
   });
   useFocusRefetch(isFocused, q);
   const [writeError, setWriteError] = useState<WriteError | null>(null);
@@ -121,9 +122,9 @@ export function useNotifications(userId: string): {
     items,
     unread,
     // Offline the query pauses rather than fails: that is "couldn't load", not a spinner.
-    loading: q.isPending && !loadFailed(q),
+    loading: userId !== '' && q.isPending && !loadFailed(q),
     error: loadFailed(q),
-    refetch: q.refetch,
+    refetch: userId === '' ? () => Promise.resolve({ isError: false }) : q.refetch,
     open: (n) => {
       if (!n.read) void setRead([n.id], true);
     },

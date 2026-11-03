@@ -29,13 +29,14 @@ export function useProfile(userId: string): {
       if (!r.ok) throw new CustomerLoadError(r.error);
       return r.value;
     },
+    enabled: userId !== '',
   });
   return {
     profile: q.data ?? null,
     // Offline the query pauses rather than fails: that is "couldn't load", not a spinner.
-    loading: q.isPending && !loadFailed(q),
+    loading: userId !== '' && q.isPending && !loadFailed(q),
     error: loadFailed(q),
-    refetch: q.refetch,
+    refetch: userId === '' ? () => Promise.resolve() : q.refetch,
   };
 }
 

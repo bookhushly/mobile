@@ -12,15 +12,32 @@ import { useSaved, type Saved } from '@/features/customer/hooks/useSaved';
 import { NOTICE_MS, NOTICE_READER_MS } from '@/features/customer/hooks/useSavedNotices';
 import type { ApartmentItem, EventItem, HotelItem } from '@/features/customer/schemas/listings';
 import { ExploreScreen } from '@/features/customer/screens/ExploreScreen';
+import { customerDb } from '@/features/customer/api/customerDb';
 import { refreshColors } from '@/shared/ui';
 
-import { ev, ho, TODAY } from '../../hooks/__tests__/customerTestUtils';
+import {
+  ev,
+  ho,
+  makeQueryClient,
+  TODAY,
+  wrapper,
+} from '../../hooks/__tests__/customerTestUtils';
 
 // Factories, not automocks: an automock loads the real module (supabase → native storage).
 jest.mock('@/features/customer/hooks/useMyBookings', () => ({ useMyBookings: jest.fn() }));
 jest.mock('@/features/customer/hooks/useSaved', () => ({ useSaved: jest.fn() }));
 jest.mock('@/features/customer/hooks/useExplorePlace', () => ({ useExplorePlace: jest.fn() }));
 jest.mock('@/features/customer/hooks/useListings', () => ({ useListingsRail: jest.fn() }));
+jest.mock('@/features/customer/api/customerDb', () => ({
+  customerDb: { events: jest.fn(), hotels: jest.fn(), apartments: jest.fn(), profile: jest.fn() },
+}));
+jest.mock('@/features/customer/offline/wallet', () => ({
+  wallet: { save: jest.fn(), load: jest.fn(), generation: jest.fn() },
+}));
+jest.mock('@/shared/supabase/client', () => ({ supabase: { auth: { getSession: jest.fn() } } }));
+jest.mock('@/shared/platform/storage', () => ({
+  plainKv: { get: () => Promise.resolve(null), set: () => Promise.resolve() },
+}));
 let mockFocused = true;
 jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused }));
 jest.mock('@/shared/api/instance', () => ({ clock: { serverNow: () => mockNow } }));
@@ -583,4 +600,38 @@ it('a saved list that can’t load says why the hearts are off', async () => {
     ),
   ).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Save Harbour Suites' })).toBeDisabled();
+});
+
+it('signed out: shows listings, no Today banner, and pull to refresh reads no bookings or profile', async () => {
+  // The real account hooks, over a mocked database: the point is what they send.
+  const real = {
+    my: jest.requireActual<typeof import('@/features/customer/hooks/useMyBookings')>(
+      '@/features/customer/hooks/useMyBookings',
+    ),
+    place: jest.requireActual<typeof import('@/features/customer/hooks/useExplorePlace')>(
+      '@/features/customer/hooks/useExplorePlace',
+    ),
+  };
+  mockMy.mockImplementation(real.my.useMyBookings);
+  mockPlace.mockImplementation(real.place.useExplorePlace);
+  const db = {
+    events: jest.spyOn(customerDb, 'events'),
+    hotels: jest.spyOn(customerDb, 'hotels'),
+    apartments: jest.spyOn(customerDb, 'apartments'),
+    profile: jest.spyOn(customerDb, 'profile'),
+  };
+  const qc = makeQueryClient();
+  const p = { ...props(), userId: '' };
+  await render(<ExploreScreen {...p} />, { wrapper: wrapper(qc) });
+  expect(within(screen.getByTestId('rail-events')).getByText('Afrobeats night')).toBeTruthy();
+  // With no profile to ask, the place falls back to Lagos.
+  expect(await screen.findByRole('header', { name: 'Hotels in Lagos' })).toBeTruthy();
+  expect(screen.queryByText(/^Today:/)).toBeNull();
+  await pullToRefresh();
+  expect(byCat.events.refetch).toHaveBeenCalled();
+  expect(db.events).not.toHaveBeenCalled();
+  expect(db.hotels).not.toHaveBeenCalled();
+  expect(db.apartments).not.toHaveBeenCalled();
+  expect(db.profile).not.toHaveBeenCalled();
+  qc.clear();
 });

@@ -112,3 +112,12 @@ describe('freshness', () => {
     qc.clear();
   });
 });
+
+it('reads nothing with no user', async () => {
+  const qc = makeQueryClient();
+  const hook = await renderHook(() => useUnreadCount(''), { wrapper: wrapper(qc) });
+  expect(hook.result.current).toBe(0);
+  expect(count).not.toHaveBeenCalled();
+  await hook.unmount();
+  qc.clear();
+});

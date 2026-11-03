@@ -71,6 +71,7 @@ export function useBooking<K extends BookingKind>(
       return { row: r.value };
     },
     // The list row has the same columns: open the details at once while the fresh read runs.
+    enabled: userId !== '',
     placeholderData: () => {
       const rows = qc.getQueryData<BookingRows>(customerKeys.bookings(userId));
       const row = rows === undefined ? undefined : fromList(rows, id);
@@ -89,6 +90,6 @@ export function useBooking<K extends BookingKind>(
     savedAt: fromWallet === null ? null : (wallet?.savedAt ?? null),
     today,
     error: failed && wallet !== undefined && fromWallet === null,
-    refetch: q.refetch,
+    refetch: userId === '' ? () => Promise.resolve() : q.refetch,
   };
 }

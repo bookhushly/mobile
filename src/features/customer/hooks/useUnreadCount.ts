@@ -20,6 +20,7 @@ export function useUnreadCount(userId: string): number {
       return r.value;
     },
     refetchOnWindowFocus: true,
+    enabled: userId !== '',
   });
   useFocusRefetch(isFocused, q);
   return q.data ?? 0;

@@ -403,3 +403,17 @@ describe('polling', () => {
     await done();
   });
 });
+
+it('reads nothing with no user', async () => {
+  const qc = makeQueryClient();
+  const hook = await renderHook(() => useNotifications(''), { wrapper: wrapper(qc) });
+  expect(hook.result.current.loading).toBe(false);
+  expect(hook.result.current.error).toBe(false);
+  expect(hook.result.current.items).toEqual([]);
+  await act(async () => {
+    await hook.result.current.refetch();
+  });
+  expect(db.notifications).not.toHaveBeenCalled();
+  await hook.unmount();
+  qc.clear();
+});

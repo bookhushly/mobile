@@ -425,3 +425,35 @@ describe('useBooking', () => {
     await done();
   });
 });
+
+describe('signed out (no user id)', () => {
+  it('useMyBookings reads nothing with no user', async () => {
+    const qc = makeQueryClient();
+    const hook = await renderHook(() => useMyBookings(''), { wrapper: wrapper(qc) });
+    expect(hook.result.current.loading).toBe(false);
+    expect(hook.result.current.bookings).toBeNull();
+    expect(hook.result.current.error).toBe(false);
+    await act(async () => {
+      await hook.result.current.refetch();
+    });
+    expect(db.events).not.toHaveBeenCalled();
+    expect(db.hotels).not.toHaveBeenCalled();
+    expect(load).not.toHaveBeenCalled();
+    await hook.unmount();
+    qc.clear();
+  });
+
+  it('useBooking reads nothing with no user', async () => {
+    const qc = makeQueryClient();
+    const hook = await renderHook(() => useBooking('', 'event', 'e1'), { wrapper: wrapper(qc) });
+    expect(hook.result.current.row).toBeUndefined();
+    expect(hook.result.current.error).toBe(false);
+    await act(async () => {
+      await hook.result.current.refetch();
+    });
+    expect(db.event).not.toHaveBeenCalled();
+    expect(load).not.toHaveBeenCalled();
+    await hook.unmount();
+    qc.clear();
+  });
+});
