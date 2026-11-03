@@ -2,6 +2,8 @@ import { act, render, screen } from '@testing-library/react-native';
 
 import RootLayout from '@/app/_layout';
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import type { SavedInput } from '@/features/customer/api/savedDb';
+import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
 import type { ModeState } from '@/features/mode/domain/route';
 import { useBrowseChoice } from '@/features/mode/hooks/useBrowseChoice';
 import type { memoryKv } from '@/shared/lib/kv';
@@ -199,5 +201,63 @@ describe('signing out ends browsing', () => {
     await signOut();
     expect(declared()).toEqual(['(auth)', 'delete-account']);
     expect(kv.dump()['bh.browse']).toBeUndefined();
+  });
+});
+
+describe('a save waiting for sign-in', () => {
+  const HOTEL: SavedInput = {
+    listingId: 'h1',
+    kind: 'hotel',
+    title: 'Harbour Suites',
+    image: null,
+    location: 'Ikeja, Lagos',
+  };
+  const signInAs = async (mode: ModeState) => {
+    await kv.set('bh.browse', '1');
+    mockMode = { status: 'loading' };
+    useSignInPrompt.setState({ reason: null, pendingSave: HOTEL });
+    const view = await render(<RootLayout />);
+    await act(async () => {
+      useAuth.setState({ state: signedIn });
+      await Promise.resolve();
+    });
+    expect(useSignInPrompt.getState().pendingSave).toEqual(HOTEL);
+    mockMode = mode;
+    await act(async () => {
+      await view.rerender(<RootLayout />);
+    });
+  };
+
+  it.each<[string, ModeState]>([
+    [
+      'gate',
+      { status: 'ready', resolution: { kind: 'modes', modes: ['gate'], defaultMode: 'gate' } },
+    ],
+    [
+      'receptionist',
+      {
+        status: 'ready',
+        resolution: { kind: 'modes', modes: ['receptionist'], defaultMode: 'receptionist' },
+      },
+    ],
+    ['web-only', { status: 'ready', resolution: { kind: 'webOnly' } }],
+  ])('is dropped for a %s account', async (_name, mode) => {
+    await signInAs(mode);
+    expect(useSignInPrompt.getState().pendingSave).toBeNull();
+  });
+
+  it('is kept for a customer', async () => {
+    await signInAs(customer);
+    expect(useSignInPrompt.getState().pendingSave).toEqual(HOTEL);
+  });
+
+  it('is forgotten by signing out, so it can never land on another account', async () => {
+    await signInAs({ status: 'error' });
+    expect(useSignInPrompt.getState().pendingSave).toEqual(HOTEL);
+    await act(async () => {
+      useAuth.setState({ state: { status: 'signedOut' } });
+      await Promise.resolve();
+    });
+    expect(useSignInPrompt.getState().pendingSave).toBeNull();
   });
 });

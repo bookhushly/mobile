@@ -15,7 +15,8 @@ import '@/features/customer/offline/recentSearches';
 import '@/features/customer/offline/actionMarks';
 // And the checkout entries (4c P5, B1): guest emails and payment links, cleared on every sign-out.
 import '@/features/customer/offline/checkoutStore';
-import { authScreensAllowed, resolveRoute } from '@/features/mode/domain/route';
+import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
+import { authScreensAllowed, resolveRoute, shouldDropPending } from '@/features/mode/domain/route';
 import { useBrowseChoice } from '@/features/mode/hooks/useBrowseChoice';
 import { useModeState } from '@/features/mode/hooks/useModeState';
 import { useRouteStore } from '@/features/mode/hooks/useRouteStore';
@@ -55,6 +56,7 @@ function Navigator() {
   const browsing = useBrowseChoice((s) => s.browsing);
   const loadBrowsing = useBrowseChoice((s) => s.load);
   const clearBrowsing = useBrowseChoice((s) => s.clear);
+  const clearPending = useSignInPrompt((s) => s.clearPending);
   useEffect(() => {
     void loadBrowsing();
   }, [loadBrowsing]);
@@ -71,9 +73,13 @@ function Navigator() {
     () =>
       useAuth.subscribe((now, before) => {
         const wasSignedIn = before.state.status === 'signedIn' && !before.recovery;
-        if (wasSignedIn && now.state.status === 'signedOut' && !now.recovery) clearBrowsing();
+        if (wasSignedIn && now.state.status === 'signedOut' && !now.recovery) {
+          clearBrowsing();
+          // Whoever signs in next is not who asked.
+          clearPending();
+        }
       }),
-    [clearBrowsing],
+    [clearBrowsing, clearPending],
   );
   const route = resolveRoute({
     versionOk: isVersionSupported(APP_VERSION, MIN_SUPPORTED_VERSION),
@@ -83,6 +89,11 @@ function Navigator() {
     recovery,
     browsing,
   });
+
+  const dropPending = shouldDropPending(route, auth.status);
+  useEffect(() => {
+    if (dropPending) clearPending();
+  }, [dropPending, clearPending]);
 
   const setRoute = useRouteStore((s) => s.setRoute);
   const hideSplash = useHideSplashOnce();

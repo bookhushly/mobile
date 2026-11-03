@@ -1,4 +1,11 @@
-import { authScreensAllowed, resolveRoute, type ModeState } from '@/features/mode/domain/route';
+import {
+  authScreensAllowed,
+  resolveRoute,
+  shouldDropPending,
+  type AppRoute,
+  type AuthKind,
+  type ModeState,
+} from '@/features/mode/domain/route';
 
 const single: ModeState = {
   status: 'ready',
@@ -208,6 +215,18 @@ describe('resolveRoute', () => {
       expect(authScreensAllowed('auth', 'signedOut')).toBe(true);
       expect(authScreensAllowed('auth', 'signedIn')).toBe(true);
       expect(authScreensAllowed('loading', 'signedOut')).toBe(false);
+    });
+    it.each<[AppRoute, AuthKind, boolean]>([
+      ['gate', 'signedIn', true],
+      ['receptionist', 'signedIn', true],
+      ['webOnly', 'signedIn', true],
+      ['customer', 'signedIn', false],
+      ['customer', 'signedOut', false],
+      ['loading', 'signedIn', false],
+      ['modeError', 'signedIn', false],
+      ['auth', 'signedIn', false],
+    ])('pending save on route %s while %s: dropped = %s', (route, auth, dropped) => {
+      expect(shouldDropPending(route, auth)).toBe(dropped);
     });
   });
 });

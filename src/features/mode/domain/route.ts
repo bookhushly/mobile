@@ -49,3 +49,10 @@ export function resolveRoute(i: Input): AppRoute {
 export function authScreensAllowed(route: AppRoute, auth: AuthKind): boolean {
   return route === 'auth' || (route === 'customer' && auth === 'signedOut');
 }
+
+// Staff and web-only accounts have nowhere to keep a save asked for from the customer stack. A mode
+// error keeps it: retrying can still land on customer.
+export function shouldDropPending(route: AppRoute, auth: AuthKind): boolean {
+  if (auth !== 'signedIn') return false;
+  return route === 'gate' || route === 'receptionist' || route === 'webOnly';
+}

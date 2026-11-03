@@ -58,7 +58,16 @@ jest.mock('@/features/customer/hooks/useTourSeen', () => ({
   useTourSeen: (userId: string | null) => mockTour(userId),
 }));
 
+jest.mock('@/shared/platform/storage', () => {
+  const { memoryKv: make } =
+    jest.requireActual<typeof import('@/shared/lib/kv')>('@/shared/lib/kv');
+  return { plainKv: make() };
+});
+
 // Resume has its own tests (hooks/__tests__); here only that the layout mounts it for the account.
+jest.mock('@/features/customer/hooks/useCompletePendingSave', () => ({
+  useCompletePendingSave: () => undefined,
+}));
 const mockResume = jest.fn();
 jest.mock('@/features/customer/hooks/useResumePayments', () => ({
   useResumePayments: (userId: string) => {

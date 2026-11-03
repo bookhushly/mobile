@@ -4,6 +4,7 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { savedDb, type SavedInput, type SavedItem } from '@/features/customer/api/savedDb';
 import { savedOutcome } from '@/features/customer/hooks/sessionWrite';
 import { useSaved } from '@/features/customer/hooks/useSaved';
+import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
 import { err, ok } from '@/shared/lib/result';
 
 import { makeQueryClient, NOON, USER, wrapper } from './customerTestUtils';
@@ -358,6 +359,32 @@ describe('Review Focus 4: saved after a lost response', () => {
 it('no user: no list query', async () => {
   const { result, unmount } = await renderHook(() => useSaved(''), { wrapper: wrapper(qc) });
   expect(list).not.toHaveBeenCalled();
-  expect(result.current.ready).toBe(false);
+  expect(result.current.items).toEqual([]);
   await unmount();
+});
+
+describe('signed out', () => {
+  beforeEach(() => {
+    useSignInPrompt.setState({ reason: null, pendingSave: null });
+  });
+
+  it('toggle with no user asks to sign in and writes nothing', async () => {
+    const { result } = await renderHook(() => useSaved(''), { wrapper: wrapper(qc) });
+    let outcome: string | undefined;
+    await act(async () => {
+      outcome = await result.current.toggle(HOTEL);
+    });
+    expect(useSignInPrompt.getState().reason).toBe('save');
+    expect(useSignInPrompt.getState().pendingSave).toEqual(HOTEL);
+    expect(save).not.toHaveBeenCalled();
+    expect(unsave).not.toHaveBeenCalled();
+    expect(outcome).toBe('ok');
+    expect(result.current.writeError).toBeNull();
+    expect(result.current.lastRemoved).toBeNull();
+  });
+
+  it('hearts are live: there is no list to wait for', async () => {
+    const { result } = await renderHook(() => useSaved(''), { wrapper: wrapper(qc) });
+    expect(result.current.ready).toBe(true);
+  });
 });

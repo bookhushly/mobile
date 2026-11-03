@@ -15,6 +15,7 @@ import {
   type WriteError,
   type WriteOutcome,
 } from '@/features/customer/hooks/sessionWrite';
+import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
 import { clock } from '@/shared/api/instance';
 
 const keyOf = (k: SavedKey) => `${k.kind}:${k.listingId}`;
@@ -32,7 +33,7 @@ const newestFirst = (a: SavedItem, b: SavedItem) =>
 
 export type Saved = {
   items: SavedItem[];
-  /** The list has loaded: until then `isSaved` doesn't know, so hearts wait. */
+  /** The list has loaded, or there is none to load: until then `isSaved` doesn't know, so hearts wait. */
   ready: boolean;
   loading: boolean;
   /** Nothing to show: the load failed, or it is paused offline. */
@@ -160,6 +161,11 @@ export function useSaved(userId: string): Saved {
   // cards' `saved` flag is read from it during render.
   const toggle = useCallback(
     (item: SavedInput) => {
+      // Every heart comes through here. Only asked, so nothing failed: no banner and no undo.
+      if (userId === '') {
+        useSignInPrompt.getState().ask('save', input(item));
+        return Promise.resolve<WriteOutcome>('ok');
+      }
       const rows = qc.getQueryData<SavedItem[]>(customerKeys.saved(userId)) ?? [];
       return write(item, !rows.some((r) => same(r, item)));
     },
@@ -174,7 +180,8 @@ export function useSaved(userId: string): Saved {
 
   return {
     items,
-    ready: q.data !== undefined,
+    // Signed out there's no list to wait for, and the heart has to stay tappable to ask.
+    ready: userId === '' || q.data !== undefined,
     loading: q.isPending && !loadFailed(q),
     error: loadFailed(q),
     refetch: q.refetch,
