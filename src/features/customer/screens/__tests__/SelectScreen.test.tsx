@@ -208,7 +208,7 @@ describe('stays', () => {
     await fireEvent.press(screen.getByTestId('day-2026-10-25'));
     await fireEvent.press(screen.getByRole('button', { name: 'Choose · 2 nights' }));
 
-    expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · ₦120,000');
+    expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · about ₦120,000');
     expect(continueButton()).toBeEnabled();
     await fireEvent.press(continueButton());
     expect(submit).toHaveBeenCalledTimes(1);
@@ -579,7 +579,7 @@ describe('browsing without an account', () => {
       browsing(HOTEL);
       await openAs('hotel', ROOM);
       await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
-      expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · ₦120,000');
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · about ₦120,000');
       expect(screen.queryByTestId('guest-fields')).toBeNull();
     });
 
@@ -767,7 +767,7 @@ describe('browsing without an account', () => {
       browsing(HOTEL);
       await openAs('hotel', ROOM);
       await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
-      await estimateIs('2 nights · ₦132,000');
+      await estimateIs('2 nights · about ₦132,000');
       expect(serviceCharge).toHaveBeenCalledWith(expect.anything(), 'hotel');
     });
 
@@ -777,7 +777,7 @@ describe('browsing without an account', () => {
       await openAs('apartment');
       await pickDates('2026-10-23', '2026-10-26', 'Choose · 3 nights');
       await applyPromo(15000, 135000);
-      await estimateIs('3 nights · ₦148,500');
+      await estimateIs('3 nights · about ₦148,500');
       expect(serviceCharge).toHaveBeenCalledWith(expect.anything(), 'apartment');
     });
 
@@ -803,7 +803,7 @@ describe('browsing without an account', () => {
       expect(screen.queryByTestId('charge-unknown')).toBeNull();
     });
 
-    it('extras it can’t price are said, never silently left out', async () => {
+    it('stays add priced extras, and say the figure is an estimate', async () => {
       jest.mocked(serviceCharge).mockResolvedValue(percent(10));
       mockDb.hotelExtras.mockResolvedValue({
         breakfastOffered: 'paid',
@@ -815,13 +815,21 @@ describe('browsing without an account', () => {
       browsing(HOTEL);
       await openAs('hotel', ROOM);
       await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
-      await estimateIs('2 nights · ₦132,000');
+      await estimateIs('2 nights · about ₦132,000');
       await press('Increase Continental');
-      await estimateIs('2 nights · ₦132,000 + extras');
+      await estimateIs('2 nights · about ₦137,500');
+    });
+
+    it('apartment: the refundable deposit is part of the estimate', async () => {
+      jest.mocked(serviceCharge).mockResolvedValue(percent(10));
+      browsing({ ...APARTMENT, apartment: { ...APARTMENT.apartment, caution_deposit: 20000 } });
+      await openAs('apartment');
+      await pickDates('2026-10-23', '2026-10-26', 'Choose · 3 nights');
+      await estimateIs('3 nights · about ₦187,000');
     });
 
     it.each([
-      ['hotel', HOTEL, ROOM, '2 nights · ₦120,000'],
+      ['hotel', HOTEL, ROOM, '2 nights · about ₦120,000'],
       ['event', PAID, null, '1 ticket · ₦5,000'],
     ] as const)(
       '%s: a failed charge read says so beside the total',
@@ -925,7 +933,7 @@ describe('browsing without an account', () => {
 
       signedIn = READY;
       await user();
-      expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · ₦120,000');
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · about ₦120,000');
       expect(continueButton()).not.toBeBusy();
     });
 
@@ -1005,7 +1013,7 @@ describe('browsing without an account', () => {
       signedIn = FAILED;
       await user();
 
-      expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · ₦120,000');
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · about ₦120,000');
       expect(screen.getByTestId('guest-name')).toHaveDisplayValue('');
       expect(screen.getByTestId('guest-phone')).toHaveDisplayValue('');
       // The signed-in email is the fallback when the profile has none, as for anyone signed in.
@@ -1055,7 +1063,7 @@ describe('browsing without an account', () => {
       signedIn = PENDING;
       await user();
       expect(skeleton()).toBeNull();
-      expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · ₦120,000');
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · about ₦120,000');
     });
 
     it('a profile with gaps shows no event errors until the next Continue', async () => {
@@ -1231,7 +1239,7 @@ describe('browsing without an account', () => {
         await Promise.resolve();
       });
       expect(continueButton()).toBeEnabled();
-      expect(screen.getByTestId('select-estimate')).toHaveTextContent('3 nights · ₦135,000');
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('3 nights · about ₦135,000');
     });
   });
 });

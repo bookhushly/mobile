@@ -229,3 +229,31 @@ export function selectionFingerprint(
     specialRequests: s.specialRequests,
   });
 }
+
+/** What the listing charges for extras, as Select already knows it. */
+export type ExtrasPrices = {
+  /** Breakfast option id → price per person. */
+  breakfast: Readonly<Record<string, number>>;
+  /** Null: no transfers. `fee`: hotels' flat fee for an airport with no listed price. */
+  airport: { prices: Readonly<Record<string, number>>; fee: number | null } | null;
+};
+
+/**
+ * Select's preview of the extras, priced as the web's create routes do (hotel-booking.js,
+ * apartment-create.js): breakfast is price per person × quantity; a transfer is the airport's
+ * listed price, else the flat fee, doubled for both ways. The server recomputes at create.
+ */
+export function stayExtrasTotal(
+  prices: ExtrasPrices,
+  breakfast: Readonly<Record<string, number>>,
+  airport: StaySelection['airport'],
+): number {
+  const meals = Object.entries(breakfast).reduce(
+    (sum, [id, qty]) => sum + (prices.breakfast[id] ?? 0) * qty,
+    0,
+  );
+  if (!airport.on || prices.airport === null) return meals;
+  const listed = airport.code === null ? undefined : prices.airport.prices[airport.code];
+  const one = listed ?? prices.airport.fee ?? 0;
+  return meals + (airport.type === 'both' ? one * 2 : one);
+}

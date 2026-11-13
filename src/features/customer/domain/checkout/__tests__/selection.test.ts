@@ -1,6 +1,7 @@
 import type { RoomRate, TicketPackage } from '@/features/customer/schemas/listings';
 import type { CustomQuestion } from '@/features/customer/schemas/checkout';
 import {
+  stayExtrasTotal,
   MAX_TICKETS,
   defaultRate,
   eventProblems,
@@ -261,5 +262,34 @@ describe('selectionFingerprint', () => {
     const a = selectionFingerprint('hotel', 'l1', 'r1', stay({ breakfast: { a: 1, b: 2 } }));
     const b = selectionFingerprint('hotel', 'l1', 'r1', stay({ breakfast: { b: 2, a: 1 } }));
     expect(a).toBe(b);
+  });
+});
+
+describe('stayExtrasTotal', () => {
+  const prices = {
+    breakfast: { b1: 3000, b2: 4500 },
+    airport: { prices: { LOS: 25000 }, fee: 15000 },
+  };
+  const off = { on: false, type: 'pickup' as const, code: null };
+  it('prices breakfast per person and quantity', () => {
+    expect(stayExtrasTotal(prices, { b1: 2, b2: 1 }, off)).toBe(10500);
+  });
+  it('ignores an option the listing no longer offers', () => {
+    expect(stayExtrasTotal(prices, { gone: 3 }, off)).toBe(0);
+  });
+  it('uses the airport price when one is listed, doubled both ways', () => {
+    expect(stayExtrasTotal(prices, {}, { on: true, type: 'pickup', code: 'LOS' })).toBe(25000);
+    expect(stayExtrasTotal(prices, {}, { on: true, type: 'both', code: 'LOS' })).toBe(50000);
+  });
+  it('falls back to the flat fee for an unlisted airport, as the hotel route does', () => {
+    expect(stayExtrasTotal(prices, {}, { on: true, type: 'dropoff', code: 'ABV' })).toBe(15000);
+  });
+  it('charges nothing for an airport with no price and no flat fee (apartments)', () => {
+    const apt = { breakfast: {}, airport: { prices: { LOS: 20000 }, fee: null } };
+    expect(stayExtrasTotal(apt, {}, { on: true, type: 'pickup', code: 'ABV' })).toBe(0);
+  });
+  it('charges nothing when transfers are off for the listing', () => {
+    const none = { breakfast: {}, airport: null };
+    expect(stayExtrasTotal(none, {}, { on: true, type: 'pickup', code: 'LOS' })).toBe(0);
   });
 });

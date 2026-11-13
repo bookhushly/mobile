@@ -9,6 +9,7 @@ import {
   withoutContactProblems,
   type Guest,
   type StaySelection,
+  stayExtrasTotal,
 } from '@/features/customer/domain/checkout/selection';
 import { bedsLine } from '@/features/customer/domain/listingDetail';
 import {
@@ -23,7 +24,11 @@ import { useRecheckPromoOnSignIn } from '@/features/customer/hooks/useRecheckPro
 import { useSelectTotal } from '@/features/customer/hooks/useSelectTotal';
 import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
 import type { RoomType } from '@/features/customer/schemas/listings';
-import { ExtrasSection, stayExtras } from '@/features/customer/ui/checkout/ExtrasSection';
+import {
+  ExtrasSection,
+  extrasPrices,
+  stayExtras,
+} from '@/features/customer/ui/checkout/ExtrasSection';
 import { FormLoading } from '@/features/customer/ui/checkout/FormLoading';
 import { GuestFields } from '@/features/customer/ui/checkout/GuestFields';
 import { PromoRow } from '@/features/customer/ui/checkout/PromoRow';
@@ -122,9 +127,17 @@ export function StaySelect({
   const amount = n !== null && perNight !== null && n > 0 ? perNight * n : null;
   useRecheckPromoOnSignIn(userId, promo, amount);
   const preview = promoFor(promo.state, amount);
+  // Extras and the refundable deposit are known here; weekend, VAT and vendor discounts are not,
+  // so the footer calls the figure an estimate.
+  const priced = extrasPrices(hotelExtras.data, aptExtras.data);
+  const deposit = apt?.caution_deposit ?? 0;
   const { total, note } = useSelectTotal(
     stay.kind,
-    amount === null ? null : Math.max(0, amount - (preview.promo?.discount ?? 0)),
+    amount === null
+      ? null
+      : Math.max(0, amount - (preview.promo?.discount ?? 0)) +
+          stayExtrasTotal(priced, sel.breakfast, sel.airport) +
+          deposit,
   );
   const created = create.created;
   // Hands over once: the parent's callback may change identity on every render.
@@ -173,8 +186,6 @@ export function StaySelect({
   };
   const noRooms = hotel !== null && availability.data?.available === false;
   const title = hotel !== null ? (hotel.listing.hotel.name ?? '') : (apt?.name ?? '');
-  // Priced by the server at create: no helper prices them here, so they're named, not added.
-  const extrasChosen = sel.airport.on || Object.values(sel.breakfast).some((q) => q > 0);
 
   const footer = (
     <SelectFooter
@@ -183,7 +194,7 @@ export function StaySelect({
           ? 'Add your dates'
           : total === null
             ? nightsWord(n)
-            : `${nightsWord(n)} · ${formatNaira(total)}${extrasChosen ? ' + extras' : ''}`
+            : `${nightsWord(n)} · about ${formatNaira(total)}`
       }
       blocked={noRooms ? NO_ROOMS : null}
       problem={null}
