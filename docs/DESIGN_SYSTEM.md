@@ -10,7 +10,7 @@ Read from `../web/tailwind.config.js`, `app/globals.css`, `app/layout.js`.
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Primary                     | `#7C3AED`                                                                                                         |
 | Violet ramp 50→950          | `#F4F1FF #EBE5FF #D9CEFF #BEA6FF #9F75FF #8B5CF6 #7C3AED #6D28D9 #5B21B6 #4C1D95 #2E1065`                         |
-| Ink                         | `#1A0D4D`                                                                                                         |
+| Ink                         | `#141414` (neutral since 2026-11-13; was violet-tinted `#1A0D4D`, still the web's)                                                                                                         |
 | Tint / secondary            | `#F0EDF8`                                                                                                         |
 | Border / input              | `#E0DBF0` (0.5 px)                                                                                                |
 | Muted text                  | `#6B6987` (5.26:1 on white)                                                                                       |
@@ -54,23 +54,27 @@ Density is a token set (`density.ts`), not a multiplier.
 
 ## 3. Typography
 
+**2026-11-14, second size step (owner: text still too small):** caption and labelSm 14/20, label and fieldLabel 16/22, bodySm 16/24, body, bodyStrong, button and linkLg 18/26, subtitle 19/28, headline 20/28, title 22/30, titleLg 26/34. Display headlines and the gate's result and counter sizes are unchanged. `src/shared/theme/type.ts` is the source of truth where this section's older numbers differ.
+
+**2026-11-15, third size step (owner: one more step up):** caption and labelSm 15/22, label, fieldLabel and bodySm 17/24, body, bodyStrong, button and linkLg 19/28, subtitle 20/30, headline 22/30, title 24/32, titleLg 28/36. Display, `lead` and gate sizes unchanged.
+
 Hand-tuned scale anchored on the web scale (a strict modular ratio gives fractional, blurry sizes on Android). Nothing below 12. Sentence case, no uppercase eyebrows. Use weights **400 / 500 / 600** (700 only for 48+ numerals); skip 300.
 
 | Token        | Size/LH | Weight | Tracking | Font                                       |
 | ------------ | ------- | ------ | -------- | ------------------------------------------ |
-| `caption`    | 12/16   | 400    | +0.2     | Hanken Grotesk                             |
-| `labelSm`    | 12/16   | 600    | +0.2     | Hanken Grotesk                             |
-| `label`      | 14/20   | 600    | 0        | Hanken Grotesk                             |
-| `fieldLabel` | 14/20   | 500    | 0        | Hanken Grotesk (form field labels only)    |
-| `bodySm`     | 14/20   | 400    | 0        | Hanken Grotesk                             |
-| `body`       | 16/24   | 400    | 0        | Hanken Grotesk                             |
-| `bodyStrong` | 16/24   | 600    | 0        | Hanken Grotesk                             |
-| `lead`       | 18/26   | 500    | 0        | Hanken Grotesk (subline under a headline)  |
-| `headline`   | 18/28   | 600    | 0        | Hanken Grotesk                             |
+| `caption`    | 13/18   | 400    | +0.2     | Hanken Grotesk                             |
+| `labelSm`    | 13/18   | 600    | +0.2     | Hanken Grotesk                             |
+| `label`      | 15/20   | 600    | 0        | Hanken Grotesk                             |
+| `fieldLabel` | 15/20   | 500    | 0        | Hanken Grotesk (form field labels only)    |
+| `bodySm`     | 15/22   | 400    | 0        | Hanken Grotesk                             |
+| `body`       | 17/24   | 400    | 0        | Hanken Grotesk                             |
+| `bodyStrong` | 17/24   | 600    | 0        | Hanken Grotesk                             |
+| `lead`       | 20/28   | 400    | 0        | Hanken Grotesk (subline under a headline)  |
+| `headline`   | 19/26   | 600    | 0        | Hanken Grotesk                             |
 | `title`      | 20/28   | 600    | −0.2     | Hanken Grotesk                             |
 | `titleLg`    | 24/32   | 600    | −0.3     | Hanken Grotesk                             |
-| `displaySm`  | 32/36   | 600    | −0.64    | Hanken Grotesk                             |
-| `displayMd`  | 36/40   | 600    | −0.72    | Hanken Grotesk (Welcome headline)          |
+| `displaySm`  | 30/36   | 500    | −0.75    | Hanken Grotesk                             |
+| `displayMd`  | 30/36   | 500    | −0.75    | Hanken Grotesk (Welcome headline)          |
 | `display`    | 40/48   | 600    | −0.8     | Hanken Grotesk                             |
 | `displayLg`  | 48/56   | 600    | −0.96    | Hanken Grotesk                             |
 | `hero`       | 64/68   | 600    | −1.28    | Hanken Grotesk (onboarding only)           |
@@ -80,6 +84,9 @@ Hand-tuned scale anchored on the web scale (a strict modular ratio gives fractio
 - **Fonts [V]:** static files only (no variable), from `@expo-google-fonts/hanken-grotesk`. One **family name per weight** (`HankenGrotesk_600SemiBold`); **never use `fontWeight`** with custom fonts [U for SDK 57]. Load via the `expo-font` **config plugin** (embedded at build, no first-frame fallback flash), so a font change needs a new native build, not an OTA update.
 - **Glyph gap [V]:** Hanken Grotesk **has no ₦ and no ṣ/Ṣ**; phones draw those in the system font. It has ẹ ọ ị ụ, Ẹ Ọ and the combining marks. The owner chose it deliberately on 2026-11-02: the look against the sites Nigerian customers use comes first, and glyph coverage no longer decides the font. Check ₦ beside digits on a device. See D7.
 - **Tabular numerals [V]:** Hanken Grotesk has no `tnum` feature, but its digits are all 560 units wide at 400, 500 and 600, so money, counts and timers don't jitter. The `tabular` prop stays harmless.
+- **Sizes up one step (2026-11-13, app-wide):** measured against Nike (cap heights from screenshots): Hanken's x-height is 0.493 against SF 0.508 and Helvetica 0.523, so reading text is 17, secondary and labels 15, captions 13, and `button` 17/600 (links `linkLg` 17/500). Headlines 30 at 500 on onboarding. Gate result variants unchanged.
+- **Onboarding spacing:** 24 pt side margins (`layout.formGutter`), 40 pt between groups on form sheets, 20 pt between fields, 12 pt headline to subline.
+- **Onboarding type rule (2026-11-13):** read 400, tap 600, nothing else. Headline 600; reading text 400 (`lead` 18 on Welcome, `body` 16 on forms); buttons and standalone links 600 at 16 (`TextLink size="lg"`); fine print `bodySm` 14 with 14/600 links. No 12 px text on onboarding screens.
 - **No serif in the app.** Headlines are Hanken Grotesk 600 at about −2% letter spacing.
 - **Dynamic Type:** keep `allowFontScaling` on; `maxFontSizeMultiplier`: body/labels 1.6, titles 1.3, display/numXl 1.0–1.15, gate result screens 1.0 (fixed huge layout). Never cap form labels/inputs below 1.3. Test iOS Accessibility 3 / Android 200 %.
 - Money via one `Money` component (₦ + tabular, integer kobo/naira, `Intl en-NG`).
@@ -93,13 +100,21 @@ Hand-tuned scale anchored on the web scale (a strict modular ratio gives fractio
 | Token        | Hex       | Role                                  |
 | ------------ | --------- | ------------------------------------- |
 | `surface`    | `#FFFFFF` | cards, sheets, inputs                 |
-| `canvas`     | `#F8F7FB` | app background (D2)                   |
-| `wash`       | `#F0EDF8` | selected rows, chips, secondary fills |
-| `line`       | `#E0DBF0` | decorative dividers, card borders     |
-| `lineStrong` | `#857FA8` | input/control borders (3.75:1)        |
-| `inkMuted`   | `#6B6987` | secondary text                        |
-| `inkSoft`    | `#4A4670` | captions on tinted fills (8.75:1)     |
-| `ink`        | `#1A0D4D` | headings, body                        |
+| `canvas`     | `#F7F7F7` | app background (D2)                   |
+| `wash`       | `#F2F2F2` | chips, secondary and disabled fills   |
+| `line`       | `#E5E5E5` | decorative dividers, card borders     |
+| `lineStrong` | `#8C8C8C` | input/control borders (3.36:1)        |
+| `inkMuted`   | `#6B6B6B` | secondary text (5.33:1)               |
+| `inkSoft`    | `#474747` | captions on fills (9.29:1)            |
+| `ink`        | `#141414` | headings, body, links (18.42:1)       |
+
+**Neutral foundation (owner decision, 2026-11-13).** Benchmarked against Booking.com, Nike and IHG: black, white and plain greys carry the UI; violet appears only on the primary action and selected state. Every neutral used to be tinted violet, which read as generic and AI-made. Links are text-coloured and underlined, not violet. Contrast rows below that name the old tinted values are historical; the new values are in the table above.
+
+**Buttons (2026-11-13):** full pill, 52 tall (customer density), label `button` 17/600 (Hanken 600 has the stroke of Helvetica Neue Medium; 500 reads thin), outlines 1 px (`hairline`). On a photo: white fill with black label, or a white 1 px outline.
+
+**Text fields (2026-11-14, after Airbnb):** the title sits inside the box: it rests where the text goes, then moves up and shrinks to 13 grey when the field is focused or filled. 58 tall (gate 64), 1 px grey border, 2 px black when focused, red on error. Search boxes: no title, placeholder only. Forms: 24 side margins, 32 between sections, 16 between fields, helper text 8 below its field.
+
+**Logo:** the full lockup on brand moments only (the opening screen and Welcome); the mark alone inside flows, left-aligned above the form headline at 40 pt, as Nike, IHG and Eventbrite do.
 
 **Semantic (PROPOSED — darker than web; D5)**
 
@@ -143,7 +158,7 @@ Violet is never decorative, a large fill, or a status colour. Red = errors/destr
 
 ## 5. Shape and elevation
 
-Radius: `r1` 4 (tags) · `r2` 8 (chips) · `r3` **12** (default: buttons, inputs, cards) · `r4` 16 (sheets, images) · `rFull`. Use `borderCurve: 'continuous'` on iOS [U].
+Radius: `r1` 4 (tags) · `r2` 8 (chips) · `r3` **12** (default: inputs, cards) · buttons are full pills (`rFull`, since 2026-11-13) · `r4` 16 (sheets, images) · `rFull`. Use `borderCurve: 'continuous'` on iOS [U].
 
 **Borders first, shadows rarely** (shadows in long lists are a classic jank source [U]):
 
@@ -160,6 +175,13 @@ Shadows tinted ink (`26,13,77`), never black; no violet glow.
 ## 6. Icons, imagery, states
 
 - **One cross-platform outline icon set** at 1.5–2 px stroke on a 24 grid (candidate: lucide — check what web uses). `expo-symbols` is iOS-only → don't mix (D6). Sizes: 16 inline, 20 rows, 24 default, 96–160 gate results.
+- **Icon rules (2026-11-15, owner: "inconsistent, the default AI template"; from Airbnb, Hyatt, Vrbo, Mindtrip, Booking and Expedia on Mobbin):**
+  1. One set, one look: lucide outline at the kit stroke (1.75). Never filled icons, emoji or a second set beside them.
+  2. Informational icons are ink (`textPrimary`); on a quiet meta line (a card's date tag, a caption), `textSecondary`. Never violet, except the selected tick and the primary action. Status colours only beside an outcome or status word.
+  3. No disc, tile or border behind an informational icon (amenities, highlights, facts, event details, place lists): the bare icon, level with the first line of its text. A circle means a button (`IconButton`). Named exceptions: the promo card's large art, initials avatars, and the soft focal circle of an empty or error state (Expedia's empty Trips).
+  3a. The icon pictures the exact thing the words name (owner, 2026-11-15): a plug for a generator or power (never a lightning bolt), a concierge bell for room service (never sparkles), a shower head for hot water, a ruler for size, a calendar for today. No stand-in or decorative glyph; when no icon pictures it, use a plain check. Stored amenity codes are always shown as words (`normalizeAmenities`), never as the code ("zap", "waves").
+  4. Size follows the text beside it: 24 (`md`) with `body`/`bodyStrong` rows; 20 (`sm`) with `bodySm`/`label` and inside buttons; 16 (`xs`) with captions and tags; 32+ only for empty states and promos.
+  5. Every icon has words next to it, except an icon button, which carries an accessibility label. One icon means one thing app-wide (e.g. `MapPin` is always a place; `ChevronRight` opens a page; `ChevronDown` opens a choice).
 - Image ratios: listing card 4:3, detail gallery 16:10, thumbs 1:1, event poster 4:5; reserve space; `expo-image` + blurhash/`wash` placeholder; **no stock imagery posing as inventory** — no photo = neutral `wash` block + icon.
 - Auth photos (`assets/images/auth/`) are brand imagery behind sign-in only, never inventory or listings. Over them, a **legibility fade** is allowed at the top and behind the Welcome text (`color.scrim`); these are the only gradients in the app and they carry the text contrast, not the photo.
 - Loading: skeletons mirroring layout, only after 150 ms, none under Reduce Motion; inline spinners for actions.
@@ -168,6 +190,10 @@ Shadows tinted ink (`26,13,77`), never black; no violet glow.
 ## 7. UX principles by mode
 
 **Customer** — progressive disclosure (filters in a sheet; price breakdown collapsible, **total always visible**); primary action pinned in a bottom bar (thumb zone); exact ₦ total before the Paystack handoff; lock countdown; pending state, never fake success. Forms: top labels, one column, per-field `keyboardType`, validate on blur, preserve input on error. Phone: accept `0803…`/`803…`/`+234803…` → E.164 on blur; amounts `₦` + separators, store integers; address = state → area + free-text landmark. Ticket: QR as large as possible, ink on white, auto-brightness, keep awake.
+
+**Customer layout (Expedia reference, 2026-11-14)** — white pages. Every tab opens with its large title (`displaySm`), signed in or out; inner pages keep a compact `headline` title beside Back. Section titles are `title` (24/600) everywhere in customer flows (rails, listing sections, checkout steps), with See all as an ink link and no See all on an empty section. A section with nothing keeps its title over one `bodySm` line; when every Explore section is empty, one empty state replaces them. The place lives only in the stays headings ("Hotels in Lagos ⌄": the city underlined in ink with a chevron, tap to change; 2026-11-15, after Booking.com and Airbnb), not as a separate line. Cards, photos and panels use `r4` (16 pt); thumbnails `r3`; small tags `r2`; chips and filter pills `rFull`, with a selected chip in solid ink. Avatars and other decoration stay neutral: violet only on the primary action and selected states.
+
+**Customer elevation (2026-11-14, owner: "bring each screen alive")** — researched on Mobbin (Expedia hotel pages and search, Booking/Marriott/Agoda promotions, Airbnb/Vrbo/Google Maps filters, Meetup/Lex/Eventbrite events, Trip.com/American Airlines search). Colour beyond black and white, in small, named places only (`color.accent`): a green score badge with its word (`ratingWord`: Exceptional/Excellent/Very good/Good, nothing below 3.5); a yellow tag on promotions and the event date tile. Pages stay white. (The soft place tints on popular-place tiles were removed on 2026-11-15: colour that meant nothing.) Category tiles (2026-11-15, owner's pick of four, after corner and Google Arts & Culture): big brand-photo cards (`r4`), Hotels across the row (200 tall, `titleLg`, white arrow disc) and Apartments and Events sharing the row below (180 tall, `title`), each with a short white `bodySm` line; the white text sits on a fade that reaches 80 % black at the foot, so it reads on any photo. Promo cards say only true things about Bookhushly (no invented discounts or counts), as Expedia's home promo laid out like a printed ad (owner's picks, 2026-11-15): a flat colour block (ink with white text and a white pill for the lead one, at most one per screen; violet-50 with a dark pill for quieter ones; never a yellow fill: yellow is only for small deal tags and the date tile), a `displaySm` headline, one `bodySm` line and a pill with an arrow at the top left, and the icon drawn 128 pt in a deeper shade (soft grey on ink), tilted and bleeding off the bottom-right corner; no photo behind text. Sheets (2026-11-15, after Skyscanner, Agoda, BlaBlaCar): a round close button at the left, the title centred, no rule under the header; a list of choices shows the chosen one with a violet tick. "Where to?" has a search field that filters popular places (pin, name, the state underneath) and all states (map). Listing pages: rating badge on cards, Highlights as icon rows, amenities as a two-column icon grid, room cards with photo, icon facts and a "Lowest price" band, events with a calendar date tile and icon rows for date, venue and organiser; booking pages lead with the place's photo. Search (owner's pick A, 2026-11-15, after Airbnb's suggested destinations): Hotels / Apartments / Events as tabs with an icon over each word (the chosen one in ink with an ink line under it), one field, then recent searches and "Suggested places" as list rows (pin, the city, the areas people book in, e.g. "Lekki, Ikoyi, Victoria Island, Ikeja"); typing turns the list into matching places and areas ("Lekki · Area in Lagos", searched within Lagos), then "Search “…”" by name or address. No separate Search button. Results never end in a dead end (owner's rule, 2026-11-15): with no exact match, a canvas note says so in one line ("No exact matches" and why), each active filter becomes a "Remove “Wi-Fi”" pill, and the closest listings follow as rails headed with how they differ ("In Port Harcourt, without your filters", "Hotels with your filters, in other places", "Apartments in Port Harcourt", "Hotels in other places"); with one or two exact matches the same rails follow under "Close to what you asked". Empty rails take no room. Filters (owner's pick A, 2026-11-15, after Airbnb): titled sections with hairlines; hotels open with "Most wanted" tiles (Has a generator, Breakfast included, NIHOTOUR certified), then price per night with naira bands (Under ₦50k, ₦50k–₦100k, ₦100k+) over the min/max fields, a guests stepper, guest rating pills, and amenity pills with icons (the web's slugs, BACKEND_STATUS §9); no Sort in the sheet (it has its own pill); "Clear all" as a link beside "Show 12 hotels", the count asked half a second after the last change and "Show results" while unknown. Cards in a row line up line for line (Airbnb, TikTok, Posh, StubHub): a one-line title, then area and rating (events: date, then venue), each slot keeping its height when empty, the price pinned to the foot. List rows keep two-line titles. Listing pages (2026-11-15, owner's second picks from Mobbin, after "why are you going for the least impressive"): hotels and apartments as Airbnb's listing (the photo runs to the screen's top edge under floating round Back/Share/Save buttons, a "1 / 20" counter; a white sheet with rounded top corners rides 24 pt over the photo's foot; the name centred in `titleLg`, "Hotel in Lekki, Lagos" or the apartment type, apartments add "4 guests · 2 bedrooms · 1 bathroom"; the score with five stars, its word and the review count in three columns between hairlines; a "Where you'll be" maps row near the end); events as Luma (an ink hero: the poster as a rounded square card, the name in white, when, where in a muted grey, then Share, Save and Directions as raised tiles; the price and "Get tickets" stay in the footer, so one primary action; plain ink, no blur). Once the page scrolls past the photo, a white bar fades in behind the floating buttons. Below the event hero (2026-11-15, Eventbrite/Posh/Luma): ticket types as cards (name, then the price with how many are left beside it, then what it includes; sold out on the canvas grey), then About, Cancellation, and "Organised by" last as a card with the organiser's initials (Eventbrite and Luma put the organiser near the end; no follow or message buttons until there is something behind them). The booking bar follows DICE (owner's pick A, 2026-11-15): events show the date and time in a small grey line on top and the price large under it (a range reads "From ₦15,000"), stays the price large; the violet button beside. A hand-off to the website keeps the summary on one line above a full-width button. Reviews as Expedia (score "4.6/5" in `display` with its word and count, then up to three equal-height review cards in a swipeable row that peeks at the edge, then "See all N reviews"; the full list in a sheet reads like Vrbo with the host's reply on a wash). Results as Airbnb's search results: a raised search pill with what was searched and the count (tap to change the search), a round filters button with a count badge, one full-width 4:3 photo card per listing (name with "★ 4.6 (47)" at its right, the place, the amount underlined), 32 between cards, and Sort as a dark pill floating over the list's foot. Bookings: a Today card leads with the place's photo and a white "Today" pill (Airbnb/Expedia Trips); list rows have 72 pt thumbnails. Booking detail: check-in and check-out side by side, the day strong and the time under it (Booking.com). Account: a raised profile card with large initials (Airbnb), details as value rows with an underlined Edit/Add, help rows with leading icons. Select and Review-and-pay open with the place card (photo thumbnail, name, where or when). Saved cards show title and place only (no empty slots for price or rating). Text fields are 64 tall (68 gate) so the title and value never squeeze. Explore refinements (2026-11-15, after Mobbin): no page title, the search bar pinned at the top with a soft shadow (Viator, Tripadvisor, Hyatt); today's booking as Booking.com's "Upcoming trip" card (the name on its own line, what happens today under it, the action as an outlined pill); card titles on one line (owner's pick: two lines left a gap under short names; the full name is on the listing page); a stay without reviews says "No reviews yet" (never a gap); on cards the score shows with its word only ("4.6 Excellent", the count still spoken); order: categories, hotels, apartments, the weekend promo leading into Happening soon, then the offline-tickets note. Explore spacing (2026-11-15, owner: "too tight"): the top group (today banner, search, category cards) 16 apart; sections 40 apart; rail heading to cards 12; cards 16 apart; photo to title 12; card text lines 8.
 
 **Customer, signed out** — Explore, listings and Select work with no account. Saved, Bookings and Account show a short sign-in prompt in place of their content. Continue (book) and Save open a sign-in sheet ("Sign in to book" / "Sign in to save"; "Create account", "Sign in", "Not now"): selection stays as chosen, backing out returns to Select.
 
@@ -191,6 +217,35 @@ src/shared/ui/     Text · Box · Stack · Inline · Card · Icon · Money · fo
 - `userInterfaceStyle: "light"` is set in `app.json`.
 
 ## 9. Reference patterns (Mobbin, iOS; links returned by the tool)
+
+### How references are chosen (owner-approved 2026-11-15)
+
+Mobbin search ranks by text match, not quality, and a count shows what is common, not what is best. So every Mobbin lookup follows these rules.
+
+**Tiered app list.** Owner adjusts these lists; ask before adding to Tier 1.
+
+- **Tier 1, design leaders.** These set the bar for "premium": Airbnb, Nike, Apple, Mindtrip, Luma, Hyatt.
+- **Tier 2, category leaders.** Use them for domain patterns such as booking, pricing and tickets: Expedia, Booking.com, IHG, Marriott, Vrbo, Eventbrite, StubHub, Posh, GetYourGuide, Trainline.
+- **Anything else** needs a stated reason, for example "only app on Mobbin with a crypto payment screen". Mark it as outside the list.
+
+**Every reference must pass four checks before it is cited:**
+
+1. **Seen.** Open the screenshot itself; never judge from Mobbin's text description alone.
+2. **Recent.** Use the app's current design. Skip screens that look like an older version when a newer one exists.
+3. **Fits our rules.** The pattern must suit a neutral base with violet only on the main action, a light UI and Hanken type, or adapt to them without losing what made it good. Say what we take and what we leave.
+4. **Honest.** No dark patterns: fake urgency, invented counts or discounts, confirm-shaming, hidden fees.
+
+**Report the findings in this order:**
+
+1. Our screen and what is wrong with it.
+2. Up to three Tier 1 examples, with links and what each does well.
+3. The count across all apps checked ("8 of 13 do X").
+4. When Tier 1 and the majority disagree, say so and lean towards Tier 1 unless the majority pattern is a usability convention people rely on, such as where a close button sits.
+5. One recommendation. When you haven't named a reference for an open-ended redesign, offer 3–4 directions with previews instead, each tied to a real app.
+
+**When Mobbin has nothing good**, say so and design from the principles above. Don't stretch a weak match. That is how the gate overlays and auth were done.
+
+### Patterns found
 
 Mobbin had nothing usable for scanner refused/already-used overlays, receptionist boards, notifications, auth, skeletons — those are our design, informed by the principles above.
 

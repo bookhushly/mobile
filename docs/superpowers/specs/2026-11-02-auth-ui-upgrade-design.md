@@ -117,3 +117,57 @@ Welcome only: headline 36/40 (`displayMd`) and subline 18/26 at 500 (`lead`); sp
 Rejected from the critique because they conflict with owner decisions or the code: Fraunces or Plus Jakarta Sans (banned list), amber or terracotta buttons (violet is the brand), blurhash (photos are bundled), larger buttons on this screen alone (48 pt and 12 pt radius are app-wide).
 
 Browsing without an account was accepted as the **next project**, separate from this one.
+
+## Onboarding pass, 2026-11-13 (owner approved)
+
+Benchmarked on Mobbin (iOS) against Nike, IHG, Airbnb, Expedia, Trainline, GetYourGuide, American Airlines, StubHub, Eventbrite, Meetup and Luma. The shared pattern: a logo-only opening screen on a brand colour, then a choice screen, then plain forms (9 of 11 have no photo behind the form).
+
+- **Type rule for every onboarding screen.** Headline 600 (36 on Welcome, 32 on forms); reading text 400 (18 subline on Welcome, 16 on forms); actions 600 at 16 (buttons and every standalone link, through `TextLink size="lg"`); fine print 14 at 400 with 14/600 links (terms line, the spam hint). Two weights only: read 400, tap 600. Nothing at 12. `lead` drops from 500 to 400. Links inside the terms line sit as words (`TextLink inline`).
+- **Opening screen (new).** The native splash is violet `#7C3AED` with the white mark (`assets/images/brand-mark-white.png`, 88 pt). On a cold start that lands on Welcome, `BrandIntro` carries the same picture on, holds 400 ms, then the mark grows slightly as the layer fades out over the photo. Once per launch; never when the launch landed elsewhere, so gate and receptionist starts are not delayed. Under Reduce Motion it holds, then goes without moving.
+- **Welcome becomes a short onboarding (after IHG).** Three slides, one per photo: the overview on the hotel photo, then events, then apartments. Words swipe in a pager; the photo behind follows the same store (`useWelcomeSlide`). It advances every 6 s and stops for good once the person swipes or steps with a screen reader. Dots are one adjustable control ("Slides, 1 of 3"). Buttons, the browse link and the terms line stay fixed. Only the slide on screen is read out. This replaces the photo-only cycle.
+- **Logo on every step.** On Welcome it moves out of the top corner into the bottom block, 40 pt, above the slide text. Every form sheet has it small (24 pt, ink) centred in the header row beside the back button.
+- **Forms are a plain sheet.** Supersedes the S1 photo band and its heights: the white sheet rests 12 pt below the safe area over the dimmed Welcome photo (iOS page-sheet look), with no band to shrink when the keyboard opens. Form behaviour is unchanged.
+- **Not copied:** IHG's uppercase, centred headlines (sentence case and no centred heroes stay).
+
+Open: the app icon is still Expo's template; the logo exists only as small PNGs (170 px mark, 319 px lockup), so an SVG or large master is needed before a store build.
+
+### Second onboarding pass, 2026-11-13 (owner approved: "all four, colour app-wide")
+
+Benchmarked on Booking.com, Nike, IHG, Airbnb, Eventbrite and Meetup.
+
+1. **Buttons:** full pill, 52 tall, label 16/500 (new `button` variant), 1 px outlines. Standalone links use the same 16/500.
+2. **Type:** `displaySm` 28/34 at 500 (form headlines), `displayMd` 34/40 at 500 (Welcome), both about −2.5%. Supersedes recipe B for these two; larger display variants keep 600.
+3. **Logo:** the mark alone (28 pt, ink) heads the form sheets; the full lockup stays on Welcome; the opening screen shows the mark.
+4. **Colour, app-wide:** neutral ink `#141414`, greys `#474747` / `#6B6B6B`, borders `#8C8C8C` / `#E5E5E5`, wash `#F2F2F2`, canvas `#F7F7F7`; links ink and underlined. Violet stays for the primary action and selected state. Supersedes the violet-tinted neutrals and the "ink matches the web" choice; the web keeps its own values.
+5. **Terms line** moved from Welcome to the Sign in and Create account sheets, where the agreement happens.
+6. **Correction, 2026-11-14:** button labels are 17/**600**, not 500. Measured stem thickness (capital I, relative to cap height): Hanken 500 0.146, Hanken 600 0.166, Helvetica Neue Medium 0.175. Matching Nike means matching stroke, not the weight number. Standalone links stay 17/500 (`linkLg`), one step quieter than buttons.
+
+### Forms after Airbnb, 2026-11-14 (owner asked for one close reference)
+
+Survey of 13 apps' field titles: inside the box 8 (Airbnb, Hyatt, Expedia, Agoda, Eventbrite, StubHub, IHG, Nike), placeholder only 2, above the box 3. Reference chosen: **Airbnb** (stays and experiences, best-in-class forms). Taken from it: field title inside the box (rests as the placeholder, moves up and shrinks to 13 when focused or filled), 58 tall fields, black focus border, 24 side margins, about 32 between sections, helper text 8 under its field. Not taken: its centred headline (ours stays left-aligned).
+
+- Shared `Input` changed app-wide (gate fields stay 64 tall via `fieldHeight`); search boxes show no title, only a placeholder (`hideLabel`).
+- The old title-above-box gap was 4 pt (`s2`), which read as cramped.
+- Form subline uses a named `subtitle` style, 18/26, under the 30 headline.
+- The logo mark moves out of the header row to sit left-aligned above the headline at 40 pt (Nike, IHG and Eventbrite place theirs this way), 20 above the headline.
+
+### Notifications primer, 2026-11-14 (owner: "safe to turn it on", not in production yet)
+
+Benchmark: 7 of 10 apps (Viator, Booking.com, IHG, Turo, Tripadvisor, Airbnb, ClickUp) show their own screen before the system prompt, all with "Not now", all after sign-in rather than on a splash. The OS prompt shows only once per app, so it is spent only on a yes.
+
+- Shown once per device (`bh.notifPrimer`, plain storage), after the first-run tour, to a signed-in customer only; never to someone browsing, gate staff or receptionists; only while the OS permission is still unanswered.
+- `NotificationPrimerScreen`: headline "Stay on top of your bookings", what arrives (confirmations, payments, check-in and event reminders: all things the backend already sends), two made-up sample notifications, "Turn on notifications" (violet) and "Not now".
+- "Turn on" closes the primer, then calls `requestNotificationPermission` (Android 13+ gets a `default` channel first, per SDK 57 docs). Permission only: no push token is registered until BACKEND-REQ-5.
+- Supersedes FR-1.10's "asked in context, not here".
+
+### Motion pass, 2026-11-14 (expo-animation skill rules)
+
+- **Press:** the whole control scales to 0.97 (fill, border and label together), 100 ms in and 180 ms out, ease-out, on the UI thread. Before, only the label shrank inside a still pill. `pressRetentionOffset` 16.
+- **Form sheet:** rises on the iOS sheet curve (0.32, 0.72, 0, 1) over 420 ms; the photo dims on the same curve and length. A sheet opening over another sheet stays in place and cross-fades its content (180 ms) instead of rising again. Back to Welcome slides the sheet down (300 ms) before the route changes.
+- **Fields:** the title starts moving in the focus handler (same frame as the tap), ease-out, and the box keeps one size when the border thickens.
+- **Opening:** native splash (violet, mark 56 pt) → identical in-app layer, which hides the splash once drawn → hold 350 ms → the mark lifts to 1.06 and fades (300 ms) → the violet dissolves (480 ms, from +120 ms) → Welcome's logo, words and actions rise in, 100 ms apart, as the violet is half gone. No ease-in anywhere. Root screens don't animate on this launch, the loading view is the same violet and mark, and the app window background is violet, so no frame of grey or a sliding card shows between them.
+- **Reduce Motion:** no movement: the intro holds then goes, the sheet appears in place, presses don't scale.
+
+### Notifications primer, second pass
+
+After IHG and Viator: a phone in ink showing the event photo as a lock screen ("Saturday 9:41"), cropped at the bottom; two notifications arrive one after another (a first-time screen, so it earns a little delight). Headline "Know before you go".
