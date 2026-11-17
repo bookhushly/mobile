@@ -36,9 +36,10 @@ export function SearchField({
     <Input
       testID={testID}
       label={label}
+      hideLabel
       value={value}
       onChangeText={onChangeText}
-      placeholder={placeholder}
+      placeholder={placeholder ?? label}
       autoFocus={autoFocus}
       autoCorrect={false}
       autoComplete="off"

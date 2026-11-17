@@ -9,16 +9,7 @@ import type { FieldErrors } from '@/features/auth/domain/signUpErrors';
 import { transientMessage } from '@/features/auth/domain/transientMessage';
 import { signUpSchema, type SignUpInput } from '@/features/auth/schemas/signUp';
 import type { Result } from '@/shared/lib/result';
-import {
-  Banner,
-  Button,
-  Input,
-  PasswordField,
-  RuleList,
-  Stack,
-  Text,
-  TextLink,
-} from '@/shared/ui';
+import { Banner, Button, Input, PasswordField, RuleList, Stack, Text, TextLink } from '@/shared/ui';
 
 type Props = {
   onSubmit: (input: SignUpInput) => Promise<Result<{ email: string }, AccountFailure>>;
@@ -122,12 +113,11 @@ export function SignUpScreen({
 
   return (
     <AuthSheet
-      band="short"
       onLeave={onBack}
       footer={
         <>
           <View style={{ alignItems: 'center' }}>
-            <TextLink label="Already have an account? Sign in" onPress={onSignIn} />
+            <TextLink size="lg" label="Already have an account? Sign in" onPress={onSignIn} />
           </View>
           <TermsLine onOpenLink={onOpenLink} />
         </>
@@ -137,11 +127,11 @@ export function SignUpScreen({
         <Text variant="displaySm" accessibilityRole="header">
           Create your account
         </Text>
-        <Text variant="body" tone="textSecondary">
+        <Text variant="subtitle" tone="textSecondary">
           Book stays and events, paid in naira.
         </Text>
       </Stack>
-      <Stack gap="s4">
+      <Stack gap="s5">
         <Input
           label="Name"
           value={name}

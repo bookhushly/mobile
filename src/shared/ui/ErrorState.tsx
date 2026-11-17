@@ -1,7 +1,7 @@
 import { CircleAlert } from 'lucide-react-native';
 import { View } from 'react-native';
 
-import { space } from '@/shared/theme';
+import { color, radius, space } from '@/shared/theme';
 
 import { Button } from './Button';
 import { Icon } from './Icon';
@@ -17,6 +17,8 @@ type Props = {
   testID?: string;
 };
 
+const ICON_DISC = 64;
+
 // DESIGN_SYSTEM §6: what happened, whether data is safe (only when known), the next step.
 export function ErrorState({
   title,
@@ -31,8 +33,20 @@ export function ErrorState({
       testID={testID}
       style={{ alignItems: 'center', gap: space.s4, paddingVertical: space.s8 }}
     >
-      <Icon as={CircleAlert} size="lg" tone="textSecondary" />
-      <Text variant="headline" align="center" accessibilityLiveRegion="polite">
+      <View
+        style={{
+          width: ICON_DISC,
+          height: ICON_DISC,
+          borderRadius: radius.rFull,
+          backgroundColor: color.wash,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: space.s2,
+        }}
+      >
+        <Icon as={CircleAlert} size="lg" tone="textPrimary" />
+      </View>
+      <Text variant="title" align="center" accessibilityLiveRegion="polite">
         {title}
       </Text>
       {message !== undefined ? (

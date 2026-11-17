@@ -32,9 +32,7 @@ describe('errorFromResponse', () => {
     expect(errorFromResponse(429, {}, h())).toEqual({ kind: 'rateLimited' });
   });
   it('keeps Retry-After seconds on a 503 (status poll fetch_failed, W4)', () => {
-    expect(
-      errorFromResponse(503, { code: 'fetch_failed' }, h({ 'retry-after': '5' })),
-    ).toEqual({
+    expect(errorFromResponse(503, { code: 'fetch_failed' }, h({ 'retry-after': '5' }))).toEqual({
       kind: 'unavailable',
       status: 503,
       code: 'fetch_failed',

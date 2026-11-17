@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react-native';
 import { View } from 'react-native';
 
-import { space } from '@/shared/theme';
+import { color, radius, space } from '@/shared/theme';
 
 import { Button } from './Button';
 import { Icon } from './Icon';
@@ -18,6 +18,8 @@ type Props = {
   action?: { label: string; onPress: () => void };
   testID?: string;
 };
+
+const ICON_DISC = 64;
 
 // DESIGN_SYSTEM §6: icon (or illustration) + reason + one action.
 export function EmptyState({
@@ -37,10 +39,24 @@ export function EmptyState({
       {illustration !== undefined ? (
         <Illustration name={illustration} size={128} />
       ) : icon !== undefined ? (
-        <Icon as={icon} size="lg" tone="textMuted" />
+        // The icon sits in a soft circle (Expedia's empty Trips): a quiet focal point, not a glyph
+        // floating on white.
+        <View
+          style={{
+            width: ICON_DISC,
+            height: ICON_DISC,
+            borderRadius: radius.rFull,
+            backgroundColor: color.wash,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: space.s2,
+          }}
+        >
+          <Icon as={icon} size="lg" tone="textPrimary" />
+        </View>
       ) : null}
       <Text
-        variant="headline"
+        variant="title"
         align="center"
         accessibilityRole={titleRole}
         accessibilityLiveRegion="polite"

@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { Linking } from 'react-native';
 
 import { resendConfirmation } from '@/features/auth/api/accountApi';
 import { useAuth } from '@/features/auth/hooks/useAuth';
@@ -19,6 +20,9 @@ export default function SignInRoute() {
       }}
       onCreateAccount={() => {
         router.push('/sign-up');
+      }}
+      onOpenLink={(url) => {
+        void Linking.openURL(url);
       }}
       onConfirmEmail={async (email) => {
         // Whatever the resend result, continue: the code screen offers resend and never leaks

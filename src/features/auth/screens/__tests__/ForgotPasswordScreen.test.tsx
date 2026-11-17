@@ -130,7 +130,10 @@ it('shows the no-leak copy under the field and a back button when given', async 
     screen.getByText('If an account uses this email, we’ll send a 6-digit code.'),
   ).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'Back' }));
-  expect(onBack).toHaveBeenCalled();
+  // The sheet slides away first, then leaves.
+  await waitFor(() => {
+    expect(onBack).toHaveBeenCalled();
+  });
 });
 
 it('a double tap sends once', async () => {

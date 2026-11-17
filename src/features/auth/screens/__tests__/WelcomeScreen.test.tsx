@@ -11,7 +11,6 @@ function props() {
     onCreateAccount: jest.fn(),
     onSignIn: jest.fn(),
     onBrowse: jest.fn(),
-    onOpenLink: jest.fn(),
   };
 }
 
@@ -46,14 +45,9 @@ it('shows no banner without a notice', async () => {
   expect(screen.queryByTestId('banner')).toBeNull();
 });
 
-it('terms and privacy open the web pages', async () => {
-  const onOpenLink = jest.fn();
-  await render(<WelcomeScreen {...props()} onOpenLink={onOpenLink} />);
-  await fireEvent.press(screen.getByRole('link', { name: 'Terms' }));
-  expect(onOpenLink).toHaveBeenCalledWith(expect.stringContaining('bookhushly.com'));
-  await fireEvent.press(screen.getByRole('link', { name: 'Privacy policy' }));
-  expect(onOpenLink).toHaveBeenLastCalledWith('https://bookhushly.com/privacy');
-  expect(onOpenLink).toHaveBeenNthCalledWith(1, 'https://bookhushly.com/terms');
+it('leaves the terms to the forms, where the agreement happens', async () => {
+  await render(<WelcomeScreen {...props()} />);
+  expect(screen.queryByRole('link', { name: 'Terms' })).toBeNull();
 });
 
 it('states all three categories and the naira line', async () => {
@@ -72,16 +66,10 @@ it('anchors the fade to the text so large text stays on it', async () => {
   expect(content.getByRole('header')).toBeTruthy();
 });
 
-it('sets the headline at 36 and a stronger subline', async () => {
+it('keeps the headline-to-subline jump at 1.5 (30 and 20)', async () => {
   await render(<WelcomeScreen {...props()} />);
-  expect(screen.getByRole('header')).toHaveStyle({ fontSize: 36 });
-  expect(screen.getByText('Find it, book it, pay in naira.')).toHaveStyle({ fontSize: 18 });
-});
-
-it('underlines the terms links over the photo', async () => {
-  await render(<WelcomeScreen {...props()} />);
-  expect(screen.getByText('Terms')).toHaveStyle({ textDecorationLine: 'underline' });
-  expect(screen.getByText('Privacy policy')).toHaveStyle({ textDecorationLine: 'underline' });
+  expect(screen.getByRole('header')).toHaveStyle({ fontSize: 30 });
+  expect(screen.getByText('Find it, book it, pay in naira.')).toHaveStyle({ fontSize: 20 });
 });
 
 it('makes Sign in a visibly outlined button', async () => {
@@ -114,12 +102,16 @@ it('scrolls when it doesn’t fit, sitting at the bottom when it does', async ()
   });
   const inside = within(scroll);
   expect(inside.getByText('Your account was deleted.')).toBeTruthy();
-  expect(inside.getByRole('link', { name: 'Terms' })).toBeTruthy();
-  expect(inside.getByRole('link', { name: 'Privacy policy' })).toBeTruthy();
+  expect(inside.getByRole('link', { name: 'Browse without an account' })).toBeTruthy();
   expect(inside.getByTestId('welcome-fade', { includeHiddenElements: true })).toBeTruthy();
 });
 
-it('keeps the browse link 12 pt below Sign in', async () => {
+it('keeps the browse link 16 pt below the buttons', async () => {
   await render(<WelcomeScreen {...props()} />);
-  expect(screen.getByTestId('welcome-browse')).toHaveStyle({ marginTop: 12 });
+  expect(screen.getByTestId('welcome-browse')).toHaveStyle({ marginTop: 16 });
+});
+
+it('puts the two choices side by side', async () => {
+  await render(<WelcomeScreen {...props()} />);
+  expect(screen.getByTestId('welcome-actions')).toHaveStyle({ flexDirection: 'row' });
 });

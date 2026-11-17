@@ -190,7 +190,6 @@ export function CodeScreen({
 
   return (
     <AuthSheet
-      band="tall"
       startRaised
       onLeave={onBack}
       footer={
@@ -205,7 +204,7 @@ export function CodeScreen({
             }}
           />
           <View style={{ alignItems: 'center' }}>
-            <Text variant="caption" tone="textSecondary" align="center">
+            <Text variant="bodySm" tone="textSecondary" align="center">
               Check spam or junk if it hasn’t arrived.
             </Text>
             {canOpenMail ? <TextLink label="Open email app" onPress={onOpenMail} /> : null}
@@ -218,10 +217,10 @@ export function CodeScreen({
           {TITLE[purpose]}
         </Text>
         <Inline gap="s1" style={{ flexWrap: 'wrap' }}>
-          <Text variant="body" tone="textSecondary">
+          <Text variant="subtitle" tone="textSecondary">
             Sent to {maskEmail(email)}
           </Text>
-          <TextLink label="Change" onPress={onChangeEmail} />
+          <TextLink size="lg" label="Change" onPress={onChangeEmail} />
         </Inline>
       </Stack>
       <Stack gap="s3">
@@ -251,6 +250,8 @@ export function CodeScreen({
         {notice?.kind === 'retry' && canRetry ? (
           <View style={{ alignSelf: 'flex-start' }}>
             <TextLink
+              size="lg"
+              inline
               label="Try again"
               onPress={() => {
                 void verify(code);

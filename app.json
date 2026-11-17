@@ -7,16 +7,18 @@
     "icon": "./assets/images/icon.png",
     "scheme": "bookhushly",
     "userInterfaceStyle": "light",
+    "backgroundColor": "#7C3AED",
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.bookhushly.app",
       "infoPlist": {
-        "LSApplicationQueriesSchemes": ["message"]
+        "LSApplicationQueriesSchemes": ["message"],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#F4F1FF",
+        "backgroundColor": "#7C3AED",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -38,9 +40,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#F8F7FB",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "backgroundColor": "#7C3AED",
+          "image": "./assets/images/brand-mark-white.png",
+          "imageWidth": 72
         }
       ],
       [

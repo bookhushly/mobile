@@ -61,19 +61,16 @@ export function ForgotPasswordScreen({ initialEmail, onSubmit, onSent, onBack }:
   }
 
   return (
-    <AuthSheet
-      band="tall"
-      onLeave={onBack}
-    >
+    <AuthSheet onLeave={onBack}>
       <Stack gap="s3">
         <Text variant="displaySm" accessibilityRole="header">
           Reset your password
         </Text>
-        <Text variant="body" tone="textSecondary">
+        <Text variant="subtitle" tone="textSecondary">
           Enter your email and we’ll send a code to choose a new one.
         </Text>
       </Stack>
-      <Stack gap="s4">
+      <Stack gap="s5">
         <Input
           label="Email"
           value={email}

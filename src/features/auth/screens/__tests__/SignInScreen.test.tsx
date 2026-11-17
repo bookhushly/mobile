@@ -206,3 +206,20 @@ it('a retry that throws replaces the previous refusal instead of keeping it', as
   expect(screen.queryByText(/email or password is not right/i)).toBeNull();
   expect(screen.getByTestId('banner')).toHaveStyle({ backgroundColor: color.status.neutral.bg });
 });
+
+it('carries the terms line, and its links open the web pages', async () => {
+  const onOpenLink = jest.fn();
+  await render(
+    <SignInScreen
+      onSubmit={jest.fn()}
+      onForgot={jest.fn()}
+      onCreateAccount={jest.fn()}
+      onConfirmEmail={jest.fn()}
+      onOpenLink={onOpenLink}
+    />,
+  );
+  await fireEvent.press(screen.getByRole('link', { name: 'Terms' }));
+  expect(onOpenLink).toHaveBeenCalledWith('https://bookhushly.com/terms');
+  await fireEvent.press(screen.getByRole('link', { name: 'Privacy policy' }));
+  expect(onOpenLink).toHaveBeenLastCalledWith('https://bookhushly.com/privacy');
+});

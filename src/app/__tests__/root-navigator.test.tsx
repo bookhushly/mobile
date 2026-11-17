@@ -2,6 +2,7 @@ import { act, render, screen } from '@testing-library/react-native';
 
 import RootLayout from '@/app/_layout';
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import { resetLaunchIntroForTests } from '@/features/auth/launchIntro';
 import type { SavedInput } from '@/features/customer/api/savedDb';
 import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
 import type { ModeState } from '@/features/mode/domain/route';
@@ -72,24 +73,42 @@ const customer: ModeState = {
 };
 const signedIn = { status: 'signedIn', userId: 'u1', email: 'a@b.co' } as const;
 
-const declared = () => screen.queryAllByTestId('stack-screen').map((s) => String(s.props.children));
+// Hidden ones too: on a Welcome launch the intro is modal over the stack (screen readers stay on
+// it), which hides the screens beneath from accessibility queries.
+const declared = () =>
+  screen
+    .queryAllByTestId('stack-screen', { includeHiddenElements: true })
+    .map((s) => String(s.props.children));
 
 beforeEach(async () => {
   await kv.delete('bh.browse');
   mockMode = { status: 'loading' };
   useBrowseChoice.setState({ browsing: null });
   useAuth.setState({ state: { status: 'signedOut' }, recovery: false });
+  resetLaunchIntroForTests();
 });
 
 it('signed out and not browsing: only the auth screens', async () => {
   await render(<RootLayout />);
-  expect(declared()).toEqual(['(auth)', 'delete-account']);
+  expect(declared()).toEqual(['index', '(auth)', 'delete-account']);
+});
+
+// Recorded 2026-11-15: mounted while the session was still restoring, the intro decided "not this
+// launch" and never played; inside (auth) it slid in with the push instead.
+it('a launch that settles on Welcome plays the intro above the navigator', async () => {
+  useAuth.setState({ state: { status: 'loading' } });
+  await render(<RootLayout />);
+  expect(screen.queryByTestId('brand-intro', { includeHiddenElements: true })).toBeNull();
+  await act(() => {
+    useAuth.setState({ state: { status: 'signedOut' } });
+  });
+  expect(screen.getByTestId('brand-intro', { includeHiddenElements: true })).toBeTruthy();
 });
 
 it('a stored choice opens browsing, with the auth screens declared on top', async () => {
   await kv.set('bh.browse', '1');
   await render(<RootLayout />);
-  expect(declared()).toEqual(['(customer)', '(auth)', 'delete-account']);
+  expect(declared()).toEqual(['index', '(customer)', '(auth)', 'delete-account']);
 });
 
 it('signing in removes the auth screens but holds customer while the mode loads', async () => {
@@ -99,7 +118,7 @@ it('signing in removes the auth screens but holds customer while the mode loads'
     useAuth.setState({ state: signedIn });
     await Promise.resolve();
   });
-  expect(declared()).toEqual(['(customer)', 'delete-account']);
+  expect(declared()).toEqual(['index', '(customer)', 'delete-account']);
   expect(useBrowseChoice.getState().browsing).toBe(true);
   expect(kv.dump()['bh.browse']).toBe('1');
 });
@@ -114,7 +133,7 @@ it('forgets the choice once the signed-in mode is known', async () => {
   });
   expect(useBrowseChoice.getState().browsing).toBe(false);
   expect(kv.dump()['bh.browse']).toBeUndefined();
-  expect(declared()).toEqual(['(customer)', 'delete-account']);
+  expect(declared()).toEqual(['index', '(customer)', 'delete-account']);
 });
 
 it('a reset started while browsing takes over, then lands in customer without a crash', async () => {
@@ -124,12 +143,12 @@ it('a reset started while browsing takes over, then lands in customer without a 
     useAuth.setState({ state: signedIn, recovery: true });
     await Promise.resolve();
   });
-  expect(declared()).toEqual(['(auth)', 'delete-account']);
+  expect(declared()).toEqual(['index', '(auth)', 'delete-account']);
   await act(async () => {
     useAuth.setState({ recovery: false });
     await Promise.resolve();
   });
-  expect(declared()).toEqual(['(customer)', 'delete-account']);
+  expect(declared()).toEqual(['index', '(customer)', 'delete-account']);
 });
 
 it('an abandoned reset goes back to browsing with the auth screens still reachable', async () => {
@@ -148,7 +167,7 @@ it('an abandoned reset goes back to browsing with the auth screens still reachab
     useAuth.setState({ recovery: false });
     await Promise.resolve();
   });
-  expect(declared()).toEqual(['(customer)', '(auth)', 'delete-account']);
+  expect(declared()).toEqual(['index', '(customer)', '(auth)', 'delete-account']);
   expect(useBrowseChoice.getState().browsing).toBe(true);
 });
 
@@ -172,17 +191,17 @@ describe('signing out ends browsing', () => {
   it('from the mode error screen', async () => {
     mockMode = { status: 'error' };
     await signIn();
-    expect(declared()).toEqual(['mode-error', 'delete-account']);
+    expect(declared()).toEqual(['index', 'mode-error', 'delete-account']);
     await signOut();
-    expect(declared()).toEqual(['(auth)', 'delete-account']);
+    expect(declared()).toEqual(['index', '(auth)', 'delete-account']);
     expect(kv.dump()['bh.browse']).toBeUndefined();
   });
 
   it('while the mode is still loading, with no render back on customer', async () => {
     await signIn();
-    expect(declared()).toEqual(['(customer)', 'delete-account']);
+    expect(declared()).toEqual(['index', '(customer)', 'delete-account']);
     await signOut();
-    expect(declared()).toEqual(['(auth)', 'delete-account']);
+    expect(declared()).toEqual(['index', '(auth)', 'delete-account']);
     expect(kv.dump()['bh.browse']).toBeUndefined();
     expect(mockRendered).not.toContain('(customer)');
   });
@@ -199,7 +218,7 @@ describe('signing out ends browsing', () => {
       await Promise.resolve();
     });
     await signOut();
-    expect(declared()).toEqual(['(auth)', 'delete-account']);
+    expect(declared()).toEqual(['index', '(auth)', 'delete-account']);
     expect(kv.dump()['bh.browse']).toBeUndefined();
   });
 });
@@ -260,4 +279,15 @@ describe('a save waiting for sign-in', () => {
     });
     expect(useSignInPrompt.getState().pendingSave).toBeNull();
   });
+});
+
+// Owner's report (2026-11-15): signing up and in landed on the delete-account modal. When every
+// guarded group is hidden (signed in, mode still loading), the stack falls back to its first
+// declared screen; `unstable_settings` never reaches the navigator as `initialRouteName`. So the
+// first declared screen must be `index`, which shows Loading and redirects once the mode is known.
+it('signed in while the mode loads: the stack’s fallback is index, never delete-account', async () => {
+  useAuth.setState({ state: signedIn, recovery: false });
+  await render(<RootLayout />);
+  expect(declared()[0]).toBe('index');
+  expect(declared()).not.toContain('(auth)');
 });

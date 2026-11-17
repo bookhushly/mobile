@@ -4,17 +4,10 @@ import { PRIVACY_URL, TERMS_URL } from '@/shared/config/store';
 import { space } from '@/shared/theme';
 import { Text, TextLink } from '@/shared/ui';
 
-// Footer line under Welcome and Create account: one caption with two caption-sized links.
-export function TermsLine({
-  onOpenLink,
-  inverse = false,
-}: {
-  onOpenLink: (url: string) => void;
-  /** White text and links, for the line over the Welcome photo. */
-  inverse?: boolean;
-}) {
-  const textTone = inverse ? 'onInverse' : 'textSecondary';
-  const linkTone = inverse ? 'onInverse' : 'link';
+// Footer line under the Sign in and Create account forms, where the agreement happens: fine print (14) with two links at the same size.
+export function TermsLine({ onOpenLink }: { onOpenLink: (url: string) => void }) {
+  const textTone = 'textSecondary';
+  const linkTone = 'link';
   return (
     <View
       style={{
@@ -25,23 +18,23 @@ export function TermsLine({
         columnGap: space.s1,
       }}
     >
-      <Text variant="caption" tone={textTone}>
+      <Text variant="bodySm" tone={textTone}>
         By continuing you agree to our
       </Text>
       <TextLink
         label="Terms"
-        size="sm"
+        inline
         tone={linkTone}
         onPress={() => {
           onOpenLink(TERMS_URL);
         }}
       />
-      <Text variant="caption" tone={textTone}>
+      <Text variant="bodySm" tone={textTone}>
         and
       </Text>
       <TextLink
         label="Privacy policy"
-        size="sm"
+        inline
         tone={linkTone}
         onPress={() => {
           onOpenLink(PRIVACY_URL);

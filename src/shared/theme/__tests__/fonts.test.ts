@@ -11,8 +11,19 @@ describe('fontFamily', () => {
     expect(fontFamily('sans', 500)).toBe('HankenGrotesk-Medium');
     expect(fontFamily('sans', 600)).toBe('HankenGrotesk-SemiBold');
   });
-  it('recipe B: display variants are sans 600 at -2%', () => {
-    for (const name of ['displaySm', 'displayMd', 'display', 'displayLg', 'hero'] as const) {
+  it('onboarding headlines are 500 at -2.5%; size carries the hierarchy (2026-11-13)', () => {
+    for (const name of ['displaySm', 'displayMd'] as const) {
+      const v = typeVariants[name];
+      expect(v.weight).toBe(500);
+      expect(v.letterSpacing).toBeCloseTo(v.size * -0.025);
+    }
+    expect(typeVariants.displaySm.size).toBe(30);
+    // Hanken 600 is the stroke weight of Nike's medium; 500 reads thin (measured 2026-11-14).
+    expect(typeVariants.button.weight).toBe(600);
+    expect(typeVariants.linkLg.weight).toBe(500);
+  });
+  it('recipe B: the larger display variants stay sans 600 at -2%', () => {
+    for (const name of ['display', 'displayLg', 'hero'] as const) {
       const v = typeVariants[name];
       expect(v.font).toBe('sans');
       expect(v.weight).toBe(600);

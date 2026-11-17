@@ -3,7 +3,7 @@ import { X } from 'lucide-react-native';
 import { Keyboard, StyleSheet } from 'react-native';
 
 import { AuthSheet } from '@/features/auth/components/AuthSheet';
-import { sheetOffset } from '@/features/auth/domain/authBackdrop';
+import { sheetTop } from '@/features/auth/domain/authBackdrop';
 import { Text } from '@/shared/ui';
 import { useMotionTier } from '@/shared/ui/motion';
 
@@ -28,7 +28,7 @@ afterEach(() => {
 
 it('renders children and footer', async () => {
   await render(
-    <AuthSheet band="medium" footer={<Text>Foot</Text>}>
+    <AuthSheet footer={<Text>Foot</Text>}>
       <Text>Body</Text>
     </AuthSheet>,
   );
@@ -39,13 +39,13 @@ it('renders children and footer', async () => {
 it('shows the leave button only with onLeave', async () => {
   const onLeave = jest.fn();
   const view = await render(
-    <AuthSheet band="short">
+    <AuthSheet>
       <Text>Body</Text>
     </AuthSheet>,
   );
   expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
   await view.rerender(
-    <AuthSheet band="short" onLeave={onLeave}>
+    <AuthSheet onLeave={onLeave}>
       <Text>Body</Text>
     </AuthSheet>,
   );
@@ -55,7 +55,7 @@ it('shows the leave button only with onLeave', async () => {
 
 it('honours leaveIcon and leaveLabel', async () => {
   await render(
-    <AuthSheet band="tall" onLeave={jest.fn()} leaveIcon={X} leaveLabel="Cancel">
+    <AuthSheet onLeave={jest.fn()} leaveIcon={X} leaveLabel="Cancel">
       <Text>Body</Text>
     </AuthSheet>,
   );
@@ -64,48 +64,52 @@ it('honours leaveIcon and leaveLabel', async () => {
 
 it('keeps taps working while the keyboard is open', async () => {
   await render(
-    <AuthSheet band="tall">
+    <AuthSheet>
       <Text>Body</Text>
     </AuthSheet>,
   );
   expect(screen.getByTestId('auth-sheet-scroll').props.keyboardShouldPersistTaps).toBe('handled');
 });
 
-it('starts raised when the keyboard is already open', async () => {
-  jest.spyOn(Keyboard, 'isVisible').mockReturnValue(true);
-  await render(
-    <AuthSheet band="tall">
-      <Text>Body</Text>
-    </AuthSheet>,
-  );
-  expect(translateY()).toBe(sheetOffset('tall', 0, true));
-});
-
 it('skips the slide at tier none', async () => {
   await render(
-    <AuthSheet band="tall">
+    <AuthSheet>
       <Text>Body</Text>
     </AuthSheet>,
   );
-  expect(translateY()).toBe(sheetOffset('tall', 0, false));
+  expect(translateY()).toBe(sheetTop(0));
 });
 
 it('puts the leave button first for screen readers', async () => {
   await render(
-    <AuthSheet band="short" onLeave={jest.fn()}>
+    <AuthSheet onLeave={jest.fn()}>
       <Text>Body</Text>
     </AuthSheet>,
   );
-  const root = screen.toJSON() as { children: { props: { testID?: string } }[] };
-  expect(root.children[0]?.props.testID).toBe('auth-leave');
+  const leave = screen.getByTestId('auth-leave');
+  const logo = screen.getByTestId('auth-sheet-logo', { includeHiddenElements: true });
+  const header = leave.parent;
+  // Same row; the leave button comes before the logo in reading order.
+  expect(header?.children.indexOf(leave)).toBe(0);
+  expect(logo).toBeTruthy();
 });
 
 it('opens raised with no slide on a screen that focuses a field on arrival', async () => {
   tierMock.mockReturnValue('full');
   await render(
-    <AuthSheet band="tall" startRaised>
+    <AuthSheet startRaised>
       <Text>Body</Text>
     </AuthSheet>,
   );
-  expect(translateY()).toBe(sheetOffset('tall', 0, true));
+  expect(translateY()).toBe(sheetTop(0));
+});
+
+it('heads every form with the logo, without making it a screen-reader stop', async () => {
+  await render(
+    <AuthSheet>
+      <Text>Body</Text>
+    </AuthSheet>,
+  );
+  expect(screen.getByTestId('auth-sheet-logo', { includeHiddenElements: true })).toBeTruthy();
+  expect(screen.queryByRole('image', { name: 'Bookhushly' })).toBeNull();
 });

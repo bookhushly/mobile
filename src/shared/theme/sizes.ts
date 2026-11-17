@@ -7,6 +7,8 @@ export const borderWidth = { hairline: 1, thick: 2 } as const;
 
 export const layout = {
   phoneGutter: 16,
+  // Onboarding (Welcome and the form sheets): roomier margins, nearer Nike's ~36 than Booking's 12.
+  formGutter: 24,
   tabletGutter: 24,
   tabletBreakpoint: 768,
   // The desk's left tab rail on tablets (react-navigation's sidebar default, pinned so screens can
@@ -21,7 +23,7 @@ export const layout = {
 
 /** Listing cards (customer Discover): a rail card's width (its 4:3 image follows) and a row's
  * square thumbnail. */
-export const cardSize = { railWidth: 240, rowImage: 96 } as const;
+export const cardSize = { railWidth: 240, rowImage: 96, avatarLg: 96 } as const;
 
 /** Skeleton bars standing in for a line of text: a title line and a caption line. */
 export const skeletonLine = { title: 16, caption: 12 } as const;

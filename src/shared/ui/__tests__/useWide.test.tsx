@@ -10,9 +10,7 @@ afterEach(() => {
 // useWindowDimensions reads Dimensions.get('window') at mount; react-native's index exposes the
 // hook through a lazy getter, so the dimensions are stubbed rather than the hook itself.
 const stubWidth = (width: number) => {
-  jest
-    .spyOn(Dimensions, 'get')
-    .mockReturnValue({ width, height: 1000, scale: 2, fontScale: 1 });
+  jest.spyOn(Dimensions, 'get').mockReturnValue({ width, height: 1000, scale: 2, fontScale: 1 });
 };
 
 it('is narrow on a phone', async () => {

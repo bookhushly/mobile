@@ -9,83 +9,103 @@ export type VariantSpec = {
   maxScale: number;
 };
 
+// Sizes moved up one step on 2026-11-13 after measuring against Nike, Booking.com and IHG, and a
+// second step on 2026-11-14 and a third on 2026-11-15 (owner: still too small): Hanken's lowercase
+// is small for its size (x-height 0.493 vs SF 0.508, Helvetica 0.523), so reading text sits at 19,
+// secondary text at 17 and nothing drops below 15. Display headlines and the gate's result sizes (`outcome`, `num*`)
+// are unchanged.
 export const typeVariants = {
   caption: {
     font: 'sans',
     weight: 400,
-    size: 12,
-    lineHeight: 16,
+    size: 15,
+    lineHeight: 22,
     letterSpacing: 0.2,
     maxScale: 1.6,
   },
   labelSm: {
     font: 'sans',
     weight: 600,
-    size: 12,
-    lineHeight: 16,
+    size: 15,
+    lineHeight: 22,
     letterSpacing: 0.2,
     maxScale: 1.6,
   },
-  label: { font: 'sans', weight: 600, size: 14, lineHeight: 20, letterSpacing: 0, maxScale: 1.6 },
+  label: { font: 'sans', weight: 600, size: 17, lineHeight: 24, letterSpacing: 0, maxScale: 1.6 },
   // Form field labels only; controls and links keep `label`.
   fieldLabel: {
     font: 'sans',
     weight: 500,
-    size: 14,
-    lineHeight: 20,
-    letterSpacing: 0,
-    maxScale: 1.6,
-  },
-  bodySm: { font: 'sans', weight: 400, size: 14, lineHeight: 20, letterSpacing: 0, maxScale: 1.6 },
-  body: { font: 'sans', weight: 400, size: 16, lineHeight: 24, letterSpacing: 0, maxScale: 1.6 },
-  bodyStrong: {
-    font: 'sans',
-    weight: 600,
-    size: 16,
+    size: 17,
     lineHeight: 24,
     letterSpacing: 0,
     maxScale: 1.6,
   },
+  bodySm: { font: 'sans', weight: 400, size: 17, lineHeight: 24, letterSpacing: 0, maxScale: 1.6 },
+  body: { font: 'sans', weight: 400, size: 19, lineHeight: 28, letterSpacing: 0, maxScale: 1.6 },
+  // Button labels. Hanken's 600 matches the stroke of Nike's medium (Helvetica Neue Medium):
+  // measured stem/cap 0.166 vs 0.175; Hanken 500 is 0.146, close to Helvetica's regular.
+  button: { font: 'sans', weight: 600, size: 19, lineHeight: 28, letterSpacing: 0, maxScale: 1.6 },
+  // Standalone links (under a form, beside buttons): one step quieter than a button.
+  linkLg: { font: 'sans', weight: 500, size: 19, lineHeight: 28, letterSpacing: 0, maxScale: 1.6 },
+  bodyStrong: {
+    font: 'sans',
+    weight: 600,
+    size: 19,
+    lineHeight: 28,
+    letterSpacing: 0,
+    maxScale: 1.6,
+  },
+  // The line under a form headline (Airbnb, Nike): a step above body so it doesn't read as fine print.
+  subtitle: {
+    font: 'sans',
+    weight: 400,
+    size: 20,
+    lineHeight: 30,
+    letterSpacing: 0,
+    maxScale: 1.6,
+  },
   // Subline under a display headline.
-  lead: { font: 'sans', weight: 500, size: 18, lineHeight: 26, letterSpacing: 0, maxScale: 1.3 },
+  lead: { font: 'sans', weight: 400, size: 20, lineHeight: 28, letterSpacing: 0, maxScale: 1.3 },
   headline: {
     font: 'sans',
     weight: 600,
-    size: 18,
-    lineHeight: 28,
+    size: 22,
+    lineHeight: 30,
     letterSpacing: 0,
     maxScale: 1.3,
   },
   title: {
     font: 'sans',
     weight: 600,
-    size: 20,
-    lineHeight: 28,
+    size: 24,
+    lineHeight: 32,
     letterSpacing: -0.2,
     maxScale: 1.3,
   },
   titleLg: {
     font: 'sans',
     weight: 600,
-    size: 24,
-    lineHeight: 32,
+    size: 28,
+    lineHeight: 36,
     letterSpacing: -0.3,
     maxScale: 1.3,
   },
+  // Form and page headlines: 30 at 500. Size carries the hierarchy, not weight (Nike, IHG).
   displaySm: {
     font: 'sans',
-    weight: 600,
-    size: 32,
+    weight: 500,
+    size: 30,
     lineHeight: 36,
-    letterSpacing: -0.64,
+    letterSpacing: -0.75,
     maxScale: 1.15,
   },
   displayMd: {
     font: 'sans',
-    weight: 600,
-    size: 36,
-    lineHeight: 40,
-    letterSpacing: -0.72,
+    weight: 500,
+    size: 30,
+    lineHeight: 36,
+    letterSpacing: -0.75,
     maxScale: 1.15,
   },
   display: {

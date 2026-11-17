@@ -7,14 +7,7 @@ import { passwordRules, RULES } from '@/features/auth/domain/passwordRules';
 import { WEAK_PASSWORD_MESSAGE } from '@/features/auth/domain/signUpErrors';
 import { transientMessage } from '@/features/auth/domain/transientMessage';
 import type { Result } from '@/shared/lib/result';
-import {
-  Banner,
-  Button,
-  PasswordField,
-  RuleList,
-  Stack,
-  Text,
-} from '@/shared/ui';
+import { Banner, Button, PasswordField, RuleList, Stack, Text } from '@/shared/ui';
 
 type Props = {
   onSave: (password: string) => Promise<Result<true, AccountFailure>>;
@@ -81,21 +74,16 @@ export function NewPasswordScreen({ onSave, onSaved, onLeave }: Props) {
   }
 
   return (
-    <AuthSheet
-      band="tall"
-      onLeave={onLeave}
-      leaveIcon={X}
-      leaveLabel="Cancel"
-    >
+    <AuthSheet onLeave={onLeave} leaveIcon={X} leaveLabel="Cancel">
       <Stack gap="s3">
         <Text variant="displaySm" accessibilityRole="header">
           Choose a new password
         </Text>
-        <Text variant="body" tone="textSecondary">
+        <Text variant="subtitle" tone="textSecondary">
           You’ll use it the next time you sign in.
         </Text>
       </Stack>
-      <Stack gap="s4">
+      <Stack gap="s5">
         <Stack gap="s3">
           <PasswordField
             label="New password"

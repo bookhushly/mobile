@@ -24,22 +24,22 @@ it('filter chips are a single-choice group with counts in the label', async () =
   expect(onChange).toHaveBeenCalledWith('dirty');
 });
 
-it('each chip is at least a 44 pt target; the chosen one is wash + violet with a heavier border', async () => {
+it('each chip is a 44 pt pill; the chosen one is solid ink with white text', async () => {
   await render(
     <FilterChips label="Room status" value="dirty" options={OPTIONS} onChange={jest.fn()} />,
   );
   expect(screen.getByRole('radio', { name: 'All 24' })).toHaveStyle({ minHeight: 44 });
   expect(screen.getByRole('radio', { name: 'Dirty 3' })).toHaveStyle({
-    backgroundColor: color.wash,
-    borderColor: color.actionPressed,
-    borderWidth: borderWidth.thick,
-    borderRadius: radius.r2,
+    backgroundColor: color.textPrimary,
+    borderColor: color.textPrimary,
+    borderRadius: radius.rFull,
   });
   expect(screen.getByRole('radio', { name: 'All 24' })).toHaveStyle({
     backgroundColor: color.surface,
+    borderColor: color.borderStrong,
     borderWidth: borderWidth.hairline,
   });
-  expect(screen.getByText('Dirty 3')).toHaveStyle({ color: color.linkText });
+  expect(screen.getByText('Dirty 3')).toHaveStyle({ color: color.onInverse });
 });
 
 it('chips sit the density target gap apart (at least 8 pt)', async () => {

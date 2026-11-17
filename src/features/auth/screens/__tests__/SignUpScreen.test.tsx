@@ -201,5 +201,8 @@ it('shows Back and calls onBack', async () => {
   const onBack = jest.fn();
   await render(<SignUpScreen {...props()} onBack={onBack} />);
   await fireEvent.press(screen.getByRole('button', { name: 'Back' }));
-  expect(onBack).toHaveBeenCalled();
+  // The sheet slides away first, then leaves.
+  await waitFor(() => {
+    expect(onBack).toHaveBeenCalled();
+  });
 });

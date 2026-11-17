@@ -2,18 +2,11 @@ import { useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import { AuthSheet } from '@/features/auth/components/AuthSheet';
+import { TermsLine } from '@/features/auth/components/TermsLine';
 import { signInCopy, type SignInError } from '@/features/auth/domain/signInErrors';
 import { signInSchema } from '@/features/auth/schemas/signIn';
 import { type StatusTone } from '@/shared/theme';
-import {
-  Banner,
-  Button,
-  Input,
-  PasswordField,
-  Stack,
-  Text,
-  TextLink,
-} from '@/shared/ui';
+import { Banner, Button, Input, PasswordField, Stack, Text, TextLink } from '@/shared/ui';
 
 type Props = {
   onSubmit: (email: string, password: string) => Promise<SignInError | null>;
@@ -24,6 +17,8 @@ type Props = {
   onConfirmEmail: (email: string) => Promise<void>;
   /** Back to Welcome; the header button is hidden when absent (bare unit renders). */
   onBack?: () => void;
+  /** Terms and privacy pages; the line is left out when absent (bare unit renders). */
+  onOpenLink?: (url: string) => void;
 };
 
 type FieldErrors = { email?: string; password?: string };
@@ -50,6 +45,7 @@ export function SignInScreen({
   onCreateAccount,
   onConfirmEmail,
   onBack,
+  onOpenLink,
 }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -93,23 +89,25 @@ export function SignInScreen({
 
   return (
     <AuthSheet
-      band="medium"
       onLeave={onBack}
       footer={
-        <View style={{ alignItems: 'center' }}>
-          <TextLink label="New here? Create account" onPress={onCreateAccount} />
-        </View>
+        <>
+          <View style={{ alignItems: 'center' }}>
+            <TextLink size="lg" label="New here? Create account" onPress={onCreateAccount} />
+          </View>
+          {onOpenLink !== undefined ? <TermsLine onOpenLink={onOpenLink} /> : null}
+        </>
       }
     >
       <Stack gap="s3">
         <Text variant="displaySm" accessibilityRole="header">
           Welcome back
         </Text>
-        <Text variant="body" tone="textSecondary">
+        <Text variant="subtitle" tone="textSecondary">
           Sign in to your Bookhushly account.
         </Text>
       </Stack>
-      <Stack gap="s4">
+      <Stack gap="s5">
         <Input
           label="Email"
           value={email}
@@ -143,6 +141,8 @@ export function SignInScreen({
         />
         <View style={{ alignItems: 'flex-start' }}>
           <TextLink
+            size="lg"
+            inline
             label="Forgot password?"
             onPress={() => {
               onForgot(email.trim().toLowerCase());

@@ -104,7 +104,7 @@ it('rule list moves the live region to the changed row on Android', async () => 
   expect(spy).not.toHaveBeenCalled();
 });
 
-it.each(['find', 'pay', 'showUp'] as const)('renders the %s scene', async (name) => {
+it.each(['camera', 'noEvents', 'offline', 'search'] as const)('renders the %s scene', async (name) => {
   await render(<Illustration name={name} />);
   // Decorative: hidden from screen readers, so the query must opt in to hidden elements.
   expect(screen.queryByTestId(`illustration-${name}`)).toBeNull();

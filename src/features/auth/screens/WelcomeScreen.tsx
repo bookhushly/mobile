@@ -1,29 +1,36 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useContext } from 'react';
+import { useContext, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { Easing, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 
-import { TermsLine } from '@/features/auth/components/TermsLine';
+import { WelcomeSlides } from '@/features/auth/components/WelcomeSlides';
+import { WELCOME_ENTERS_AT, welcomeUnderIntro } from '@/features/auth/launchIntro';
 import type { AuthNotice } from '@/features/auth/hooks/useAuthNotice';
 import { color, layout, motion, space } from '@/shared/theme';
-import { Banner, Button, Text, TextLink } from '@/shared/ui';
+import { Banner, Button, TextLink } from '@/shared/ui';
 import { useMotionTier } from '@/shared/ui/motion';
 
 const wordmark = require('../../../../assets/images/logo-wordmark.png') as number;
 
-// Wordmark file is 319 x 91.
-const WORDMARK_HEIGHT = 28;
-const WORDMARK_WIDTH = (WORDMARK_HEIGHT * 319) / 91;
+// The full logo, drawn from the vector (assets/brand/bookhushly-lockup-ink.svg): 1288 x 364. Big
+// enough to read as the brand, not a corner label.
+const WORDMARK_HEIGHT = 40;
+const WORDMARK_WIDTH = (WORDMARK_HEIGHT * 1288) / 364;
 // How far above the text the fade starts from clear.
 const FADE_ABOVE_PT = 120;
-// Headline, subline, then actions: a small fade and lift, one after another, no bounce.
-const ENTER = [0, 1, 2].map((step) =>
-  FadeInDown.duration(motion.duration.moderate)
-    .delay(step * motion.duration.fast)
-    .withInitialValues({ transform: [{ translateY: space.s3 }] }),
-);
+// Logo, slides, then actions: a small fade and lift, one after another, no bounce.
+const [w1, w2, w3, w4] = motion.easing.decelerate;
+const RISE_EASE = Easing.bezier(w1, w2, w3, w4);
+// Logo, words, then actions rise in one after another. On a cold start they wait for the intro
+// so the entrance is seen, not played under the violet layer.
+function enter(step: number, after: number) {
+  return FadeInDown.duration(motion.duration.sheet)
+    .delay(after + step * motion.duration.fast)
+    .easing(RISE_EASE)
+    .withInitialValues({ opacity: 0, transform: [{ translateY: space.s5 }] });
+}
 
 type Props = {
   notice: AuthNotice;
@@ -31,7 +38,6 @@ type Props = {
   onCreateAccount: () => void;
   onSignIn: () => void;
   onBrowse: () => void;
-  onOpenLink: (url: string) => void;
 };
 
 // Landing screen when signed out and not browsing: create account first, sign in second
@@ -43,44 +49,28 @@ export function WelcomeScreen({
   onCreateAccount,
   onSignIn,
   onBrowse,
-  onOpenLink,
 }: Props) {
   const insets = useContext(SafeAreaInsetsContext) ?? { top: 0, bottom: 0 };
   const still = useMotionTier() === 'none';
+  // Decided once, on the first frame: the intro is about to play over this screen.
+  const [after] = useState(() => (welcomeUnderIntro() ? WELCOME_ENTERS_AT : 0));
   return (
     <View style={{ flex: 1 }}>
-      <View
-        accessible
-        accessibilityRole="image"
-        accessibilityLabel="Bookhushly"
-        style={{
-          position: 'absolute',
-          top: insets.top + space.s4,
-          left: layout.phoneGutter,
-        }}
-      >
-        <Image
-          source={wordmark}
-          style={{ width: WORDMARK_WIDTH, height: WORDMARK_HEIGHT }}
-          contentFit="contain"
-          tintColor={color.onInverse}
-        />
-      </View>
       {/* Sits at the bottom until large text or the notice outgrow the screen, then scrolls, so the
-          terms stay reachable. Its top padding keeps the content clear of the wordmark. */}
+          terms stay reachable. */}
       <ScrollView
         testID="welcome-scroll"
         style={{ flex: 1 }}
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: 'flex-end',
-          paddingTop: insets.top + space.s4 + WORDMARK_HEIGHT + space.s4,
+          paddingTop: insets.top + space.s4,
         }}
       >
         <View
           testID="welcome-content"
           style={{
-            paddingHorizontal: layout.phoneGutter,
+            paddingHorizontal: layout.formGutter,
             paddingBottom: Math.max(insets.bottom, space.s5),
           }}
         >
@@ -109,26 +99,42 @@ export function WelcomeScreen({
               />
             </View>
           ) : null}
-          <Animated.View entering={still ? undefined : ENTER[0]}>
-            <Text variant="displayMd" tone="onInverse" accessibilityRole="header">
-              Events, stays and hotels across Nigeria.
-            </Text>
-          </Animated.View>
-          <Animated.View entering={still ? undefined : ENTER[1]} style={{ marginTop: space.s4 }}>
-            <Text variant="lead" tone="onInverse">
-              Find it, book it, pay in naira.
-            </Text>
-          </Animated.View>
-          <Animated.View entering={still ? undefined : ENTER[2]} style={{ marginTop: space.s8 }}>
-            <Button label="Create account" onInverse="light" onPress={onCreateAccount} />
-            <View style={{ marginTop: space.s4 }}>
-              <Button label="Sign in" variant="secondary" onInverse="light" onPress={onSignIn} />
+          <Animated.View entering={still ? undefined : enter(0, after)}>
+            <View accessible accessibilityRole="image" accessibilityLabel="Bookhushly">
+              <Image
+                source={wordmark}
+                style={{ width: WORDMARK_WIDTH, height: WORDMARK_HEIGHT }}
+                contentFit="contain"
+                tintColor={color.onInverse}
+              />
             </View>
-            <View testID="welcome-browse" style={{ marginTop: space.s4, alignItems: 'center' }}>
-              <TextLink label="Browse without an account" tone="onInverse" onPress={onBrowse} />
+          </Animated.View>
+          <Animated.View
+            entering={still ? undefined : enter(1, after)}
+            style={{ marginTop: space.s7 }}
+          >
+            <WelcomeSlides />
+          </Animated.View>
+          <Animated.View
+            entering={still ? undefined : enter(2, after)}
+            style={{ marginTop: space.s7 }}
+          >
+            {/* Side by side, as Nike and IHG do: two equal choices, neither a full-width slab. */}
+            <View testID="welcome-actions" style={{ flexDirection: 'row', gap: space.s3 }}>
+              <View style={{ flex: 1 }}>
+                <Button label="Create account" onInverse="light" onPress={onCreateAccount} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button label="Sign in" variant="secondary" onInverse="light" onPress={onSignIn} />
+              </View>
             </View>
-            <View style={{ marginTop: space.s7 }}>
-              <TermsLine inverse onOpenLink={onOpenLink} />
+            <View testID="welcome-browse" style={{ marginTop: space.s5, alignItems: 'center' }}>
+              <TextLink
+                size="lg"
+                label="Browse without an account"
+                tone="onInverse"
+                onPress={onBrowse}
+              />
             </View>
           </Animated.View>
         </View>
