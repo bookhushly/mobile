@@ -44,6 +44,8 @@ type Props = {
   /** Signed in, but the account may yet be staff: Continue stays off until this clears. */
   modePending: boolean;
   header: ReactNode;
+  /** What's being booked, first (Airbnb / Booking.com checkout: the place card on top). */
+  lead?: ReactNode;
   onCreated: (bookingId: string, free: boolean) => void;
   /** Re-reads the listing: after a refusal the stock counts may be stale (P11). */
   onRefused: () => void;
@@ -65,6 +67,7 @@ export function EventSelect({
   guestReady,
   modePending,
   header,
+  lead,
   onCreated,
   onRefused,
 }: Props) {
@@ -202,6 +205,7 @@ export function EventSelect({
 
   return (
     <Screen scroll header={header} footer={footer}>
+      {lead}
       <EventTickets
         lines={lines}
         qty={sel.qty}

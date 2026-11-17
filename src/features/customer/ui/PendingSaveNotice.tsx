@@ -25,7 +25,7 @@ export function PendingSaveNotice({ userId, onSignInAgain }: Props) {
         left: layout.phoneGutter,
         right: layout.phoneGutter,
         // A surface to cast from: Android draws no elevation shadow without one.
-        borderRadius: radius.r3,
+        borderRadius: radius.r4,
         backgroundColor: color.surface,
         ...elevation.e3,
       }}

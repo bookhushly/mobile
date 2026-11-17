@@ -61,7 +61,7 @@ export function PriceDetails({
   return (
     <Card>
       <View style={{ gap: space.s3 }} testID={testID}>
-        <Text variant="headline" accessibilityRole="header">
+        <Text variant="title" accessibilityRole="header">
           Price details
         </Text>
         {lines === null ? (

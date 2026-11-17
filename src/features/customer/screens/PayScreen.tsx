@@ -17,11 +17,7 @@ import { customerKeys } from '@/features/customer/hooks/customerKeys';
 import { useBooking } from '@/features/customer/hooks/useBooking';
 import { useServiceCharge } from '@/features/customer/hooks/useCheckoutData';
 import { sentNotice } from '@/features/customer/hooks/sentNotice';
-import {
-  usePayment,
-  type ReviewCancel,
-  type PayKind,
-} from '@/features/customer/hooks/usePayment';
+import { usePayment, type ReviewCancel, type PayKind } from '@/features/customer/hooks/usePayment';
 import { checkoutStore } from '@/features/customer/offline/checkoutStore';
 import { NoticeScreen } from '@/features/customer/screens/NoticeScreen';
 import { BookedDone } from '@/features/customer/ui/checkout/BookedDone';
@@ -316,7 +312,7 @@ function Pay({
           ? null
           : {
               words: failure.words,
-                action: startErrorButton(failure.action, startAgain, p.checkAgain),
+              action: startErrorButton(failure.action, startAgain, p.checkAgain),
             }
       }
       onPay={p.pay}

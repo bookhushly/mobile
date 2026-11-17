@@ -36,6 +36,17 @@ export default function ResultsRoute() {
           params: { category: query.category, q: query.q },
         });
       }}
+      onSeeResults={(t) => {
+        router.push({
+          pathname: '/results',
+          params: {
+            category: t.category,
+            q: t.q,
+            ...(t.state !== undefined ? { region: t.state } : {}),
+            ...(t.city !== undefined ? { city: t.city } : {}),
+          },
+        });
+      }}
       onSignInAgain={() => {
         signOut();
       }}

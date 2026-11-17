@@ -4,14 +4,19 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import { useNotificationPrimer } from '@/features/customer/hooks/useNotificationPrimer';
 import { useTourSeen } from '@/features/customer/hooks/useTourSeen';
+import { NotificationPrimerScreen } from '@/features/customer/screens/NotificationPrimerScreen';
 import { TourScreen } from '@/features/customer/screens/TourScreen';
 import { useKnownCustomer } from '@/features/mode/hooks/useKnownCustomer';
 import { CUSTOMER_TOUR_ENABLED } from '@/shared/config/features';
-import { color } from '@/shared/theme';
+import { borderWidth, color } from '@/shared/theme';
 import { Text, useDensity } from '@/shared/ui';
 
 const LABEL_MAX_SCALE = 1.3;
+// The active icon draws a touch heavier, so the state reads without colour.
+const STROKE_ON = 2.25;
+const STROKE_OFF = 1.75;
 
 // Spec 4b D1: Explore · Saved · Bookings · Account. A bottom bar on every size.
 export default function CustomerTabsLayout() {
@@ -28,6 +33,12 @@ export default function CustomerTabsLayout() {
   const { seen, markSeen } = useTourSeen(CUSTOMER_TOUR_ENABLED ? userId : null);
   const holding = CUSTOMER_TOUR_ENABLED && userId !== null && seen === null;
   const touring = CUSTOMER_TOUR_ENABLED && seen === false;
+  // After the tour, once per device: the notifications primer (customers only, never browsing).
+  const primer = useNotificationPrimer({
+    customer: userId !== null,
+    tourDone: !CUSTOMER_TOUR_ENABLED || seen === true,
+  });
+  const covered = touring || primer.open;
   // Once up, the tabs are never replaced: signing in from Saved has to come back to Saved.
   const [tabsUp, setTabsUp] = useState(false);
   if (!tabsUp && !holding && !touring) setTabsUp(true);
@@ -43,24 +54,28 @@ export default function CustomerTabsLayout() {
     <View style={{ flex: 1 }}>
       <View
         style={{ flex: 1 }}
-        accessibilityElementsHidden={touring}
-        importantForAccessibility={touring ? 'no-hide-descendants' : 'auto'}
+        accessibilityElementsHidden={covered}
+        importantForAccessibility={covered ? 'no-hide-descendants' : 'auto'}
       >
         <Tabs
           screenOptions={{
             headerShown: false,
             tabBarPosition: 'bottom',
-            // linkText (violet 700) rather than the fill: a 12 px label needs the 7:1 shade.
-            tabBarActiveTintColor: color.linkText,
-            tabBarInactiveTintColor: color.textSecondary,
-            // A non-colour cue for the active tab (WCAG 1.4.1): a selected wash behind it.
-            tabBarActiveBackgroundColor: color.selectedWash,
-            tabBarStyle: { backgroundColor: color.surface, borderTopColor: color.border },
+            // Expedia and Airbnb: the active tab in the brand colour, the rest quiet grey, no block
+            // behind it. Violet 700 (7.1:1) for the 13 pt label. The non-colour cue (WCAG 1.4.1) is
+            // the heavier label and icon stroke below.
+            tabBarActiveTintColor: color.actionPressed,
+            tabBarInactiveTintColor: color.textMuted,
+            tabBarStyle: {
+              backgroundColor: color.surface,
+              borderTopColor: color.border,
+              borderTopWidth: borderWidth.hairline,
+            },
             tabBarItemStyle: { minHeight: d.controlHeight },
             // Labels follow Dynamic Type up to 1.3× so the fixed-height bar never clips (ruling B6).
-            tabBarLabel: ({ color: tint, children }) => (
+            tabBarLabel: ({ color: tint, focused, children }) => (
               <Text
-                variant="labelSm"
+                variant={focused ? 'labelSm' : 'caption'}
                 maxScale={LABEL_MAX_SCALE}
                 numberOfLines={1}
                 style={{ color: tint }}
@@ -74,28 +89,40 @@ export default function CustomerTabsLayout() {
             name="explore"
             options={{
               title: 'Explore',
-              tabBarIcon: ({ color: tint, size }) => <Compass color={tint} size={size} />,
+              tabBarIcon: ({ color: tint, size, focused }) => (
+                <Compass color={tint} size={size} strokeWidth={focused ? STROKE_ON : STROKE_OFF} />
+              ),
             }}
           />
           <Tabs.Screen
             name="saved"
             options={{
               title: 'Saved',
-              tabBarIcon: ({ color: tint, size }) => <Heart color={tint} size={size} />,
+              tabBarIcon: ({ color: tint, size, focused }) => (
+                <Heart color={tint} size={size} strokeWidth={focused ? STROKE_ON : STROKE_OFF} />
+              ),
             }}
           />
           <Tabs.Screen
             name="bookings"
             options={{
               title: 'Bookings',
-              tabBarIcon: ({ color: tint, size }) => <Ticket color={tint} size={size} />,
+              tabBarIcon: ({ color: tint, size, focused }) => (
+                <Ticket color={tint} size={size} strokeWidth={focused ? STROKE_ON : STROKE_OFF} />
+              ),
             }}
           />
           <Tabs.Screen
             name="account"
             options={{
               title: 'Account',
-              tabBarIcon: ({ color: tint, size }) => <UserRound color={tint} size={size} />,
+              tabBarIcon: ({ color: tint, size, focused }) => (
+                <UserRound
+                  color={tint}
+                  size={size}
+                  strokeWidth={focused ? STROKE_ON : STROKE_OFF}
+                />
+              ),
             }}
           />
         </Tabs>
@@ -103,6 +130,15 @@ export default function CustomerTabsLayout() {
       {touring ? (
         <View testID="tour-overlay" accessibilityViewIsModal style={StyleSheet.absoluteFill}>
           <TourScreen onDone={markSeen} />
+        </View>
+      ) : primer.open ? (
+        <View testID="primer-overlay" accessibilityViewIsModal style={StyleSheet.absoluteFill}>
+          <NotificationPrimerScreen
+            onTurnOn={() => {
+              void primer.accept();
+            }}
+            onNotNow={primer.dismiss}
+          />
         </View>
       ) : null}
     </View>

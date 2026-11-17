@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { useIsFocused } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -11,8 +12,19 @@ import { HIDDEN_LINE } from '@/features/customer/ui/BookingRow';
 import { chipTone } from '@/features/customer/ui/chipTone';
 import { openWeb, WEB_DASHBOARD } from '@/features/customer/ui/links';
 import { CHECKOUT_PAYMENTS_ENABLED } from '@/shared/config/features';
-import { space } from '@/shared/theme';
-import { Banner, Header, IconButton, refreshColors, Screen, StatusPill, Text } from '@/shared/ui';
+import { color, layout, space } from '@/shared/theme';
+import {
+  Banner,
+  Header,
+  IconButton,
+  refreshColors,
+  Screen,
+  StatusPill,
+  Text,
+  useWide,
+} from '@/shared/ui';
+
+const PHOTO_RATIO = 2;
 
 /** P21: where the pending banner's actions go (supplied by the route). */
 export type PayHandlers = {
@@ -57,6 +69,7 @@ export function BookingFrame({
   children,
 }: Props) {
   const [refreshing, setRefreshing] = useState(false);
+  const gutter = useWide() ? layout.tabletGutter : layout.phoneGutter;
   const refresh =
     onRefresh === undefined
       ? undefined
@@ -82,6 +95,22 @@ export function BookingFrame({
       }
       footer={footer}
     >
+      {b !== undefined && b.imageUrl !== null ? (
+        // Expedia's trip pages lead with the place: the listing's photo, edge to edge.
+        <Image
+          testID="booking-photo"
+          source={{ uri: b.imageUrl }}
+          style={{
+            alignSelf: 'stretch',
+            marginHorizontal: -gutter,
+            aspectRatio: PHOTO_RATIO,
+            backgroundColor: color.wash,
+          }}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          accessible={false}
+        />
+      ) : null}
       {b !== undefined ? (
         <View style={{ gap: space.s3 }}>
           <Text variant="titleLg" accessibilityRole="header">

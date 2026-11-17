@@ -10,7 +10,7 @@ import { Button, Text } from '@/shared/ui';
 
 type Props = {
   price: CardPrice;
-  /** Events: "Sat 17 Oct" under the price. */
+  /** Events: "Sat 17 Oct · 7:00 pm" over the price. */
   when?: string | null;
   label: string;
   /** Why the button is off ("Sold out"); it then reads the reason (D12). */
@@ -38,24 +38,47 @@ export function ListingFooter({
 }: Props) {
   const hasWhen = when !== undefined && when !== null;
   const summary = price !== null || hasWhen;
+  // "Book on bookhushly.com" is too long to share the row: squeezed, it wraps to two lines and cuts
+  // the price short. The hand-off stacks instead (Booking.com's footer): the summary on one line,
+  // the button across the full width under it. In-app labels are short and keep the row.
+  const stacked = external && summary;
   return (
     <View>
       {notice !== undefined && notice !== null ? <FooterNotice>{notice}</FooterNotice> : null}
       <View
-        style={{ flexDirection: 'row', alignItems: 'center', gap: space.s4 }}
+        style={
+          stacked
+            ? { gap: space.s3 }
+            : { flexDirection: 'row', alignItems: 'center', gap: space.s4 }
+        }
         testID="listing-footer"
       >
         {summary ? (
-          <View style={{ flex: 1, gap: space.s1 }} testID="footer-summary">
-            <PriceTag price={price} testID="footer-price" />
-            {hasWhen ? (
+          // DICE's booking bar (owner's pick A, 2026-11-15): when it is in a small line on top, the
+          // price large under it, the button beside. A hand-off keeps them on one line above a
+          // full-width button.
+          <View
+            style={
+              stacked
+                ? { flexDirection: 'row', alignItems: 'baseline', gap: space.s3, flexWrap: 'wrap' }
+                : { flex: 1, gap: space.s1 }
+            }
+            testID="footer-summary"
+          >
+            {hasWhen && !stacked ? (
               <Text variant="bodySm" tone="textSecondary" numberOfLines={1}>
                 {when}
               </Text>
             ) : null}
+            <PriceTag price={price} lead={!stacked} testID="footer-price" />
+            {hasWhen && stacked ? (
+              <Text variant="bodySm" tone="textSecondary" numberOfLines={1}>
+                {price !== null ? `· ${when}` : when}
+              </Text>
+            ) : null}
           </View>
         ) : null}
-        <View style={summary ? { flexShrink: 0, maxWidth: '60%' } : { flex: 1 }}>
+        <View style={summary && !stacked ? { flexShrink: 0, maxWidth: '60%' } : null}>
           <Button
             label={blocked ?? label}
             icon={blocked === null && external ? ExternalLink : undefined}

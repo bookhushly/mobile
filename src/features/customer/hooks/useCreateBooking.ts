@@ -261,7 +261,10 @@ export function useCreateBooking(
           return;
         }
       }
-      if (idem.current?.fingerprint !== fingerprint || now - idem.current.mintedAt >= KEY_MAX_AGE_MS) {
+      if (
+        idem.current?.fingerprint !== fingerprint ||
+        now - idem.current.mintedAt >= KEY_MAX_AGE_MS
+      ) {
         idem.current = { fingerprint, key: Crypto.randomUUID(), busyRetries: 0, mintedAt: now };
       }
       const k = idem.current;

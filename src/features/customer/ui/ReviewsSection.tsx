@@ -2,9 +2,10 @@ import { FlatList, View } from 'react-native';
 
 import type { useReviews } from '@/features/customer/hooks/useReviews';
 import { loadFailedLine } from '@/features/customer/ui/discoverLabels';
-import { ReviewItem, ReviewList } from '@/features/customer/ui/ReviewList';
-import { space } from '@/shared/theme';
-import { Button, SectionHeader, Sheet, Spinner, Text, TextLink } from '@/shared/ui';
+import { ratingWord } from '@/features/customer/domain/discover';
+import { REVIEW_CARD_WIDTH, ReviewCard, ReviewItem } from '@/features/customer/ui/ReviewList';
+import { layout, space } from '@/shared/theme';
+import { Button, SectionHeader, Sheet, Spinner, Text, TextLink, useWide } from '@/shared/ui';
 
 /** Shown on the listing (D10). */
 export const FIRST_REVIEWS = 3;
@@ -36,22 +37,59 @@ function ReviewsFailed({ r }: { r: Loaded }) {
   );
 }
 
-type Props = { reviews: Loaded; onSeeAll: () => void };
+type Props = {
+  reviews: Loaded;
+  /** The listing's average and count, for the score at the top. */
+  rating: { avg: number; count: number } | null;
+  onSeeAll: () => void;
+};
 
-// D10/D16: the first three show on the page (stays only); "See all" opens a paged sheet. The
-// query is the screen's, started with the detail (P5).
-export function ReviewsSection({ reviews: r, onSeeAll }: Props) {
+// D10/D16, laid out after Expedia (owner's pick, 2026-11-15): the score as "4.6/5" with its word
+// and count, the first reviews as cards in a row you swipe, and "See all" for the paged sheet.
+// The query is the screen's, started with the detail (P5).
+export function ReviewsSection({ reviews: r, rating, onSeeAll }: Props) {
+  const gutter = useWide() ? layout.tabletGutter : layout.phoneGutter;
   if (!r.loading && !r.failed && r.reviews.length === 0) return null;
+  const word = rating === null ? null : ratingWord(rating.avg, rating.count);
   return (
-    <View testID="reviews" style={{ gap: space.s2 }}>
+    <View testID="reviews" style={{ gap: space.s4 }}>
       <SectionHeader label="Reviews" />
+      {rating !== null ? (
+        <View
+          accessible
+          accessibilityLabel={`Rated ${rating.avg.toFixed(1)} out of 5${word === null ? '' : `, ${word}`}, ${String(rating.count)} reviews`}
+          style={{ gap: space.s1 }}
+        >
+          <Text variant="display" tabular>
+            {`${rating.avg.toFixed(1)}/5`}
+          </Text>
+          <Text variant="body" tone="textSecondary">
+            {[word, `${String(rating.count)} review${rating.count === 1 ? '' : 's'}`]
+              .filter((x) => x !== null)
+              .join(' · ')}
+          </Text>
+        </View>
+      ) : null}
       {r.loading ? <Spinner label="Loading reviews" /> : null}
       {r.failed && r.reviews.length === 0 ? <ReviewsFailed r={r} /> : null}
-      <ReviewList reviews={r.reviews.slice(0, FIRST_REVIEWS)} />
+      {r.reviews.length > 0 ? (
+        <FlatList
+          horizontal
+          data={r.reviews.slice(0, FIRST_REVIEWS)}
+          keyExtractor={(review) => review.id}
+          renderItem={({ item }) => <ReviewCard r={item} />}
+          showsHorizontalScrollIndicator={false}
+          snapToInterval={REVIEW_CARD_WIDTH + space.s4}
+          decelerationRate="fast"
+          // Full bleed, so the next card peeks at the screen's edge (there's more to swipe).
+          style={{ marginHorizontal: -gutter }}
+          contentContainerStyle={{ gap: space.s4, paddingHorizontal: gutter }}
+        />
+      ) : null}
       {r.total > FIRST_REVIEWS ? (
         <Button
           variant="secondary"
-          label={`See all reviews (${String(r.total)})`}
+          label={`See all ${String(r.total)} reviews`}
           onPress={onSeeAll}
         />
       ) : null}

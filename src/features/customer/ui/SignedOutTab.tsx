@@ -2,7 +2,16 @@ import { ExternalLink, Heart, Ticket, UserRound, type LucideIcon } from 'lucide-
 
 import { openWeb } from '@/features/customer/ui/links';
 import { HELP_URL, PRIVACY_URL, TERMS_URL } from '@/shared/config/store';
-import { Button, EmptyState, Icon, ListRow, Screen, SectionHeader, Stack } from '@/shared/ui';
+import {
+  Button,
+  EmptyState,
+  Header,
+  Icon,
+  ListRow,
+  Screen,
+  SectionHeader,
+  Stack,
+} from '@/shared/ui';
 
 export type SignedOutTabName = 'saved' | 'bookings' | 'account';
 
@@ -12,18 +21,24 @@ type Props = {
   onCreateAccount: () => void;
 };
 
-const COPY: Record<SignedOutTabName, { icon: LucideIcon; title: string; message: string }> = {
+const COPY: Record<
+  SignedOutTabName,
+  { page: string; icon: LucideIcon; title: string; message: string }
+> = {
   saved: {
+    page: 'Saved',
     icon: Heart,
     title: 'Your saved places live here',
     message: 'Saved places and events are kept in your account. Sign in to see them.',
   },
   bookings: {
+    page: 'Bookings',
     icon: Ticket,
     title: 'Your bookings live here',
     message: 'Booked on the website? Sign in with the same email and we’ll help you add them.',
   },
   account: {
+    page: 'Account',
     icon: UserRound,
     title: 'Your account lives here',
     message: 'With an account you can book, keep your tickets and manage your details.',
@@ -39,16 +54,11 @@ const LINKS: { title: string; url: string }[] = [
 
 /** What Saved, Bookings and Account show to someone browsing without an account. */
 export function SignedOutTab({ tab, onSignIn, onCreateAccount }: Props) {
-  const { icon, title, message } = COPY[tab];
+  const { page, icon, title, message } = COPY[tab];
   return (
-    <Screen scroll>
-      <EmptyState
-        testID={`signed-out-${tab}`}
-        icon={icon}
-        title={title}
-        titleRole="header"
-        message={message}
-      />
+    // Every tab opens with its large title, as Explore does (Expedia's Trips and Account).
+    <Screen scroll header={<Header title={page} />}>
+      <EmptyState testID={`signed-out-${tab}`} icon={icon} title={title} message={message} />
       <Stack gap="s4" testID="signed-out-actions">
         <Button label="Create account" onPress={onCreateAccount} />
         <Button variant="secondary" label="Sign in" onPress={onSignIn} />

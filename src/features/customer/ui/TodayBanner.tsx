@@ -1,4 +1,4 @@
-import { ChevronRight, KeyRound, Ticket } from 'lucide-react-native';
+import { KeyRound, Ticket } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 
 import { kindWord } from '@/features/customer/domain/myBookings';
@@ -15,8 +15,9 @@ type Props = {
 
 const ACTION = { tickets: 'Show ticket', checkInCode: 'Show check-in code' } as const;
 
-// Spec D1: a slim banner at the top of Explore when a booking is happening today — "Your event
-// starts at 7:00 pm · Show ticket" — one tap from the door. Not violet-filled: one quiet row.
+// Spec D1, laid out after Booking.com's "Upcoming trip" card (Mobbin, 2026-11-15): the place's name
+// on its own line (two lines before it's cut), what happens today under it, and the one action as a
+// pill. The whole card is the button, so the pill is drawn, not a second control. Not violet-filled.
 export function TodayBanner({ today, onShowTickets, onShowCheckInCode, testID }: Props) {
   const d = useDensity();
   const b = today.booking;
@@ -32,28 +33,39 @@ export function TodayBanner({ today, onShowTickets, onShowCheckInCode, testID }:
         else onShowCheckInCode(b.id);
       }}
       style={({ pressed }) => ({
-        minHeight: d.rowMin,
-        flexDirection: 'row',
-        alignItems: 'center',
         gap: space.s4,
-        paddingHorizontal: space.s4,
-        paddingVertical: space.s3,
-        borderRadius: radius.r3,
+        padding: space.s5,
+        borderRadius: radius.r4,
+        borderCurve: 'continuous',
         borderWidth: borderWidth.hairline,
         borderColor: color.border,
         backgroundColor: pressed ? color.wash : color.surface,
       })}
     >
-      <Icon as={today.action === 'tickets' ? Ticket : KeyRound} size="sm" tone="textPrimary" />
-      <View style={{ flex: 1, gap: space.s1 }}>
-        <Text variant="bodySm" tone="textPrimary" numberOfLines={1}>
-          {`${today.text} · ${title}`}
+      <View style={{ gap: space.s1 }}>
+        <Text variant="bodyStrong" numberOfLines={2}>
+          {title}
         </Text>
-        <Text variant="label" tone="linkText" numberOfLines={1}>
-          {action}
+        <Text variant="bodySm" tone="textSecondary" numberOfLines={2}>
+          {today.text}
         </Text>
       </View>
-      <Icon as={ChevronRight} size="sm" tone="textSecondary" />
+      <View
+        style={{
+          alignSelf: 'flex-start',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space.s3,
+          minHeight: d.minTarget,
+          paddingHorizontal: space.s5,
+          borderRadius: radius.rFull,
+          borderWidth: borderWidth.hairline,
+          borderColor: color.borderStrong,
+        }}
+      >
+        <Icon as={today.action === 'tickets' ? Ticket : KeyRound} size="sm" />
+        <Text variant="label">{action}</Text>
+      </View>
     </Pressable>
   );
 }

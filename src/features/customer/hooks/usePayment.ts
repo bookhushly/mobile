@@ -234,7 +234,9 @@ export function usePayment(
 
   /** One verify; its Paystack status feeds the Review warning (V4). Unknown on any failure. */
   const verifyOnce = useCallback(
-    async (reference: string): Promise<{ verdict: PayVerdict; definitive: boolean; provider: string | null }> => {
+    async (
+      reference: string,
+    ): Promise<{ verdict: PayVerdict; definitive: boolean; provider: string | null }> => {
       const v = await verifyPayment(api, reference);
       if (!v.ok) return { verdict: 'unknown', definitive: false, provider: null };
       const provider = v.value.provider_status ?? null;
@@ -342,7 +344,18 @@ export function usePayment(
       return;
     }
     await openBrowser(reference, payment_url, startedAt);
-  }, [holdOver, email, send, kind, bookingId, userId, openBrowser, alive, recordStart, startFailed]);
+  }, [
+    holdOver,
+    email,
+    send,
+    kind,
+    bookingId,
+    userId,
+    openBrowser,
+    alive,
+    recordStart,
+    startFailed,
+  ]);
 
   /**
    * V3: a pending reference under 30 min old with no URL here. Initialise, signed in and without

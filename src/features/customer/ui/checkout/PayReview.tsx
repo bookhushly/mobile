@@ -147,9 +147,14 @@ export function PayReview({
   );
   return (
     <Screen scroll header={header} footer={footer}>
-      <BookingSummary title={summary.title} when={summary.when} extra={summary.extra} />
+      <BookingSummary
+        title={summary.title}
+        when={summary.when}
+        extra={summary.extra}
+        image={summary.image}
+      />
       <View style={{ gap: space.s2 }}>
-        <Text variant="headline" accessibilityRole="header">
+        <Text variant="title" accessibilityRole="header">
           Your details
         </Text>
         <DetailRows rows={[{ label: 'Email', value: email }]} testID="pay-details" />

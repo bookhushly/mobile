@@ -277,7 +277,12 @@ describe('checkoutDb.findRecentStayBooking', () => {
   });
 
   it('skips cancelled, paid and older rows', async () => {
-    const row = (id: string, created_at: string, payment_status: string, booking_status: string) => ({
+    const row = (
+      id: string,
+      created_at: string,
+      payment_status: string,
+      booking_status: string,
+    ) => ({
       id,
       created_at,
       payment_status,

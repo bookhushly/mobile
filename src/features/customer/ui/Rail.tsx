@@ -1,3 +1,4 @@
+import { ChevronDown } from 'lucide-react-native';
 import { FlatList, Pressable, View } from 'react-native';
 
 import type { ListingCardModel } from '@/features/customer/domain/listingCard';
@@ -5,7 +6,7 @@ import { loadFailedLine } from '@/features/customer/ui/discoverLabels';
 import { ListingCard, RAIL_CARD_WIDTH } from '@/features/customer/ui/ListingCard';
 import type { ApiError } from '@/shared/lib/errors';
 import { density, skeletonLine, space } from '@/shared/theme';
-import { Banner, Skeleton, Text, TextLink } from '@/shared/ui';
+import { Banner, Icon, Skeleton, Text, TextLink } from '@/shared/ui';
 
 /** A rail shows the first few; See all opens the full list. */
 export const RAIL_MAX = 10;
@@ -25,7 +26,8 @@ type Props = {
   /** A 429 is still inside its Retry-After: Try again comes back after it. */
   waiting: boolean;
   onRetry: () => void;
-  onSeeAll: () => void;
+  /** Opens the full list; without it there's no See all (a list that can't be reopened as is). */
+  onSeeAll?: () => void;
   isSaved: (l: ListingCardModel) => boolean;
   savedReady: boolean;
   onOpen: (l: ListingCardModel) => void;
@@ -38,11 +40,11 @@ function RailSkeleton() {
     <View
       accessible
       accessibilityLabel="Loading"
-      style={{ flexDirection: 'row', gap: space.s4, overflow: 'hidden' }}
+      style={{ flexDirection: 'row', gap: space.s5, overflow: 'hidden' }}
     >
       {[0, 1].map((i) => (
         <View key={i} style={{ width: RAIL_CARD_WIDTH, gap: space.s3 }}>
-          <Skeleton height={(RAIL_CARD_WIDTH * 3) / 4} radius="r3" />
+          <Skeleton height={(RAIL_CARD_WIDTH * 3) / 4} radius="r4" />
           <Skeleton height={skeletonLine.title} width="80%" />
           <Skeleton height={skeletonLine.caption} width="50%" />
         </View>
@@ -71,23 +73,25 @@ export function Rail({
   testID,
 }: Props) {
   const title = place === undefined ? what : `${what} in ${place.label}`;
-  if (!loading && !failed && items.length === 0)
-    return (
-      <Text testID={testID} variant="bodySm" tone="textSecondary">
-        {emptyNote}
-      </Text>
-    );
+  const empty = !loading && !failed && items.length === 0;
   return (
-    <View testID={testID} style={{ gap: space.s3 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}>
+    <View testID={testID} style={{ gap: space.s4 }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space.s3,
+          minHeight: density.customer.minTarget,
+        }}
+      >
         {place === undefined ? (
-          <Text variant="headline" accessibilityRole="header" numberOfLines={1} style={{ flex: 1 }}>
+          <Text variant="title" accessibilityRole="header" numberOfLines={2} style={{ flex: 1 }}>
             {title}
           </Text>
         ) : (
-          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }}>
             <View accessible accessibilityRole="header" accessibilityLabel={title}>
-              <Text variant="headline" numberOfLines={1}>
+              <Text variant="title" numberOfLines={1}>
                 {`${what} in`}
               </Text>
             </View>
@@ -95,22 +99,40 @@ export function Rail({
               accessibilityRole="button"
               accessibilityLabel={`${place.label}. Change place`}
               onPress={place.onChange}
-              style={{
+              style={({ pressed }) => ({
                 flexShrink: 1,
                 minHeight: density.customer.minTarget,
-                justifyContent: 'center',
-                paddingHorizontal: space.s2,
-              }}
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.s1,
+                paddingLeft: space.s2,
+                opacity: pressed ? 0.6 : 1,
+              })}
             >
-              <Text variant="headline" tone="linkText" numberOfLines={1}>
+              {/* Booking.com / Airbnb: the place in the heading, in ink, underlined, with a
+                  chevron that says it opens a choice (owner, 2026-11-15: it replaces the separate
+                  "Stays in Lagos" line). */}
+              <Text
+                variant="title"
+                numberOfLines={1}
+                style={{ flexShrink: 1, textDecorationLine: 'underline' }}
+              >
                 {place.label}
               </Text>
+              <Icon as={ChevronDown} size="md" />
             </Pressable>
           </View>
         )}
-        <TextLink label="See all" accessibilityLabel={`See all, ${title}`} onPress={onSeeAll} />
+        {empty || onSeeAll === undefined ? null : (
+          <TextLink label="See all" accessibilityLabel={`See all, ${title}`} onPress={onSeeAll} />
+        )}
       </View>
-      {loading ? (
+      {empty ? (
+        // The heading stays, so the page keeps its shape; the note takes the cards' place.
+        <Text variant="bodySm" tone="textSecondary">
+          {emptyNote}
+        </Text>
+      ) : loading ? (
         <RailSkeleton />
       ) : failed ? (
         <Banner
@@ -133,7 +155,7 @@ export function Rail({
           initialNumToRender={2}
           maxToRenderPerBatch={3}
           windowSize={3}
-          contentContainerStyle={{ gap: space.s4 }}
+          contentContainerStyle={{ gap: space.s5 }}
           accessibilityLabel={title}
           renderItem={({ item }) => (
             <ListingCard

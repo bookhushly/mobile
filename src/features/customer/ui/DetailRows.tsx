@@ -13,6 +13,8 @@ export type DetailRow = {
   amount?: number | null;
   /** What a screen reader says for the row, when the default (label, value) isn't right. */
   spoken?: string;
+  /** A second column beside this one (Booking.com: Check-in | Check-out). */
+  beside?: { label: string; value: string };
 };
 
 type Props = { rows: readonly (DetailRow | null)[]; testID?: string };
@@ -33,6 +35,40 @@ export function DetailRows({ rows, testID }: Props) {
           borderBottomWidth: borderWidth.hairline,
           borderBottomColor: color.border,
         };
+        const beside = r.beside;
+        if (beside !== undefined && beside.value.trim() !== '')
+          return (
+            <View
+              key={r.label}
+              accessible
+              accessibilityLabel={`${r.label}, ${r.value}. ${beside.label}, ${beside.value}`}
+              style={[style, { alignItems: 'stretch' }]}
+            >
+              {[{ label: r.label, value: r.value }, beside].map((c, i) => (
+                <View
+                  key={c.label}
+                  style={{
+                    flex: 1,
+                    gap: space.s1,
+                    paddingLeft: i === 0 ? 0 : space.s4,
+                    borderLeftWidth: i === 0 ? 0 : borderWidth.hairline,
+                    borderLeftColor: color.border,
+                  }}
+                >
+                  <Text variant="label" tone="textSecondary">
+                    {c.label}
+                  </Text>
+                  {/* Booking.com: the day strong, the time under it ("Sun 15 Nov" / "from 2 pm"). */}
+                  <Text variant="bodyStrong">{c.value.split(' · ')[0]}</Text>
+                  {c.value.includes(' · ') ? (
+                    <Text variant="bodySm" tone="textSecondary">
+                      {c.value.split(' · ').slice(1).join(' · ')}
+                    </Text>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          );
         const text = (
           <View style={{ flex: 1, gap: space.s1 }}>
             <Text variant="label" tone="textSecondary">
@@ -46,7 +82,11 @@ export function DetailRows({ rows, testID }: Props) {
                 </Text>
               </View>
             ) : (
-              <Text variant="body" tone={r.onPress !== undefined ? 'linkText' : 'textPrimary'}>
+              <Text
+                variant="body"
+                tone={r.onPress !== undefined ? 'linkText' : 'textPrimary'}
+                style={r.onPress !== undefined ? { textDecorationLine: 'underline' } : undefined}
+              >
                 {r.value}
               </Text>
             )}
@@ -76,7 +116,7 @@ export function DetailRows({ rows, testID }: Props) {
             ]}
           >
             {text}
-            <Icon as={MapPin} size="sm" tone="linkText" />
+            <Icon as={MapPin} size="md" tone="linkText" />
           </Pressable>
         );
       })}

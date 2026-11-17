@@ -44,7 +44,12 @@ const CODED_WORDS: ReadonlyMap<string, string> = new Map([
 // ── Paystack's own status on verify (web #222, V1, V2) ─────────────────────────────────────────
 
 /** Paystack statuses a bank transfer or USSD sits in while it clears: it may still succeed. */
-const STILL_PROCESSING: ReadonlySet<string> = new Set(['ongoing', 'pending', 'processing', 'queued']);
+const STILL_PROCESSING: ReadonlySet<string> = new Set([
+  'ongoing',
+  'pending',
+  'processing',
+  'queued',
+]);
 /** Paystack statuses web treats as final at once (`lib/payment/paystack-status.js`). */
 const FINAL_FAILURES: ReadonlySet<string> = new Set(['failed', 'reversed']);
 

@@ -6,7 +6,9 @@ import {
   eventDateLine,
   eventDay,
   handoff,
+  apartmentSpecs,
   hotelFacts,
+  stayKindLine,
   hotelFromPrice,
   httpsImages,
   pricingRuleLine,
@@ -318,5 +320,26 @@ describe('reviewDate', () => {
     expect(reviewDate('2026-10-12T23:30:00Z')).toBe('13 Oct 2026');
     expect(reviewDate('later')).toBeNull();
     expect(reviewDate(null)).toBeNull();
+  });
+});
+
+describe('stayKindLine', () => {
+  it('names the kind and where it is (Airbnb: "Entire loft in Menlo Park")', () => {
+    expect(stayKindLine('hotel', null, 'Lekki, Lagos')).toBe('Hotel in Lekki, Lagos');
+    expect(stayKindLine('apartment', 'two_bedroom', 'Yaba, Lagos')).toBe(
+      'Two bedroom in Yaba, Lagos',
+    );
+    expect(stayKindLine('apartment', '  ', null)).toBe('Apartment');
+    expect(stayKindLine('hotel', null, null)).toBe('Hotel');
+  });
+});
+
+describe('apartmentSpecs', () => {
+  it('reads guests, bedrooms and bathrooms on one line, skipping the unknown', () => {
+    expect(apartmentSpecs({ ...APT, max_guests: 4, bedrooms: 2, bathrooms: 1 })).toBe(
+      '4 guests · 2 bedrooms · 1 bathroom',
+    );
+    expect(apartmentSpecs({ ...APT, max_guests: 1, bedrooms: 1 })).toBe('1 guest · 1 bedroom');
+    expect(apartmentSpecs(APT)).toBeNull();
   });
 });

@@ -1,4 +1,6 @@
 import {
+  filterPlaces,
+  placeRegion,
   apartmentPriceLabel,
   buildListingParams,
   effectivePackagePrice,
@@ -16,6 +18,7 @@ import {
   placeForState,
   POPULAR_PLACES,
   ratingLabel,
+  ratingWord,
   roomTypeFrom,
   sanitizeSearch,
   ticketTiers,
@@ -235,6 +238,52 @@ describe('inThisWeekend', () => {
   it('on a Sunday, this weekend is the one ending today', () => {
     expect(inThisWeekend('2026-10-18', '2026-10-18')).toBe(true);
     expect(inThisWeekend('2026-10-23', '2026-10-18')).toBe(false);
+  });
+});
+
+describe('hotel needs (filter sheet, 2026-11-15)', () => {
+  it('sends guests, NIHOTOUR and amenities (the web’s icon slugs, sorted, comma-joined)', () => {
+    expect(
+      buildListingParams(
+        'hotels',
+        where,
+        { sort: 'newest', guests: 3, certified: true, amenities: ['wifi', 'waves'] },
+        TODAY,
+      ).params,
+    ).toEqual({
+      sort: 'newest',
+      page: '0',
+      max_occupancy: '3',
+      nihotour_only: 'true',
+      amenities: 'waves,wifi',
+    });
+  });
+
+  it('leaves out one guest, an empty amenity list, and anything a non-hotel can’t use', () => {
+    expect(
+      buildListingParams('hotels', where, { sort: 'newest', guests: 1, amenities: [] }, TODAY)
+        .params,
+    ).toEqual({ sort: 'newest', page: '0' });
+    expect(
+      buildListingParams(
+        'serviced_apartments',
+        where,
+        { sort: 'newest', guests: 3, certified: true, amenities: ['wifi'] },
+        TODAY,
+      ).params,
+    ).toEqual({ sort: 'newest', page: '0' });
+  });
+
+  it('counts guests, certified and each amenity', () => {
+    expect(
+      filterCount('hotels', {
+        sort: 'newest',
+        guests: 2,
+        certified: true,
+        amenities: ['wifi', 'waves'],
+      }),
+    ).toBe(4);
+    expect(filterCount('hotels', { sort: 'newest', guests: 1 })).toBe(0);
   });
 });
 
@@ -641,8 +690,33 @@ describe('normalizeAmenities', () => {
 
   it('reads {key: true} as sentence-case labels', () => {
     expect(normalizeAmenities({ free_wifi: true, swimming_pool: false, gym: true })).toEqual([
-      'Free wifi',
+      'Free Wi-Fi',
       'Gym',
+    ]);
+  });
+
+  it('turns the web’s stored icon codes into words a guest reads (never "zap" or "waves")', () => {
+    expect(
+      normalizeAmenities({
+        items: ['wifi', 'waves', 'zap', 'air-vent', 'battery-charging', 'utensils', 'wind'],
+      }),
+    ).toEqual([
+      'Wi-Fi',
+      'Pool',
+      'Generator',
+      'Air conditioning',
+      'Inverter backup',
+      'Room service',
+      'Balcony',
+    ]);
+    // Room-type and edit-form codes read as words too; unknown codes lose their dashes.
+    expect(normalizeAmenities({ items: ['air_conditioning', 'coffee_maker', 'sea-view'] })).toEqual(
+      ['Air conditioning', 'Coffee maker', 'Sea view'],
+    );
+    expect(normalizeAmenities({ pool: true, airport_shuttle: true, wifi: true })).toEqual([
+      'Pool',
+      'Airport shuttle',
+      'Wi-Fi',
     ]);
   });
 
@@ -650,5 +724,50 @@ describe('normalizeAmenities', () => {
     expect(normalizeAmenities(null)).toEqual([]);
     expect(normalizeAmenities('pool')).toEqual([]);
     expect(normalizeAmenities(42)).toEqual([]);
+  });
+});
+
+describe('ratingWord', () => {
+  it('names the band of a real score, and nothing below "Good" or without reviews', () => {
+    expect(ratingWord(4.9, 10)).toBe('Exceptional');
+    expect(ratingWord(4.8, 10)).toBe('Exceptional');
+    expect(ratingWord(4.6, 47)).toBe('Excellent');
+    expect(ratingWord(4.0, 3)).toBe('Very good');
+    expect(ratingWord(3.5, 3)).toBe('Good');
+    expect(ratingWord(3.2, 5)).toBeNull();
+    expect(ratingWord(4.6, 0)).toBeNull();
+    expect(ratingWord(null, 4)).toBeNull();
+  });
+});
+
+describe('placeRegion', () => {
+  it('names the state a popular place sits in', () => {
+    expect(placeRegion({ label: 'Lagos', state: 'Lagos' })).toBe('Lagos State');
+    expect(placeRegion({ label: 'Abuja', state: 'FCT' })).toBe('Federal Capital Territory');
+    expect(placeRegion({ label: 'Port Harcourt', city: 'Port Harcourt' })).toBe('Rivers State');
+    expect(placeRegion({ label: 'Calabar', city: 'Calabar' })).toBe('Cross River State');
+  });
+  it('has nothing to add for a plain state', () => {
+    expect(placeRegion({ label: 'Abia', state: 'Abia' })).toBeNull();
+  });
+});
+
+describe('filterPlaces', () => {
+  const places = [
+    { label: 'Lagos', state: 'Lagos' },
+    { label: 'Port Harcourt', city: 'Port Harcourt' },
+    { label: 'Abia', state: 'Abia' },
+  ];
+  it('keeps everything for an empty or blank query', () => {
+    expect(filterPlaces(places, '  ')).toEqual(places);
+  });
+  it('matches the name anywhere, ignoring case and spaces around it', () => {
+    expect(filterPlaces(places, ' har ')).toEqual([places[1]]);
+  });
+  it('matches the region too', () => {
+    expect(filterPlaces(places, 'rivers')).toEqual([places[1]]);
+  });
+  it('finds nothing for an unknown place', () => {
+    expect(filterPlaces(places, 'zzz')).toEqual([]);
   });
 });

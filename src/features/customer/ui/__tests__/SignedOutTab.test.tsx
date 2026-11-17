@@ -50,9 +50,10 @@ it('Sign in and Create account call their handlers', async () => {
   expect(onCreateAccount).toHaveBeenCalledTimes(1);
 });
 
-it('the title is a header', async () => {
+it('opens with the tab’s page title as the header, as Explore does', async () => {
   await render(<SignedOutTab tab="saved" onSignIn={noop} onCreateAccount={noop} />);
-  expect(screen.getByRole('header', { name: 'Your saved places live here' })).toBeTruthy();
+  expect(screen.getByRole('header', { name: 'Saved' })).toBeTruthy();
+  expect(screen.getByText('Your saved places live here')).toBeTruthy();
 });
 
 it('keeps 12 pt between the buttons', async () => {

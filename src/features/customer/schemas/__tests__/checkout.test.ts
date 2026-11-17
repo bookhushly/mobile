@@ -30,7 +30,9 @@ const stay = {
     hotel: { id: 'h1', name: 'Grand' },
     extra_key: 1,
   },
-  next: { payment: { type: 'hotel', id: 'b1', amount: 45000.5, endpoint: '/api/payment/initialize' } },
+  next: {
+    payment: { type: 'hotel', id: 'b1', amount: 45000.5, endpoint: '/api/payment/initialize' },
+  },
 };
 
 describe('stayCreated', () => {
@@ -75,24 +77,39 @@ describe('eventCreated', () => {
       ticket_details: { Regular: 2 },
     },
   };
-  it('parses', () => { expect(eventCreated.parse(body).booking.total_amount).toBe(5000); });
+  it('parses', () => {
+    expect(eventCreated.parse(body).booking.total_amount).toBe(5000);
+  });
   it('fails without an id', () => {
-    expect(eventCreated.safeParse({ booking: { ...body.booking, id: undefined } }).success).toBe(false);
+    expect(eventCreated.safeParse({ booking: { ...body.booking, id: undefined } }).success).toBe(
+      false,
+    );
   });
 });
 
 describe('roomAvailability', () => {
   it('parses', () => {
-    expect(roomAvailability.parse({ totalRooms: 5, bookedCount: 2, freeRooms: 3, available: true }).freeRooms).toBe(3);
+    expect(
+      roomAvailability.parse({ totalRooms: 5, bookedCount: 2, freeRooms: 3, available: true })
+        .freeRooms,
+    ).toBe(3);
   });
   it('fails without available', () => {
-    expect(roomAvailability.safeParse({ totalRooms: 5, bookedCount: 2, freeRooms: 3 }).success).toBe(false);
+    expect(
+      roomAvailability.safeParse({ totalRooms: 5, bookedCount: 2, freeRooms: 3 }).success,
+    ).toBe(false);
   });
 });
 
 describe('promoResult', () => {
   it('parses a valid code', () => {
-    const r = promoResult.parse({ valid: true, code_id: 'c', code: 'X', discount_amount: 100, discounted_total: '900' });
+    const r = promoResult.parse({
+      valid: true,
+      code_id: 'c',
+      code: 'X',
+      discount_amount: 100,
+      discounted_total: '900',
+    });
     expect(r.valid && r.discounted_total).toBe(900);
   });
   it('parses an invalid code', () => {
@@ -100,7 +117,10 @@ describe('promoResult', () => {
     expect(!r.valid && r.error).toBe('Expired');
   });
   it('fails a valid code missing code_id', () => {
-    expect(promoResult.safeParse({ valid: true, code: 'X', discount_amount: 1, discounted_total: 1 }).success).toBe(false);
+    expect(
+      promoResult.safeParse({ valid: true, code: 'X', discount_amount: 1, discounted_total: 1 })
+        .success,
+    ).toBe(false);
   });
 });
 
@@ -128,12 +148,22 @@ describe('initialized', () => {
     currency: 'NGN',
     payment_url: 'https://checkout.paystack.com/abc',
   };
-  it('parses', () => { expect(initialized.parse({ success: true, payment }).payment.reference).toBe('ref'); });
+  it('parses', () => {
+    expect(initialized.parse({ success: true, payment }).payment.reference).toBe('ref');
+  });
   it('rejects a non-https payment_url', () => {
-    expect(initialized.safeParse({ success: true, payment: { ...payment, payment_url: 'http://x.com/a' } }).success).toBe(false);
+    expect(
+      initialized.safeParse({
+        success: true,
+        payment: { ...payment, payment_url: 'http://x.com/a' },
+      }).success,
+    ).toBe(false);
   });
   it('fails without a reference', () => {
-    expect(initialized.safeParse({ success: true, payment: { ...payment, reference: undefined } }).success).toBe(false);
+    expect(
+      initialized.safeParse({ success: true, payment: { ...payment, reference: undefined } })
+        .success,
+    ).toBe(false);
   });
   it('keeps reused when web #223 hands back an open checkout (W5)', () => {
     expect(initialized.parse({ success: true, reused: true, payment }).reused).toBe(true);
@@ -160,14 +190,25 @@ describe('checkStatus', () => {
 describe('verified', () => {
   it('parses with and without payment', () => {
     expect(verified.parse({ verified: false, status: 'pending' }).verified).toBe(false);
-    expect(verified.parse({ verified: true, status: 'completed', payment: { reference: 'r', status: 'completed' } }).payment?.reference).toBe('r');
+    expect(
+      verified.parse({
+        verified: true,
+        status: 'completed',
+        payment: { reference: 'r', status: 'completed' },
+      }).payment?.reference,
+    ).toBe('r');
   });
   it('fails without verified', () => {
     expect(verified.safeParse({ status: 'x' }).success).toBe(false);
   });
   it('keeps provider_status, a string or null, when present (W5)', () => {
-    expect(verified.parse({ verified: false, status: 'failed', provider_status: 'failed' }).provider_status).toBe('failed');
-    expect(verified.parse({ verified: false, status: 'pending', provider_status: null }).provider_status).toBeNull();
+    expect(
+      verified.parse({ verified: false, status: 'failed', provider_status: 'failed' })
+        .provider_status,
+    ).toBe('failed');
+    expect(
+      verified.parse({ verified: false, status: 'pending', provider_status: null }).provider_status,
+    ).toBeNull();
     expect(verified.parse({ verified: false, status: 'pending' }).provider_status).toBeUndefined();
   });
 });
@@ -176,20 +217,35 @@ describe('paymentState', () => {
   const payment = { reference: 'r', status: 'completed', fulfilled: true, request_type: 'hotel' };
   it('parses with a request or null', () => {
     expect(paymentState.parse({ payment, request: null }).request).toBeNull();
-    expect(paymentState.parse({ payment, request: { id: 'b', status: null, payment_status: 'completed' } }).request?.id).toBe('b');
+    expect(
+      paymentState.parse({
+        payment,
+        request: { id: 'b', status: null, payment_status: 'completed' },
+      }).request?.id,
+    ).toBe('b');
   });
   it('fails without fulfilled', () => {
-    expect(paymentState.safeParse({ payment: { ...payment, fulfilled: undefined }, request: null }).success).toBe(false);
+    expect(
+      paymentState.safeParse({ payment: { ...payment, fulfilled: undefined }, request: null })
+        .success,
+    ).toBe(false);
   });
 });
 
 describe('parseCustomQuestions', () => {
   it('reads a JSON string, taking label from question', () => {
-    const r = parseCustomQuestions('[{"id":"q1","question":"Size?","type":"select","options":["S","M"],"required":true}]');
-    expect(r).toEqual([{ id: 'q1', label: 'Size?', type: 'select', options: ['S', 'M'], required: true }]);
+    const r = parseCustomQuestions(
+      '[{"id":"q1","question":"Size?","type":"select","options":["S","M"],"required":true}]',
+    );
+    expect(r).toEqual([
+      { id: 'q1', label: 'Size?', type: 'select', options: ['S', 'M'], required: true },
+    ]);
   });
   it('reads an array, falling back to label then text, with defaults', () => {
-    const r = parseCustomQuestions([{ id: 'a', label: 'L', type: 'text' }, { id: 'b', text: 'T', type: 'textarea' }]);
+    const r = parseCustomQuestions([
+      { id: 'a', label: 'L', type: 'text' },
+      { id: 'b', text: 'T', type: 'textarea' },
+    ]);
     expect(r.map((q) => q.label)).toEqual(['L', 'T']);
     expect(r[0]).toMatchObject({ options: [], required: false });
   });
@@ -217,6 +273,8 @@ describe('parseCustomQuestions', () => {
     expect(r.map((q) => q.required)).toEqual([true, false, false]);
   });
   it('an empty question falls back to label (D1)', () => {
-    expect(parseCustomQuestions([{ id: 'a', question: '', label: 'Diet', type: 'text' }])[0]?.label).toBe('Diet');
+    expect(
+      parseCustomQuestions([{ id: 'a', question: '', label: 'Diet', type: 'text' }])[0]?.label,
+    ).toBe('Diet');
   });
 });

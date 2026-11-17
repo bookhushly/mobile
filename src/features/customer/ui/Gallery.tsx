@@ -11,10 +11,13 @@ import {
 } from 'react-native';
 
 import type { ListingKind } from '@/features/customer/domain/discover';
-import { color, radius, space } from '@/shared/theme';
-import { Icon, Text } from '@/shared/ui';
+import { color, layout, radius, space } from '@/shared/theme';
+import { Icon, Text, useWide } from '@/shared/ui';
 
-const RATIO = 16 / 10;
+// Owner's picks (2026-11-15, second round, Mobbin): hotels and apartments after Airbnb's listing
+// (the photo to the screen's top edge, a "1 / 20" counter that moves as you swipe, the page's sheet
+// riding up over its foot); events after Luma (the poster as a rounded square card on a dark hero).
+const RATIO: Record<ListingKind, number> = { hotel: 5 / 4, apartment: 5 / 4, event: 1 };
 
 const KIND_ICON: Record<ListingKind, LucideIcon> = {
   hotel: BedDouble,
@@ -28,53 +31,63 @@ type Props = {
   /** https only (D14), already filtered. */
   images: readonly string[];
   onOpen: (index: number) => void;
+  /** Luma: a rounded card inside the page's gutters instead of edge to edge. */
+  framed?: boolean;
+  /** Space kept clear at the photo's foot (the sheet that rides over it), above the counter. */
+  footInset?: number;
 };
 
-/** "2/12" over the photo; spoken with the photo's own label instead. */
-export function Counter({ index, total }: { index: number; total: number }) {
+/** "2 / 12" (Airbnb), counting as the photos move; the photo's own label is what's spoken. */
+export function Counter({
+  index,
+  total,
+  lift = 0,
+}: {
+  index: number;
+  total: number;
+  lift?: number;
+}) {
   return (
     <View
+      pointerEvents="none"
       accessible={false}
       importantForAccessibility="no-hide-descendants"
-      style={{
-        position: 'absolute',
-        right: space.s4,
-        bottom: space.s4,
-        paddingHorizontal: space.s3,
-        paddingVertical: space.s1,
-        borderRadius: radius.r2,
-        backgroundColor: color.inverse,
-      }}
+      style={{ position: 'absolute', right: space.s4, bottom: space.s4 + lift }}
     >
-      <Text variant="labelSm" tone="onInverse" tabular testID="gallery-counter">
-        {`${String(index + 1)}/${String(total)}`}
-      </Text>
+      <View
+        style={{
+          paddingHorizontal: space.s4,
+          paddingVertical: space.s2,
+          borderRadius: radius.rFull,
+          backgroundColor: color.inverse,
+        }}
+      >
+        <Text variant="labelSm" tone="onInverse" tabular testID="gallery-counter">
+          {`${String(index + 1)} / ${String(total)}`}
+        </Text>
+      </View>
     </View>
   );
 }
 
-// Spec §3/§6, D14: a 16:10 pager with a counter; a tap opens the full-screen viewer. No photo →
-// a wash block with the kind's icon, never a stock image.
-// D14 wants full-size photos only in the viewer, but there is no resize endpoint yet
-// (BACKEND_STATUS §9 "Booking thumbnails are full-size originals"): the pager loads originals,
-// at most ~3 at a time (`initialNumToRender` 1, `windowSize` 3): only the first photo loads with
-// the page (perf review P4), the next as the list fills its window.
-export function Gallery({ kind, title, images, onOpen }: Props) {
+// Spec §3/§6, D14: a pager; a tap opens the full-screen viewer. No photo → a wash block with the
+// kind's icon, never a stock image. No resize endpoint yet (BACKEND_STATUS §9): originals, at most
+// ~3 at a time (`initialNumToRender` 1, `windowSize` 3; perf review P4).
+export function Gallery({ kind, title, images, onOpen, framed = false, footInset = 0 }: Props) {
   const [width, setWidth] = useState(0);
   const [index, setIndex] = useState(0);
-  const frame = { width: '100%' as const, aspectRatio: RATIO, borderRadius: radius.r3 };
-  if (images.length === 0)
-    return (
-      <View
-        testID="gallery-empty"
-        style={[
-          frame,
-          { backgroundColor: color.wash, alignItems: 'center', justifyContent: 'center' },
-        ]}
-      >
-        <Icon as={KIND_ICON[kind]} size="lg" tone="textMuted" />
-      </View>
-    );
+  // Edge to edge (Expedia, Airbnb): the photo runs past the page gutters to the screen's sides.
+  const gutter = useWide() ? layout.tabletGutter : layout.phoneGutter;
+  const ratio = RATIO[kind];
+  const frame = framed
+    ? {
+        alignSelf: 'stretch' as const,
+        aspectRatio: ratio,
+        borderRadius: radius.r4,
+        borderCurve: 'continuous' as const,
+      }
+    : { alignSelf: 'stretch' as const, marginHorizontal: -gutter, aspectRatio: ratio };
+  const many = images.length > 1;
   const onLayout = (e: LayoutChangeEvent) => {
     setWidth(e.nativeEvent.layout.width);
   };
@@ -83,6 +96,25 @@ export function Gallery({ kind, title, images, onOpen }: Props) {
     const i = Math.round(e.nativeEvent.contentOffset.x / width);
     setIndex(Math.min(images.length - 1, Math.max(0, i)));
   };
+  const overlay = many ? <Counter index={index} total={images.length} lift={footInset} /> : null;
+  if (images.length === 0)
+    return (
+      <View
+        testID="gallery-empty"
+        style={[
+          frame,
+          {
+            overflow: 'hidden',
+            backgroundColor: color.wash,
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+        ]}
+      >
+        <Icon as={KIND_ICON[kind]} size="lg" tone="textMuted" />
+        {overlay}
+      </View>
+    );
   return (
     <View
       testID="gallery"
@@ -112,7 +144,7 @@ export function Gallery({ kind, title, images, onOpen }: Props) {
             >
               <Image
                 source={{ uri: item }}
-                style={{ width, aspectRatio: RATIO, backgroundColor: color.wash }}
+                style={{ width, aspectRatio: ratio, backgroundColor: color.wash }}
                 contentFit="cover"
                 cachePolicy="memory-disk"
                 recyclingKey={item}
@@ -122,7 +154,7 @@ export function Gallery({ kind, title, images, onOpen }: Props) {
           )}
         />
       ) : null}
-      {images.length > 1 ? <Counter index={index} total={images.length} /> : null}
+      {overlay}
     </View>
   );
 }

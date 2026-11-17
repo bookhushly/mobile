@@ -220,3 +220,30 @@ export function apartmentFacts(a: ApartmentDetail): Fact[] {
   ];
   return facts.filter((f): f is Fact => f !== null);
 }
+
+const plural = (n: string, one: string) => `${n} ${one}${n === '1' ? '' : 's'}`;
+
+/** Under a stay's title (Airbnb: "Entire loft in Menlo Park"): its kind and where it is. */
+export function stayKindLine(
+  kind: 'hotel' | 'apartment',
+  apartmentType: string | null,
+  area: string | null,
+): string {
+  const word =
+    kind === 'apartment' && apartmentType?.trim()
+      ? sentence(apartmentType)
+      : kind === 'hotel'
+        ? 'Hotel'
+        : 'Apartment';
+  return area === null ? word : `${word} in ${area}`;
+}
+
+/** "4 guests · 2 bedrooms · 1 bathroom" (Airbnb's line under the title); null if none is known. */
+export function apartmentSpecs(a: ApartmentDetail): string | null {
+  const parts = [
+    count(a.max_guests) === null ? null : plural(String(count(a.max_guests)), 'guest'),
+    count(a.bedrooms) === null ? null : plural(String(count(a.bedrooms)), 'bedroom'),
+    count(a.bathrooms) === null ? null : plural(String(count(a.bathrooms)), 'bathroom'),
+  ].filter((s): s is string => s !== null);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}

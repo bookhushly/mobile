@@ -211,7 +211,7 @@ describe('detail rows', () => {
       status: 'active',
       caretaker_phone: '0800',
     });
-    expect(a.amenities).toEqual(['Wifi']);
+    expect(a.amenities).toEqual(['Wi-Fi']);
     expect(a.security_features).toEqual(['CCTV']);
     expect(a).not.toHaveProperty('caretaker_phone');
     expect(

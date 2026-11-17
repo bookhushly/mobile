@@ -10,6 +10,10 @@ import { StaySelect } from '@/features/customer/ui/checkout/StaySelect';
 import { loadFailedMessage } from '@/features/customer/ui/discoverLabels';
 import { CHECKOUT_EVENTS_ENABLED, CHECKOUT_STAYS_ENABLED } from '@/shared/config/features';
 import { formatNigerianPhone } from '@/shared/lib/phone';
+import { minuteOf } from '@/features/customer/domain/listingCard';
+import { BookingSummary } from '@/features/customer/ui/BookingSummary';
+import { clock } from '@/shared/api/instance';
+import { listingSummary } from '@/features/customer/ui/listingSummary';
 import { ErrorState, Header, IconButton, Screen, SkeletonRows } from '@/shared/ui';
 
 type Props = {
@@ -81,6 +85,15 @@ function Select({
       </Screen>
     );
   }
+  // The place card on top (Airbnb, Booking.com): photo, name, and where or when.
+  const ls = listingSummary(data, minuteOf(clock.serverNow()));
+  const lead = (
+    <BookingSummary
+      title={ls.title}
+      when={(kind === 'event' ? ls.when : ls.area) ?? ''}
+      image={ls.images[0] ?? null}
+    />
+  );
   const p = profile.profile;
   const guest = {
     name: p?.name ?? '',
@@ -100,6 +113,7 @@ function Select({
         guestReady={guestReady}
         modePending={modePending}
         header={header}
+        lead={lead}
         onCreated={(id) => {
           onCreated(id, false);
         }}
@@ -116,6 +130,7 @@ function Select({
         guestReady={guestReady}
         modePending={modePending}
         header={header}
+        lead={lead}
         onCreated={(id) => {
           onCreated(id, false);
         }}
@@ -130,6 +145,7 @@ function Select({
       guestReady={guestReady}
       modePending={modePending}
       header={header}
+      lead={lead}
       onCreated={onCreated}
       onRefused={() => {
         void listing.refetch();

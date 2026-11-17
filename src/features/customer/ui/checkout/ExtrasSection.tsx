@@ -83,7 +83,7 @@ export function ExtrasSection({
       : 'Airport transfer';
   return (
     <Stack gap="s4" testID="extras">
-      <Text variant="headline">Extras</Text>
+      <Text variant="title" accessibilityRole="header">Extras</Text>
       {extras.breakfast.map((b) => (
         <View
           key={b.id}

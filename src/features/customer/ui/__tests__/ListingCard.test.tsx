@@ -38,7 +38,9 @@ it('a hotel card shows title, area, rating, price and opens', async () => {
     />,
   );
   expect(screen.getByText('Harbour Suites')).toBeTruthy();
-  expect(screen.getByText('4.6 (23)')).toBeTruthy();
+  // The score badge, its word and the count (Expedia style).
+  expect(screen.getByText('4.6')).toBeTruthy();
+  expect(screen.getByLabelText('Rated 4.6 out of 5, 23 reviews')).toBeTruthy();
   expect(screen.getByText('From ₦45,000')).toBeTruthy();
   expect(screen.getByText('/ night')).toBeTruthy();
   const card = screen.getByRole('button', {
@@ -55,7 +57,7 @@ it('a hotel with price 0 says "See rooms for prices", never ₦0', async () => {
   await render(
     <ListingCard
       listing={{ ...HOTEL, price: { text: 'See rooms for prices' } }}
-      variant="row"
+      variant="feature"
       saved={false}
       savedReady
       onOpen={jest.fn()}
@@ -124,7 +126,7 @@ it('the heart waits while the saved list loads', async () => {
   await render(
     <ListingCard
       listing={HOTEL}
-      variant="row"
+      variant="feature"
       saved={false}
       savedReady={false}
       onOpen={jest.fn()}
@@ -132,4 +134,18 @@ it('the heart waits while the saved list loads', async () => {
     />,
   );
   expect(screen.getByRole('button', { name: 'Save Harbour Suites', disabled: true })).toBeTruthy();
+});
+
+it('a results card (Airbnb) puts "★ 4.6 (47)" beside the name and underlines the amount', async () => {
+  await render(
+    <ListingCard
+      listing={{ ...HOTEL, rating: { avg: 4.6, count: 47 } }}
+      variant="feature"
+      saved={false}
+      savedReady
+      onOpen={jest.fn()}
+      onToggleSaved={jest.fn()}
+    />,
+  );
+  expect(screen.getByTestId('feature-rating')).toHaveTextContent('4.6 (47)');
 });

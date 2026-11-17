@@ -136,7 +136,7 @@ export function useListings<C extends Category>(
 
 export type RailListings<T> = Pick<
   Listings<T>,
-  'items' | 'loading' | 'failed' | 'error' | 'retryAfterSec' | 'refetch'
+  'items' | 'loading' | 'failed' | 'error' | 'retryAfterSec' | 'refetch' | 'totalCount'
 >;
 
 /**
@@ -162,6 +162,7 @@ export function useListingsRail<C extends Category>(
   const items = useMemo(() => q.data?.items ?? [], [q.data]);
   return {
     items,
+    totalCount: q.data?.totalCount ?? null,
     loading: q.isPending && q.fetchStatus === 'fetching',
     failed: loadFailed(q),
     error,

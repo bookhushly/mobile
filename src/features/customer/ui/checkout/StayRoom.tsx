@@ -39,7 +39,7 @@ export function StayRoom({ roomType, rates, rateId, beds, onRate }: Props) {
       </Card>
       {rates.length > 1 ? (
         <Stack gap="s2" testID="bed-options">
-          <Text variant="headline">Bed option</Text>
+          <Text variant="title" accessibilityRole="header">Bed option</Text>
           {rates.map((r) => (
             <ListRow
               key={r.id}

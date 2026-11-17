@@ -63,6 +63,8 @@ type Props = {
   /** Signed in, but the account may yet be staff: Continue stays off until this clears. */
   modePending: boolean;
   header: ReactNode;
+  /** What's being booked, first (Airbnb / Booking.com checkout: the place card on top). */
+  lead?: ReactNode;
   onCreated: (bookingId: string) => void;
 };
 
@@ -77,6 +79,7 @@ export function StaySelect({
   guestReady,
   modePending,
   header,
+  lead,
   onCreated,
 }: Props) {
   const hotel = stay.kind === 'hotel' ? stay : null;
@@ -231,6 +234,7 @@ export function StaySelect({
 
   return (
     <Screen scroll header={header} footer={footer}>
+      {lead}
       {hotel !== null ? (
         <StayRoom
           roomType={hotel.roomType}

@@ -38,7 +38,7 @@ export function GuestFields({
 }: Props) {
   return (
     <Stack gap="s4" testID="guest-fields">
-      <Text variant="headline">Your details</Text>
+      <Text variant="title" accessibilityRole="header">Your details</Text>
       {showName ? (
         <Input
           ref={nameRef}

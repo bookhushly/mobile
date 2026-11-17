@@ -16,6 +16,8 @@ import { formatNaira, Text } from '@/shared/ui';
 
 type Props = { listing: ApartmentListing; onShowAmenities: () => void };
 
+const ON_TOP = new Set(['Type', 'Guests', 'Bedrooms', 'Bathrooms']);
+
 const at = (word: string, t: string | null) => {
   const c = clockLabel(t);
   return c === null ? '' : `${word} ${c}`;
@@ -50,7 +52,11 @@ export function ApartmentBody({ listing, onShowAmenities }: Props) {
   ].filter((r) => r !== null);
   return (
     <>
-      <FactsGrid facts={apartmentFacts(a)} testID="facts" />
+      <FactsGrid
+        // Type, guests, bedrooms and bathrooms are already under the title (StayOverview).
+        facts={apartmentFacts(a).filter((f) => !ON_TOP.has(f.label))}
+        testID="facts"
+      />
       {prices.length > 0 || seasonal.length > 0 ? (
         <DetailSection label="Prices" testID="prices">
           <DetailRows rows={prices} />

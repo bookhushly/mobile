@@ -111,3 +111,33 @@ it('popular places search by state or city in the chosen category', async () => 
   await fireEvent.press(screen.getByRole('button', { name: 'Port Harcourt, Events' }));
   expect(p.onSearch).toHaveBeenLastCalledWith({ category: 'events', city: 'Port Harcourt' });
 });
+
+it('suggested places show the areas people book in', async () => {
+  initial = [];
+  await render(<SearchScreen {...props()} />);
+  expect(screen.getByText('Suggested places')).toBeTruthy();
+  expect(screen.getByText('Lekki, Ikoyi, Victoria Island, Ikeja')).toBeTruthy();
+});
+
+it('typing suggests places and areas; an area searches within its place', async () => {
+  const p = props();
+  await render(<SearchScreen {...p} />);
+  await fireEvent.changeText(screen.getByLabelText('Where or what'), 'lek');
+  expect(screen.queryByText('Suggested places')).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Lekki, Lagos, Hotels' }));
+  expect(p.onSearch).toHaveBeenCalledWith({ category: 'hotels', q: 'Lekki', region: 'Lagos' });
+  expect(add).toHaveBeenCalledWith({
+    label: 'Lekki, Lagos',
+    category: 'hotels',
+    q: 'Lekki',
+    state: 'Lagos',
+  });
+});
+
+it('typing a state finds its city', async () => {
+  const p = props();
+  await render(<SearchScreen {...p} />);
+  await fireEvent.changeText(screen.getByLabelText('Where or what'), 'Rivers');
+  await fireEvent.press(screen.getByRole('button', { name: 'Port Harcourt, Hotels' }));
+  expect(p.onSearch).toHaveBeenCalledWith({ category: 'hotels', city: 'Port Harcourt' });
+});

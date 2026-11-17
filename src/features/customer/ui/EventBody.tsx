@@ -6,18 +6,12 @@ import {
   lowStockThreshold,
   ticketTiers,
 } from '@/features/customer/domain/discover';
-import {
-  earlyBirdNote,
-  eventDateLine,
-  ticketStockWord,
-} from '@/features/customer/domain/listingDetail';
+import { earlyBirdNote, ticketStockWord } from '@/features/customer/domain/listingDetail';
 import { plainText } from '@/features/customer/domain/plainText';
 import type { EventDetail } from '@/features/customer/schemas/listings';
-import { DetailRows } from '@/features/customer/ui/DetailRows';
 import { DetailSection } from '@/features/customer/ui/DetailSection';
-import { openMaps } from '@/features/customer/ui/links';
-import { ReadMoreText } from '@/features/customer/ui/ReadMoreText';
-import { TicketTypeRow } from '@/features/customer/ui/TicketTypeRow';
+import { TicketTypeCard } from '@/features/customer/ui/TicketTypeCard';
+import { space } from '@/shared/theme';
 import { Banner } from '@/shared/ui';
 
 type Props = { event: EventDetail; stock: EventStock; nowMs: number };
@@ -29,13 +23,12 @@ const STOCK_BANNER: Partial<Record<EventStock, string>> = {
   notOnSale: 'Tickets aren’t on sale right now.',
 };
 
-// Spec §3 event: date and time (12-hour, Lagos), venue (→ Maps), organizer, ticket types with
-// price, early-bird note and stock word, cancellation policy.
+// Spec §3 event: why tickets can't be had (if so), then the ticket types with price, early-bird
+// note and stock word. When and where are in the hero (EventHero); the description, cancellation
+// and organiser follow on the page (ListingScreen), organiser last as Eventbrite and Luma do.
 export function EventBody({ event: e, stock, nowMs }: Props) {
-  const venue = e.location?.trim() ?? '';
   const threshold = lowStockThreshold(e.low_stock_threshold);
   const banner = STOCK_BANNER[stock];
-  const cancellation = plainText(e.cancellation_policy);
   // A single-tier event's implicit tier isn't a ticket type: its price is in the footer.
   const tiers = ticketTiers(e.ticket_packages);
   return (
@@ -43,26 +36,11 @@ export function EventBody({ event: e, stock, nowMs }: Props) {
       {banner !== undefined ? (
         <Banner tone="neutral" message={banner} testID="stock-banner" />
       ) : null}
-      <DetailRows
-        rows={[
-          { label: 'When', value: eventDateLine(e) ?? '' },
-          venue === ''
-            ? null
-            : {
-                label: 'Venue',
-                value: venue,
-                onPress: () => {
-                  openMaps(venue);
-                },
-              },
-          { label: 'Organizer', value: e.vendor_name?.trim() ?? '' },
-        ]}
-      />
       {tiers.length > 0 ? (
         <DetailSection label="Tickets" testID="tickets">
-          <View>
+          <View style={{ gap: space.s3 }}>
             {tiers.map((p, i) => (
-              <TicketTypeRow
+              <TicketTypeCard
                 key={`${String(i)}:${p.name}`}
                 ticket={{
                   name: p.name,
@@ -74,11 +52,6 @@ export function EventBody({ event: e, stock, nowMs }: Props) {
               />
             ))}
           </View>
-        </DetailSection>
-      ) : null}
-      {cancellation !== null ? (
-        <DetailSection label="Cancellation">
-          <ReadMoreText text={cancellation} />
         </DetailSection>
       ) : null}
     </>

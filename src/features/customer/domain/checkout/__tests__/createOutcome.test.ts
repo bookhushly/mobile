@@ -297,7 +297,9 @@ describe('create codes (web #222, #223)', () => {
   });
 
   it('event 409 sold_out says not enough tickets left', () => {
-    expect(eventCreateOutcome(conflict('sold_out', { error: 'Not enough “VIP” tickets left' }))).toEqual({
+    expect(
+      eventCreateOutcome(conflict('sold_out', { error: 'Not enough “VIP” tickets left' })),
+    ).toEqual({
       kind: 'refused',
       words: 'Not enough tickets left.',
     });
@@ -318,7 +320,9 @@ describe('create codes (web #222, #223)', () => {
   });
 
   it('event 500 booking_failed is failed, with nothing to release', () => {
-    expect(eventCreateOutcome({ kind: 'unavailable', status: 500, code: 'booking_failed' })).toEqual({
+    expect(
+      eventCreateOutcome({ kind: 'unavailable', status: 500, code: 'booking_failed' }),
+    ).toEqual({
       kind: 'failed',
       words: 'Couldn’t book. Try again',
       strayBookingId: null,

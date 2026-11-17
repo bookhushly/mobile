@@ -439,7 +439,9 @@ describe('useCreateBooking — no user', () => {
     const paid = await renderHook(() => useCreateBooking('', 'event', EVENT));
     await act(() => paid.result.current.submit(tickets(), { title: 'Afrobeats night' }));
     const free = await renderHook(() => useCreateBooking('', 'event', EVENT));
-    await act(() => free.result.current.submit(tickets(), { title: 'Afrobeats night', free: true }));
+    await act(() =>
+      free.result.current.submit(tickets(), { title: 'Afrobeats night', free: true }),
+    );
 
     expect(stayMock).not.toHaveBeenCalled();
     expect(eventMock).not.toHaveBeenCalled();

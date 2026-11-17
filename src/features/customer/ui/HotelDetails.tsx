@@ -71,10 +71,13 @@ export function HotelDetails({
                   openMaps(address);
                 },
               },
-          { label: 'Check-in', value: dayAt(row.check_in_date, h?.check_in_time ?? null, 'from') },
           {
-            label: 'Check-out',
-            value: dayAt(row.check_out_date, h?.check_out_time ?? null, 'by'),
+            label: 'Check-in',
+            value: dayAt(row.check_in_date, h?.check_in_time ?? null, 'from'),
+            beside: {
+              label: 'Check-out',
+              value: dayAt(row.check_out_date, h?.check_out_time ?? null, 'by'),
+            },
           },
           { label: 'Room type', value: row.room_type?.name ?? '' },
           { label: 'Guests', value: guestsLine(row.adults, row.children) ?? '' },

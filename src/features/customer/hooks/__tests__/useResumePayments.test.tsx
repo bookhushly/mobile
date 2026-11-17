@@ -173,9 +173,7 @@ describe('useResumePayments', () => {
     stateMock.mockResolvedValue(polled('failed', false));
     await mount();
     expect(verifyMock).toHaveBeenCalledTimes(1);
-    expect(await checkoutStore.get(USER, 'event', 'b1')).toEqual(
-      entry('b1', 'ref1', 3 * 60 * MIN),
-    );
+    expect(await checkoutStore.get(USER, 'event', 'b1')).toEqual(entry('b1', 'ref1', 3 * 60 * MIN));
   });
 
   it('skips a booking whose Pay screen is open', async () => {
