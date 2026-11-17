@@ -71,7 +71,9 @@ it('shows the header, each detail, help links and the version', async () => {
   withProfile(full);
   await open({ modeSwitcher: <Text>Mode switcher here</Text> });
   expect(screen.getByText('AL', { includeHiddenElements: true })).toBeTruthy();
-  expect(screen.getByRole('header', { name: 'Ada Lovelace' })).toBeTruthy();
+  // The page title is the header, as on every tab; the name sits under it.
+  expect(screen.getByRole('header', { name: 'Account' })).toBeTruthy();
+  expect(screen.getAllByText('Ada Lovelace').length).toBeGreaterThan(0);
   expect(screen.getByText('ada@example.com')).toBeTruthy();
   expect(screen.getByText('Mode switcher here')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Name, Ada Lovelace, edit' })).toBeTruthy();
@@ -92,14 +94,14 @@ it('unset details read "Add"', async () => {
   withProfile(empty);
   await open();
   expect(screen.getAllByText('Add')).toHaveLength(3);
-  expect(screen.getByRole('button', { name: 'Phone, not set, edit' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Phone, not set, add' })).toBeTruthy();
 });
 
 it('falls back to the email letter for the avatar', async () => {
   withProfile({ ...empty, name: '' });
   await open();
   expect(screen.getByText('A', { includeHiddenElements: true })).toBeTruthy();
-  expect(screen.getByRole('header', { name: 'Account' })).toBeTruthy();
+  expect(screen.getByText('Your account')).toBeTruthy();
 });
 
 it('says so when the details could not load', async () => {
@@ -112,7 +114,7 @@ it('says so when the details could not load', async () => {
 it('validates the phone on blur and saves it as E.164 with only the four fields', async () => {
   withProfile(empty);
   await open();
-  await fireEvent.press(screen.getByRole('button', { name: 'Phone, not set, edit' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Phone, not set, add' }));
   const input = screen.getByLabelText('Phone number');
   await fireEvent.changeText(input, '12345');
   await fireEvent(input, 'blur');

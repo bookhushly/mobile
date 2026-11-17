@@ -164,8 +164,12 @@ export function GuestsScreen({ tab, onTabChange, onOpenBooking, onChooseRoom, on
     >
       {wide ? (
         <View style={{ flex: 1, flexDirection: 'row', gap: layout.tabletGutter }}>
-          <View style={{ width: LIST_PANE_WIDTH }}>{left}</View>
-          <View style={{ flex: 1 }} testID="guest-detail-pane">
+          {/* Up to 380, shrinking first when the window is narrow (an iPad in portrait beside the
+              rail), so the detail pane always keeps the larger share. */}
+          <View style={{ flexBasis: LIST_PANE_WIDTH, flexShrink: 1, flexGrow: 0, minWidth: 0 }}>
+            {left}
+          </View>
+          <View style={{ flex: 1, minWidth: LIST_PANE_WIDTH }} testID="guest-detail-pane">
             {selected === null ? (
               <EmptyState icon={Users} title="Choose a guest" />
             ) : (

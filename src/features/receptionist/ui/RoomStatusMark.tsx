@@ -20,7 +20,7 @@ export function RoomStatusMark({ status }: { status: RoomStatus }) {
           backgroundColor: color.status[tone].solid,
         }}
       />
-      <Text variant="labelSm" tone={TONE_FG[tone]} numberOfLines={1}>
+      <Text variant="labelSm" tone={TONE_FG[tone]} numberOfLines={2} style={{ flexShrink: 1 }}>
         {statusLabel(status)}
       </Text>
     </View>

@@ -123,6 +123,8 @@ function EventRow({
       title={label}
       subtitle={[timeOf(e), e.location].filter(Boolean).join(' · ')}
       note={note}
+      // Long event names and venues wrap instead of being cut at the larger type scale.
+      numberOfLines={2}
       accessibilityLabel={spoken}
     />
   );

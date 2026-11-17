@@ -12,6 +12,7 @@ import PayRoute from '@/app/(customer)/pay/[kind]/[bookingId]';
 import TicketsRoute from '@/app/(customer)/tickets/[bookingId]';
 import type { CheckoutTarget } from '@/features/customer/screens/ListingScreen';
 import type { PayHandlers } from '@/features/customer/ui/BookingFrame';
+import { useBrowseChoice } from '@/features/mode/hooks/useBrowseChoice';
 import { ROUTE_HREF } from '@/features/mode/hooks/useRouteStore';
 import { color } from '@/shared/theme';
 
@@ -58,7 +59,21 @@ jest.mock('@/features/customer/hooks/useTourSeen', () => ({
   useTourSeen: (userId: string | null) => mockTour(userId),
 }));
 
+// The notifications primer has its own tests; here it stays closed so tab renders are counted once.
+const mockPrimer = { open: false, accept: jest.fn(), dismiss: jest.fn() };
+jest.mock('@/features/customer/hooks/useNotificationPrimer', () => ({
+  useNotificationPrimer: () => mockPrimer,
+}));
+jest.mock('@/shared/platform/storage', () => {
+  const { memoryKv: make } =
+    jest.requireActual<typeof import('@/shared/lib/kv')>('@/shared/lib/kv');
+  return { plainKv: make() };
+});
+
 // Resume has its own tests (hooks/__tests__); here only that the layout mounts it for the account.
+jest.mock('@/features/customer/ui/PendingSaveNotice', () => ({
+  PendingSaveNotice: () => null,
+}));
 const mockResume = jest.fn();
 jest.mock('@/features/customer/hooks/useResumePayments', () => ({
   useResumePayments: (userId: string) => {
@@ -110,11 +125,17 @@ jest.mock('@/features/customer/screens/CheckInCodeScreen', () => ({
 // Select and Pay too: the routes only hand over where Pay was reached from (A2a).
 const mockCheckout: {
   onCreated?: (bookingId: string, free: boolean) => void;
+  select?: { userId: string; modePending: boolean };
   pay?: { free: boolean; fromSelect: boolean };
 } = {};
 jest.mock('@/features/customer/screens/SelectScreen', () => ({
-  SelectScreen: (p: { onCreated: (bookingId: string, free: boolean) => void }) => {
+  SelectScreen: (p: {
+    userId: string;
+    modePending: boolean;
+    onCreated: (bookingId: string, free: boolean) => void;
+  }) => {
     mockCheckout.onCreated = p.onCreated;
+    mockCheckout.select = { userId: p.userId, modePending: p.modePending };
     return null;
   },
 }));
@@ -139,19 +160,31 @@ beforeEach(() => {
   mockListing.props = undefined;
 });
 
+it.each([
+  [true, true],
+  [false, false],
+])('Select: browsing %s means the mode is still pending: %s', async (browsing, pending) => {
+  useBrowseChoice.setState({ browsing });
+  mockNav.params = { kind: 'event', listingId: ID };
+  await render(<CheckoutRoute />);
+  expect(mockCheckout.select).toEqual({ userId: 'u1', modePending: pending });
+  useBrowseChoice.setState({ browsing: null });
+});
+
 it('customer mode lands on the Explore tab (4b D1)', () => {
   expect(ROUTE_HREF.customer).toBe('/explore');
   expect(unstable_settings).toEqual({ initialRouteName: '(tabs)' });
 });
 
-it('has Explore, Saved, Bookings and Account tabs, in that order, with the desk tabs styling', async () => {
+it('has Explore, Saved, Bookings and Account tabs, in that order, active in violet 700 with no wash', async () => {
   await render(<CustomerTabsLayout />);
   expect(mockNav.tabNames).toEqual(['explore', 'saved', 'bookings', 'account']);
   expect(mockNav.tabs).toMatchObject({
     tabBarPosition: 'bottom',
-    tabBarActiveTintColor: color.linkText,
-    tabBarActiveBackgroundColor: color.selectedWash,
+    tabBarActiveTintColor: color.actionPressed,
+    tabBarInactiveTintColor: color.textMuted,
   });
+  expect(mockNav.tabs?.tabBarActiveBackgroundColor).toBeUndefined();
   // B6: labels scale with Dynamic Type, capped at 1.3×.
   const renderLabel = mockNav.tabs?.tabBarLabel as (p: {
     color: string;
@@ -160,6 +193,14 @@ it('has Explore, Saved, Bookings and Account tabs, in that order, with the desk 
   expect(renderLabel({ color: color.linkText, children: 'Bookings' }).props.maxScale).toBe(1.3);
   // D15: the tour is on, so its marker is read for the signed-in user.
   expect(mockTour).toHaveBeenCalledWith('u1');
+});
+
+it('after the tour, covers the tabs with the notifications primer when it is due', async () => {
+  mockPrimer.open = true;
+  await render(<CustomerTabsLayout />);
+  expect(screen.getByTestId('primer-overlay')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Turn on notifications' })).toBeTruthy();
+  mockPrimer.open = false;
 });
 
 it('shows the tour instead of the tabs to a user who hasn’t seen it', async () => {

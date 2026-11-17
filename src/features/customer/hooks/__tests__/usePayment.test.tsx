@@ -60,9 +60,10 @@ const pendingRef = (reference: string, createdAt: string) =>
     hasPending: true,
     payment: { reference, status: 'pending', created_at: createdAt },
   });
-const initialized = (reference: string) =>
+const initialized = (reference: string, reused?: boolean) =>
   ok<Initialized>({
     success: true,
+    ...(reused !== undefined ? { reused } : {}),
     payment: {
       id: 'p1',
       reference,
@@ -74,7 +75,12 @@ const initialized = (reference: string) =>
       payment_url: URL1,
     },
   });
-const verified = (v: boolean, status: string) => ok<Verified>({ verified: v, status });
+const verified = (v: boolean, status: string, provider?: string | null) =>
+  ok<Verified>({
+    verified: v,
+    status,
+    ...(provider !== undefined ? { provider_status: provider } : {}),
+  });
 const polled = (status: string, fulfilled: boolean) =>
   ok<PaymentState>({
     payment: { reference: 'ref1', status, fulfilled, request_type: 'hotel' },
@@ -294,10 +300,13 @@ describe('usePayment', () => {
     });
     await flush();
     expect(result.current.state.step).toBe('checking');
-    // A1: never verify a payment the customer may still be making; status polls only.
+    // V1: verify once on return, then status polls.
+    expect(verifyMock).toHaveBeenCalledTimes(1);
+    expect(verifyMock).toHaveBeenCalledWith({}, 'ref1');
+    expect(stateMock).not.toHaveBeenCalled();
     await advance(2000);
     expect(stateMock).toHaveBeenCalledWith({}, 'ref1');
-    expect(verifyMock).not.toHaveBeenCalled();
+    expect(verifyMock).toHaveBeenCalledTimes(1);
   });
 
   it('android starts checking on AppState active', async () => {
@@ -323,9 +332,10 @@ describe('usePayment', () => {
     });
     await flush();
     expect(result.current.state.step).toBe('checking');
+    expect(verifyMock).toHaveBeenCalledTimes(1);
     await advance(2000);
     expect(stateMock).toHaveBeenCalledTimes(1);
-    expect(verifyMock).not.toHaveBeenCalled();
+    expect(verifyMock).toHaveBeenCalledTimes(1);
   });
 
   it('polls status on the schedule and ends done only when fulfilled', async () => {
@@ -351,7 +361,7 @@ describe('usePayment', () => {
     expect(result.current.state).toMatchObject({ step: 'checking', attempt: 1 });
     await advance(3000);
     expect(stateMock).toHaveBeenCalledTimes(2);
-    expect(verifyMock).not.toHaveBeenCalled();
+    expect(verifyMock).toHaveBeenCalledTimes(1);
     expect(result.current.state).toEqual({ step: 'done', reference: 'ref1' });
     expect(await checkoutStore.get(USER, 'hotel', BOOKING)).toBeNull();
     expect(invalidate).toHaveBeenCalledWith({ queryKey: customerKeys.bookings(USER) });
@@ -361,11 +371,12 @@ describe('usePayment', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: customerKeys.wallet(USER) });
   });
 
-  it('a failed verdict on a fresh payment is unconfirmed: payment kept, Check again polls (A1b)', async () => {
+  it('a failed status without a definitive verify is unconfirmed: payment kept, Check again verifies and polls (V1)', async () => {
     withPlatform('ios');
     checkMock.mockResolvedValue(noPayment);
     initMock.mockResolvedValue(initialized('ref1'));
     openMock.mockResolvedValue({ type: WebBrowser.WebBrowserResultType.CANCEL });
+    verifyMock.mockResolvedValue(verified(false, 'failed', 'abandoned'));
     stateMock.mockResolvedValue(polled('failed', false));
     const { result } = await setup();
     await act(() => {
@@ -384,21 +395,23 @@ describe('usePayment', () => {
     await flush();
     expect(initMock).toHaveBeenCalledTimes(1);
     stateMock.mockResolvedValue(polled('pending', false));
+    verifyMock.mockResolvedValue(verified(false, 'pending', 'ongoing'));
     await act(() => {
       result.current.checkAgain();
     });
+    await flush();
     expect(result.current.state.step).toBe('checking');
+    expect(verifyMock).toHaveBeenCalledTimes(2);
     await advance(2000);
     expect(stateMock).toHaveBeenCalledTimes(2);
-    expect(verifyMock).not.toHaveBeenCalled();
   });
 
-  it('failed on a payment 15 min old: entry kept, payment cleared; Try again goes to Review (A1d)', async () => {
+  it('a definitive failure (Paystack failed) is Failed at once: payment cleared; Try again goes to Review and pays right away (V1)', async () => {
     withPlatform('ios');
-    const started = NOW - 20 * MIN;
+    const started = NOW - 2 * MIN;
     checkMock.mockResolvedValue(pendingRef('ref1', new Date(started).toISOString()));
     openMock.mockResolvedValue({ type: WebBrowser.WebBrowserResultType.CANCEL });
-    stateMock.mockResolvedValue(polled('failed', false));
+    verifyMock.mockResolvedValue(verified(false, 'failed', 'failed'));
     const stored = { reference: 'ref1', paymentUrl: URL1, startedAt: started };
     const { result, invalidate } = await setup(
       entry({ payment: stored, paymentEverStarted: true }),
@@ -407,8 +420,8 @@ describe('usePayment', () => {
       result.current.pay();
     });
     await flush();
-    await advance(2000);
     expect(result.current.state).toEqual({ step: 'failed', reference: 'ref1' });
+    expect(stateMock).not.toHaveBeenCalled();
     expect(await checkoutStore.get(USER, 'hotel', BOOKING)).toEqual(
       entry({ payment: null, paymentEverStarted: true }),
     );
@@ -420,7 +433,7 @@ describe('usePayment', () => {
     expect(result.current.state).toEqual({ step: 'review' });
     expect(checkMock).toHaveBeenCalledTimes(1);
     expect(initMock).not.toHaveBeenCalled();
-    // Pay: the new payment is on disk before the browser opens.
+    // Pay: the failed row isn't pending, so a new payment, on disk before the browser opens.
     checkMock.mockResolvedValue(noPayment);
     initMock.mockResolvedValue(initialized('ref2'));
     const seen: (string | null)[] = [];
@@ -437,16 +450,32 @@ describe('usePayment', () => {
     expect(seen).toEqual(['ref2']);
   });
 
-  it('recentAttempt: a payment started under 15 min ago warns on Review', async () => {
+  it('providerPending: Review warns only after a verify says Paystack is still clearing (V4)', async () => {
     withPlatform('ios');
     const stored = { reference: 'ref1', paymentUrl: URL1, startedAt: NOW - MIN };
     const { result } = await setup(entry({ payment: stored, paymentEverStarted: true }));
-    expect(result.current.recentAttempt).toBe(true);
-    await advance(14 * MIN);
-    expect(result.current.recentAttempt).toBe(false);
-    await checkoutStore.wipe();
-    const none = await setup(entry());
-    expect(none.result.current.recentAttempt).toBe(false);
+    // A recent attempt on this device alone never warns.
+    expect(result.current.providerPending).toBe(false);
+    checkMock.mockResolvedValue(pendingRef('ref1', new Date(NOW - MIN).toISOString()));
+    openMock.mockResolvedValue({ type: WebBrowser.WebBrowserResultType.CANCEL });
+    verifyMock.mockResolvedValue(verified(false, 'pending', 'ongoing'));
+    await act(() => {
+      result.current.pay();
+    });
+    await flush();
+    expect(result.current.providerPending).toBe(true);
+    // A later verify that no longer says so clears it.
+    verifyMock.mockResolvedValue(verified(false, 'pending', 'abandoned'));
+    stateMock.mockResolvedValue(polled('pending', false));
+    for (let i = 0; i < 15 && result.current.state.step === 'checking'; i += 1) {
+      await advance(15_000);
+    }
+    expect(result.current.state.step).toBe('stillChecking');
+    await act(() => {
+      result.current.checkAgain();
+    });
+    await flush();
+    expect(result.current.providerPending).toBe(false);
   });
 
   it('a cancelled or paid row never pays', async () => {
@@ -533,18 +562,57 @@ describe('usePayment', () => {
     expect(result.current.state.step).toBe('checking');
   });
 
-  it('a recent pending reference with no url waits; it never initialises', async () => {
+  it('a pending reference under 30 min with no url reopens the checkout web hands back (V3)', async () => {
     withPlatform('ios');
-    checkMock.mockResolvedValue(pendingRef('ref9', new Date(NOW - 5 * 60_000).toISOString()));
+    const created = NOW - 5 * MIN;
+    checkMock.mockResolvedValue(pendingRef('ref9', new Date(created).toISOString()));
+    initMock.mockResolvedValue(initialized('ref9', true));
+    const seen: (string | null)[] = [];
+    openMock.mockImplementation(async () => {
+      const e = await checkoutStore.get(USER, 'hotel', BOOKING);
+      seen.push(e?.payment?.reference ?? null);
+      return new Promise(() => undefined);
+    });
     const { result } = await setup();
     await act(() => {
       result.current.pay();
     });
     await flush();
-    // A1: a reference under 15 min old is never verified.
+    // Signed in, without email: web compares the owner's own email.
+    expect(initMock).toHaveBeenCalledWith({}, 'hotel', BOOKING);
     expect(verifyMock).not.toHaveBeenCalled();
-    expect(initMock).not.toHaveBeenCalled();
+    expect(seen).toEqual(['ref9']);
+    expect((await checkoutStore.get(USER, 'hotel', BOOKING))?.payment).toEqual({
+      reference: 'ref9',
+      paymentUrl: URL1,
+      startedAt: created,
+    });
+    expect(result.current.state).toEqual({
+      step: 'inBrowser',
+      reference: 'ref9',
+      paymentStartedAt: created,
+    });
+  });
+
+  it.each([
+    ['a fresh charge (no reused)', () => initialized('ref9')],
+    ['another reference', () => initialized('refX', true)],
+    ['a lost answer', () => err<ApiError>({ kind: 'timeout' })],
+  ])('V3 never opens %s: it is pendingElsewhere', async (_name, answer) => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(pendingRef('ref9', new Date(NOW - 5 * MIN).toISOString()));
+    initMock.mockResolvedValue(answer());
+    const { result } = await setup();
+    await act(() => {
+      result.current.pay();
+    });
+    await flush();
+    expect(initMock).toHaveBeenCalledTimes(1);
+    expect(openMock).not.toHaveBeenCalled();
     expect(result.current.state).toEqual({ step: 'pendingElsewhere' });
+    expect((await checkoutStore.get(USER, 'hotel', BOOKING))?.payment).toBeNull();
+    // Leaving never cancels after this: a payment may exist.
+    expect(result.current.willCancelOnLeave).toBe(false);
     // Check again re-runs check-status before anything else.
     checkMock.mockResolvedValue(noPayment);
     initMock.mockResolvedValue(initialized('ref1'));
@@ -554,7 +622,37 @@ describe('usePayment', () => {
     });
     await flush();
     expect(checkMock).toHaveBeenCalledTimes(2);
-    expect(initMock).toHaveBeenCalledTimes(1);
+    expect(initMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('a pending reference 30 min old with no url waits while Paystack says it is clearing (V2)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(pendingRef('ref9', new Date(NOW - 3 * 60 * MIN).toISOString()));
+    verifyMock.mockResolvedValue(verified(false, 'pending', 'processing'));
+    const { result } = await setup();
+    await act(() => {
+      result.current.pay();
+    });
+    await flush();
+    expect(verifyMock).toHaveBeenCalledTimes(1);
+    expect(initMock).not.toHaveBeenCalled();
+    expect(result.current.state).toEqual({ step: 'pendingElsewhere' });
+    expect(result.current.providerPending).toBe(true);
+  });
+
+  it('a pending reference 30 min old that verify fails is replaced by a new initialise (P26)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(pendingRef('ref9', new Date(NOW - 40 * MIN).toISOString()));
+    verifyMock.mockResolvedValue(verified(false, 'failed', 'abandoned'));
+    initMock.mockResolvedValue(initialized('ref1'));
+    openMock.mockReturnValue(new Promise(() => undefined));
+    const { result } = await setup();
+    await act(() => {
+      result.current.pay();
+    });
+    await flush();
+    expect(initMock).toHaveBeenCalledWith({}, 'hotel', BOOKING, 'ada@example.com');
+    expect(result.current.state.step).toBe('inBrowser');
   });
 
   it('a lost initialise answer is not retried and Check again runs check-status', async () => {
@@ -573,12 +671,108 @@ describe('usePayment', () => {
     });
     expect(initMock).toHaveBeenCalledTimes(1);
     checkMock.mockResolvedValue(pendingRef('ref1', new Date(NOW - 10_000).toISOString()));
+    initMock.mockResolvedValue(initialized('refNew'));
     await act(() => {
       result.current.checkAgain();
     });
     await flush();
     expect(checkMock).toHaveBeenCalledTimes(2);
+    // The pending reference is only asked back (V3, no email); a fresh charge is never opened.
+    expect(initMock).toHaveBeenCalledTimes(2);
+    expect(initMock).toHaveBeenLastCalledWith({}, 'hotel', BOOKING);
+    expect(openMock).not.toHaveBeenCalled();
+    expect(result.current.state).toEqual({ step: 'pendingElsewhere' });
+  });
+
+  it('409 already_paid is never retried: check-status names the paid reference for Checking (W1)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValueOnce(noPayment).mockResolvedValueOnce(
+      ok<CheckStatus>({
+        hasPaid: true,
+        payment: { reference: 'refPaid', status: 'completed', created_at: '2026-10-21T11:50:00Z' },
+      }),
+    );
+    initMock.mockResolvedValue(err<ApiError>({ kind: 'conflict', code: 'already_paid' }));
+    const { result, invalidate } = await setup();
+    await act(() => {
+      result.current.pay();
+    });
+    await flush();
     expect(initMock).toHaveBeenCalledTimes(1);
+    expect(result.current.state).toMatchObject({ step: 'checking', reference: 'refPaid' });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: customerKeys.booking(USER, 'hotel', BOOKING),
+    });
+  });
+
+  it('409 already_paid without a paid reference says so, with no retry (W1)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(noPayment);
+    initMock.mockResolvedValue(err<ApiError>({ kind: 'conflict', code: 'already_paid' }));
+    const { result } = await setup();
+    await act(() => {
+      result.current.pay();
+    });
+    await flush();
+    expect(result.current.state).toEqual({
+      step: 'startError',
+      words: 'This booking is already paid.',
+      action: 'paid',
+    });
+    expect(initMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('500 record_failed says Check again, which runs check-status before any new Pay (W1)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(noPayment);
+    initMock.mockResolvedValue(
+      err<ApiError>({ kind: 'unavailable', status: 500, code: 'record_failed' }),
+    );
+    const { result } = await setup();
+    await act(() => {
+      result.current.pay();
+    });
+    await flush();
+    expect(result.current.state).toEqual({
+      step: 'startError',
+      words: 'Couldn’t start payment. Check again.',
+      action: 'checkAgain',
+    });
+    checkMock.mockResolvedValue(pendingRef('ref1', new Date(NOW - 10_000).toISOString()));
+    initMock.mockResolvedValue(err<ApiError>({ kind: 'network' }));
+    await act(() => {
+      result.current.checkAgain();
+    });
+    await flush();
+    expect(checkMock).toHaveBeenCalledTimes(2);
+    // Only the V3 ask-back (no email); never a new charge with the payer's email.
+    expect(initMock).toHaveBeenCalledTimes(2);
+    expect(initMock).toHaveBeenLastCalledWith({}, 'hotel', BOOKING);
+    expect(result.current.state).toEqual({ step: 'pendingElsewhere' });
+  });
+
+  it('a 503 status poll with Retry-After waits at least that long, and is never failed (W4)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(noPayment);
+    initMock.mockResolvedValue(initialized('ref1'));
+    openMock.mockResolvedValue({ type: WebBrowser.WebBrowserResultType.CANCEL });
+    stateMock
+      .mockResolvedValueOnce(
+        err<ApiError>({ kind: 'unavailable', status: 503, code: 'fetch_failed', retryAfterSec: 9 }),
+      )
+      .mockResolvedValue(polled('pending', false));
+    const { result } = await setup();
+    await act(() => {
+      result.current.pay();
+    });
+    await flush();
+    await advance(2000);
+    expect(stateMock).toHaveBeenCalledTimes(1);
+    expect(result.current.state).toMatchObject({ step: 'checking', attempt: 1, nextDelayMs: 9000 });
+    await advance(8999);
+    expect(stateMock).toHaveBeenCalledTimes(1);
+    await advance(1);
+    expect(stateMock).toHaveBeenCalledTimes(2);
   });
 
   it('a hold past 25 minutes ends without initialising', async () => {
@@ -629,6 +823,77 @@ describe('usePayment', () => {
     await flush();
     expect(cancelMock).not.toHaveBeenCalled();
     expect(await checkoutStore.get(USER, 'hotel', BOOKING)).not.toBeNull();
+  });
+
+  it('cancelNow runs check-status, cancels and drops the entry, and says cancelled (G1)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(noPayment);
+    cancelMock.mockResolvedValue(ok({ refunded: false, refundMessage: null }));
+    const { result, invalidate } = await setup();
+    let r: string | undefined;
+    await act(async () => {
+      r = await result.current.cancelNow();
+    });
+    expect(r).toBe('cancelled');
+    expect(checkMock).toHaveBeenCalledWith({}, 'hotel', BOOKING);
+    expect(cancelMock).toHaveBeenCalledWith({}, 'hotel', BOOKING);
+    expect(await checkoutStore.get(USER, 'hotel', BOOKING)).toBeNull();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: customerKeys.bookings(USER) });
+  });
+
+  it('cancelNow keeps a booking with a payment and stops offering Cancel booking (G1)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(pendingRef('ref9', new Date(NOW - MIN).toISOString()));
+    const { result } = await setup();
+    expect(result.current.willCancelOnLeave).toBe(true);
+    let r: string | undefined;
+    await act(async () => {
+      r = await result.current.cancelNow();
+    });
+    expect(r).toBe('paymentInProgress');
+    expect(cancelMock).not.toHaveBeenCalled();
+    expect(result.current.willCancelOnLeave).toBe(false);
+  });
+
+  it.each([
+    ['a lost check-status', err<ApiError>({ kind: 'network' }), null],
+    ['a lost cancel', noPayment, err<ApiError>({ kind: 'unavailable', status: 503 })],
+  ])('cancelNow after %s is notDone, never a refusal (G1)', async (_n, check, cancel) => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(check);
+    if (cancel !== null) cancelMock.mockResolvedValue(cancel);
+    const { result } = await setup();
+    let r: string | undefined;
+    await act(async () => {
+      r = await result.current.cancelNow();
+    });
+    expect(r).toBe('notDone');
+    expect(await checkoutStore.get(USER, 'hotel', BOOKING)).not.toBeNull();
+  });
+
+  it('cancelNow refused by the server says refused (G1)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(noPayment);
+    cancelMock.mockResolvedValue(err<ApiError>({ kind: 'conflict', code: 'check_in_passed' }));
+    const { result } = await setup();
+    let r: string | undefined;
+    await act(async () => {
+      r = await result.current.cancelNow();
+    });
+    expect(r).toBe('refused');
+  });
+
+  it('cancelNow from a Review not reached from Select never cancels (G1)', async () => {
+    withPlatform('ios');
+    checkMock.mockResolvedValue(noPayment);
+    const { result } = await setup(entry(), 'hotel', { fromSelect: false });
+    let r: string | undefined;
+    await act(async () => {
+      r = await result.current.cancelNow();
+    });
+    expect(r).toBe('paymentInProgress');
+    expect(checkMock).not.toHaveBeenCalled();
+    expect(cancelMock).not.toHaveBeenCalled();
   });
 
   it('leave from a Review not reached from Select never cancels, even with an entry (I1)', async () => {

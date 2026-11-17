@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { View } from 'react-native';
 
+import { AuthSheet } from '@/features/auth/components/AuthSheet';
 import type { AccountFailure } from '@/features/auth/api/accountApi';
 import { TermsLine } from '@/features/auth/components/TermsLine';
 import { passwordRules, RULES } from '@/features/auth/domain/passwordRules';
@@ -8,17 +9,7 @@ import type { FieldErrors } from '@/features/auth/domain/signUpErrors';
 import { transientMessage } from '@/features/auth/domain/transientMessage';
 import { signUpSchema, type SignUpInput } from '@/features/auth/schemas/signUp';
 import type { Result } from '@/shared/lib/result';
-import {
-  Banner,
-  Button,
-  Input,
-  PasswordField,
-  RuleList,
-  Screen,
-  Stack,
-  Text,
-  TextLink,
-} from '@/shared/ui';
+import { Banner, Button, Input, PasswordField, RuleList, Stack, Text, TextLink } from '@/shared/ui';
 
 type Props = {
   onSubmit: (input: SignUpInput) => Promise<Result<{ email: string }, AccountFailure>>;
@@ -28,6 +19,7 @@ type Props = {
   onVerifyExisting: (email: string) => Promise<void>;
   onSignIn: () => void;
   onOpenLink: (url: string) => void;
+  onBack?: () => void;
 };
 
 // `emailTaken` is ambiguous (confirmed or not), so both paths are offered (spec §2 decision 8).
@@ -47,6 +39,7 @@ export function SignUpScreen({
   onVerifyExisting,
   onSignIn,
   onOpenLink,
+  onBack,
 }: Props) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -119,12 +112,12 @@ export function SignUpScreen({
   }
 
   return (
-    <Screen
-      scroll
+    <AuthSheet
+      onLeave={onBack}
       footer={
         <>
           <View style={{ alignItems: 'center' }}>
-            <TextLink label="Already have an account? Sign in" onPress={onSignIn} />
+            <TextLink size="lg" label="Already have an account? Sign in" onPress={onSignIn} />
           </View>
           <TermsLine onOpenLink={onOpenLink} />
         </>
@@ -134,11 +127,11 @@ export function SignUpScreen({
         <Text variant="displaySm" accessibilityRole="header">
           Create your account
         </Text>
-        <Text variant="body" tone="textSecondary">
+        <Text variant="subtitle" tone="textSecondary">
           Book stays and events, paid in naira.
         </Text>
       </Stack>
-      <Stack gap="s4">
+      <Stack gap="s5">
         <Input
           label="Name"
           value={name}
@@ -209,6 +202,6 @@ export function SignUpScreen({
           }}
         />
       </Stack>
-    </Screen>
+    </AuthSheet>
   );
 }

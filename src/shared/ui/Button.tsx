@@ -92,11 +92,11 @@ export function Button({
       style={({ pressed }) => ({
         minHeight: d.controlHeight,
         paddingHorizontal: space.s5,
-        borderRadius: radius.r3,
+        borderRadius: radius.rFull,
         borderCurve: 'continuous',
         justifyContent: 'center',
         backgroundColor: muted ? color.wash : pressed ? l.pressed : l.bg,
-        borderWidth: l.border === null ? 0 : borderWidth.thick,
+        borderWidth: l.border === null ? 0 : borderWidth.hairline,
         borderColor: muted ? color.border : (l.border ?? undefined),
       })}
     >
@@ -113,7 +113,7 @@ export function Button({
         ) : icon !== undefined ? (
           <Icon as={icon} size="sm" tone={fg} />
         ) : null}
-        <Text variant="bodyStrong" tone={fg} numberOfLines={2} align="center" maxScale={maxScale}>
+        <Text variant="button" tone={fg} numberOfLines={2} align="center" maxScale={maxScale}>
           {label}
         </Text>
       </View>

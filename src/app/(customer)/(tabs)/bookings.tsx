@@ -2,11 +2,29 @@ import { router } from 'expo-router';
 
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { BookingsScreen } from '@/features/customer/screens/BookingsScreen';
+import { SignedOutTab } from '@/features/customer/ui/SignedOutTab';
 
 export default function BookingsRoute() {
   const state = useAuth((s) => s.state);
-  const userId = state.status === 'signedIn' ? state.userId : '';
-  const email = state.status === 'signedIn' ? state.email : '';
+  if (state.status !== 'signedIn') return <SignedOutRoute />;
+  return <SignedInBookings userId={state.userId} email={state.email} />;
+}
+
+function SignedOutRoute() {
+  return (
+    <SignedOutTab
+      tab="bookings"
+      onSignIn={() => {
+        router.push('/sign-in');
+      }}
+      onCreateAccount={() => {
+        router.push('/sign-up');
+      }}
+    />
+  );
+}
+
+function SignedInBookings({ userId, email }: { userId: string; email: string }) {
   return (
     <BookingsScreen
       userId={userId}

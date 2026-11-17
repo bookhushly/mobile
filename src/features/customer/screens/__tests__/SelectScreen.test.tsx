@@ -1,12 +1,18 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { AccessibilityInfo } from 'react-native';
 
-import { roomAvailability, validatePromo } from '@/features/customer/api/checkoutApi';
+import {
+  roomAvailability,
+  serviceCharge,
+  validatePromo,
+} from '@/features/customer/api/checkoutApi';
 import { checkoutDb } from '@/features/customer/api/checkoutDb';
 import type { ApartmentListing, HotelListing } from '@/features/customer/api/listingDetailDb';
 import { useCreateBooking, type CreateState } from '@/features/customer/hooks/useCreateBooking';
 import { useListing } from '@/features/customer/hooks/useListing';
 import { useProfile } from '@/features/customer/hooks/useProfile';
+import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
 import {
   apartmentDetail,
   eventDetail,
@@ -154,6 +160,7 @@ async function open(kind: 'hotel' | 'apartment' | 'event', roomTypeId: string | 
         rateId={null}
         userId="u1"
         email="ada@example.com"
+        modePending={false}
         onBack={jest.fn()}
         onCreated={onCreated}
       />
@@ -170,6 +177,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockFlags.stays = true;
   mockFlags.events = true;
+  jest.mocked(serviceCharge).mockReset();
+  useSignInPrompt.setState({ reason: null, pendingSave: null });
   createState({ phase: 'idle' });
   mockDb.hotelExtras.mockResolvedValue({
     breakfastOffered: 'included',
@@ -199,7 +208,7 @@ describe('stays', () => {
     await fireEvent.press(screen.getByTestId('day-2026-10-25'));
     await fireEvent.press(screen.getByRole('button', { name: 'Choose · 2 nights' }));
 
-    expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · ₦120,000');
+    expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · about ₦120,000');
     expect(continueButton()).toBeEnabled();
     await fireEvent.press(continueButton());
     expect(submit).toHaveBeenCalledTimes(1);
@@ -232,7 +241,40 @@ describe('stays', () => {
     given(APARTMENT);
     await open('apartment');
     expect(await screen.findByTestId('min-nights')).toHaveTextContent('At least 3 nights');
-    expect(screen.queryByTestId('promo-open')).toBeNull();
+  });
+
+  it('apartments preview a promo as apartment and send its id (W3)', async () => {
+    jest.mocked(validatePromo).mockResolvedValue({
+      ok: true,
+      value: {
+        valid: true,
+        code_id: 'c1',
+        code: 'STAY10',
+        discount_amount: 15000,
+        discounted_total: 135000,
+      },
+    });
+    given(APARTMENT);
+    await open('apartment');
+    await fireEvent.press(await screen.findByTestId('dates-row'));
+    await fireEvent.press(screen.getByTestId('day-2026-10-23'));
+    await fireEvent.press(screen.getByTestId('day-2026-10-26'));
+    await fireEvent.press(screen.getByRole('button', { name: 'Choose · 3 nights' }));
+    await fireEvent.press(screen.getByTestId('promo-open'));
+    await fireEvent.changeText(screen.getByTestId('promo-input'), 'STAY10');
+    await fireEvent.press(screen.getByTestId('promo-apply'));
+    expect(await screen.findByTestId('promo-applied')).toBeTruthy();
+    expect(jest.mocked(validatePromo).mock.calls[0]?.[1]).toEqual({
+      code: 'STAY10',
+      service_type: 'apartment',
+      service_id: ID,
+      amount: 150000,
+    });
+    await fireEvent.press(continueButton());
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(submit.mock.calls[0]?.[0]).toMatchObject({
+      promo: { codeId: 'c1', discount: 15000 },
+    });
   });
 
   it('refused dates_invalid shows the words', async () => {
@@ -467,5 +509,737 @@ describe('events', () => {
     given(PAID);
     await open('event');
     expect(screen.getByTestId('listing-not-found')).toBeTruthy();
+  });
+});
+
+describe('browsing without an account', () => {
+  const refetch = jest.fn(() => Promise.resolve());
+  const NO_PROFILE = { profile: null, loading: false, error: false, refetch };
+  const PENDING = { profile: null, loading: true, error: false, refetch };
+  const FAILED = { profile: null, loading: false, error: true, refetch };
+  const READY = { profile: PROFILE, loading: false, error: false, refetch };
+  let signedIn: ReturnType<typeof useProfile> = PENDING;
+
+  function browsing(data: HotelListing | ApartmentListing | EventDetail) {
+    mockListing.mockReturnValue({ data, error: false, apiError: null, refetch: refetchListing });
+    signedIn = PENDING;
+    mockProfile.mockImplementation((userId) => (userId === '' ? NO_PROFILE : signedIn));
+  }
+
+  /** Opens signed out, or as `startAs`; `user` re-renders the same tree as that person. */
+  async function openAs(
+    kind: 'hotel' | 'apartment' | 'event',
+    roomTypeId: string | null = null,
+    startAs = '',
+  ) {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+    });
+    const ui = (userId: string, modePending = false) => (
+      <QueryClientProvider client={client}>
+        <SelectScreen
+          kind={kind}
+          listingId={ID}
+          roomTypeId={roomTypeId}
+          rateId={null}
+          userId={userId}
+          email={userId === '' ? '' : 'ada@example.com'}
+          modePending={modePending}
+          onBack={jest.fn()}
+          onCreated={onCreated}
+        />
+      </QueryClientProvider>
+    );
+    const { rerender } = await render(ui(startAs));
+    return {
+      user: async (userId = 'u1', modePending = false) => {
+        await rerender(ui(userId, modePending));
+      },
+    };
+  }
+
+  const pickDates = async (from: string, to: string, label: string) => {
+    await fireEvent.press(await screen.findByTestId('dates-row'));
+    await fireEvent.press(screen.getByTestId(`day-${from}`));
+    await fireEvent.press(screen.getByTestId(`day-${to}`));
+    await fireEvent.press(screen.getByRole('button', { name: label }));
+  };
+  const reason = () => useSignInPrompt.getState().reason;
+  const skeleton = () => screen.queryByLabelText('Loading');
+  const QUESTION: CustomQuestion = {
+    id: 'q1',
+    label: 'T-shirt size',
+    type: 'text',
+    options: [],
+    required: true,
+  };
+
+  describe('signed out', () => {
+    it('signed out: hides the contact fields and shows the total', async () => {
+      browsing(HOTEL);
+      await openAs('hotel', ROOM);
+      await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · about ₦120,000');
+      expect(screen.queryByTestId('guest-fields')).toBeNull();
+    });
+
+    it('signed out: hides the contact fields on an event too, keeping its questions', async () => {
+      mockDb.eventQuestions.mockResolvedValue([QUESTION]);
+      browsing(PAID);
+      await openAs('event');
+      await screen.findByTestId('questions');
+      await press('Increase Regular');
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('1 ticket · ₦5,000');
+      expect(screen.getByTestId('question-q1')).toBeTruthy();
+      expect(screen.queryByTestId('guest-fields')).toBeNull();
+    });
+
+    it('signed out: Continue with dates missing shows the dates problem, not the sheet', async () => {
+      browsing(HOTEL);
+      await openAs('hotel', ROOM);
+      await screen.findByTestId('room-summary');
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('Add your dates');
+      expect(continueButton()).toBeDisabled();
+      await fireEvent.press(continueButton());
+      expect(reason()).toBeNull();
+    });
+
+    it('signed out: Continue with no tickets says so, not the sheet', async () => {
+      browsing(PAID);
+      await openAs('event');
+      await screen.findByTestId('tickets');
+      await fireEvent.press(continueButton());
+      expect(screen.getByTestId('select-problem')).toHaveTextContent('Choose at least one ticket');
+      expect(reason()).toBeNull();
+    });
+
+    it('signed out: an unanswered organiser question is validated before the sheet', async () => {
+      mockDb.eventQuestions.mockResolvedValue([QUESTION]);
+      browsing(PAID);
+      await openAs('event');
+      await screen.findByTestId('questions');
+      await press('Increase Regular');
+      await fireEvent.press(continueButton());
+      expect(screen.getByText('Answer this question')).toBeTruthy();
+      expect(reason()).toBeNull();
+
+      await fireEvent.changeText(screen.getByTestId('question-q1'), 'L');
+      await fireEvent.press(continueButton());
+      expect(reason()).toBe('book');
+      expect(submit).not.toHaveBeenCalled();
+    });
+
+    it('signed out: valid Continue asks to sign in and creates nothing (hotel)', async () => {
+      browsing(HOTEL);
+      await openAs('hotel', ROOM);
+      await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
+      await fireEvent.press(continueButton());
+      expect(reason()).toBe('book');
+      expect(submit).not.toHaveBeenCalled();
+    });
+
+    it('signed out: valid Continue asks to sign in and creates nothing (apartment)', async () => {
+      browsing(APARTMENT);
+      await openAs('apartment');
+      await pickDates('2026-10-23', '2026-10-26', 'Choose · 3 nights');
+      await fireEvent.press(continueButton());
+      expect(reason()).toBe('book');
+      expect(submit).not.toHaveBeenCalled();
+    });
+
+    it('signed out: valid Continue asks to sign in and creates nothing (paid event)', async () => {
+      browsing(PAID);
+      await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Regular');
+      await fireEvent.press(continueButton());
+      expect(reason()).toBe('book');
+      expect(submit).not.toHaveBeenCalled();
+    });
+
+    it('signed out: a free event asks first and registers nothing', async () => {
+      browsing(FREE);
+      await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Entry');
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('1 ticket · Free');
+      await fireEvent.press(continueButton());
+      expect(reason()).toBe('book');
+      expect(submit).not.toHaveBeenCalled();
+    });
+
+    it('signed out: a promo covering a paid order still blocks, with no sheet', async () => {
+      jest.mocked(validatePromo).mockResolvedValue({
+        ok: true,
+        value: {
+          valid: true,
+          code_id: 'c1',
+          code: 'ALLFREE',
+          discount_amount: 5000,
+          discounted_total: 0,
+        },
+      });
+      browsing(PAID);
+      await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Regular');
+      await fireEvent.press(screen.getByTestId('promo-open'));
+      await fireEvent.changeText(screen.getByTestId('promo-input'), 'ALLFREE');
+      await fireEvent.press(screen.getByTestId('promo-apply'));
+      await screen.findByTestId('promo-applied');
+      await fireEvent.press(continueButton());
+      expect(reason()).toBeNull();
+    });
+  });
+
+  describe('signed in while the mode lookup is still running', () => {
+    const waitsForMode = () => {
+      expect(continueButton()).toBeDisabled();
+      expect(continueButton()).toBeBusy();
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('Getting your details…');
+    };
+
+    it('a stay can’t be booked until it’s known to be a customer', async () => {
+      browsing(HOTEL);
+      signedIn = READY;
+      const { user } = await openAs('hotel', ROOM);
+      await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
+
+      await user('u1', true);
+      waitsForMode();
+      await fireEvent.press(continueButton());
+      expect(submit).not.toHaveBeenCalled();
+      expect(reason()).toBeNull();
+
+      await user('u1', false);
+      expect(continueButton()).toBeEnabled();
+      await fireEvent.press(continueButton());
+      expect(submit).toHaveBeenCalledTimes(1);
+    });
+
+    it('an event can’t be booked until it’s known to be a customer', async () => {
+      browsing(PAID);
+      signedIn = READY;
+      const { user } = await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Regular');
+
+      await user('u1', true);
+      waitsForMode();
+      await fireEvent.press(continueButton());
+      expect(submit).not.toHaveBeenCalled();
+
+      await user('u1', false);
+      expect(continueButton()).toBeEnabled();
+    });
+  });
+
+  describe('the footer total', () => {
+    const percent = (value: number) => ({
+      ok: true as const,
+      value: {
+        charge: { charge_type: 'percentage', charge_value: value, enabled: true, label: null },
+      },
+    });
+    const estimateIs = (text: string) =>
+      waitFor(() => {
+        expect(screen.getByTestId('select-estimate')).toHaveTextContent(text);
+      });
+    const applyPromo = async (discount: number, total: number) => {
+      jest.mocked(validatePromo).mockResolvedValueOnce({
+        ok: true,
+        value: {
+          valid: true,
+          code_id: 'c1',
+          code: 'SAVE',
+          discount_amount: discount,
+          discounted_total: total,
+        },
+      });
+      await fireEvent.press(screen.getByTestId('promo-open'));
+      await fireEvent.changeText(screen.getByTestId('promo-input'), 'SAVE');
+      await fireEvent.press(screen.getByTestId('promo-apply'));
+      await screen.findByTestId('promo-applied');
+    };
+
+    it('hotel: adds the service charge', async () => {
+      jest.mocked(serviceCharge).mockResolvedValue(percent(10));
+      browsing(HOTEL);
+      await openAs('hotel', ROOM);
+      await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
+      await estimateIs('2 nights · about ₦132,000');
+      expect(serviceCharge).toHaveBeenCalledWith(expect.anything(), 'hotel');
+    });
+
+    it('apartment: takes off the promo, then adds the charge on what is left', async () => {
+      jest.mocked(serviceCharge).mockResolvedValue(percent(10));
+      browsing(APARTMENT);
+      await openAs('apartment');
+      await pickDates('2026-10-23', '2026-10-26', 'Choose · 3 nights');
+      await applyPromo(15000, 135000);
+      await estimateIs('3 nights · about ₦148,500');
+      expect(serviceCharge).toHaveBeenCalledWith(expect.anything(), 'apartment');
+    });
+
+    it('event: takes off the promo, then adds the charge on what is left', async () => {
+      jest.mocked(serviceCharge).mockResolvedValue(percent(10));
+      browsing(PAID);
+      await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Regular');
+      await applyPromo(1000, 4000);
+      await estimateIs('1 ticket · ₦4,400');
+      expect(serviceCharge).toHaveBeenCalledWith(expect.anything(), 'event');
+    });
+
+    it('a free event stays Free, with no charge words', async () => {
+      jest.mocked(serviceCharge).mockResolvedValue(percent(10));
+      browsing(FREE);
+      await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Entry');
+      await estimateIs('1 ticket · Free');
+      expect(screen.queryByTestId('charge-checking')).toBeNull();
+      expect(screen.queryByTestId('charge-unknown')).toBeNull();
+    });
+
+    it('stays add priced extras, and say the figure is an estimate', async () => {
+      jest.mocked(serviceCharge).mockResolvedValue(percent(10));
+      mockDb.hotelExtras.mockResolvedValue({
+        breakfastOffered: 'paid',
+        breakfast: [{ id: 'b1', name: 'Continental', pricePerPerson: 5000 }],
+        airportEnabled: false,
+        airportPrices: {},
+        airportFee: null,
+      });
+      browsing(HOTEL);
+      await openAs('hotel', ROOM);
+      await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
+      await estimateIs('2 nights · about ₦132,000');
+      await press('Increase Continental');
+      await estimateIs('2 nights · about ₦137,500');
+    });
+
+    it('apartment: the refundable deposit is part of the estimate', async () => {
+      jest.mocked(serviceCharge).mockResolvedValue(percent(10));
+      browsing({ ...APARTMENT, apartment: { ...APARTMENT.apartment, caution_deposit: 20000 } });
+      await openAs('apartment');
+      await pickDates('2026-10-23', '2026-10-26', 'Choose · 3 nights');
+      await estimateIs('3 nights · about ₦187,000');
+    });
+
+    it.each([
+      ['hotel', HOTEL, ROOM, '2 nights · about ₦120,000'],
+      ['event', PAID, null, '1 ticket · ₦5,000'],
+    ] as const)(
+      '%s: a failed charge read says so beside the total',
+      async (kind, data, room, line) => {
+        jest.mocked(serviceCharge).mockResolvedValue({ ok: false, error: { kind: 'network' } });
+        browsing(data);
+        await openAs(kind, room);
+        if (kind === 'hotel') await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
+        else {
+          await screen.findByTestId('tickets');
+          await press('Increase Regular');
+        }
+        expect(await screen.findByTestId('charge-unknown')).toHaveTextContent(
+          'plus any service charge shown on Paystack',
+        );
+        expect(screen.getByTestId('select-estimate')).toHaveTextContent(line);
+        expect(screen.queryByTestId('charge-checking')).toBeNull();
+      },
+    );
+
+    it('a charge still being read says so', async () => {
+      jest.mocked(serviceCharge).mockReturnValue(new Promise(() => undefined));
+      browsing(PAID);
+      await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Regular');
+      expect(screen.getByTestId('charge-checking')).toHaveTextContent(
+        'Checking the service charge…',
+      );
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('1 ticket · ₦5,000');
+    });
+
+    it('nothing chosen yet: no charge words', async () => {
+      jest.mocked(serviceCharge).mockResolvedValue({ ok: false, error: { kind: 'network' } });
+      browsing(HOTEL);
+      await openAs('hotel', ROOM);
+      await screen.findByTestId('dates-row');
+      expect(screen.queryByTestId('charge-unknown')).toBeNull();
+      expect(screen.queryByTestId('charge-checking')).toBeNull();
+    });
+  });
+
+  describe('after signing in on Select', () => {
+    const WORDS = 'You’re signed in. Check your details, then continue.';
+    let announced: jest.SpyInstance;
+    beforeEach(() => {
+      announced = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    });
+    afterEach(() => {
+      announced.mockRestore();
+    });
+
+    it('a stay says what happened, above the fields, and announces it once', async () => {
+      browsing(HOTEL);
+      const { user } = await openAs('hotel', ROOM);
+      expect(screen.queryByText(WORDS)).toBeNull();
+      await user();
+      expect(screen.queryByText(WORDS)).toBeNull();
+      expect(announced).not.toHaveBeenCalled();
+      signedIn = READY;
+      await user();
+      expect(screen.getByText(WORDS)).toBeTruthy();
+      await user();
+      expect(announced.mock.calls.filter(([m]) => m === WORDS)).toHaveLength(1);
+    });
+
+    it('an event says what happened and announces it', async () => {
+      browsing(PAID);
+      const { user } = await openAs('event');
+      await screen.findByTestId('tickets');
+      signedIn = READY;
+      await user();
+      expect(screen.getByText(WORDS)).toBeTruthy();
+      expect(announced).toHaveBeenCalledWith(WORDS);
+    });
+
+    it('someone signed in from the start is told nothing', async () => {
+      browsing(HOTEL);
+      signedIn = READY;
+      await openAs('hotel', ROOM, 'u1');
+      await screen.findByTestId('guest-fields');
+      expect(screen.queryByText(WORDS)).toBeNull();
+      expect(announced).not.toHaveBeenCalledWith(WORDS);
+    });
+  });
+
+  describe('a user appears', () => {
+    it('keeps the selection when a user appears (hotel)', async () => {
+      browsing(HOTEL);
+      const { user } = await openAs('hotel', ROOM);
+      await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
+
+      await user();
+      expect(skeleton()).toBeNull();
+      // Pending: no fields yet, and Continue waits for them and says why.
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('Getting your details…');
+      expect(screen.queryByTestId('guest-fields')).toBeNull();
+      expect(continueButton()).toBeDisabled();
+      expect(continueButton()).toBeBusy();
+      expect(submit).not.toHaveBeenCalled();
+
+      signedIn = READY;
+      await user();
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · about ₦120,000');
+      expect(continueButton()).not.toBeBusy();
+    });
+
+    it('keeps the selection when a user appears (event)', async () => {
+      browsing(PAID);
+      const { user } = await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Regular', 2);
+
+      await user();
+      expect(skeleton()).toBeNull();
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('Getting your details…');
+      expect(continueButton()).toBeDisabled();
+      expect(continueButton()).toBeBusy();
+
+      signedIn = READY;
+      await user();
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 tickets · ₦10,000');
+    });
+
+    it('fills contact fields from the profile after sign-in (hotel)', async () => {
+      browsing(HOTEL);
+      const { user } = await openAs('hotel', ROOM);
+      await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
+      await fireEvent.press(continueButton());
+      await user();
+      signedIn = READY;
+      await user();
+
+      expect(screen.getByTestId('guest-name')).toHaveDisplayValue('Ada Obi');
+      expect(screen.getByTestId('guest-email')).toHaveDisplayValue('ada@example.com');
+      expect(screen.getByTestId('guest-phone')).toHaveDisplayValue('0803 123 4567');
+      // Never auto-submitted: the person taps Continue again.
+      expect(submit).not.toHaveBeenCalled();
+      await fireEvent.press(continueButton());
+      expect(submit).toHaveBeenCalledTimes(1);
+      expect(submit.mock.calls[0]?.[0]).toMatchObject({
+        checkIn: '2026-10-23',
+        checkOut: '2026-10-25',
+        guest: { name: 'Ada Obi', email: 'ada@example.com', phone: '0803 123 4567' },
+      });
+    });
+
+    it('fills contact fields at once when the profile is already cached', async () => {
+      browsing(PAID);
+      signedIn = READY;
+      const { user } = await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Regular');
+      await user();
+      expect(screen.getByTestId('guest-email')).toHaveDisplayValue('ada@example.com');
+      await fireEvent.press(continueButton());
+      expect(submit.mock.calls[0]?.[0]).toMatchObject({ qty: { Regular: 1 } });
+    });
+
+    it('a profile with gaps shows no errors until the next Continue', async () => {
+      browsing(HOTEL);
+      const { user } = await openAs('hotel', ROOM);
+      await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
+      await fireEvent.press(continueButton());
+      signedIn = { ...READY, profile: { ...PROFILE, phone: null } };
+      await user();
+
+      expect(screen.getByTestId('guest-phone')).toHaveDisplayValue('');
+      expect(screen.queryByText('Enter a Nigerian number, like 0803 123 4567')).toBeNull();
+      await fireEvent.press(continueButton());
+      expect(screen.getByText('Enter a Nigerian number, like 0803 123 4567')).toBeTruthy();
+      expect(submit).not.toHaveBeenCalled();
+    });
+
+    it('profile read failure after sign-in: fields empty and editable, selection kept', async () => {
+      browsing(HOTEL);
+      const { user } = await openAs('hotel', ROOM);
+      await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
+      await fireEvent.press(continueButton());
+      await user();
+      signedIn = FAILED;
+      await user();
+
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · about ₦120,000');
+      expect(screen.getByTestId('guest-name')).toHaveDisplayValue('');
+      expect(screen.getByTestId('guest-phone')).toHaveDisplayValue('');
+      // The signed-in email is the fallback when the profile has none, as for anyone signed in.
+      expect(screen.getByTestId('guest-email')).toHaveDisplayValue('ada@example.com');
+
+      await fireEvent.press(continueButton());
+      expect(screen.getByText('Enter your name')).toBeTruthy();
+      expect(submit).not.toHaveBeenCalled();
+
+      await fireEvent.changeText(screen.getByTestId('guest-name'), 'Ada Obi');
+      await fireEvent.changeText(screen.getByTestId('guest-phone'), '0803 123 4567');
+      await fireEvent.press(continueButton());
+      expect(submit).toHaveBeenCalledTimes(1);
+      expect(submit.mock.calls[0]?.[0]).toMatchObject({
+        checkIn: '2026-10-23',
+        guest: { name: 'Ada Obi', phone: '0803 123 4567' },
+      });
+    });
+
+    it('a failed profile refetching keeps the fields up and what was typed', async () => {
+      browsing(HOTEL);
+      const { user } = await openAs('hotel', ROOM);
+      await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
+      signedIn = FAILED;
+      await user();
+      await fireEvent.changeText(screen.getByTestId('guest-name'), 'Typed Name');
+
+      // TanStack goes back to pending when a query with no data refetches.
+      signedIn = PENDING;
+      await user();
+      expect(screen.getByTestId('guest-name')).toHaveDisplayValue('Typed Name');
+      expect(continueButton()).toBeEnabled();
+
+      signedIn = READY;
+      await user();
+      expect(screen.getByTestId('guest-name')).toHaveDisplayValue('Typed Name');
+    });
+
+    it('signed in from the start: a failed profile refetching keeps the live form', async () => {
+      browsing(HOTEL);
+      signedIn = FAILED;
+      const { user } = await openAs('hotel', ROOM, 'u1');
+      await pickDates('2026-10-23', '2026-10-25', 'Choose · 2 nights');
+
+      // TanStack goes back to pending when a query with no data refetches. Unmounting here would
+      // also lose useCreateBooking's guards against a second booking.
+      signedIn = PENDING;
+      await user();
+      expect(skeleton()).toBeNull();
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('2 nights · about ₦120,000');
+    });
+
+    it('a profile with gaps shows no event errors until the next Continue', async () => {
+      browsing(PAID);
+      const { user } = await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Regular');
+      await fireEvent.press(continueButton());
+      expect(reason()).toBe('book');
+      signedIn = { ...READY, profile: { ...PROFILE, phone: null } };
+      await user();
+
+      expect(screen.getByTestId('guest-phone')).toHaveDisplayValue('');
+      expect(screen.queryByText('Enter a Nigerian number, like 0803 123 4567')).toBeNull();
+      await fireEvent.press(continueButton());
+      expect(screen.getByText('Enter a Nigerian number, like 0803 123 4567')).toBeTruthy();
+      expect(submit).not.toHaveBeenCalled();
+    });
+
+    it('a failed profile refetching keeps an event’s fields up and what was typed', async () => {
+      browsing(PAID);
+      const { user } = await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Regular');
+      signedIn = FAILED;
+      await user();
+      await fireEvent.changeText(screen.getByTestId('guest-phone'), '0803 123 4567');
+
+      signedIn = PENDING;
+      await user();
+      expect(screen.getByTestId('guest-phone')).toHaveDisplayValue('0803 123 4567');
+      expect(continueButton()).toBeEnabled();
+
+      signedIn = { ...READY, profile: { ...PROFILE, phone: '+2348099999999' } };
+      await user();
+      expect(screen.getByTestId('guest-phone')).toHaveDisplayValue('0803 123 4567');
+      await fireEvent.press(continueButton());
+      expect(submit.mock.calls[0]?.[0]).toMatchObject({
+        qty: { Regular: 1 },
+        guest: { phone: '0803 123 4567' },
+      });
+    });
+
+    it('a free event after sign-in validates the name as usual', async () => {
+      browsing(FREE);
+      const { user } = await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Entry');
+      signedIn = FAILED;
+      await user();
+      await fireEvent.press(continueButton());
+      expect(screen.getByText('Enter your name')).toBeTruthy();
+      expect(submit).not.toHaveBeenCalled();
+    });
+
+    it('already signed in: skeleton then form, as today', async () => {
+      browsing(HOTEL);
+      const { user } = await openAs('hotel', ROOM, 'u1');
+      expect(skeleton()).toBeTruthy();
+      expect(screen.queryByTestId('select-continue')).toBeNull();
+
+      signedIn = READY;
+      await user();
+      expect(await screen.findByTestId('guest-fields')).toBeTruthy();
+      expect(skeleton()).toBeNull();
+      expect(screen.getByTestId('guest-name')).toHaveDisplayValue('Ada Obi');
+    });
+
+    it('rechecks an applied promo once when a user appears', async () => {
+      const promoMock = jest.mocked(validatePromo);
+      promoMock.mockResolvedValue({
+        ok: true,
+        value: {
+          valid: true,
+          code_id: 'c1',
+          code: 'STAY10',
+          discount_amount: 15000,
+          discounted_total: 135000,
+        },
+      });
+      browsing(APARTMENT);
+      const { user } = await openAs('apartment');
+      await pickDates('2026-10-23', '2026-10-26', 'Choose · 3 nights');
+      await fireEvent.press(screen.getByTestId('promo-open'));
+      await fireEvent.changeText(screen.getByTestId('promo-input'), 'STAY10');
+      await fireEvent.press(screen.getByTestId('promo-apply'));
+      await screen.findByTestId('promo-applied');
+      expect(promoMock).toHaveBeenCalledTimes(1);
+
+      await user();
+      signedIn = READY;
+      await user();
+      await user();
+      expect(promoMock).toHaveBeenCalledTimes(2);
+      expect(promoMock.mock.calls[1]?.[1]).toEqual({
+        code: 'STAY10',
+        service_type: 'apartment',
+        service_id: ID,
+        amount: 150000,
+      });
+      expect(await screen.findByTestId('promo-applied')).toBeTruthy();
+      await fireEvent.press(continueButton());
+      expect(submit.mock.calls[0]?.[0]).toMatchObject({ promo: { codeId: 'c1', discount: 15000 } });
+    });
+
+    it('a code refused at the recheck leaves the booking without it, in the server’s words', async () => {
+      const promoMock = jest.mocked(validatePromo);
+      promoMock.mockResolvedValueOnce({
+        ok: true,
+        value: {
+          valid: true,
+          code_id: 'c1',
+          code: 'ONCE',
+          discount_amount: 1000,
+          discounted_total: 4000,
+        },
+      });
+      promoMock.mockResolvedValueOnce({
+        ok: true,
+        value: { valid: false, error: 'This code has been used up' },
+      });
+      browsing(PAID);
+      signedIn = READY;
+      const { user } = await openAs('event');
+      await screen.findByTestId('tickets');
+      await press('Increase Regular');
+      await fireEvent.press(screen.getByTestId('promo-open'));
+      await fireEvent.changeText(screen.getByTestId('promo-input'), 'ONCE');
+      await fireEvent.press(screen.getByTestId('promo-apply'));
+      await screen.findByTestId('promo-applied');
+
+      await user();
+      expect(await screen.findByText('This code has been used up')).toBeTruthy();
+      expect(screen.queryByTestId('promo-applied')).toBeNull();
+      await fireEvent.press(continueButton());
+      expect(submit).toHaveBeenCalledTimes(1);
+      expect(submit.mock.calls[0]?.[0]).toMatchObject({ qty: { Regular: 1 }, promo: null });
+    });
+
+    it('Continue waits while the recheck is running, so the code is never dropped', async () => {
+      const promoMock = jest.mocked(validatePromo);
+      const applied = {
+        ok: true as const,
+        value: {
+          valid: true as const,
+          code_id: 'c1',
+          code: 'STAY10',
+          discount_amount: 15000,
+          discounted_total: 135000,
+        },
+      };
+      promoMock.mockResolvedValueOnce(applied);
+      let answer: (r: typeof applied) => void = () => undefined;
+      promoMock.mockReturnValueOnce(
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+      );
+      browsing(APARTMENT);
+      signedIn = READY;
+      const { user } = await openAs('apartment');
+      await pickDates('2026-10-23', '2026-10-26', 'Choose · 3 nights');
+      await fireEvent.press(screen.getByTestId('promo-open'));
+      await fireEvent.changeText(screen.getByTestId('promo-input'), 'STAY10');
+      await fireEvent.press(screen.getByTestId('promo-apply'));
+      await screen.findByTestId('promo-applied');
+
+      await user();
+      expect(continueButton()).toBeDisabled();
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('Getting your details…');
+      await act(async () => {
+        answer(applied);
+        await Promise.resolve();
+      });
+      expect(continueButton()).toBeEnabled();
+      expect(screen.getByTestId('select-estimate')).toHaveTextContent('3 nights · about ₦135,000');
+    });
   });
 });

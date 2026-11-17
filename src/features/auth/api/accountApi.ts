@@ -96,16 +96,26 @@ async function post<T>(
   path: string,
   body: unknown,
   schema: z.ZodType<T>,
+  access: { auth?: false } = {},
 ): Promise<Result<T, AccountFailure>> {
-  const r = await client.request(path, { method: 'POST', body, schema, timeoutMs: TIMEOUT_MS });
+  const r = await client.request(path, {
+    method: 'POST',
+    body,
+    schema,
+    timeoutMs: TIMEOUT_MS,
+    ...access,
+  });
   return r.ok ? ok(r.value) : err(toFailure(r.error));
 }
+
+// These run before there is a session, so they never ask the client for one.
+const NO_SESSION = { auth: false } as const;
 
 export async function signUp(
   client: Client,
   input: { name: string; email: string; password: string },
 ): Promise<Result<{ email: string }, AccountFailure>> {
-  const r = await post(client, '/api/auth/signup', input, signUpOk);
+  const r = await post(client, '/api/auth/signup', input, signUpOk, NO_SESSION);
   // The server returns the normalised (trimmed, lowercased) address; verifyOtp must use it.
   return r.ok ? ok({ email: r.value.user.email }) : r;
 }
@@ -114,7 +124,7 @@ export async function resendConfirmation(
   client: Client,
   email: string,
 ): Promise<Result<true, AccountFailure>> {
-  const r = await post(client, '/api/auth/resend-confirmation', { email }, acceptedOk);
+  const r = await post(client, '/api/auth/resend-confirmation', { email }, acceptedOk, NO_SESSION);
   return r.ok ? ok(true) : r;
 }
 
@@ -122,7 +132,7 @@ export async function forgotPassword(
   client: Client,
   email: string,
 ): Promise<Result<true, AccountFailure>> {
-  const r = await post(client, '/api/auth/forgot-password', { email }, acceptedOk);
+  const r = await post(client, '/api/auth/forgot-password', { email }, acceptedOk, NO_SESSION);
   return r.ok ? ok(true) : r;
 }
 

@@ -25,6 +25,10 @@ export default function SignUpRoute() {
       onOpenLink={(url) => {
         void Linking.openURL(url);
       }}
+      onBack={() => {
+        if (router.canGoBack()) router.back();
+        else router.replace('/welcome');
+      }}
     />
   );
 }

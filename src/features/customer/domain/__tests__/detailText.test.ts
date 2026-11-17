@@ -51,3 +51,15 @@ it('joins the address parts that exist', () => {
   expect(joinAddress(['12 Marina Rd', null, ' Lagos ', ''])).toBe('12 Marina Rd, Lagos');
   expect(joinAddress([null, undefined, ' '])).toBeNull();
 });
+
+describe('joinAddress — no repeated place', () => {
+  it('leaves out a city or state the address already ends with or contains as a part', () => {
+    expect(joinAddress(['Plot 14, Victoria Island, Lagos', 'Lagos', 'Lagos'])).toBe(
+      'Plot 14, Victoria Island, Lagos',
+    );
+    expect(joinAddress(['12 Bourdillon Road, Ikoyi', 'Lagos', 'Lagos'])).toBe(
+      '12 Bourdillon Road, Ikoyi, Lagos',
+    );
+    expect(joinAddress(['3 Marina', 'lagos ', 'Lagos'])).toBe('3 Marina, lagos');
+  });
+});

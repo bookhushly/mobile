@@ -30,12 +30,12 @@ export function useSavedWallet(
     queryKey: customerKeys.wallet(userId),
     // A wallet that can't be read (corrupt blob, Keychain error) is the same as no wallet.
     queryFn: () => wallet.load(userId).catch(() => null),
-    enabled,
+    enabled: enabled && userId !== '',
     // It reads the disk: offline is exactly when it must run.
     networkMode: 'always',
     // Re-read from disk each time it is needed again: a newer save may have landed.
     staleTime: 0,
     retry: false,
   });
-  return { wallet: enabled ? w.data : undefined };
+  return { wallet: enabled && userId !== '' ? w.data : undefined };
 }

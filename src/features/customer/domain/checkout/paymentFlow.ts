@@ -1,5 +1,5 @@
-import type { CheckStatus } from '@/features/customer/schemas/checkout';
-import type { PayVerdict, StartErrorAction } from './paymentStatus';
+import type { CheckStatus, Initialized } from '@/features/customer/schemas/checkout';
+import { providerStillProcessing, type PayVerdict, type StartErrorAction } from './paymentStatus';
 
 // ── Polling after the browser closes (P6) ───────────────────────────────────────────────────────
 
@@ -66,17 +66,10 @@ export function rowPayState(
 export const URL_MAX_AGE_MS = 24 * 3600_000;
 /** A pending reference this old (with no usable URL) may be replaced by a new initialise. */
 export const PENDING_REINIT_MS = 15 * 60_000;
+/** Web #223 hands back an open checkout for a pending reference younger than this (V3). */
+export const REUSE_WINDOW_MS = 30 * 60_000;
 
 export type StoredPayment = { reference: string; paymentUrl: string; startedAt: number };
-
-/**
- * A payment started less than 15 min ago (or at an unknown time) may still be in progress: a bank
- * transfer or USSD can take minutes. Such a reference is never verified (web marks Paystack's
- * `ongoing`/`pending` as failed, BACKEND_STATUS §9 (p)) and its failure is never final.
- */
-export function isFreshPayment(startedAtMs: number, nowMs: number): boolean {
-  return !(nowMs - startedAtMs >= PENDING_REINIT_MS);
-}
 
 /**
  * Only Paystack's own pages are opened (security review 6): https, on paystack.com or a
@@ -92,10 +85,12 @@ export function isPaymentUrl(url: string): boolean {
 
 // hasPaid is never Done by itself: check-status ignores `fulfilled`, so a paid reference still goes
 // through the status poll (`check`), and only its 'paid' verdict ends in Done.
+// `reuse` (V3): initialise, signed in and without `email`, may hand back the same checkout; it is
+// opened only when it does, and never otherwise (the caller shows pendingElsewhere).
 export type PayPlan =
   | { do: 'check'; reference: string; paymentStartedAt: number }
   | { do: 'open'; reference: string; url: string; paymentStartedAt: number }
-  | { do: 'wait' }
+  | { do: 'reuse'; reference: string; paymentStartedAt: number }
   | { do: 'verifyPending'; reference: string }
   | { do: 'initialize' };
 
@@ -118,22 +113,31 @@ export function planPay(check: CheckStatus, stored: StoredPayment | null, nowMs:
   ) {
     return { do: 'open', reference, url: stored.paymentUrl, paymentStartedAt: stored.startedAt };
   }
-  // A reference under 15 min old is never verified (A1): wait for it, never initialise.
-  if (isFreshPayment(Date.parse(check.payment.created_at), nowMs)) return { do: 'wait' };
+  const created = Date.parse(check.payment.created_at);
+  if (Number.isFinite(created) && nowMs - created < REUSE_WINDOW_MS) {
+    return { do: 'reuse', reference, paymentStartedAt: created };
+  }
   return { do: 'verifyPending', reference };
 }
 
+/** V3: an initialise answer is the pending checkout only when web says so for that reference. */
+export function acceptReuse(init: Initialized, pendingReference: string): boolean {
+  return init.reused === true && init.payment.reference === pendingReference;
+}
+
 /**
- * After verifying a pending reference we have no URL for (P26; only references ≥ 15 min old are
- * verified). Never initialises on doubt.
+ * After verifying a pending reference we have no URL for (P26, V2). Never initialises on doubt:
+ * a charge Paystack still reports as clearing waits at any age.
  * 'done' comes from verify, which doesn't report `fulfilled`: the caller dispatches `paid`, which
  * moves to Checking, and Done still waits for the status poll.
  */
 export function afterPendingVerify(
   v: PayVerdict,
+  providerStatus: string | null | undefined,
   pendingCreatedAtIso: string,
   nowMs: number,
 ): 'done' | 'initialize' | 'wait' {
+  if (providerStillProcessing(providerStatus)) return 'wait';
   if (v === 'paid') return 'done';
   if (v === 'failed') return 'initialize';
   const created = Date.parse(pendingCreatedAtIso);
@@ -143,16 +147,14 @@ export function afterPendingVerify(
 
 // ── The flow reducer ─────────────────────────────────────────────────────────────────────────────
 //
-// Checking polls `GET /api/payment/status/{ref}` only (A1, amended P6): verify is never called
-// for a payment the customer may still be making, because web marks a Paystack transfer or USSD in
-// progress as failed. The first poll is 2 s after entering Checking (attempt 0), then 3, 5, 8, 13
-// and every 15 s. Each pending/unknown verdict computes the next delay; when there is none left
-// the same transition moves to stillChecking, so the caller schedules purely from state and can
-// never stall. A failed verdict for a payment started under 15 min ago is `unconfirmed`, never
-// `failed` (A1b): it may still complete.
+// Checking (P6, amended 4c.1 V1): on return from the browser (and on Check again) verify runs
+// once (`verify: true`), then `GET /api/payment/status/{ref}` is polled. The first poll is 2 s
+// after verify answers (attempt 0), then 3, 5, 8, 13 and every 15 s. Each pending/unknown verdict
+// computes the next delay; when there is none left the same transition moves to stillChecking, so
+// the caller schedules purely from state and can never stall. Only a definitive verify failure
+// (Paystack `failed`/`reversed`) is `failed`; a status `failed` without one is `unconfirmed`.
 //
-// `paymentStartedAt` is when the reference was started (server clock; NaN when unknown, which
-// counts as fresh).
+// `paymentStartedAt` is when the reference was started (server clock; NaN when unknown).
 
 export type FlowState =
   | { step: 'review' }
@@ -165,6 +167,8 @@ export type FlowState =
       startedAt: number;
       attempt: number;
       nextDelayMs: number;
+      /** Verify runs once before the status polls (V1). */
+      verify: boolean;
     }
   | { step: 'done'; reference: string }
   | { step: 'failed'; reference: string }
@@ -178,7 +182,10 @@ export type FlowEvent =
   | { type: 'pay' }
   | { type: 'opened'; reference: string; paymentStartedAt: number }
   | { type: 'returned'; now: number }
-  | { type: 'verdict'; verdict: PayVerdict; now: number }
+  /** Verify's answer in a verifying Checking: `definitive` is `isDefinitiveFailure` (V1). */
+  | { type: 'verified'; verdict: PayVerdict; definitive: boolean; now: number }
+  /** `retryAfterMs`: a 503 `Retry-After` (web #223 `fetch_failed`); the next poll waits at least that. */
+  | { type: 'verdict'; verdict: PayVerdict; now: number; retryAfterMs?: number }
   | { type: 'startFailed'; words: string; action: StartErrorAction }
   | { type: 'holdExpired' }
   | { type: 'checkAgain'; now: number }
@@ -186,7 +193,12 @@ export type FlowEvent =
   | { type: 'pendingElsewhere' }
   | { type: 'retry' };
 
-function startChecking(reference: string, paymentStartedAt: number, now: number): FlowState {
+function startChecking(
+  reference: string,
+  paymentStartedAt: number,
+  now: number,
+  verify: boolean,
+): FlowState {
   return {
     step: 'checking',
     reference,
@@ -194,6 +206,7 @@ function startChecking(reference: string, paymentStartedAt: number, now: number)
     startedAt: now,
     attempt: 0,
     nextDelayMs: POLL_SCHEDULE_MS[0] ?? POLL_EVERY_MS,
+    verify,
   };
 }
 
@@ -215,17 +228,24 @@ export function flow(state: FlowState, ev: FlowEvent): FlowState {
     case 'paid':
       // check-status or verify said paid; Done still waits for a fulfilled status poll.
       return state.step === 'starting'
-        ? startChecking(ev.reference, ev.paymentStartedAt, ev.now)
+        ? startChecking(ev.reference, ev.paymentStartedAt, ev.now, false)
         : state;
     case 'pendingElsewhere':
       return state.step === 'starting' ? { step: 'pendingElsewhere' } : state;
     case 'returned':
       return state.step === 'inBrowser'
-        ? startChecking(state.reference, state.paymentStartedAt, ev.now)
+        ? startChecking(state.reference, state.paymentStartedAt, ev.now, true)
         : state;
+    case 'verified':
+      if (state.step !== 'checking' || !state.verify) return state;
+      if (ev.verdict === 'failed' && ev.definitive) {
+        return { step: 'failed', reference: state.reference };
+      }
+      // Anything else goes on to the status polls: only a fulfilled status poll is Done.
+      return { ...state, verify: false };
     case 'checkAgain':
       if (state.step === 'stillChecking' || state.step === 'unconfirmed') {
-        return startChecking(state.reference, state.paymentStartedAt, ev.now);
+        return startChecking(state.reference, state.paymentStartedAt, ev.now, true);
       }
       // P26 "Check again" re-runs check-status and the pay plan.
       return state.step === 'pendingElsewhere' ? { step: 'starting' } : state;
@@ -241,16 +261,13 @@ export function flow(state: FlowState, ev: FlowEvent): FlowState {
       if (state.step !== 'checking') return state;
       const { reference, paymentStartedAt } = state;
       if (ev.verdict === 'paid') return { step: 'done', reference };
-      if (ev.verdict === 'failed') {
-        return isFreshPayment(paymentStartedAt, ev.now)
-          ? { step: 'unconfirmed', reference, paymentStartedAt }
-          : { step: 'failed', reference };
-      }
+      // Without a definitive verify a failed status may still be a transfer clearing (V1).
+      if (ev.verdict === 'failed') return { step: 'unconfirmed', reference, paymentStartedAt };
       const attempt = state.attempt + 1;
       const nextDelayMs = nextPollDelay(ev.now - state.startedAt, attempt);
       return nextDelayMs === null
         ? { step: 'stillChecking', reference, paymentStartedAt }
-        : { ...state, attempt, nextDelayMs };
+        : { ...state, attempt, nextDelayMs: Math.max(nextDelayMs, ev.retryAfterMs ?? 0) };
     }
   }
 }

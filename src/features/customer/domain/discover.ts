@@ -14,6 +14,12 @@ export type Filters = {
   minRating?: 3 | 4 | 4.5;
   breakfastIncluded?: boolean;
   generator24h?: boolean;
+  /** At least this many in one room (`max_occupancy`); 1 is no filter. */
+  guests?: number;
+  /** NIHOTOUR-certified only. */
+  certified?: boolean;
+  /** The web's hotel amenity slugs (BACKEND_STATUS §9), all required. */
+  amenities?: readonly HotelAmenity[];
   // Apartments only.
   bedrooms?: 1 | 2 | 3;
   furnished?: boolean;
@@ -21,6 +27,22 @@ export type Filters = {
   // Events only: 'today', 'weekend' or a picked YYYY-MM-DD.
   eventDate?: 'today' | 'weekend' | PickedDate;
 };
+
+/**
+ * Hotel amenities a guest filters on, as the web's onboarding form stores them
+ * (`web/lib/hotel.js` AMENITY_ICONS; BACKEND_STATUS §9): matched exactly, all required.
+ */
+export const HOTEL_AMENITIES = [
+  'wifi',
+  'air-vent',
+  'waves',
+  'car',
+  'dumbbell',
+  'utensils',
+  'droplet',
+  'tv',
+] as const;
+export type HotelAmenity = (typeof HOTEL_AMENITIES)[number];
 
 /** A picked calendar date, `YYYY-MM-DD` (checked with `isIsoDate` before it is sent). */
 export type PickedDate = `${number}-${number}-${number}`;
@@ -72,6 +94,10 @@ export function buildListingParams(
       put('min_rating', filters.minRating === undefined ? null : String(filters.minRating));
       if (filters.breakfastIncluded === true) put('breakfast_offered', 'included');
       if (filters.generator24h === true) put('hotel_has_generator', 'true');
+      if (filters.guests !== undefined && filters.guests > 1)
+        put('max_occupancy', String(Math.floor(filters.guests)));
+      if (filters.certified === true) put('nihotour_only', 'true');
+      put('amenities', [...(filters.amenities ?? [])].sort().join(','));
       return { params };
     case 'serviced_apartments':
       put('bedrooms', filters.bedrooms === undefined ? null : String(filters.bedrooms));
@@ -125,7 +151,15 @@ export function filterCount(cat: Category, f: Filters): number {
   const shared = wholeNaira(f.priceMin) !== null || wholeNaira(f.priceMax) !== null ? 1 : 0;
   switch (cat) {
     case 'hotels':
-      return shared + set(f.minRating) + on(f.breakfastIncluded) + on(f.generator24h);
+      return (
+        shared +
+        set(f.minRating) +
+        on(f.breakfastIncluded) +
+        on(f.generator24h) +
+        (f.guests !== undefined && f.guests > 1 ? 1 : 0) +
+        on(f.certified) +
+        (f.amenities?.length ?? 0)
+      );
     case 'serviced_apartments':
       return shared + set(f.bedrooms) + on(f.furnished) + on(f.generator);
     case 'events':
@@ -145,6 +179,32 @@ export const POPULAR_PLACES: readonly Place[] = [
   { label: 'Uyo', city: 'Uyo' },
   { label: 'Calabar', city: 'Calabar' },
 ];
+
+// The line under a popular place in the "Where to?" sheet (Skyscanner: "New York, United States").
+const REGION: Readonly<Record<string, string>> = {
+  Lagos: 'Lagos State',
+  Abuja: 'Federal Capital Territory',
+  'Port Harcourt': 'Rivers State',
+  Ibadan: 'Oyo State',
+  Enugu: 'Enugu State',
+  Kano: 'Kano State',
+  Uyo: 'Akwa Ibom State',
+  Calabar: 'Cross River State',
+};
+
+/** The state a popular place sits in; null for any other place. */
+export function placeRegion(p: Place): string | null {
+  return REGION[p.label] ?? null;
+}
+
+/** The places whose name or region contains the query (case-insensitive); all for a blank one. */
+export function filterPlaces<P extends Place>(places: readonly P[], query: string): P[] {
+  const q = query.trim().toLowerCase();
+  if (q === '') return [...places];
+  return places.filter(
+    (p) => p.label.toLowerCase().includes(q) || (placeRegion(p) ?? '').toLowerCase().includes(q),
+  );
+}
 
 const LAGOS: Place = { label: 'Lagos', state: 'Lagos' };
 
@@ -364,6 +424,19 @@ export function ratingLabel(avg: number | null, count: number | null): string | 
   return `${avg.toFixed(1)} (${String(count)})`;
 }
 
+// Expedia-style words for a real average (out of 5). Below "Good" the number speaks alone.
+const RATING_WORDS: readonly [number, string][] = [
+  [4.8, 'Exceptional'],
+  [4.5, 'Excellent'],
+  [4.0, 'Very good'],
+  [3.5, 'Good'],
+];
+
+export function ratingWord(avg: number | null, count: number | null): string | null {
+  if (count === null || count <= 0 || !positive(avg)) return null;
+  return RATING_WORDS.find(([min]) => avg >= min)?.[1] ?? null;
+}
+
 const WEB = 'https://bookhushly.com';
 
 export function webListingUrl(kind: ListingKind, id: string): string {
@@ -383,8 +456,44 @@ const sentence = (key: string) => {
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 
+/**
+ * The web's hotel onboarding stores icon names as amenity codes (`web/lib/hotel.js` AMENITY_ICONS;
+ * BACKEND_STATUS §9): each gets the word a guest reads. Never show the code itself ("zap", "waves").
+ */
+const AMENITY_WORDS: Readonly<Record<string, string>> = {
+  wifi: 'Wi-Fi',
+  'air-vent': 'Air conditioning',
+  tv: 'TV',
+  coffee: 'Coffee maker',
+  bath: 'Bathtub',
+  refrigerator: 'Mini fridge',
+  utensils: 'Room service',
+  dumbbell: 'Gym',
+  waves: 'Pool',
+  car: 'Parking',
+  shirt: 'Laundry',
+  briefcase: 'Work desk',
+  'shield-check': 'Safe',
+  phone: 'Phone',
+  wind: 'Balcony',
+  droplet: 'Hot water',
+  zap: 'Generator',
+  'battery-charging': 'Inverter backup',
+  shower: 'Shower',
+};
+// A stored code (lowercase, dashes or underscores), not a label a vendor typed ("Swimming pool").
+const CODE = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
+
+/** A stored amenity → the words shown: a known code's word, else the code as a sentence. */
+export function amenityWords(raw: string): string {
+  const known = AMENITY_WORDS[raw];
+  if (known !== undefined) return known;
+  if (!CODE.test(raw)) return raw;
+  return sentence(raw.replace(/-/g, '_')).replace(/\bwi ?-?fi\b/i, 'Wi-Fi');
+}
+
 const strings = (list: readonly unknown[]) =>
-  list.flatMap((v) => (typeof v === 'string' && v.trim() !== '' ? [v.trim()] : []));
+  list.flatMap((v) => (typeof v === 'string' && v.trim() !== '' ? [amenityWords(v.trim())] : []));
 
 /** `{items: [...]}`, a string array, or `{key: true}` → labels; anything else → []. */
 export function normalizeAmenities(value: unknown): string[] {
@@ -396,7 +505,7 @@ export function normalizeAmenities(value: unknown): string[] {
     if (Array.isArray(items)) out = strings(items);
     else
       out = Object.entries(value).flatMap(([k, v]) =>
-        v === true && k.trim() !== '' ? [sentence(k)] : [],
+        v === true && k.trim() !== '' ? [amenityWords(k.trim())] : [],
       );
   }
   return [...new Set(out)];

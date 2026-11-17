@@ -164,8 +164,12 @@ it('hotel: dates with the hotel times, room type, guests, payment and the check-
   loaded({ row: ho({ id: ID, children: 1 }) });
   await show('hotel');
   expect(screen.getByRole('header', { name: 'Harbour Suites' })).toBeTruthy();
-  expect(screen.getByLabelText('Check-in, Tue 13 Oct · from 2:00 pm')).toBeTruthy();
-  expect(screen.getByLabelText('Check-out, Thu 15 Oct · by 12:00 pm')).toBeTruthy();
+  // Booking.com: check-in and check-out side by side, read as one.
+  expect(
+    screen.getByLabelText(
+      'Check-in, Tue 13 Oct · from 2:00 pm. Check-out, Thu 15 Oct · by 12:00 pm',
+    ),
+  ).toBeTruthy();
   expect(screen.getByLabelText('Room type, Deluxe')).toBeTruthy();
   expect(screen.getByLabelText('Guests, 2 adults, 1 child')).toBeTruthy();
   expect(screen.getByLabelText('Payment, ₦45,000, Paid')).toBeTruthy();
@@ -207,8 +211,11 @@ it('apartment: area, address, dates and nights, times, guests and payment', asyn
   expect(screen.getByRole('header', { name: 'Lekki Loft' })).toBeTruthy();
   expect(screen.getByLabelText('Area, Lekki, Lagos')).toBeTruthy();
   expect(screen.getByLabelText('Dates, 20–22 Oct · 2 nights')).toBeTruthy();
-  expect(screen.getByLabelText('Check-in, Tue 20 Oct · from 3:00 pm')).toBeTruthy();
-  expect(screen.getByLabelText('Check-out, Thu 22 Oct · by 11:00 am')).toBeTruthy();
+  expect(
+    screen.getByLabelText(
+      'Check-in, Tue 20 Oct · from 3:00 pm. Check-out, Thu 22 Oct · by 11:00 am',
+    ),
+  ).toBeTruthy();
   expect(screen.getByLabelText('Guests, 2 guests')).toBeTruthy();
   expect(screen.getByLabelText('Payment, ₦45,000, Not paid')).toBeTruthy();
   expect(screen.getByText('Finish paying on bookhushly.com')).toBeTruthy();

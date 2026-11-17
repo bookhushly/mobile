@@ -1,12 +1,4 @@
-import {
-  BedDouble,
-  Building2,
-  MapPin,
-  Search,
-  Ticket,
-  WifiOff,
-  type LucideIcon,
-} from 'lucide-react-native';
+import { Compass, QrCode, Search, Ticket, WifiOff } from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, View } from 'react-native';
 
@@ -19,15 +11,16 @@ import { useListingsRail } from '@/features/customer/hooks/useListings';
 import { useMyBookings } from '@/features/customer/hooks/useMyBookings';
 import { useSaved } from '@/features/customer/hooks/useSaved';
 import { useSavedNotices } from '@/features/customer/hooks/useSavedNotices';
-import { ChipButton } from '@/features/customer/ui/ChipButton';
+import { CategoryTiles, type Tile } from '@/features/customer/ui/CategoryTiles';
+import { PromoCard } from '@/features/customer/ui/PromoCard';
 import { isConnectionFailure } from '@/features/customer/ui/discoverLabels';
 import { PlaceSheet } from '@/features/customer/ui/PlaceSheet';
 import { Rail, RAIL_MAX } from '@/features/customer/ui/Rail';
 import { SavedBanner, savedBannerShown } from '@/features/customer/ui/SavedBanner';
 import { TodayBanner } from '@/features/customer/ui/TodayBanner';
 import { clock } from '@/shared/api/instance';
-import { borderWidth, color, radius, space } from '@/shared/theme';
-import { Banner, Header, Icon, refreshColors, Screen, Text, useDensity } from '@/shared/ui';
+import { borderWidth, color, elevation, radius, space } from '@/shared/theme';
+import { Banner, EmptyState, Icon, refreshColors, Screen, Text, useDensity } from '@/shared/ui';
 
 export type ResultsTarget = { category: Category; region?: string; city?: string };
 
@@ -38,14 +31,20 @@ type Props = {
   onOpenListing: (kind: ListingKind, id: string) => void;
   onShowTickets: (bookingId: string) => void;
   onShowCheckInCode: (bookingId: string) => void;
+  onOpenBookings: () => void;
   /** A stale session on a heart: the route signs out so the customer can sign in again. */
   onSignInAgain: () => void;
 };
 
-const CATEGORIES: readonly { cat: Category; label: string; icon: LucideIcon }[] = [
-  { cat: 'hotels', label: 'Hotels', icon: BedDouble },
-  { cat: 'serviced_apartments', label: 'Apartments', icon: Building2 },
-  { cat: 'events', label: 'Events', icon: Ticket },
+// Brand photos (the opening screen's), never listings.
+const HOTEL_PHOTO = require('../../../../assets/images/auth/hotel.webp') as number;
+const APARTMENT_PHOTO = require('../../../../assets/images/auth/apartment.webp') as number;
+const EVENT_PHOTO = require('../../../../assets/images/auth/event.webp') as number;
+
+const CATEGORIES: readonly Tile<Category>[] = [
+  { key: 'hotels', label: 'Hotels', blurb: 'Rooms & suites', image: HOTEL_PHOTO },
+  { key: 'serviced_apartments', label: 'Apartments', blurb: 'Whole homes', image: APARTMENT_PHOTO },
+  { key: 'events', label: 'Events', blurb: 'Tickets to shows', image: EVENT_PHOTO },
 ];
 
 // D6: "Happening soon" is events soonest first; stays are newest in the chosen place.
@@ -73,6 +72,7 @@ export function ExploreScreen({
   onOpenListing,
   onShowTickets,
   onShowCheckInCode,
+  onOpenBookings,
   onSignInAgain,
 }: Props) {
   const d = useDensity();
@@ -119,6 +119,9 @@ export function ExploreScreen({
   // banner and Saved still work from the device) instead of three identical rail errors.
   const rails = place === null ? [events] : [events, hotels, apartments];
   const offline = rails.every((r) => r.failed && isConnectionFailure(r.error));
+  // Nothing anywhere (a new region, or a quiet week): one calm empty state, not three bare lines.
+  const allEmpty =
+    place !== null && rails.every((r) => !r.loading && !r.failed && r.items.length === 0);
   const retryRails = () => {
     for (const r of rails) void r.refetch();
   };
@@ -173,121 +176,150 @@ export function ExploreScreen({
   return (
     <Screen
       scroll
-      header={<Header title="Explore" />}
+      // Viator, Tripadvisor and Hyatt (Mobbin, 2026-11-15): no page title; the search bar is
+      // pinned at the top, so it's one tap away however far down the page you are.
+      header={
+        <View style={{ paddingTop: space.s3, paddingBottom: space.s4 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Search hotels, apartments and events"
+            onPress={onOpenSearch}
+            testID="explore-search"
+            style={({ pressed }) => ({
+              minHeight: d.controlHeight,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.s3,
+              paddingHorizontal: space.s5,
+              borderRadius: radius.rFull,
+              borderWidth: borderWidth.hairline,
+              borderColor: color.border,
+              backgroundColor: pressed ? color.wash : color.surface,
+              ...elevation.e3,
+            })}
+          >
+            <Icon as={Search} size="md" tone="textPrimary" />
+            <Text variant="body" tone="textSecondary" numberOfLines={1}>
+              Search hotels, apartments and events
+            </Text>
+          </Pressable>
+        </View>
+      }
       footer={footer}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshColors} />
       }
     >
-      {today !== null ? (
-        <TodayBanner
-          today={today}
-          onShowTickets={onShowTickets}
-          onShowCheckInCode={onShowCheckInCode}
-          testID="today-banner"
-        />
-      ) : null}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Search hotels, apartments and events"
-        onPress={onOpenSearch}
-        style={({ pressed }) => ({
-          minHeight: d.controlHeight,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: space.s3,
-          paddingHorizontal: space.s5,
-          borderRadius: radius.rFull,
-          borderWidth: borderWidth.hairline,
-          borderColor: color.borderStrong,
-          backgroundColor: pressed ? color.wash : color.surface,
-        })}
-      >
-        <Icon as={Search} size="sm" tone="textSecondary" />
-        <Text variant="body" tone="textSecondary" numberOfLines={1}>
-          Search hotels, apartments and events
-        </Text>
-      </Pressable>
-      <View
-        testID="explore-chips"
-        style={{ flexDirection: 'row', flexWrap: 'wrap', gap: d.targetGap }}
-      >
-        {CATEGORIES.map((c) => (
-          <ChipButton
-            key={c.cat}
-            label={c.label}
-            icon={c.icon}
-            onPress={() => {
-              onOpenResults({ category: c.cat });
+      {/* Spacing (owner, 2026-11-15: "too tight"), after Airbnb and Expedia: the top group (today,
+          search, categories) 16 apart; every section after it 40 apart, so each reads on its own. */}
+      <View style={{ gap: space.s9 }}>
+        <View style={{ gap: space.s5 }}>
+          {today !== null ? (
+            <TodayBanner
+              today={today}
+              onShowTickets={onShowTickets}
+              onShowCheckInCode={onShowCheckInCode}
+              testID="today-banner"
+            />
+          ) : null}
+          <CategoryTiles
+            tiles={CATEGORIES}
+            onPress={(cat) => {
+              onOpenResults({ category: cat });
             }}
+            testID="explore-categories"
           />
-        ))}
-        <ChipButton
-          label={place === null ? 'Where to?' : `Where to? · ${where}`}
-          accessibilityLabel={place === null ? 'Where to?' : `Where to? ${where}. Change place`}
-          icon={MapPin}
-          onPress={choosePlace}
-        />
+        </View>
+        {offline ? (
+          <Banner
+            tone="neutral"
+            icon={WifiOff}
+            message="You’re offline — showing what’s saved."
+            action={{ label: 'Try again', onPress: retryRails }}
+            testID="explore-offline"
+          />
+        ) : allEmpty ? (
+          <EmptyState
+            icon={Compass}
+            title={`Nothing listed in ${where} yet`}
+            message="New hotels, apartments and events show up here as they’re added."
+            action={{ label: 'Try another place', onPress: choosePlace }}
+            testID="explore-empty"
+          />
+        ) : (
+          <View style={{ gap: space.s9 }}>
+            <Rail
+              title="Hotels"
+              {...(placeLink === undefined ? {} : { place: placeLink })}
+              emptyNote={`No hotels in ${where} yet.`}
+              items={hotelCards}
+              loading={place === null || hotels.loading}
+              failed={hotels.failed}
+              error={hotels.error}
+              waiting={hotels.retryAfterSec !== null}
+              onRetry={() => void hotels.refetch()}
+              onSeeAll={() => {
+                onOpenResults(targetOf('hotels', place));
+              }}
+              testID="rail-hotels"
+              {...railProps}
+            />
+            <Rail
+              title="Apartments"
+              {...(placeLink === undefined ? {} : { place: placeLink })}
+              emptyNote={`No apartments in ${where} yet.`}
+              items={apartmentCards}
+              loading={place === null || apartments.loading}
+              failed={apartments.failed}
+              error={apartments.error}
+              waiting={apartments.retryAfterSec !== null}
+              onRetry={() => void apartments.refetch()}
+              onSeeAll={() => {
+                onOpenResults(targetOf('serviced_apartments', place));
+              }}
+              testID="rail-apartments"
+              {...railProps}
+            />
+            {/* Stays first (what most people come to book), then the weekend promo leading
+                into the events it promises, then the offline note that belongs with tickets. */}
+            <PromoCard
+              testID="promo-weekend"
+              tone="dark"
+              icon={Ticket}
+              title="Go out this weekend"
+              body="Concerts, comedy, food and culture, with tickets straight to the app."
+              action="See events"
+              onPress={() => {
+                onOpenResults({ category: 'events' });
+              }}
+            />
+            <Rail
+              title="Happening soon"
+              emptyNote="No upcoming events yet."
+              items={eventCards}
+              loading={events.loading}
+              failed={events.failed}
+              error={events.error}
+              waiting={events.retryAfterSec !== null}
+              onRetry={() => void events.refetch()}
+              onSeeAll={() => {
+                onOpenResults({ category: 'events' });
+              }}
+              testID="rail-events"
+              {...railProps}
+            />
+            <PromoCard
+              testID="promo-offline"
+              tone="tint"
+              icon={QrCode}
+              title="Your tickets work offline"
+              body="Your code is saved on your phone, so it opens at the door even without signal."
+              action="See your bookings"
+              onPress={onOpenBookings}
+            />
+          </View>
+        )}
       </View>
-      {offline ? (
-        <Banner
-          tone="neutral"
-          icon={WifiOff}
-          message="You’re offline — showing what’s saved."
-          action={{ label: 'Try again', onPress: retryRails }}
-          testID="explore-offline"
-        />
-      ) : (
-        <>
-          <Rail
-            title="Happening soon"
-            emptyNote="No upcoming events yet."
-            items={eventCards}
-            loading={events.loading}
-            failed={events.failed}
-            error={events.error}
-            waiting={events.retryAfterSec !== null}
-            onRetry={() => void events.refetch()}
-            onSeeAll={() => {
-              onOpenResults({ category: 'events' });
-            }}
-            testID="rail-events"
-            {...railProps}
-          />
-          <Rail
-            title="Hotels"
-            {...(placeLink === undefined ? {} : { place: placeLink })}
-            emptyNote={`No hotels in ${where} yet.`}
-            items={hotelCards}
-            loading={place === null || hotels.loading}
-            failed={hotels.failed}
-            error={hotels.error}
-            waiting={hotels.retryAfterSec !== null}
-            onRetry={() => void hotels.refetch()}
-            onSeeAll={() => {
-              onOpenResults(targetOf('hotels', place));
-            }}
-            testID="rail-hotels"
-            {...railProps}
-          />
-          <Rail
-            title="Apartments"
-            {...(placeLink === undefined ? {} : { place: placeLink })}
-            emptyNote={`No apartments in ${where} yet.`}
-            items={apartmentCards}
-            loading={place === null || apartments.loading}
-            failed={apartments.failed}
-            error={apartments.error}
-            waiting={apartments.retryAfterSec !== null}
-            onRetry={() => void apartments.refetch()}
-            onSeeAll={() => {
-              onOpenResults(targetOf('serviced_apartments', place));
-            }}
-            testID="rail-apartments"
-            {...railProps}
-          />
-        </>
-      )}
       <PlaceSheet
         visible={choosing}
         current={place}

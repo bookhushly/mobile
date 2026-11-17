@@ -60,7 +60,9 @@ export default function DeleteAccountRoute() {
           void signOutAfterDeletion(state.userId);
         }}
         onCancel={() => {
-          router.back();
+          // Opened with nothing beneath it (a cold start or deep link), back has nowhere to go.
+          if (router.canGoBack()) router.back();
+          else router.replace('/');
         }}
       />
     </DensityProvider>

@@ -19,7 +19,7 @@ jest.mock('@/features/customer/api/checkoutApi', () => ({
   createEvent: jest.fn(),
 }));
 jest.mock('@/features/customer/api/checkoutDb', () => ({
-  checkoutDb: { findRecentEventBooking: jest.fn() },
+  checkoutDb: { findRecentEventBooking: jest.fn(), findRecentStayBooking: jest.fn() },
 }));
 jest.mock('@/features/customer/api/bookingActionsApi', () => ({ cancelBooking: jest.fn() }));
 jest.mock('@/shared/platform/storage', () => ({
@@ -29,9 +29,14 @@ jest.mock('expo-crypto', () => ({ randomUUID: jest.fn() }));
 
 const stayMock = jest.mocked(createStay);
 const eventMock = jest.mocked(createEvent);
-const findMock = jest.requireMock<{
-  checkoutDb: { findRecentEventBooking: jest.MockedFunction<CheckoutDb['findRecentEventBooking']> };
-}>('@/features/customer/api/checkoutDb').checkoutDb.findRecentEventBooking;
+const dbMock = jest.requireMock<{
+  checkoutDb: {
+    findRecentEventBooking: jest.MockedFunction<CheckoutDb['findRecentEventBooking']>;
+    findRecentStayBooking: jest.MockedFunction<CheckoutDb['findRecentStayBooking']>;
+  };
+}>('@/features/customer/api/checkoutDb').checkoutDb;
+const findMock = dbMock.findRecentEventBooking;
+const findStayMock = dbMock.findRecentStayBooking;
 const cancelMock = jest.mocked(cancelBooking);
 const uuidMock = jest.mocked(Crypto.randomUUID);
 
@@ -113,6 +118,7 @@ beforeEach(async () => {
     return `k${String(n)}`;
   });
   cancelMock.mockResolvedValue(err<ApiError>({ kind: 'network' }));
+  findStayMock.mockResolvedValue(null);
   await checkoutStore.wipe();
 });
 
@@ -183,10 +189,47 @@ describe('useCreateBooking — stays', () => {
     expect(keysSent()).toEqual(['k1', 'k1']);
     await advance(1);
     await act(() => result.current.checkAgain());
+    // G3: nothing found from the first send, so a new key.
+    expect(findStayMock).toHaveBeenCalledTimes(1);
     expect(keysSent()).toEqual(['k1', 'k1', 'k2']);
     // The new key is kept from then on.
     await act(() => result.current.submit(stay(), ctx));
     expect(keysSent()).toEqual(['k1', 'k1', 'k2', 'k2']);
+  });
+
+  it('Check again past 9 min adopts a pending stay the lost send made, without sending (G3)', async () => {
+    stayMock.mockResolvedValue(lost);
+    findStayMock.mockResolvedValue({ id: 'hbX', created_at: '2026-10-21T12:00:00Z' });
+    const { result } = await renderHook(() => useCreateBooking(USER, 'hotel', HOTEL));
+    await act(() => result.current.submit(stay(), ctx));
+    await advance(9 * 60_000 - 1);
+    await act(() => result.current.checkAgain());
+    // Under 9 min: a replay with the same key, no lookup.
+    expect(findStayMock).not.toHaveBeenCalled();
+    await advance(1);
+    await act(() => result.current.checkAgain());
+    expect(findStayMock).toHaveBeenCalledWith(
+      'hotel',
+      USER,
+      { targetId: ROOM, checkIn: '2026-11-01', checkOut: '2026-11-03' },
+      new Date(NOW - 5000).toISOString(),
+    );
+    expect(keysSent()).toEqual(['k1', 'k1']);
+    expect(result.current.created).toEqual({ bookingId: 'hbX' });
+    expect(result.current.state).toEqual({ phase: 'idle' });
+  });
+
+  it('apartments look up by apartment; a failed lookup stays unsure and sends nothing (G3)', async () => {
+    stayMock.mockResolvedValue(lost);
+    const { result } = await renderHook(() => useCreateBooking(USER, 'apartment', 'ap1'));
+    await act(() => result.current.submit(stay(), { title: 'Loft' }));
+    await advance(9 * 60_000);
+    findStayMock.mockRejectedValueOnce(new Error('read failed'));
+    await act(() => result.current.checkAgain());
+    expect(findStayMock.mock.calls[0]?.[0]).toBe('apartment');
+    expect(findStayMock.mock.calls[0]?.[2]).toMatchObject({ targetId: 'ap1' });
+    expect(keysSent()).toEqual(['k1']);
+    expect(result.current.state).toEqual({ phase: 'unsure' });
   });
 
   it('stay create reuses the idempotency key for the same selection and mints a new one when it changes', async () => {
@@ -203,7 +246,7 @@ describe('useCreateBooking — stays', () => {
     expect(stayMock.mock.calls[0]?.[2]).toMatchObject({ room_type_id: ROOM, hotel_id: HOTEL });
   });
 
-  it('busy retries three times then mints a new key', async () => {
+  it('busy waits three times, then 60 s once more, always with the same key (V5)', async () => {
     stayMock.mockResolvedValue(inProgress);
     const { result } = await renderHook(() => useCreateBooking(USER, 'hotel', HOTEL));
     let done: Promise<void> = Promise.resolve();
@@ -217,12 +260,43 @@ describe('useCreateBooking — stays', () => {
     await advance(2000);
     await advance(2000);
     await advance(2000);
-    await act(() => done);
+    // The server's stuck-key window is 60 s (web #223): one last wait with the same key.
+    expect(result.current.state).toEqual({ phase: 'busy', waitSeconds: 60 });
     expect(keysSent()).toEqual(['k1', 'k1', 'k1', 'k1']);
-    expect(result.current.state.phase).toBe('failed');
+    await advance(59_999);
+    expect(stayMock).toHaveBeenCalledTimes(4);
+    await advance(1);
+    await act(() => done);
+    expect(keysSent()).toEqual(['k1', 'k1', 'k1', 'k1', 'k1']);
+    expect(result.current.state).toEqual({
+      phase: 'failed',
+      words: 'Still working on your last try. Try again in a moment',
+    });
+    // No new key for in_progress: the next Continue replays the same one.
     stayMock.mockResolvedValue(stayCreated);
     await act(() => result.current.submit(stay(), ctx));
-    expect(keysSent()).toEqual(['k1', 'k1', 'k1', 'k1', 'k2']);
+    expect(keysSent()).toEqual(['k1', 'k1', 'k1', 'k1', 'k1', 'k1']);
+    expect(result.current.created).toEqual({ bookingId: 'hb1' });
+  });
+
+  it('the 60 s wait ends as soon as the server answers', async () => {
+    stayMock
+      .mockResolvedValueOnce(inProgress)
+      .mockResolvedValueOnce(inProgress)
+      .mockResolvedValueOnce(inProgress)
+      .mockResolvedValueOnce(inProgress)
+      .mockResolvedValue(stayCreated);
+    const { result } = await renderHook(() => useCreateBooking(USER, 'hotel', HOTEL));
+    let done: Promise<void> = Promise.resolve();
+    await act(async () => {
+      done = result.current.submit(stay(), ctx);
+      await Promise.resolve();
+    });
+    await advance(6000);
+    await advance(60_000);
+    await act(() => done);
+    expect(keysSent()).toEqual(['k1', 'k1', 'k1', 'k1', 'k1']);
+    expect(result.current.created).toEqual({ bookingId: 'hb1' });
   });
 
   it('a refusal clears the key: the re-send is a new request, not a cached replay', async () => {
@@ -352,5 +426,43 @@ describe('useCreateBooking — events', () => {
     await act(() => result.current.checkAgain());
     expect(result.current.state).toEqual({ phase: 'unsure' });
     expect(result.current.created).toBeNull();
+  });
+});
+
+// The hard guard: with no session `createEvent` would answer 201 with `customer_id: null`.
+describe('useCreateBooking — no user', () => {
+  it('submit with no user sends nothing', async () => {
+    const hotel = await renderHook(() => useCreateBooking('', 'hotel', HOTEL));
+    await act(() => hotel.result.current.submit(stay(), ctx));
+    const apartment = await renderHook(() => useCreateBooking('', 'apartment', HOTEL));
+    await act(() => apartment.result.current.submit(stay(), { title: 'Lekki loft' }));
+    const paid = await renderHook(() => useCreateBooking('', 'event', EVENT));
+    await act(() => paid.result.current.submit(tickets(), { title: 'Afrobeats night' }));
+    const free = await renderHook(() => useCreateBooking('', 'event', EVENT));
+    await act(() =>
+      free.result.current.submit(tickets(), { title: 'Afrobeats night', free: true }),
+    );
+
+    expect(stayMock).not.toHaveBeenCalled();
+    expect(eventMock).not.toHaveBeenCalled();
+    for (const { result } of [hotel, apartment, paid, free]) {
+      expect(result.current.state).toEqual({ phase: 'idle' });
+      expect(result.current.created).toBeNull();
+    }
+  });
+
+  it('a user appearing on the mounted hook lets the next submit through', async () => {
+    stayMock.mockResolvedValueOnce(stayCreated);
+    const { result, rerender } = await renderHook(
+      ({ userId }: { userId: string }) => useCreateBooking(userId, 'hotel', HOTEL),
+      { initialProps: { userId: '' } },
+    );
+    await act(() => result.current.submit(stay(), ctx));
+    expect(stayMock).not.toHaveBeenCalled();
+
+    await rerender({ userId: USER });
+    await act(() => result.current.submit(stay(), ctx));
+    expect(stayMock).toHaveBeenCalledTimes(1);
+    expect(result.current.created).toEqual({ bookingId: 'hb1' });
   });
 });

@@ -62,14 +62,26 @@ it('skip ends the tour', async () => {
   expect(onDone).toHaveBeenCalled();
 });
 
-it('shows the three scenes with serif headlines', async () => {
+it('shows a panel of app pieces over each headline, hidden from screen readers', async () => {
   await render(<TourScreen onDone={jest.fn()} />);
-  for (const name of ['find', 'pay', 'showUp'])
-    expect(
-      screen.getByTestId(`illustration-${name}`, { includeHiddenElements: true }),
-    ).toBeTruthy();
+  for (const name of ['find', 'pay', 'showUp']) {
+    // Decorative: the headline and text below say the same thing.
+    expect(screen.queryByTestId(`tour-scene-${name}`)).toBeNull();
+    expect(screen.getByTestId(`tour-scene-${name}`, { includeHiddenElements: true })).toBeTruthy();
+  }
   for (const h of ['Find your place', 'Pay in naira', 'Show up'])
-    expect(screen.getByRole('header', { name: h })).toBeTruthy();
+    expect(screen.getByRole('header', { name: h, includeHiddenElements: true })).toBeTruthy();
+});
+
+// UX review 2026-11-17: a screen reader moving into the next page's text would scroll the pager
+// without the dots or Next knowing, so only the page on screen is readable.
+it('only the page on screen is readable by a screen reader', async () => {
+  await render(<TourScreen onDone={jest.fn()} />);
+  expect(screen.getByRole('header', { name: 'Find your place' })).toBeTruthy();
+  expect(screen.queryByRole('header', { name: 'Pay in naira' })).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Next' }));
+  expect(screen.getByRole('header', { name: 'Pay in naira' })).toBeTruthy();
+  expect(screen.queryByRole('header', { name: 'Find your place' })).toBeNull();
 });
 
 it('says booking and payment happen in the app too once events checkout is on (P2)', async () => {
@@ -78,6 +90,7 @@ it('says booking and payment happen in the app too once events checkout is on (P
   expect(
     screen.getByText(
       'Book and pay in the app or on bookhushly.com. You see the full price before you pay.',
+      { includeHiddenElements: true },
     ),
   ).toBeTruthy();
   expect(screen.queryByText(/For now/)).toBeNull();
@@ -85,6 +98,8 @@ it('says booking and payment happen in the app too once events checkout is on (P
 
 it('says payment happens on bookhushly.com for now (D15)', async () => {
   await render(<TourScreen onDone={jest.fn()} />);
-  expect(screen.getByText(/book and pay on bookhushly\.com/)).toBeTruthy();
+  expect(
+    screen.getByText(/book and pay on bookhushly\.com/, { includeHiddenElements: true }),
+  ).toBeTruthy();
   expect(screen.queryByText(/crypto/)).toBeNull();
 });

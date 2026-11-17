@@ -1,10 +1,10 @@
-import { ChevronDown, ChevronRight } from 'lucide-react-native';
+import { Check, ChevronDown, ChevronRight } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { borderWidth, color, space } from '@/shared/theme';
 
-import { useDensity } from './DensityProvider';
+import { useDensity, useDensityName } from './DensityProvider';
 import { Icon } from './Icon';
 import { Text } from './Text';
 
@@ -67,6 +67,10 @@ export function ListRow({
     <>
       {body}
       {trailing}
+      {/* The chosen option shows, not only speaks: a violet tick (selected state, §1). */}
+      {checked === true && trailing === undefined ? (
+        <Icon as={Check} size="md" color={color.actionFill} />
+      ) : null}
     </>
   );
   const line = { flexDirection: 'row' as const, alignItems: 'center' as const, gap: space.s4 };
@@ -114,10 +118,24 @@ type SectionProps = { label: string; count?: number; expanded?: boolean; onToggl
 export function SectionHeader({ label, count, expanded, onToggle }: SectionProps) {
   const d = useDensity();
   const text = count === undefined ? label : `${label} (${String(count)})`;
+  // Customers: a real section title (Expedia's 20 pt headings). Staff: a compact label, so dense
+  // desk and gate lists keep their rows on screen.
+  const customer = useDensityName() === 'customer';
   if (onToggle === undefined)
     return (
-      <View style={{ minHeight: 40, justifyContent: 'flex-end', paddingBottom: space.s2 }}>
-        <Text variant="label" tone="textSecondary" accessibilityRole="header">
+      <View
+        style={{
+          minHeight: d.minTarget,
+          justifyContent: 'flex-end',
+          paddingTop: customer ? space.s4 : 0,
+          paddingBottom: customer ? space.s3 : space.s2,
+        }}
+      >
+        <Text
+          variant={customer ? 'title' : 'label'}
+          tone={customer ? 'textPrimary' : 'textSecondary'}
+          accessibilityRole="header"
+        >
           {text}
         </Text>
       </View>

@@ -25,7 +25,7 @@ export function SegmentedControl<T extends string>({ value, options, onChange, t
       style={{
         flexDirection: 'row',
         backgroundColor: color.wash,
-        borderRadius: radius.r3,
+        borderRadius: radius.rFull,
         padding: space.s1,
         gap: space.s1,
       }}
@@ -47,7 +47,7 @@ export function SegmentedControl<T extends string>({ value, options, onChange, t
               alignItems: 'center',
               justifyContent: 'center',
               paddingHorizontal: space.s2,
-              borderRadius: radius.r2,
+              borderRadius: radius.rFull,
               backgroundColor: selected ? color.surface : 'transparent',
               borderWidth: borderWidth.hairline,
               borderColor: selected ? color.border : 'transparent',

@@ -27,7 +27,8 @@ it('prefers the error over the hint', async () => {
   expect(screen.queryByText('Optional')).toBeNull();
 });
 
-it('is 64 tall under gate density', async () => {
+it('is 68 tall under gate density (64 inside a 2 pt border)', async () => {
+  atTextScale(1);
   await render(
     <DensityProvider density="gate">
       <Input label="Approver" value="" onChangeText={jest.fn()} />
@@ -36,9 +37,64 @@ it('is 64 tall under gate density', async () => {
   expect(screen.getByLabelText('Approver')).toHaveStyle({ minHeight: 64 });
 });
 
-it('is 48 tall by default', async () => {
+const mockDims = { width: 390, height: 844, scale: 3, fontScale: 1 };
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => mockDims,
+}));
+const atTextScale = (fontScale: number) => {
+  mockDims.fontScale = fontScale;
+};
+
+afterEach(() => {
+  mockDims.fontScale = 1;
+});
+
+it('grows with Dynamic Type so the title never sits on the value (design review)', async () => {
+  atTextScale(1.6);
   await render(<Input label="Approver" value="" onChangeText={jest.fn()} />);
-  expect(screen.getByLabelText('Approver')).toHaveStyle({ minHeight: 48 });
+  // 8 + 22×1.6 − 4 above the text, 28×1.6 for it, 4 below: taller than the 60 default.
+  expect(screen.getByLabelText('Approver')).toHaveStyle({
+    minHeight: 8 + 22 * 1.6 - 4 + 28 * 1.6 + 4,
+  });
+});
+
+it('is 64 tall by default: room for the title inside the box', async () => {
+  atTextScale(1);
+  await render(<Input label="Approver" value="" onChangeText={jest.fn()} />);
+  expect(screen.getByLabelText('Approver')).toHaveStyle({ minHeight: 60 });
+});
+
+it('keeps the box the same size when focus thickens the border, so the form never jumps', async () => {
+  await render(<Input label="Email" value="" onChangeText={jest.fn()} />);
+  // The text area's margin gives back exactly what the thicker border takes.
+  const area = () => screen.getByTestId('input-area');
+  expect(area()).toHaveStyle({ marginVertical: 1 });
+  await fireEvent(screen.getByLabelText('Email'), 'focus');
+  expect(area()).toHaveStyle({ marginVertical: 0 });
+});
+
+it('rests the title in the box as the placeholder, and shows a real one only once it moves up', async () => {
+  await render(
+    <Input label="Email" value="" onChangeText={jest.fn()} placeholder="you@example.com" />,
+  );
+  const field = screen.getByLabelText('Email');
+  expect(field.props.placeholder).toBeUndefined();
+  await fireEvent(field, 'focus');
+  expect(screen.getByLabelText('Email').props.placeholder).toBe('you@example.com');
+});
+
+it('keeps the visible title out of the screen reader; the field carries the label', async () => {
+  await render(<Input label="Email" value="" onChangeText={jest.fn()} />);
+  expect(screen.queryByText('Email')).toBeNull();
+  expect(screen.getByText('Email', { includeHiddenElements: true })).toBeTruthy();
+  expect(screen.getByLabelText('Email')).toBeTruthy();
+});
+
+it('a search box shows no title, just its placeholder', async () => {
+  await render(<SearchField label="Search guests" value="" onChangeText={jest.fn()} />);
+  expect(screen.queryByText('Search guests', { includeHiddenElements: true })).toBeNull();
+  expect(screen.getByLabelText('Search guests').props.placeholder).toBe('Search guests');
 });
 
 it('search field clears with one tap', async () => {

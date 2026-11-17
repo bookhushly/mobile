@@ -40,6 +40,7 @@ function routeOf(r: { current: ReturnType<typeof useModeState> }) {
     mode: r.current.state,
     chosenMode: r.current.chosen,
     recovery: false,
+    browsing: false,
   });
 }
 

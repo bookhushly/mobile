@@ -158,3 +158,17 @@ it('a network failure is transient', async () => {
   expect(result.current.s.saving).toBe(false);
   await done();
 });
+
+it('reads nothing with no user', async () => {
+  const qc = makeQueryClient();
+  const hook = await renderHook(() => useProfile(''), { wrapper: wrapper(qc) });
+  expect(hook.result.current.loading).toBe(false);
+  expect(hook.result.current.error).toBe(false);
+  expect(hook.result.current.profile).toBeNull();
+  await act(async () => {
+    await hook.result.current.refetch();
+  });
+  expect(db.profile).not.toHaveBeenCalled();
+  await hook.unmount();
+  qc.clear();
+});

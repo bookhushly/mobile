@@ -5,7 +5,7 @@ import {
   nightsLabel,
   packagesLine,
 } from '@/features/customer/domain/detailText';
-import { fromEvent } from '@/features/customer/domain/myBookings';
+import { fromApartment, fromEvent, fromHotel } from '@/features/customer/domain/myBookings';
 import type {
   ApartmentBookingRow,
   EventBookingRow,
@@ -32,7 +32,13 @@ export type SummaryEntry = {
   };
 };
 
-export type ReviewSummary = { title: string; when: string; extra: string | null };
+export type ReviewSummary = {
+  title: string;
+  when: string;
+  extra: string | null;
+  /** The place's first photo, for the summary card; null until the booking row has loaded. */
+  image: string | null;
+};
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -59,8 +65,9 @@ const positive = (n: number | null | undefined): n is number =>
 
 /**
  * The cached breakdown as lines, or null for the total-only layout (P28). Hotel discounts are
- * already inside `room_total`, so they are a note, never a minus line. An apartment discount is
- * recorded but not subtracted by the server, so it is never shown.
+ * already inside `room_total`, so they are a note, never a minus line. An apartment's
+ * `discount_amount` (automatic discount plus promo) is subtracted from `subtotal` by the server
+ * since web #223, so it is a minus line.
  */
 export function priceLines(
   kind: ReviewKind,
@@ -81,8 +88,11 @@ export function priceLines(
           ['Airport transfer', pricing.airport_fee],
         ];
   const lines: PriceLine[] = [{ label: kind === 'hotel' ? 'Room' : 'Stay', amount: main }];
-  for (const [label, amount] of extras) if (positive(amount)) lines.push({ label, amount });
   const discount = pricing.discount_amount;
+  if (kind === 'apartment' && positive(discount)) {
+    lines.push({ label: 'Discount', amount: -discount });
+  }
+  for (const [label, amount] of extras) if (positive(amount)) lines.push({ label, amount });
   return { lines, discountIncluded: kind === 'hotel' && positive(discount) ? discount : null };
 }
 
@@ -111,6 +121,7 @@ export function reviewSummary(
     if (row != null && 'listing' in row) {
       const b = fromEvent(row, today);
       return {
+        image: b.imageUrl,
         title: b.title ?? fallbackTitle,
         when: eventWhen(b.start, b.end, b.time),
         extra:
@@ -120,6 +131,7 @@ export function reviewSummary(
     }
     const day = s.eventDate?.slice(0, 10);
     return {
+      image: null,
       title: fallbackTitle,
       when: day !== undefined && isIsoDate(day) ? shortDate(day) : '',
       extra: s.tickets !== undefined && s.tickets > 0 ? ticketsWord(s.tickets) : null,
@@ -128,6 +140,7 @@ export function reviewSummary(
   const guests = s.guests !== undefined ? guestsCount(s.guests) : null;
   if (row != null && 'hotel' in row) {
     return {
+      image: fromHotel(row, today).imageUrl,
       title: row.hotel?.name ?? fallbackTitle,
       when: stayWhen(row.check_in_date, row.check_out_date),
       extra: join([row.room_type?.name ?? s.roomName, guestsLine(row.adults, row.children)]),
@@ -135,12 +148,14 @@ export function reviewSummary(
   }
   if (row != null && 'apartment' in row) {
     return {
+      image: fromApartment(row, today).imageUrl,
       title: row.apartment?.name ?? fallbackTitle,
       when: stayWhen(row.check_in_date, row.check_out_date),
       extra: guestsCount(row.number_of_guests),
     };
   }
   return {
+    image: null,
     title: fallbackTitle,
     when: stayWhen(s.checkIn, s.checkOut),
     extra: join([kind === 'hotel' ? s.roomName : null, guests]),

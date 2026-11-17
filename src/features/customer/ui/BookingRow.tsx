@@ -9,7 +9,7 @@ import { color, radius, space } from '@/shared/theme';
 import { DateTile, Icon, ListRow, StatusPill, Text } from '@/shared/ui';
 
 export const HIDDEN_LINE = 'Details aren’t available right now';
-const THUMB = 56;
+const THUMB = 72;
 
 // Decorative: the kind word beside it carries the meaning.
 const KIND_ICON: Record<BookingKind, LucideIcon> = {
@@ -41,7 +41,7 @@ export function BookingRow({ booking: b, onPress }: Props) {
       note={
         <View style={{ gap: space.s1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s2 }}>
-            <Icon as={KIND_ICON[b.kind]} size="xs" tone="textSecondary" />
+            <Icon as={KIND_ICON[b.kind]} size="sm" tone="textSecondary" />
             <Text variant="bodySm" tone="textSecondary" numberOfLines={1} style={{ flexShrink: 1 }}>
               {subtitle}
             </Text>
@@ -62,7 +62,7 @@ export function BookingRow({ booking: b, onPress }: Props) {
             style={{
               width: THUMB,
               height: THUMB,
-              borderRadius: radius.r2,
+              borderRadius: radius.r3,
               backgroundColor: color.wash,
             }}
             testID={`booking-thumb-${b.id}`}

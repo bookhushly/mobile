@@ -10,7 +10,7 @@ Done when: the flows in §3 work end to end against production on the Moto G06 w
 
 ## 2. Decisions
 
-1. **Welcome every time signed out** (owner, 2026-10-08): the landing screen offers **Create account** (primary) and **Sign in** (secondary).
+1. **Welcome every time signed out** (owner, 2026-10-08): the landing screen offers **Create account** (primary) and **Sign in** (secondary). Replaced 2026-11-03 by `2026-11-03-browse-without-account-design.md`.
 2. **Tour = Find · Pay · Show up** (owner): 3 skippable screens, once per account per device, after the mode resolves to customer; built now behind `CUSTOMER_TOUR_ENABLED = false` until Phase 4.
 3. **Delete account re-auth in the app** (owner): the user enters their password and types `DELETE`; the app checks the password with `signInWithPassword` (so an outage is never shown as "wrong password") and calls `/api/account/delete` **without** `password`. Available to customers and gate staff (role `customer`); hidden for receptionists (server returns 403 `not_customer`).
 4. **Leaving the new-password screen signs out** (owner): a reset code alone never leaves anyone signed in.

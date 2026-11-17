@@ -6,10 +6,14 @@ import type { RoomRate, TicketPackage } from '@/features/customer/schemas/listin
 
 export type Guest = { name: string; email: string; phone: string };
 
+/** A promo that makes a paid order ₦0 (P19): said on Select and for create's `zero_total`. */
+export const PROMO_ZERO_WORDS =
+  'This code makes your order free, which can’t be booked in the app yet. Remove the code or book on bookhushly.com.';
+
 export type StaySelection = {
   checkIn: string | null;
   checkOut: string | null;
-  // Apartments send `adults` as number_of_guests and ignore rateId, breakfast and promo.
+  // Apartments send `adults` as number_of_guests and ignore rateId and breakfast.
   adults: number;
   children: number;
   rateId: string | null;
@@ -103,6 +107,16 @@ export function stayProblems(
   if (!emailOk(s.guest.email)) out.push('guestEmail');
   if (!phoneOk(s.guest.phone)) out.push('guestPhone');
   return out;
+}
+
+/**
+ * What stops Continue for someone signed out: the contact fields are hidden until sign-in, when
+ * they fill from the profile and are validated as usual.
+ */
+export function withoutContactProblems<P>(problems: P[]): P[] {
+  return problems.filter(
+    (p: unknown) => p !== 'guestName' && p !== 'guestEmail' && p !== 'guestPhone',
+  );
 }
 
 /** Positive integers only (P18): zero, negative, NaN and fractional quantities are dropped. */
@@ -214,4 +228,32 @@ export function selectionFingerprint(
     guest: s.guest,
     specialRequests: s.specialRequests,
   });
+}
+
+/** What the listing charges for extras, as Select already knows it. */
+export type ExtrasPrices = {
+  /** Breakfast option id → price per person. */
+  breakfast: Readonly<Record<string, number>>;
+  /** Null: no transfers. `fee`: hotels' flat fee for an airport with no listed price. */
+  airport: { prices: Readonly<Record<string, number>>; fee: number | null } | null;
+};
+
+/**
+ * Select's preview of the extras, priced as the web's create routes do (hotel-booking.js,
+ * apartment-create.js): breakfast is price per person × quantity; a transfer is the airport's
+ * listed price, else the flat fee, doubled for both ways. The server recomputes at create.
+ */
+export function stayExtrasTotal(
+  prices: ExtrasPrices,
+  breakfast: Readonly<Record<string, number>>,
+  airport: StaySelection['airport'],
+): number {
+  const meals = Object.entries(breakfast).reduce(
+    (sum, [id, qty]) => sum + (prices.breakfast[id] ?? 0) * qty,
+    0,
+  );
+  if (!airport.on || prices.airport === null) return meals;
+  const listed = airport.code === null ? undefined : prices.airport.prices[airport.code];
+  const one = listed ?? prices.airport.fee ?? 0;
+  return meals + (airport.type === 'both' ? one * 2 : one);
 }

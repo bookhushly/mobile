@@ -15,3 +15,30 @@ jest.mock('@sentry/react-native', () => ({
   captureException: jest.fn(),
   wrap: <T>(component: T): T => component,
 }));
+
+// expo-notifications: jest-expo stubs only the native module, so give every test a phone that
+// has already answered (granted) unless a test says otherwise; nothing prompts by default.
+jest.mock('expo-notifications', () => ({
+  PermissionStatus: { UNDETERMINED: 'undetermined', GRANTED: 'granted', DENIED: 'denied' },
+  IosAuthorizationStatus: {
+    NOT_DETERMINED: 0,
+    DENIED: 1,
+    AUTHORIZED: 2,
+    PROVISIONAL: 3,
+    EPHEMERAL: 4,
+  },
+  AndroidImportance: { DEFAULT: 3 },
+  getPermissionsAsync: jest.fn(() =>
+    Promise.resolve({ status: 'granted', granted: true, canAskAgain: true }),
+  ),
+  requestPermissionsAsync: jest.fn(() =>
+    Promise.resolve({ status: 'granted', granted: true, canAskAgain: true }),
+  ),
+  setNotificationChannelAsync: jest.fn(() => Promise.resolve(null)),
+}));
+
+// AsyncStorage's official in-memory mock, so code reading plain device storage works in tests.
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+

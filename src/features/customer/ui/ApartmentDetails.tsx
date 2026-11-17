@@ -55,10 +55,13 @@ export function ApartmentDetails({ row, userId, pay, today, onBack, onRefresh, m
                 },
               },
           { label: 'Dates', value: nights > 0 ? `${dates} · ${nightsLabel(nights)}` : dates },
-          { label: 'Check-in', value: dayAt(row.check_in_date, a?.check_in_time ?? null, 'from') },
           {
-            label: 'Check-out',
-            value: dayAt(row.check_out_date, a?.check_out_time ?? null, 'by'),
+            label: 'Check-in',
+            value: dayAt(row.check_in_date, a?.check_in_time ?? null, 'from'),
+            beside: {
+              label: 'Check-out',
+              value: dayAt(row.check_out_date, a?.check_out_time ?? null, 'by'),
+            },
           },
           { label: 'Guests', value: guestsCount(row.number_of_guests) ?? '' },
           { label: 'Payment', value: b.paid ? 'Paid' : 'Not paid', amount: row.total_amount },

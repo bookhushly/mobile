@@ -12,15 +12,26 @@ import { useSaved, type Saved } from '@/features/customer/hooks/useSaved';
 import { NOTICE_MS, NOTICE_READER_MS } from '@/features/customer/hooks/useSavedNotices';
 import type { ApartmentItem, EventItem, HotelItem } from '@/features/customer/schemas/listings';
 import { ExploreScreen } from '@/features/customer/screens/ExploreScreen';
+import { customerDb } from '@/features/customer/api/customerDb';
 import { refreshColors } from '@/shared/ui';
 
-import { ev, ho, TODAY } from '../../hooks/__tests__/customerTestUtils';
+import { ev, ho, makeQueryClient, TODAY, wrapper } from '../../hooks/__tests__/customerTestUtils';
 
 // Factories, not automocks: an automock loads the real module (supabase → native storage).
 jest.mock('@/features/customer/hooks/useMyBookings', () => ({ useMyBookings: jest.fn() }));
 jest.mock('@/features/customer/hooks/useSaved', () => ({ useSaved: jest.fn() }));
 jest.mock('@/features/customer/hooks/useExplorePlace', () => ({ useExplorePlace: jest.fn() }));
 jest.mock('@/features/customer/hooks/useListings', () => ({ useListingsRail: jest.fn() }));
+jest.mock('@/features/customer/api/customerDb', () => ({
+  customerDb: { events: jest.fn(), hotels: jest.fn(), apartments: jest.fn(), profile: jest.fn() },
+}));
+jest.mock('@/features/customer/offline/wallet', () => ({
+  wallet: { save: jest.fn(), load: jest.fn(), generation: jest.fn() },
+}));
+jest.mock('@/shared/supabase/client', () => ({ supabase: { auth: { getSession: jest.fn() } } }));
+jest.mock('@/shared/platform/storage', () => ({
+  plainKv: { get: () => Promise.resolve(null), set: () => Promise.resolve() },
+}));
 let mockFocused = true;
 jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused }));
 jest.mock('@/shared/api/instance', () => ({ clock: { serverNow: () => mockNow } }));
@@ -84,6 +95,7 @@ function listings(items: AnyListings['items'], over: Partial<AnyListings> = {}):
     failed: false,
     error: null,
     retryAfterSec: null,
+    totalCount: null,
     refetch: jest.fn(() => Promise.resolve()),
     ...over,
   };
@@ -138,6 +150,7 @@ function props() {
     onOpenListing: jest.fn(),
     onShowTickets: jest.fn(),
     onShowCheckInCode: jest.fn(),
+    onOpenBookings: jest.fn(),
     onSignInAgain: jest.fn(),
   };
 }
@@ -210,7 +223,7 @@ it('a rail mounts two cards first (P4)', async () => {
   expect(rail.queryByText('Event e3')).toBeNull();
 });
 
-it('a failed rail offers Try again; an empty rail is one line', async () => {
+it('a failed rail offers Try again; an empty rail keeps its heading over one line', async () => {
   byCat.hotels = listings([], { failed: true, error: { kind: 'validation' } });
   byCat.serviced_apartments = listings([]);
   await render(<ExploreScreen {...props()} />);
@@ -223,7 +236,9 @@ it('a failed rail offers Try again; an empty rail is one line', async () => {
   );
   expect(byCat.hotels.refetch).toHaveBeenCalled();
   expect(screen.getByText('No apartments in Lagos yet.')).toBeTruthy();
-  expect(screen.queryByRole('header', { name: 'Apartments in Lagos' })).toBeNull();
+  expect(screen.getByRole('header', { name: 'Apartments in Lagos' })).toBeTruthy();
+  // Nothing to see all of.
+  expect(screen.queryByRole('button', { name: 'See all, Apartments in Lagos' })).toBeNull();
   // The events rail is untouched by the others.
   expect(screen.getByText('Afrobeats night')).toBeTruthy();
 });
@@ -309,7 +324,9 @@ it('shows the Today banner and its action opens the ticket', async () => {
   });
   const p = props();
   await render(<ExploreScreen {...p} />);
-  expect(screen.getByText('Your event starts at 7:00 pm · Jazz at the lagoon')).toBeTruthy();
+  // Booking.com's upcoming-trip card: the name on its own line, what happens today under it.
+  expect(screen.getByText('Jazz at the lagoon')).toBeTruthy();
+  expect(screen.getByText('Your event starts at 7:00 pm')).toBeTruthy();
   await fireEvent.press(
     screen.getByRole('button', {
       name: 'Today: Your event starts at 7:00 pm, Jazz at the lagoon. Show ticket',
@@ -331,8 +348,10 @@ it('the place chip changes the stays query', async () => {
     { sort: 'newest' },
     { enabled: true },
   );
-  await fireEvent.press(screen.getByRole('button', { name: 'Where to? Lagos. Change place' }));
-  await fireEvent.press(screen.getByRole('radio', { name: 'Abuja' }));
+  await fireEvent.press(
+    within(screen.getByTestId('rail-hotels')).getByRole('button', { name: 'Lagos. Change place' }),
+  );
+  await fireEvent.press(screen.getByRole('radio', { name: 'Abuja, Federal Capital Territory' }));
   expect(mockListings).toHaveBeenLastCalledWith(
     'serviced_apartments',
     { q: '', state: 'FCT' },
@@ -347,8 +366,12 @@ it('the place chip changes the stays query', async () => {
   );
   expect(screen.getByRole('header', { name: 'Hotels in Abuja' })).toBeTruthy();
 
-  await fireEvent.press(screen.getByRole('button', { name: 'Where to? Abuja. Change place' }));
-  await fireEvent.press(screen.getByRole('radio', { name: 'Port Harcourt' }));
+  await fireEvent.press(
+    within(screen.getByTestId('rail-apartments')).getByRole('button', {
+      name: 'Abuja. Change place',
+    }),
+  );
+  await fireEvent.press(screen.getByRole('radio', { name: 'Port Harcourt, Rivers State' }));
   expect(mockListings).toHaveBeenCalledWith(
     'hotels',
     { q: '', city: 'Port Harcourt' },
@@ -357,16 +380,29 @@ it('the place chip changes the stays query', async () => {
   );
 });
 
-it('"Where to?" sits with the category chips, and a stays heading’s place is tappable (U2)', async () => {
+it('categories are tiles, and the place lives in the stays headings, tappable (U2)', async () => {
   await render(<ExploreScreen {...props()} />);
-  const chips = screen.getByTestId('explore-chips');
-  expect(within(chips).getByRole('button', { name: 'Where to? Lagos. Change place' })).toBeTruthy();
-  expect(within(chips).getByText('Hotels')).toBeTruthy();
+  const tiles = screen.getByTestId('explore-categories');
+  expect(within(tiles).getByRole('button', { name: 'Hotels' })).toBeTruthy();
+  expect(within(tiles).getByRole('button', { name: 'Events' })).toBeTruthy();
+  expect(screen.queryByTestId('explore-place')).toBeNull();
   const hotels = screen.getByTestId('rail-hotels');
   expect(within(hotels).getByRole('header', { name: 'Hotels in Lagos' })).toBeTruthy();
   await fireEvent.press(within(hotels).getByRole('button', { name: 'Lagos. Change place' }));
-  await fireEvent.press(screen.getByRole('radio', { name: 'Abuja' }));
+  await fireEvent.press(screen.getByRole('radio', { name: 'Abuja, Federal Capital Territory' }));
   expect(screen.getByRole('header', { name: 'Apartments in Abuja' })).toBeTruthy();
+});
+
+it('nothing listed anywhere: one empty state that offers another place', async () => {
+  byCat.events = listings([]);
+  byCat.hotels = listings([]);
+  byCat.serviced_apartments = listings([]);
+  await render(<ExploreScreen {...props()} />);
+  const empty = screen.getByTestId('explore-empty');
+  expect(within(empty).getByText('Nothing listed in Lagos yet')).toBeTruthy();
+  expect(screen.queryByTestId('rail-events')).toBeNull();
+  await fireEvent.press(within(empty).getByRole('button', { name: 'Try another place' }));
+  expect(screen.getByRole('radio', { name: 'Abuja, Federal Capital Territory' })).toBeTruthy();
 });
 
 it('pull to refresh uses the theme colours (U6)', async () => {
@@ -501,7 +537,8 @@ it('See all from a city-only place sends the city', async () => {
 // The pull gesture: the RefreshControl handed to Explore's scroll view (the host mock renders it
 // without props, so it is read from the nearest ancestor that carries it).
 async function pullToRefresh() {
-  let node = screen.getByRole('button', { name: 'Search hotels, apartments and events' }).parent;
+  // Inside the scroll view (the search bar is pinned above it).
+  let node = screen.getByTestId('explore-categories').parent;
   while (node !== null && node.props.refreshControl === undefined) node = node.parent;
   const control: unknown = node?.props.refreshControl;
   const onRefresh: unknown =
@@ -583,4 +620,38 @@ it('a saved list that can’t load says why the hearts are off', async () => {
     ),
   ).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Save Harbour Suites' })).toBeDisabled();
+});
+
+it('signed out: shows listings, no Today banner, and pull to refresh reads no bookings or profile', async () => {
+  // The real account hooks, over a mocked database: the point is what they send.
+  const real = {
+    my: jest.requireActual<typeof import('@/features/customer/hooks/useMyBookings')>(
+      '@/features/customer/hooks/useMyBookings',
+    ),
+    place: jest.requireActual<typeof import('@/features/customer/hooks/useExplorePlace')>(
+      '@/features/customer/hooks/useExplorePlace',
+    ),
+  };
+  mockMy.mockImplementation(real.my.useMyBookings);
+  mockPlace.mockImplementation(real.place.useExplorePlace);
+  const db = {
+    events: jest.spyOn(customerDb, 'events'),
+    hotels: jest.spyOn(customerDb, 'hotels'),
+    apartments: jest.spyOn(customerDb, 'apartments'),
+    profile: jest.spyOn(customerDb, 'profile'),
+  };
+  const qc = makeQueryClient();
+  const p = { ...props(), userId: '' };
+  await render(<ExploreScreen {...p} />, { wrapper: wrapper(qc) });
+  expect(within(screen.getByTestId('rail-events')).getByText('Afrobeats night')).toBeTruthy();
+  // With no profile to ask, the place falls back to Lagos.
+  expect(await screen.findByRole('header', { name: 'Hotels in Lagos' })).toBeTruthy();
+  expect(screen.queryByText(/^Today:/)).toBeNull();
+  await pullToRefresh();
+  expect(byCat.events.refetch).toHaveBeenCalled();
+  expect(db.events).not.toHaveBeenCalled();
+  expect(db.hotels).not.toHaveBeenCalled();
+  expect(db.apartments).not.toHaveBeenCalled();
+  expect(db.profile).not.toHaveBeenCalled();
+  qc.clear();
 });

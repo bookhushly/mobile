@@ -53,18 +53,18 @@ export function FilterChips<T extends string>({
             style={{
               minHeight: d.minTarget,
               justifyContent: 'center',
-              paddingHorizontal: space.s3,
-              borderRadius: radius.r2,
-              // DESIGN_SYSTEM §6/§7: a selected chip is wash + violet; the heavier border keeps the
-              // state visible without relying on hue alone.
-              backgroundColor: checked ? color.wash : color.surface,
-              borderWidth: checked ? borderWidth.thick : borderWidth.hairline,
-              borderColor: checked ? color.actionPressed : color.border,
+              paddingHorizontal: space.s5,
+              borderRadius: radius.rFull,
+              // Selected is solid ink with white text (Airbnb, Expedia): unmistakable without hue,
+              // and violet stays for the one action on the screen.
+              backgroundColor: checked ? color.textPrimary : color.surface,
+              borderWidth: borderWidth.hairline,
+              borderColor: checked ? color.textPrimary : color.borderStrong,
             }}
           >
             <Text
               variant="label"
-              tone={checked ? 'linkText' : 'textPrimary'}
+              tone={checked ? 'onInverse' : 'textPrimary'}
               numberOfLines={1}
               maxScale={1.3}
               tabular

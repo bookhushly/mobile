@@ -19,6 +19,7 @@ Expo (SDK 57) / React Native app for iOS + Android: **customer**, **gate staff**
 - **Production Supabase is live.** No destructive calls, no test data left behind. Provision test accounts through real flows. Point dev builds at staging only once Bearer works there (see BACKEND_STATUS §8).
 - **Server-side authorisation is the truth**; hide UI the user can't use, but never rely on it.
 - **Never trust client prices**; send selections, the server recomputes.
+- Signed-out browsing: a person who taps "Browse without an account" gets the customer stack with no session; booking, paying and saving ask for sign-in in a sheet. Their `(customer)` route guard holds through sign-in (see `.claude/rules/routing.md`).
 - **Never render a transient failure (429/503/timeout/network) as a business refusal.** Gate scanning outcomes are: Admitted / Already used / Refused (specific reason) / Couldn't check — try again. No undo for gate staff.
 - **No lost admissions**: write the outbox to disk *before* showing success.
 - Tokens only in `expo-secure-store`; the offline roster (PII) in an encrypted store, wiped on logout once the outbox is empty.
@@ -27,7 +28,7 @@ Expo (SDK 57) / React Native app for iOS + Android: **customer**, **gate staff**
 
 ## Design
 
-Light UI only. Violet `#7C3AED`, ink `#1A0D4D`, tints `#FFFFFF` / `#F8F7FB`. Fonts: Radio-Canada (UI) + Source Serif 4 (display). Min text 12 px, sentence-case labels, semibold headings, touch targets ≥ 44 pt. Outcomes use colour + icon + text + haptic. Avoid centered-everything heroes, gradients/glows, fake stats, and the banned fonts listed in requirements §1.3. The template's dark-mode/theme scaffolding (`useColorScheme`, themed components) should be replaced, not extended.
+Light UI only. Violet `#7C3AED`, ink `#1A0D4D`, tints `#FFFFFF` / `#F8F7FB`. Font: Hanken Grotesk for UI and headlines (the web keeps Radio-Canada and Source Serif 4). Min text 12 px, sentence-case labels, semibold headings, touch targets ≥ 44 pt. Outcomes use colour + icon + text + haptic. Avoid centered-everything heroes, gradients/glows (one exception: the legibility fades over auth photos), fake stats, and the banned fonts listed in requirements §1.3. The template's dark-mode/theme scaffolding (`useColorScheme`, themed components) should be replaced, not extended.
 
 ## Code conventions
 

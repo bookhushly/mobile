@@ -196,3 +196,13 @@ it('footer links go to sign in and open the terms and privacy pages', async () =
   expect(p.onOpenLink).toHaveBeenCalledWith('https://bookhushly.com/terms');
   expect(p.onOpenLink).toHaveBeenCalledWith('https://bookhushly.com/privacy');
 });
+
+it('shows Back and calls onBack', async () => {
+  const onBack = jest.fn();
+  await render(<SignUpScreen {...props()} onBack={onBack} />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Back' }));
+  // The sheet slides away first, then leaves.
+  await waitFor(() => {
+    expect(onBack).toHaveBeenCalled();
+  });
+});

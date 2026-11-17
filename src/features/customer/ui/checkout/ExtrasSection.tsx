@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 
 import type { ApartmentExtras, HotelExtras } from '@/features/customer/api/checkoutDb';
-import type { StaySelection } from '@/features/customer/domain/checkout/selection';
+import type { ExtrasPrices, StaySelection } from '@/features/customer/domain/checkout/selection';
 import { CheckRow } from '@/features/customer/ui/CheckRow';
 import { space } from '@/shared/theme';
 import { formatNaira, ListRow, SegmentedControl, Stack, Stepper, Text } from '@/shared/ui';
@@ -32,6 +32,18 @@ export function stayExtras(
   return {
     breakfast: [],
     airport: priced ? { prices: apartment.airportPrices, fee: null } : null,
+  };
+}
+
+/** The same listing extras, as prices for Select's estimate (stayExtrasTotal). */
+export function extrasPrices(
+  hotel: HotelExtras | undefined,
+  apartment: ApartmentExtras | undefined,
+): ExtrasPrices {
+  const e = stayExtras(hotel, apartment);
+  return {
+    breakfast: Object.fromEntries(e.breakfast.map((b) => [b.id, b.pricePerPerson])),
+    airport: e.airport,
   };
 }
 
@@ -71,7 +83,7 @@ export function ExtrasSection({
       : 'Airport transfer';
   return (
     <Stack gap="s4" testID="extras">
-      <Text variant="headline">Extras</Text>
+      <Text variant="title" accessibilityRole="header">Extras</Text>
       {extras.breakfast.map((b) => (
         <View
           key={b.id}

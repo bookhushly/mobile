@@ -56,9 +56,14 @@ export function eventWhen(start: IsoDate, end: IsoDate, time: string | null): st
 
 /** "12 Marina Rd, Lagos, Lagos State" from the parts that exist; null when none do. */
 export function joinAddress(parts: readonly (string | null | undefined)[]): string | null {
-  const s = parts
-    .filter((p): p is string => typeof p === 'string' && p.trim() !== '')
-    .map((p) => p.trim())
-    .join(', ');
-  return s === '' ? null : s;
+  // A part already in the line (as one of its comma-separated pieces) is left out, so a street
+  // address ending "…, Lagos" plus city "Lagos" and state "Lagos" reads "Lagos" once.
+  const pieces: string[] = [];
+  for (const p of parts) {
+    const t = typeof p === 'string' ? p.trim() : '';
+    if (t === '') continue;
+    const known = pieces.flatMap((x) => x.split(',').map((y) => y.trim().toLowerCase()));
+    if (!known.includes(t.toLowerCase())) pieces.push(t);
+  }
+  return pieces.length > 0 ? pieces.join(', ') : null;
 }

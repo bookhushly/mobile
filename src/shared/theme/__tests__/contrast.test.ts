@@ -49,6 +49,11 @@ describe('contrast', () => {
     expect(contrastRatio(color.onInverse, color.textPrimary)).toBeGreaterThanOrEqual(7);
   });
 
+  it('white text clears AA over the fade stop behind text, on a pure white photo', () => {
+    // scrimMid (60% of 10,6,30) composited over white.
+    expect(contrastRatio('#FFFFFF', '#6C6A78')).toBeGreaterThanOrEqual(AA_TEXT);
+  });
+
   it('gate outcome fills reach 7:1 for sunlight legibility', () => {
     for (const o of [
       color.outcome.admitted,

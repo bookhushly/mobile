@@ -50,7 +50,10 @@ it('cancel leaves (signs out)', async () => {
   const p = props();
   await render(<NewPasswordScreen {...p} />);
   await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
-  expect(p.onLeave).toHaveBeenCalled();
+  // The sheet slides away first, then leaves.
+  await waitFor(() => {
+    expect(p.onLeave).toHaveBeenCalled();
+  });
 });
 
 it('an expired reset offers to start again', async () => {
@@ -123,5 +126,15 @@ it('a double tap saves once', async () => {
   resolve({ ok: true, value: true });
   await waitFor(() => {
     expect(p.onSaved).toHaveBeenCalledTimes(1);
+  });
+});
+
+it('keeps Cancel, not Back', async () => {
+  const p = props();
+  await render(<NewPasswordScreen {...p} />);
+  expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => {
+    expect(p.onLeave).toHaveBeenCalled();
   });
 });

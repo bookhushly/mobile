@@ -3,10 +3,12 @@ import { useSyncExternalStore } from 'react';
 import { registerAlwaysWipe } from '@/shared/lib/signOutGuard';
 
 // Spec E7: after a transfer the screen leaves the booking (it is no longer yours) and Bookings
-// says where the tickets went. Memory only, one line, masked address; gone on sign-out. Keyed by
-// user (security S1): another account signed in later never sees it.
+// says where the tickets went. 4c.1 G1: Review's Cancel booking leaves for Bookings with
+// "Booking cancelled" the same way. Memory only, one line, masked address; gone on sign-out.
+// Keyed by user (security S1): another account signed in later never sees it.
 
-type Sent = { userId: string; bookingId: string; message: string };
+/** `bookingId` is the booking transferred away; null for a line that names no such booking. */
+type Sent = { userId: string; bookingId: string | null; message: string };
 
 let current: Sent | null = null;
 const listeners = new Set<() => void>();
@@ -27,6 +29,11 @@ export const sentNotice = {
   set: (userId: string, bookingId: string, masked: string | null): void => {
     const message = masked === null ? 'Tickets sent' : `Tickets sent to ${masked}`;
     current = { userId, bookingId, message };
+    emit();
+  },
+  /** A line for Bookings that is not about a transfer (G1: "Booking cancelled"). */
+  note: (userId: string, message: string): void => {
+    current = { userId, bookingId: null, message };
     emit();
   },
   clear,

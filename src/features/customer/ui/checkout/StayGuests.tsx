@@ -39,7 +39,7 @@ export function StayGuests({ kind, adults, kids, max, error, onChange }: Props) 
   const sub = max === null ? undefined : `Up to ${String(max)}`;
   return (
     <Stack gap="s3" testID="guests">
-      <Text variant="headline">Guests</Text>
+      <Text variant="title" accessibilityRole="header">Guests</Text>
       {kind === 'hotel' ? (
         <>
           <Row label="Adults" sub={sub}>

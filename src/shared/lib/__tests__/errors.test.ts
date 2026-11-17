@@ -31,6 +31,20 @@ describe('errorFromResponse', () => {
     });
     expect(errorFromResponse(429, {}, h())).toEqual({ kind: 'rateLimited' });
   });
+  it('keeps Retry-After seconds on a 503 (status poll fetch_failed, W4)', () => {
+    expect(errorFromResponse(503, { code: 'fetch_failed' }, h({ 'retry-after': '5' }))).toEqual({
+      kind: 'unavailable',
+      status: 503,
+      code: 'fetch_failed',
+      body: { code: 'fetch_failed' },
+      retryAfterSec: 5,
+    });
+    expect(errorFromResponse(503, null, h({ 'retry-after': 'later' }))).toEqual({
+      kind: 'unavailable',
+      status: 503,
+      body: null,
+    });
+  });
   it('keeps the body on a 503', () => {
     expect(
       errorFromResponse(503, { code: 'booking_failed', booking_id: 'b-1' }, h()),

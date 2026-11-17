@@ -45,14 +45,16 @@ export function CountCard({ counts, onPress, testID }: Props) {
                 paddingVertical: space.s3,
                 paddingHorizontal: space.s3,
                 gap: space.s1,
-                borderRadius: radius.r2,
+                // Inside a 16 pt card, a 12 pt press highlight sits concentric.
+                borderRadius: radius.r3,
                 backgroundColor: pressed ? color.wash : 'transparent',
               })}
             >
               <Text variant="titleLg" tabular maxScale={1.3}>
                 {shown}
               </Text>
-              <Text variant="labelSm" tone="textSecondary" numberOfLines={1}>
+              {/* The label is what's being read ("Arriving"), so it gets the 15 pt label size. */}
+              <Text variant="label" tone="textSecondary" numberOfLines={2}>
                 {c.label}
               </Text>
             </Pressable>

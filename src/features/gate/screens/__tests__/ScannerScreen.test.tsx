@@ -115,7 +115,8 @@ it('shows the door counter and passes camera reads to the session', async () => 
   await render(<ScannerScreen {...base} />);
   expect(screen.getByRole('button', { name: /41 admitted of 120/ })).toBeTruthy();
   expect(screen.getByText('41')).toBeTruthy();
-  expect(screen.getByText('of 120')).toBeTruthy();
+  // The total sits on the count's line, never as a footnote.
+  expect(screen.getByText('of 120 admitted')).toBeTruthy();
   await fireEvent.press(screen.getByRole('button', { name: 'fake-camera' }));
   expect(session.scan).toHaveBeenCalledWith(TICKET, 'camera');
 });
@@ -287,7 +288,7 @@ it('shows "Checking N…" on a surface pill readable over the camera', async () 
   expect(screen.getByText('Checking 2…')).toBeTruthy();
   const pill = flat(screen.getByTestId('checking-pill'));
   expect(pill.backgroundColor).toBe(color.surface);
-  expect(pill.borderRadius).toBe(radius.r2);
+  expect(pill.borderRadius).toBe(radius.rFull);
 });
 
 it('a summary change does not re-render the camera', async () => {

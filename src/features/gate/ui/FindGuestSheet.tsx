@@ -1,4 +1,4 @@
-import { Phone, UserRound } from 'lucide-react-native';
+import { Phone, SearchX, UserRound } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, View } from 'react-native';
 
@@ -21,6 +21,7 @@ import {
   SearchField,
   SegmentedControl,
   Sheet,
+  SkeletonRows,
   StatusPill,
   Text,
 } from '@/shared/ui';
@@ -268,9 +269,16 @@ export function FindGuestSheet({
     if (noList)
       return <EmptyState illustration="search" title="No offline list on this phone yet" />;
     if (query === null) return <Message>Type a name or 2–4 phone digits</Message>;
-    if (results === null) return <Message>Searching…</Message>;
+    if (results === null) return <SkeletonRows count={3} />;
     if (results === 'failed') return <Banner tone="neutral" message="Couldn’t search the list" />;
-    if (results.length === 0) return <Message>No one matches</Message>;
+    if (results.length === 0)
+      return (
+        <EmptyState
+          icon={SearchX}
+          title="No one matches"
+          message="Check the spelling, or try 2–4 digits of their phone number."
+        />
+      );
     const inCount = results.filter((g) => matchesFilter(g, 'in')).length;
     return (
       <FlatList
@@ -287,7 +295,9 @@ export function FindGuestSheet({
             leading={<Initials g={item} />}
             title={who(item)}
             subtitle={ticketLabel(item)}
-            trailing={<GuestStatus g={item} nowMs={nowMs} />}
+            // Status under the name, as in the booking view below: one pattern for both lists.
+            note={<GuestStatus g={item} nowMs={nowMs} />}
+            numberOfLines={2}
             accessibilityLabel={`${who(item)}, ${ticketLabel(item)}, ${statusOf(item)}`}
             onPress={() => {
               setError(null);
@@ -300,7 +310,7 @@ export function FindGuestSheet({
   };
 
   const bookingBody = (b: Booking) => {
-    if (b.rows === null) return <Message>Loading…</Message>;
+    if (b.rows === null) return <SkeletonRows count={2} />;
     if (b.rows === 'failed') return <Banner tone="neutral" message="Couldn’t load this booking" />;
     return (
       <FlatList
@@ -316,7 +326,9 @@ export function FindGuestSheet({
             groupAccessibility={false}
             trailing={
               canAdmit(item) ? (
+                // Outlined: a sheet of guests would otherwise stack a violet button per row.
                 <Button
+                  variant="secondary"
                   label="Admit"
                   accessibilityLabel={`Admit ${who(item)}, ${ticketLabel(item)}`}
                   loading={admitting === item.id}

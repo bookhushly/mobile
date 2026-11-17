@@ -21,7 +21,7 @@ export function QuestionFields({ questions, answers, missing, onAnswer, inputRef
   if (questions.length === 0) return null;
   return (
     <Stack gap="s4" testID="questions">
-      <Text variant="headline">Questions from the organiser</Text>
+      <Text variant="title" accessibilityRole="header">Questions from the organiser</Text>
       {questions.map((q) => {
         const label = q.required ? q.label : `${q.label} (optional)`;
         const error = missing.has(q.id) ? QUESTION_WORDS : undefined;

@@ -1,13 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { BackHandler } from 'react-native';
 
 import type { FlowState } from '@/features/customer/domain/checkout/paymentFlow';
 import { useBooking } from '@/features/customer/hooks/useBooking';
 import { useServiceCharge } from '@/features/customer/hooks/useCheckoutData';
-import { usePayment } from '@/features/customer/hooks/usePayment';
+import { usePayment, type ReviewCancel } from '@/features/customer/hooks/usePayment';
 import type { CheckoutEntry } from '@/features/customer/offline/checkoutStore';
 import { eventBookingRow, hotelBookingRow } from '@/features/customer/schemas/bookings';
+import { sentNotice } from '@/features/customer/hooks/sentNotice';
 import { PayScreen } from '@/features/customer/screens/PayScreen';
 
 // Factories, not automocks: an automock loads the real module (supabase → native storage).
@@ -107,6 +108,14 @@ const EVENT_ROW = eventBookingRow.parse({
   tickets: [],
 });
 
+const FREE_ROW_NO_TICKETS = eventBookingRow.parse({
+  ...EVENT_ROW,
+  status: 'confirmed',
+  payment_status: 'completed',
+  total_amount: 0,
+  tickets: [],
+});
+
 const ENTRY: CheckoutEntry = {
   userId: 'u1',
   kind: 'hotel',
@@ -132,10 +141,11 @@ function setPayment(state: FlowState, over: Partial<Pay> = {}) {
     retry: jest.fn(),
     checkAgain: jest.fn(),
     leave: jest.fn(),
+    cancelNow: jest.fn(() => Promise.resolve<ReviewCancel>('cancelled')),
     willCancelOnLeave: true,
     holdEndsAt: null,
     canPay: true,
-    recentAttempt: false,
+    providerPending: false,
     entry: null,
     ...over,
   };
@@ -158,6 +168,7 @@ function setCharge(q: {
   } as unknown as ReturnType<typeof useServiceCharge>);
 }
 
+const refetchRow = jest.fn(() => Promise.resolve());
 function setRow(row: unknown, error = false) {
   mockBooking.mockImplementation(
     () =>
@@ -167,7 +178,8 @@ function setRow(row: unknown, error = false) {
         savedAt: null,
         today: '2026-10-21',
         error,
-        refetch: jest.fn(),
+        // A fresh function each render, as a changing identity must not restart timers.
+        refetch: () => refetchRow(),
       }) as unknown as ReturnType<typeof useBooking>,
   );
 }
@@ -182,7 +194,7 @@ const handlers = {
 };
 
 async function renderPay(
-  kind: 'hotel' | 'event',
+  kind: 'hotel' | 'apartment' | 'event',
   opts: { free?: boolean; fromSelect?: boolean } = {},
 ) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -296,6 +308,7 @@ it('checking blocks back and has nothing to press', async () => {
     startedAt: 0,
     attempt: 0,
     nextDelayMs: 2000,
+    verify: false,
   });
   await renderPay('hotel');
   expect(screen.getByText('Checking your payment')).toBeTruthy();
@@ -307,16 +320,10 @@ it('checking blocks back and has nothing to press', async () => {
   spy.mockRestore();
 });
 
-it('failed never says you weren’t charged; Try again goes back to Review (A1c, A1d)', async () => {
+it('failed (Paystack’s final word) says you weren’t charged; Try again goes back to Review (V1)', async () => {
   setPayment({ step: 'failed', reference: 'r1' });
   await renderPay('hotel');
-  expect(screen.getByText('Payment didn’t go through.')).toBeTruthy();
-  expect(
-    screen.getByText(
-      'If money left your account, it’ll be confirmed or refunded — check Bookings.',
-    ),
-  ).toBeTruthy();
-  expect(screen.queryByText(/weren’t charged/)).toBeNull();
+  expect(screen.getByText('Payment didn’t go through. You weren’t charged.')).toBeTruthy();
   expect(mockCue).toHaveBeenCalledWith('error');
   await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
   expect(pay.retry).toHaveBeenCalledTimes(1);
@@ -374,6 +381,71 @@ it('done shows View tickets for an event', async () => {
   expect(handlers.onDone).toHaveBeenCalledTimes(1);
 });
 
+it('a row that reads paid while Checking is Done, with its buttons and Back free (G4)', async () => {
+  const back: { handler?: () => boolean | null | undefined } = {};
+  const spy = jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_e, handler) => {
+    back.handler = () => handler({ type: 'hardwareBackPress', timeStamp: 0 });
+    return { remove: jest.fn() };
+  });
+  setRow(hotelBookingRow.parse({ ...HOTEL_ROW, payment_status: 'completed' }));
+  setPayment({
+    step: 'checking',
+    reference: 'r1',
+    paymentStartedAt: 0,
+    startedAt: 0,
+    attempt: 2,
+    nextDelayMs: 5000,
+    verify: false,
+  });
+  await renderPay('hotel');
+  expect(screen.getByText('You’re booked')).toBeTruthy();
+  expect(back.handler).toBeUndefined();
+  expect(removeScreen().preventDefault).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole('button', { name: 'View booking' }));
+  expect(handlers.onViewBooking).toHaveBeenCalledWith('hotel', ID);
+  spy.mockRestore();
+});
+
+it('an event Done with no tickets yet says they are being prepared and reads the row again once, 5 s later (G5)', async () => {
+  jest.useFakeTimers();
+  try {
+    setRow(FREE_ROW_NO_TICKETS);
+    await renderPay('event', { free: true });
+    expect(screen.getByText('You’re booked')).toBeTruthy();
+    expect(screen.getByTestId('booked-note')).toHaveTextContent(
+      'Your tickets are being prepared — they’ll appear in Bookings shortly',
+    );
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(4999);
+    });
+    expect(refetchRow).not.toHaveBeenCalled();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1);
+    });
+    expect(refetchRow).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(30_000);
+    });
+    expect(refetchRow).toHaveBeenCalledTimes(1);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it('an event Done with its tickets has no preparing line', async () => {
+  setRow(
+    eventBookingRow.parse({
+      ...EVENT_ROW,
+      status: 'confirmed',
+      payment_status: 'completed',
+      tickets: [{ id: 't1', ticket_type: 'VIP', ticket_index: 1, checked_in_at: null }],
+    }),
+  );
+  await renderPay('event');
+  expect(screen.getByText('You’re booked')).toBeTruthy();
+  expect(screen.queryByTestId('booked-note')).toBeNull();
+});
+
 it('done shows View booking for a hotel, to the guest email', async () => {
   setPayment({ step: 'done', reference: 'r1' }, { entry: ENTRY });
   await renderPay('hotel');
@@ -388,6 +460,10 @@ it('a cancelled booking shows it was cancelled, with Go to Bookings and no Pay (
   setRow(hotelBookingRow.parse({ ...HOTEL_ROW, booking_status: 'cancelled' }));
   await renderPay('hotel');
   expect(screen.getByText('This booking was cancelled.')).toBeTruthy();
+  // G2: a payment that landed after the cancel is refunded.
+  expect(
+    screen.getByText('If money left your account, it’ll be refunded — check Bookings.'),
+  ).toBeTruthy();
   expect(screen.queryByTestId('pay-button')).toBeNull();
   expect(mockPayment).toHaveBeenCalledWith(
     'u1',
@@ -407,17 +483,17 @@ it('a row that already reads paid is Done, and the entry is dropped (A2b)', asyn
   expect(mockDrop).toHaveBeenCalledWith('u1', 'hotel', ID);
 });
 
-it('a recent payment attempt warns above Pay (A1d)', async () => {
-  setPayment({ step: 'review' }, { recentAttempt: true });
+it('a payment Paystack still reports as clearing warns above Pay (V4)', async () => {
+  setPayment({ step: 'review' }, { providerPending: true });
   await renderPay('hotel');
   expect(
     screen.getByText(
-      'If you already paid by bank transfer or USSD, wait a few minutes — paying again could charge you twice.',
+      'A bank transfer or USSD payment for this booking is still processing — paying again could charge you twice.',
     ),
   ).toBeTruthy();
-  setPayment({ step: 'review' }, { recentAttempt: false });
+  setPayment({ step: 'review' }, { providerPending: false });
   await renderPay('hotel');
-  expect(screen.queryByTestId('pay-recent-attempt')).toBeNull();
+  expect(screen.queryByTestId('pay-provider-pending')).toBeNull();
 });
 
 it('passes whether Review was reached from Select to the hook (A2a)', async () => {
@@ -437,12 +513,53 @@ it('back from review calls leave', async () => {
   expect(pay.leave).toHaveBeenCalledTimes(1);
 });
 
-it('Cancel booking leaves once, then goes back', async () => {
+it('Cancel booking spins while it checks and cancels, then leaves for Bookings saying so (G1)', async () => {
+  let answer: (r: ReviewCancel) => void = () => undefined;
+  setPayment(
+    { step: 'review' },
+    {
+      cancelNow: jest.fn(
+        () =>
+          new Promise<ReviewCancel>((r) => {
+            answer = r;
+          }),
+      ),
+    },
+  );
   await renderPay('hotel');
   await fireEvent.press(screen.getByRole('button', { name: 'Cancel booking' }));
-  expect(pay.leave).toHaveBeenCalledTimes(1);
-  expect(handlers.onBack).toHaveBeenCalledTimes(1);
-  // The removal that follows doesn't cancel twice.
+  expect(pay.cancelNow).toHaveBeenCalledTimes(1);
+  expect(screen.getByTestId('pay-cancel')).toBeDisabled();
+  expect(screen.getByTestId('pay-button')).toBeDisabled();
+  expect(handlers.onBookings).not.toHaveBeenCalled();
+  // A second tap while it runs does nothing.
+  await fireEvent.press(screen.getByTestId('pay-cancel'));
+  expect(pay.cancelNow).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    answer('cancelled');
+    await Promise.resolve();
+  });
+  expect(handlers.onBookings).toHaveBeenCalledTimes(1);
+  expect(handlers.onBack).not.toHaveBeenCalled();
+  expect(sentNotice.messageFor('u1')).toBe('Booking cancelled');
+  // The removal that follows never runs the silent leave-cancel as well.
+  removeScreen();
+  expect(pay.leave).not.toHaveBeenCalled();
+  sentNotice.clear();
+});
+
+it.each<[ReviewCancel, string]>([
+  ['paymentInProgress', 'This booking has a payment in progress, so it wasn’t cancelled.'],
+  ['notDone', 'Couldn’t cancel — check your connection and try again'],
+  ['refused', 'This booking can’t be cancelled now.'],
+])('Cancel booking that ends %s stays on Review and says why (G1)', async (result, words) => {
+  setPayment({ step: 'review' }, { cancelNow: jest.fn(() => Promise.resolve(result)) });
+  await renderPay('hotel');
+  await fireEvent.press(screen.getByRole('button', { name: 'Cancel booking' }));
+  expect(await screen.findByTestId('pay-cancel-error')).toHaveTextContent(words);
+  expect(handlers.onBookings).not.toHaveBeenCalled();
+  expect(handlers.onBack).not.toHaveBeenCalled();
+  // Back keeps the silent best-effort behaviour.
   removeScreen();
   expect(pay.leave).toHaveBeenCalledTimes(1);
 });
@@ -472,6 +589,46 @@ it('a price that could not be confirmed offers Start again', async () => {
     listingId: 'h1',
     roomTypeId: 'rt1',
   });
+});
+
+it('record_failed offers Check again, which re-runs Pay through check-status (W1)', async () => {
+  setPayment({
+    step: 'startError',
+    words: 'Couldn’t start payment. Check again.',
+    action: 'checkAgain',
+  });
+  await renderPay('hotel');
+  await fireEvent.press(screen.getByRole('button', { name: 'Check again' }));
+  expect(pay.checkAgain).toHaveBeenCalledTimes(1);
+});
+
+it('already paid has no retry button beside its words (W1)', async () => {
+  setPayment({ step: 'startError', words: 'This booking is already paid.', action: 'paid' });
+  await renderPay('hotel');
+  expect(screen.getByText('This booking is already paid.')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull();
+});
+
+it('an apartment discount reads as a minus line on Review (W3)', async () => {
+  setRow(undefined);
+  setCharge({ data: null });
+  setPayment(
+    { step: 'review' },
+    {
+      entry: {
+        ...ENTRY,
+        kind: 'apartment',
+        total: 96000,
+        pricing: { subtotal: 90000, discount_amount: 9000, caution_deposit: 15000, airport_fee: 0 },
+      },
+    },
+  );
+  await renderPay('apartment');
+  expect(screen.getByText('Discount')).toBeTruthy();
+  expect(screen.getByText('−₦9,000')).toBeTruthy();
+  expect(screen.getByLabelText('Discount, minus 9,000 naira')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Pay ₦96,000' })).toBeTruthy();
 });
 
 it('a refusal has no button beside its words', async () => {

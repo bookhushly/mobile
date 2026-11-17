@@ -9,7 +9,7 @@ import {
 import { Pressable, View } from 'react-native';
 
 import type { NotificationRow as Row } from '@/features/customer/schemas/notifications';
-import { borderWidth, color, radius, space } from '@/shared/theme';
+import { borderWidth, color, radius, space, typeVariants } from '@/shared/theme';
 import { Icon, IconButton, Text, useDensity } from '@/shared/ui';
 
 const DOT = space.s3;
@@ -75,17 +75,10 @@ export function NotificationRow({ item: n, when, onPress, onLongPress }: Props) 
           backgroundColor: pressed ? color.wash : 'transparent',
         })}
       >
-        <View
-          style={{
-            width: d.minTarget,
-            height: d.minTarget,
-            borderRadius: radius.rFull,
-            backgroundColor: unread ? color.selectedWash : color.wash,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Icon as={typeIcon(n.type)} size="sm" tone={unread ? 'linkText' : 'textSecondary'} />
+        {/* Icon rules (DESIGN_SYSTEM §6): bare and ink, level with the title; unread is the
+            title's weight and the violet dot, not a tinted disc. */}
+        <View style={{ height: typeVariants.bodyStrong.lineHeight, justifyContent: 'center' }}>
+          <Icon as={typeIcon(n.type)} size="md" />
         </View>
         {/* Read rows keep full-contrast text on purpose: Mobbin §5 mutes them, but the contrast
           rules forbid muted text, so read vs unread is the title weight, the icon tint and the dot. */}

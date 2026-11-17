@@ -6,8 +6,10 @@ import {
   defaultRate,
   nights,
   stayProblems,
+  withoutContactProblems,
   type Guest,
   type StaySelection,
+  stayExtrasTotal,
 } from '@/features/customer/domain/checkout/selection';
 import { bedsLine } from '@/features/customer/domain/listingDetail';
 import {
@@ -18,12 +20,20 @@ import {
 import { useCreateBooking } from '@/features/customer/hooks/useCreateBooking';
 import { loadFailed } from '@/features/customer/hooks/loadState';
 import { promoFor, usePromo } from '@/features/customer/hooks/usePromo';
+import { useRecheckPromoOnSignIn } from '@/features/customer/hooks/useRecheckPromoOnSignIn';
+import { useSelectTotal } from '@/features/customer/hooks/useSelectTotal';
+import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
 import type { RoomType } from '@/features/customer/schemas/listings';
-import { ExtrasSection, stayExtras } from '@/features/customer/ui/checkout/ExtrasSection';
+import {
+  ExtrasSection,
+  extrasPrices,
+  stayExtras,
+} from '@/features/customer/ui/checkout/ExtrasSection';
 import { FormLoading } from '@/features/customer/ui/checkout/FormLoading';
 import { GuestFields } from '@/features/customer/ui/checkout/GuestFields';
 import { PromoRow } from '@/features/customer/ui/checkout/PromoRow';
 import { SelectFooter } from '@/features/customer/ui/checkout/SelectFooter';
+import { SignedInNote } from '@/features/customer/ui/checkout/SignedInNote';
 import {
   focusFirst,
   guestErrors,
@@ -48,13 +58,30 @@ type Props = {
   requestedRate: string | null;
   userId: string;
   guest: Guest;
+  /** Signed in and the profile has settled: the contact fields can be shown and filled. */
+  guestReady: boolean;
+  /** Signed in, but the account may yet be staff: Continue stays off until this clears. */
+  modePending: boolean;
   header: ReactNode;
+  /** What's being booked, first (Airbnb / Booking.com checkout: the place card on top). */
+  lead?: ReactNode;
   onCreated: (bookingId: string) => void;
 };
 
-// Spec §5 Select (stays): room and bed option, dates, guests, extras, promo (hotels, P9), the
-// guest's details (P16) and, for hotels, special requests. Continue creates the booking (P1).
-export function StaySelect({ stay, requestedRate, userId, guest, header, onCreated }: Props) {
+// Spec §5 Select (stays): room and bed option, dates, guests, extras, promo (P9, amended 4c.1), the
+// guest's details (P16) and, for hotels, special requests. Continue creates the booking (P1), or
+// asks for an account first: the details stay hidden until there is one.
+export function StaySelect({
+  stay,
+  requestedRate,
+  userId,
+  guest,
+  guestReady,
+  modePending,
+  header,
+  lead,
+  onCreated,
+}: Props) {
   const hotel = stay.kind === 'hotel' ? stay : null;
   const apt = stay.kind === 'apartment' ? stay.listing.apartment : null;
   const id = hotel !== null ? hotel.listing.hotel.id : (apt?.id ?? '');
@@ -73,6 +100,18 @@ export function StaySelect({ stay, requestedRate, userId, guest, header, onCreat
     specialRequests: '',
   }));
   const [tried, setTried] = useState(false);
+  // Once only: a later profile refetch must not hide the fields or overwrite what was typed. The
+  // details are new to the person, so they aren't marked wrong until the next Continue.
+  const [guestFilled, setGuestFilled] = useState(guestReady);
+  if (guestReady && !guestFilled) {
+    setGuestFilled(true);
+    setSel((s) => ({ ...s, guest }));
+    setTried(false);
+  }
+  const signedOut = userId === '';
+  const showGuest = !signedOut && guestFilled;
+  const [startedSignedOut] = useState(signedOut);
+  const ask = useSignInPrompt((s) => s.ask);
   const nameRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
@@ -80,7 +119,29 @@ export function StaySelect({ stay, requestedRate, userId, guest, header, onCreat
   const aptExtras = useApartmentExtras(hotel === null ? id : null);
   const availability = useRoomAvailability(hotel?.roomType.id ?? null, sel.checkIn, sel.checkOut);
   const create = useCreateBooking(userId, stay.kind, id);
-  const promo = usePromo('hotel', id);
+  const promo = usePromo(stay.kind, id);
+  const rate = rates.find((r) => r.id === sel.rateId) ?? null;
+  const perNight =
+    hotel !== null
+      ? (rate?.price_per_night ?? hotel.roomType.base_price)
+      : (apt?.price_per_night ?? null);
+  const n =
+    sel.checkIn !== null && sel.checkOut !== null ? nights(sel.checkIn, sel.checkOut) : null;
+  const amount = n !== null && perNight !== null && n > 0 ? perNight * n : null;
+  useRecheckPromoOnSignIn(userId, promo, amount);
+  const preview = promoFor(promo.state, amount);
+  // Extras and the refundable deposit are known here; weekend, VAT and vendor discounts are not,
+  // so the footer calls the figure an estimate.
+  const priced = extrasPrices(hotelExtras.data, aptExtras.data);
+  const deposit = apt?.caution_deposit ?? 0;
+  const { total, note } = useSelectTotal(
+    stay.kind,
+    amount === null
+      ? null
+      : Math.max(0, amount - (preview.promo?.discount ?? 0)) +
+          stayExtrasTotal(priced, sel.breakfast, sel.airport) +
+          deposit,
+  );
   const created = create.created;
   // Hands over once: the parent's callback may change identity on every render.
   const handed = useRef(false);
@@ -109,17 +170,8 @@ export function StaySelect({ stay, requestedRate, userId, guest, header, onCreat
   const extras = stayExtras(hotel !== null ? he : undefined, hotel === null ? ae : undefined);
   const minNights = hotel !== null ? 1 : Math.max(1, ae?.minimumStay ?? apt?.minimum_stay ?? 1);
   const maxGuests = hotel !== null ? hotel.roomType.max_occupancy : (apt?.max_guests ?? null);
-  const rate = rates.find((r) => r.id === sel.rateId) ?? null;
-  const perNight =
-    hotel !== null
-      ? (rate?.price_per_night ?? hotel.roomType.base_price)
-      : (apt?.price_per_night ?? null);
-  const n =
-    sel.checkIn !== null && sel.checkOut !== null ? nights(sel.checkIn, sel.checkOut) : null;
-  const amount = n !== null && perNight !== null && n > 0 ? perNight * n : null;
-  const preview = promoFor(promo.state, amount);
   const stale = preview.stale;
-  const selection: StaySelection = { ...sel, promo: hotel !== null ? preview.promo : null };
+  const selection: StaySelection = { ...sel, promo: preview.promo };
   const rules = { minNights, maxGuests };
   const problems = stayProblems(selection, {
     today: lagosToday(clock.serverNow()),
@@ -143,21 +195,30 @@ export function StaySelect({ stay, requestedRate, userId, guest, header, onCreat
       estimate={
         n === null
           ? 'Add your dates'
-          : amount === null
+          : total === null
             ? nightsWord(n)
-            : `${nightsWord(n)} · ${formatNaira(amount)}`
+            : `${nightsWord(n)} · about ${formatNaira(total)}`
       }
       blocked={noRooms ? NO_ROOMS : null}
       problem={null}
       create={create.state}
       refusalShownAtField={refused?.field !== undefined}
-      disabled={sel.checkIn === null || sel.checkOut === null}
+      gettingDetails={
+        modePending || (!signedOut && (!showGuest || promo.state.phase === 'checking'))
+      }
+      chargeNote={note}
+      disabled={sel.checkIn === null || sel.checkOut === null || promo.state.phase === 'checking'}
       onContinue={() => {
         setTried(true);
-        if (problems.length > 0) {
-          focusFirst(problems, { name: nameRef, email: emailRef, phone: phoneRef }, (p) =>
+        const stopping = signedOut ? withoutContactProblems(problems) : problems;
+        if (stopping.length > 0) {
+          focusFirst(stopping, { name: nameRef, email: emailRef, phone: phoneRef }, (p) =>
             stayWords(p, rules),
           );
+          return;
+        }
+        if (signedOut) {
+          ask('book');
           return;
         }
         void create.submit(selection, {
@@ -173,6 +234,7 @@ export function StaySelect({ stay, requestedRate, userId, guest, header, onCreat
 
   return (
     <Screen scroll header={header} footer={footer}>
+      {lead}
       {hotel !== null ? (
         <StayRoom
           roomType={hotel.roomType}
@@ -219,27 +281,28 @@ export function StaySelect({ stay, requestedRate, userId, guest, header, onCreat
           setSel({ ...sel, airport });
         }}
       />
-      {hotel !== null ? (
-        <PromoRow
-          state={promo.state}
-          stale={stale}
-          amount={amount}
-          onApply={(code) => {
-            if (amount !== null) void promo.apply(code, amount);
+      <PromoRow
+        state={promo.state}
+        stale={stale}
+        amount={amount}
+        onApply={(code) => {
+          if (amount !== null) void promo.apply(code, amount);
+        }}
+        onRemove={promo.remove}
+      />
+      {showGuest && startedSignedOut ? <SignedInNote /> : null}
+      {showGuest ? (
+        <GuestFields
+          guest={sel.guest}
+          onChange={(g) => {
+            setSel({ ...sel, guest: g });
           }}
-          onRemove={promo.remove}
+          errors={guestErrors(shown)}
+          nameRef={nameRef}
+          emailRef={emailRef}
+          phoneRef={phoneRef}
         />
       ) : null}
-      <GuestFields
-        guest={sel.guest}
-        onChange={(g) => {
-          setSel({ ...sel, guest: g });
-        }}
-        errors={guestErrors(shown)}
-        nameRef={nameRef}
-        emailRef={emailRef}
-        phoneRef={phoneRef}
-      />
       {hotel !== null ? (
         <SpecialRequests
           value={sel.specialRequests}

@@ -42,7 +42,7 @@ export function hotelBody(roomTypeId: string, hotelId: string, s: StaySelection)
   return out;
 }
 
-/** Apartments take no rate, breakfast or promo (P9). */
+/** Apartments take no rate or breakfast. The promo is priced by the server (P9, amended 4c.1). */
 export function apartmentBody(apartmentId: string, s: StaySelection): Body {
   return {
     apartment_id: apartmentId,
@@ -50,6 +50,7 @@ export function apartmentBody(apartmentId: string, s: StaySelection): Body {
     check_out_date: s.checkOut,
     number_of_guests: s.adults + s.children,
     ...airportFields(s),
+    ...(s.promo !== null ? { promo_code_id: s.promo.codeId } : {}),
     ...guestFields(s),
     ...requestsField(s),
   };

@@ -22,7 +22,7 @@ export function PinField({ label, value, onChangeText, length = 6, error, testID
   const ref = useRef<TextInput>(null);
   return (
     <Stack gap="s2">
-      <Text variant="label">{label}</Text>
+      <Text variant="fieldLabel">{label}</Text>
       <Pressable
         accessible={false}
         onPress={() => ref.current?.focus()}

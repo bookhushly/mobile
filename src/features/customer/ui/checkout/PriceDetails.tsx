@@ -20,11 +20,18 @@ type Props = {
   testID?: string;
 };
 
+/** A negative line (an apartment discount) reads "−₦X", spoken "minus X naira". */
+function shownAmount(amount: number): { shown: string; spoken: string } {
+  if (amount >= 0) return { shown: formatNaira(amount), spoken: spokenNaira(amount) };
+  return { shown: `−${formatNaira(-amount)}`, spoken: `minus ${spokenNaira(-amount)}` };
+}
+
 function Row({ line, strong }: { line: PriceLine; strong?: boolean }) {
+  const { shown, spoken } = shownAmount(line.amount);
   return (
     <View
       accessible
-      accessibilityLabel={`${line.label}, ${spokenNaira(line.amount)}`}
+      accessibilityLabel={`${line.label}, ${spoken}`}
       style={{ flexDirection: 'row', justifyContent: 'space-between', gap: space.s4 }}
     >
       <Text
@@ -34,7 +41,7 @@ function Row({ line, strong }: { line: PriceLine; strong?: boolean }) {
         {line.label}
       </Text>
       <Text variant={strong ? 'bodyStrong' : 'body'} tabular>
-        {formatNaira(line.amount)}
+        {shown}
       </Text>
     </View>
   );
@@ -54,7 +61,7 @@ export function PriceDetails({
   return (
     <Card>
       <View style={{ gap: space.s3 }} testID={testID}>
-        <Text variant="headline" accessibilityRole="header">
+        <Text variant="title" accessibilityRole="header">
           Price details
         </Text>
         {lines === null ? (

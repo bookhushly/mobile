@@ -3,27 +3,22 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
 import { paymentState, verifyPayment } from '@/features/customer/api/checkoutApi';
-import { isFreshPayment } from '@/features/customer/domain/checkout/paymentFlow';
-import {
-  fromPaymentState,
-  fromVerified,
-  type PayVerdict,
-} from '@/features/customer/domain/checkout/paymentStatus';
+import { settleVerdict } from '@/features/customer/domain/checkout/paymentStatus';
 import { customerKeys } from '@/features/customer/hooks/customerKeys';
 import { isPayScreenOpen } from '@/features/customer/hooks/openPayScreens';
 import { checkoutStore } from '@/features/customer/offline/checkoutStore';
-import { api, clock } from '@/shared/api/instance';
+import { api } from '@/shared/api/instance';
 
 /**
  * Spec P5: a payment left open when the app was killed or backgrounded is settled quietly. On
  * mount and each return to the foreground, every stored entry with a payment is read, one entry
  * at a time, skipping a booking whose Pay screen is open (that screen settles it).
  *
- * A1: a payment started under 15 min ago gets one status read only, never verify (web marks a
- * transfer or USSD still in progress as failed), and only 'paid' settles it: its 'failed' may
- * still complete. An older one gets verify, then a status read. Paid drops the entry, failed
- * clears its payment, each only while the entry still holds that reference (A4); anything else is
- * left for the next pass. It never initialises.
+ * V1 (4c.1): each entry gets verify once, then a status read, per pass (web #222 no longer fails a
+ * transfer or USSD in progress). Paid needs a fulfilled status; failed needs a definitive verify
+ * (Paystack `failed`/`reversed`). Paid drops the entry, failed clears its payment, each only while
+ * the entry still holds that reference (A4); anything else is left for the next pass. It never
+ * initialises.
  */
 export function useResumePayments(userId: string): void {
   const qc = useQueryClient();
@@ -36,17 +31,10 @@ export function useResumePayments(userId: string): void {
     const live = () => on;
     const rerun = () => again;
 
-    const settleOne = async (reference: string, startedAt: number): Promise<PayVerdict> => {
-      if (isFreshPayment(startedAt, clock.serverNow())) {
-        const s = await paymentState(api, reference);
-        const v = s.ok ? fromPaymentState(s.value) : 'unknown';
-        return v === 'paid' ? 'paid' : 'unknown';
-      }
+    const settleOne = async (reference: string): Promise<'paid' | 'failed' | 'unknown'> => {
       const v = await verifyPayment(api, reference);
       const s = await paymentState(api, reference);
-      if (s.ok) return fromPaymentState(s.value);
-      // No status answer: only a definite failure from verify settles it.
-      return v.ok && fromVerified(v.value) === 'failed' ? 'failed' : 'unknown';
+      return settleVerdict(v.ok ? v.value : null, s.ok ? s.value : null);
     };
 
     const pass = async () => {
@@ -56,7 +44,7 @@ export function useResumePayments(userId: string): void {
         if (e.payment === null) continue;
         if (isPayScreenOpen(userId, e.kind, e.bookingId)) continue;
         const { reference } = e.payment;
-        const verdict = await settleOne(reference, e.payment.startedAt);
+        const verdict = await settleOne(reference);
         if (!live()) return;
         if (verdict !== 'paid' && verdict !== 'failed') continue;
         // Paid drops the entry; failed keeps it, payment cleared, for Try again (R8).

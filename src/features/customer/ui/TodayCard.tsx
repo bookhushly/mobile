@@ -1,10 +1,11 @@
+import { Image } from 'expo-image';
 import { View } from 'react-native';
 
 import { kindWord, type MyBooking } from '@/features/customer/domain/myBookings';
 import { chipTone } from '@/features/customer/ui/chipTone';
 import type { MainAction } from '@/features/customer/ui/mainAction';
-import { space } from '@/shared/theme';
-import { Button, Card, StatusPill, Text } from '@/shared/ui';
+import { borderWidth, color, radius, space } from '@/shared/theme';
+import { Button, StatusPill, Text } from '@/shared/ui';
 
 type Props = {
   booking: MyBooking;
@@ -37,20 +38,58 @@ export function TodayCard({
     else if (action === 'checkInCode') onShowCheckInCode(b);
     else onOpen(b);
   };
+  // Airbnb and Expedia Trips (Mobbin, 2026-11-15): the place's photo leads the card with a "Today"
+  // pill on it, then the name, what's next and the one action that matters at the door.
   return (
-    <Card>
-      <View style={{ gap: space.s3 }}>
-        <Text variant="labelSm" tone="textSecondary">
-          {`Today · ${kindWord(b.kind)}`}
-        </Text>
-        <Text variant="headline" numberOfLines={2}>
+    <View
+      style={{
+        borderRadius: radius.r4,
+        borderCurve: 'continuous',
+        borderWidth: borderWidth.hairline,
+        borderColor: color.border,
+        overflow: 'hidden',
+        backgroundColor: color.surface,
+      }}
+    >
+      {b.imageUrl !== null ? (
+        <View style={{ aspectRatio: 2, backgroundColor: color.wash }}>
+          <Image
+            source={{ uri: b.imageUrl }}
+            style={{ width: '100%', height: '100%' }}
+            contentFit="cover"
+            recyclingKey={b.id}
+            transition={0}
+            accessible={false}
+          />
+          <View
+            style={{
+              position: 'absolute',
+              top: space.s4,
+              left: space.s4,
+              paddingHorizontal: space.s4,
+              paddingVertical: space.s2,
+              borderRadius: radius.rFull,
+              backgroundColor: color.surface,
+            }}
+          >
+            <Text variant="labelSm">{`Today · ${kindWord(b.kind)}`}</Text>
+          </View>
+        </View>
+      ) : null}
+      <View style={{ gap: space.s3, padding: space.s5 }}>
+        {b.imageUrl === null ? (
+          <Text variant="labelSm" tone="textSecondary">
+            {`Today · ${kindWord(b.kind)}`}
+          </Text>
+        ) : null}
+        <Text variant="title" numberOfLines={2}>
           {title}
         </Text>
-        <Text variant="bodySm" tone="textSecondary">
+        <Text variant="body" tone="textSecondary">
           {b.next}
         </Text>
         <StatusPill tone={chipTone(b.tone)} label={b.status} size="sm" />
-        <View style={{ gap: space.s2 }}>
+        <View style={{ gap: space.s4, marginTop: space.s2 }}>
           <Button
             variant={primary && action !== 'open' ? 'primary' : 'secondary'}
             label={LABEL[action]}
@@ -69,6 +108,6 @@ export function TodayCard({
           ) : null}
         </View>
       </View>
-    </Card>
+    </View>
   );
 }

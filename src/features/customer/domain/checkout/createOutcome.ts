@@ -1,5 +1,5 @@
 import type { ApiError } from '@/shared/lib/errors';
-import type { StayProblem } from './selection';
+import { PROMO_ZERO_WORDS, type StayProblem } from './selection';
 
 export type CreateOutcome =
   | { kind: 'created' }
@@ -103,6 +103,9 @@ function stayCode(e: ApiError, kind: 'hotel' | 'apartment'): CreateOutcome | nul
       );
     case 'not_found':
       return refused(NOT_AVAILABLE);
+    case 'not_bookable':
+      // Hotel 409 (web #223): a zero-total room, priced by the hotel only.
+      return refused('This stay can’t be booked right now.');
     case 'invalid_input':
       return refused(firstDetail(body) ?? 'Check your details');
     default:
@@ -135,11 +138,27 @@ export function stayCreateOutcome(e: ApiError, kind: 'hotel' | 'apartment'): Cre
   return { kind: 'unsure' };
 }
 
+/** Event create/free codes (web #222). The screen refetches the listing after any refusal. */
+const EVENT_REFUSALS: ReadonlyMap<string, string> = new Map([
+  ['invalid_quantity', 'Check your ticket numbers.'],
+  ['ticket_type_unavailable', 'One of these ticket types isn’t available any more.'],
+  ['sold_out', 'Not enough tickets left.'],
+  ['not_free', 'This event has paid tickets.'],
+  ['zero_total', PROMO_ZERO_WORDS],
+]);
+
 export function eventCreateOutcome(e: ApiError): CreateOutcome {
   const flow = busyOrWait(e);
   if (flow !== null) return flow;
   if (e.kind === 'auth') return refused(SIGN_IN);
+  if (e.kind === 'unavailable' && e.code === 'booking_failed') {
+    // The insert failed: nothing was written, so nothing to release.
+    return { kind: 'failed', words: 'Couldn’t book. Try again', strayBookingId: null };
+  }
   if (transient(e)) return { kind: 'unsure' };
+  const words =
+    e.kind === 'conflict' || e.kind === 'unknown' ? EVENT_REFUSALS.get(e.code ?? '') : undefined;
+  if (words !== undefined) return refused(words);
   if (e.kind === 'notFound') return refused(NOT_AVAILABLE);
   if (e.kind === 'conflict') return refused('Not enough tickets left');
   if (e.kind === 'unknown' && e.status === 400) {

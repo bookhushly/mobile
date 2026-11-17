@@ -60,7 +60,7 @@ type Props = {
 export function EventTickets({ lines, qty, total, threshold, closed, onQty }: Props) {
   return (
     <Stack gap="s2" testID="tickets">
-      <Text variant="headline">Tickets</Text>
+      <Text variant="title" accessibilityRole="header">Tickets</Text>
       <Text variant="bodySm" tone="textSecondary" testID="max-tickets">
         {MAX_TICKETS_LINE}
       </Text>

@@ -1,4 +1,10 @@
-import { ChevronRight, ExternalLink } from 'lucide-react-native';
+import {
+  CircleHelp,
+  ExternalLink,
+  FileText,
+  ShieldCheck,
+  type LucideIcon,
+} from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 
@@ -12,10 +18,11 @@ import { openWeb } from '@/features/customer/ui/links';
 import { APP_VERSION } from '@/shared/api/instance';
 import { HELP_URL, PRIVACY_URL, TERMS_URL } from '@/shared/config/store';
 import { formatNigerianPhone } from '@/shared/lib/phone';
-import { color, radius, space } from '@/shared/theme';
+import { cardSize, color, elevation, radius, space } from '@/shared/theme';
 import {
   Button,
   ErrorState,
+  Header,
   Icon,
   ListRow,
   Screen,
@@ -26,8 +33,8 @@ import {
   TextLink,
 } from '@/shared/ui';
 
-const AVATAR = space.s11;
-const ADD = 'Add';
+const AVATAR = cardSize.avatarLg;
+const ADD = 'Not provided';
 
 type Props = {
   userId: string;
@@ -72,11 +79,16 @@ export function AccountScreen({ userId, email, modeSwitcher, onSignOut, onDelete
         key={r.f}
         title={r.title}
         subtitle={r.value ?? ADD}
-        accessibilityLabel={`${r.title}, ${r.value ?? 'not set'}, edit`}
+        accessibilityLabel={`${r.title}, ${r.value ?? 'not set'}, ${r.value === null ? 'add' : 'edit'}`}
         onPress={() => {
           edit(r.f);
         }}
-        trailing={<Icon as={ChevronRight} size="sm" tone="textSecondary" />}
+        // Airbnb's "Personal info": the value under its name and an underlined Edit or Add.
+        trailing={
+          <Text variant="label" style={{ textDecorationLine: 'underline' }}>
+            {r.value === null ? 'Add' : 'Edit'}
+          </Text>
+        }
       />
     ));
   } else if (loading) {
@@ -93,9 +105,10 @@ export function AccountScreen({ userId, email, modeSwitcher, onSignOut, onDelete
     );
   }
 
-  const link = (title: string, url: string) => (
+  const link = (title: string, url: string, icon: LucideIcon) => (
     <ListRow
       title={title}
+      leading={<Icon as={icon} size="md" />}
       accessibilityLabel={`${title}, opens bookhushly.com`}
       onPress={() => {
         openWeb(url);
@@ -105,8 +118,21 @@ export function AccountScreen({ userId, email, modeSwitcher, onSignOut, onDelete
   );
 
   return (
-    <Screen scroll>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s4 }}>
+    <Screen scroll header={<Header title="Account" />}>
+      {/* Airbnb's profile card (Mobbin, 2026-11-15): a raised card, the initials large in a
+          neutral circle, the name and email centred under it. */}
+      <View
+        style={{
+          alignItems: 'center',
+          gap: space.s3,
+          paddingVertical: space.s7,
+          paddingHorizontal: space.s5,
+          borderRadius: radius.r4,
+          borderCurve: 'continuous',
+          backgroundColor: color.surface,
+          ...elevation.e3,
+        }}
+      >
         <View
           importantForAccessibility="no-hide-descendants"
           accessibilityElementsHidden
@@ -114,20 +140,21 @@ export function AccountScreen({ userId, email, modeSwitcher, onSignOut, onDelete
             width: AVATAR,
             height: AVATAR,
             borderRadius: radius.rFull,
-            backgroundColor: color.selectedWash,
+            // Neutral: violet is for the action and the selected state, never decoration.
+            backgroundColor: color.wash,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <Text variant="title" tone="linkText" maxScale={1}>
+          <Text variant="displaySm" maxScale={1}>
             {initials(name, shown)}
           </Text>
         </View>
-        <View style={{ flex: 1, gap: space.s1 }}>
-          <Text variant="title" accessibilityRole="header" numberOfLines={2}>
-            {name === '' ? 'Account' : name}
+        <View style={{ alignItems: 'center', gap: space.s1 }}>
+          <Text variant="title" align="center" numberOfLines={2}>
+            {name === '' ? 'Your account' : name}
           </Text>
-          <Text variant="bodySm" tone="textSecondary" numberOfLines={1}>
+          <Text variant="bodySm" tone="textSecondary" align="center" numberOfLines={1}>
             {shown}
           </Text>
         </View>
@@ -139,9 +166,9 @@ export function AccountScreen({ userId, email, modeSwitcher, onSignOut, onDelete
       </Stack>
       <Stack gap="s1">
         <SectionHeader label="Help and legal" />
-        {link('Help', HELP_URL)}
-        {link('Terms', TERMS_URL)}
-        {link('Privacy', PRIVACY_URL)}
+        {link('Help', HELP_URL, CircleHelp)}
+        {link('Terms', TERMS_URL, FileText)}
+        {link('Privacy', PRIVACY_URL, ShieldCheck)}
       </Stack>
       <Stack gap="s3">
         <Button variant="secondary" label="Sign out" onPress={onSignOut} />

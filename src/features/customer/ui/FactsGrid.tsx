@@ -1,8 +1,9 @@
 import { View } from 'react-native';
 
 import type { Fact } from '@/features/customer/domain/listingDetail';
-import { borderWidth, color, radius, space } from '@/shared/theme';
-import { Text } from '@/shared/ui';
+import { space } from '@/shared/theme';
+import { amenityIcon } from '@/features/customer/ui/amenityIcon';
+import { Icon, Text } from '@/shared/ui';
 
 type Props = { facts: readonly Fact[]; testID?: string };
 
@@ -20,13 +21,12 @@ export function FactsGrid({ facts, testID }: Props) {
             flexGrow: 1,
             flexBasis: '45%',
             gap: space.s1,
-            padding: space.s4,
-            borderRadius: radius.r3,
-            borderWidth: borderWidth.hairline,
-            borderColor: color.border,
-            backgroundColor: color.surface,
+            paddingVertical: space.s3,
           }}
         >
+          <View style={{ marginBottom: space.s2 }}>
+            <Icon as={amenityIcon(f.label)} size="md" />
+          </View>
           <Text variant="labelSm" tone="textSecondary">
             {f.label}
           </Text>

@@ -44,6 +44,59 @@ const schema = z.object({ ok: z.boolean() });
 const headersOf = (c: Call | undefined) => c?.init.headers as Record<string, string>;
 
 describe('api client', () => {
+  describe('an auth call with no token', () => {
+    const noToken = () => Promise.resolve(null);
+
+    it('refreshes first and sends the new token', async () => {
+      const { client, calls } = make([res(200, { ok: true })], { getAccessToken: noToken });
+      const r = await client.request('/api/x', { method: 'POST', schema });
+      expect(r.ok).toBe(true);
+      expect(calls).toHaveLength(1);
+      expect(headersOf(calls[0])['Authorization']).toBe('Bearer tok2');
+    });
+
+    it('an invalid session sends nothing and is an auth error', async () => {
+      const { client, fetchFn } = make([], {
+        getAccessToken: noToken,
+        refreshSession: () => Promise.resolve({ failure: 'invalid' }),
+      });
+      const r = await client.request('/api/bookings/event/create', { method: 'POST', schema });
+      expect(r).toEqual({ ok: false, error: { kind: 'auth' } });
+      expect(fetchFn).not.toHaveBeenCalled();
+    });
+
+    it('a network failure refreshing sends nothing and is a network error, not sign-in', async () => {
+      const { client, fetchFn } = make([], {
+        getAccessToken: noToken,
+        refreshSession: () => Promise.resolve({ failure: 'network' }),
+      });
+      const r = await client.request('/api/bookings/event/create', { method: 'POST', schema });
+      expect(r).toEqual({ ok: false, error: { kind: 'network' } });
+      expect(fetchFn).not.toHaveBeenCalled();
+    });
+
+    it('refreshes at most once: a 401 on the refreshed token is an auth error', async () => {
+      const refreshSession = jest.fn(() => Promise.resolve({ token: 'tok2' }));
+      const { client, calls } = make([res(401, {})], { getAccessToken: noToken, refreshSession });
+      const r = await client.request('/api/x', { schema });
+      expect(r).toEqual({ ok: false, error: { kind: 'auth' } });
+      expect(refreshSession).toHaveBeenCalledTimes(1);
+      expect(calls).toHaveLength(1);
+    });
+
+    it('a public call never refreshes', async () => {
+      const refreshSession = jest.fn(() => Promise.resolve({ failure: 'invalid' as const }));
+      const { client, calls } = make([res(200, { ok: true })], {
+        getAccessToken: noToken,
+        refreshSession,
+      });
+      const r = await client.request('/api/x', { auth: false, schema });
+      expect(r.ok).toBe(true);
+      expect(refreshSession).not.toHaveBeenCalled();
+      expect(headersOf(calls[0])['Authorization']).toBeUndefined();
+    });
+  });
+
   it('sends bearer + app headers and records the Date header', async () => {
     const { client, calls, dates } = make([
       res(200, { ok: true }, { date: 'Sun, 04 Oct 2026 12:00:00 GMT' }),

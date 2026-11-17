@@ -2,9 +2,17 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import type { CreateState } from '@/features/customer/hooks/useCreateBooking';
+import type { ChargeNote } from '@/features/customer/hooks/useSelectTotal';
 import { RateLimitWait } from '@/features/customer/ui/RateLimitWait';
 import { space } from '@/shared/theme';
 import { Banner, Button, Text } from '@/shared/ui';
+
+const GETTING_DETAILS = 'Getting your details…';
+// The same words as Price details on Pay.
+const CHARGE_WORDS = {
+  checking: { words: 'Checking the service charge…', testID: 'charge-checking' },
+  unknown: { words: 'plus any service charge shown on Paystack', testID: 'charge-unknown' },
+} as const;
 
 type Props = {
   /** "3 nights · ₦90,000", "2 tickets · Free", or what is still missing. */
@@ -16,6 +24,10 @@ type Props = {
   create: CreateState;
   /** The words beside a field already show this refusal. */
   refusalShownAtField: boolean;
+  /** Just signed in and something is still loading: read in place of the estimate. */
+  gettingDetails: boolean;
+  /** The estimate has no service charge in it yet, and why. */
+  chargeNote: ChargeNote;
   disabled: boolean;
   onContinue: () => void;
   onCheckAgain: () => void;
@@ -29,6 +41,8 @@ export function SelectFooter({
   problem,
   create,
   refusalShownAtField,
+  gettingDetails,
+  chargeNote,
   disabled,
   onContinue,
   onCheckAgain,
@@ -36,6 +50,9 @@ export function SelectFooter({
   const sending =
     create.phase === 'sending' || (create.phase === 'busy' && create.words === undefined);
   const unsure = create.phase === 'unsure';
+  const fetching = gettingDetails && blocked === null;
+  const charge =
+    chargeNote !== null && blocked === null && !gettingDetails ? CHARGE_WORDS[chargeNote] : null;
   // A 429 keeps Continue off until its countdown ends; a new answer starts a new wait.
   const [waitedOut, setWaitedOut] = useState<CreateState | null>(null);
   const waiting = create.phase === 'busy' && create.words !== undefined && waitedOut !== create;
@@ -77,21 +94,26 @@ export function SelectFooter({
         </Text>
       ) : null}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s4 }}>
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, gap: space.s1 }}>
           <Text
             variant={blocked !== null ? 'bodySm' : 'bodyStrong'}
             tone={blocked !== null ? 'dangerFg' : 'textPrimary'}
             tabular
             testID="select-estimate"
           >
-            {blocked ?? estimate}
+            {blocked ?? (gettingDetails ? GETTING_DETAILS : estimate)}
           </Text>
+          {charge !== null ? (
+            <Text variant="bodySm" tone="textSecondary" testID={charge.testID}>
+              {charge.words}
+            </Text>
+          ) : null}
         </View>
         <View style={{ flexShrink: 0, maxWidth: '60%' }}>
           <Button
             label="Continue"
-            loading={sending}
-            disabled={disabled || unsure || waiting || blocked !== null}
+            loading={sending || fetching}
+            disabled={disabled || gettingDetails || unsure || waiting || blocked !== null}
             onPress={onContinue}
             testID="select-continue"
           />

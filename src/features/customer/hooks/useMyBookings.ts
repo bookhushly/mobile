@@ -126,6 +126,8 @@ async function saveWallet(userId: string, rows: BookingRows, gen: number): Promi
   }
 }
 
+const noRefetch = (): Promise<unknown> => Promise.resolve();
+
 export function useMyBookings(userId: string): {
   bookings: BookingLists | null;
   rows: BookingRows | null;
@@ -136,13 +138,17 @@ export function useMyBookings(userId: string): {
   refetch: () => Promise<unknown>;
 } {
   const isFocused = useIsFocused();
+  // Signed out (browsing): no account, so no read, no spinner, and a refetch that does nothing.
+  const signedOut = userId === '';
   // C17: on focus, on foreground (TanStack's focusManager) and on pull; no interval.
   const q = useQuery({
     queryKey: customerKeys.bookings(userId),
     queryFn: () => loadAll(userId),
     refetchOnWindowFocus: true,
+    enabled: !signedOut,
   });
-  useFocusRefetch(isFocused, q);
+  // TanStack's refetch() ignores `enabled`, so a signed-out focus regain must not reach it.
+  useFocusRefetch(isFocused, { isStale: q.isStale, refetch: signedOut ? noRefetch : q.refetch });
   const failed = useLoadFailed(q, userId);
   const w = useSavedWallet(userId, failed);
 
@@ -162,8 +168,8 @@ export function useMyBookings(userId: string): {
     bookings: fresh ?? fromWallet,
     rows: rows ?? null,
     saved: saved === null ? null : { savedAt: saved.savedAt },
-    loading: failed ? w.wallet === undefined : q.isPending,
+    loading: signedOut ? false : failed ? w.wallet === undefined : q.isPending,
     error: failed && w.wallet === null,
-    refetch: q.refetch,
+    refetch: signedOut ? noRefetch : q.refetch,
   };
 }

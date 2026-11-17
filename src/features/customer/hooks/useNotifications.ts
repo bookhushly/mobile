@@ -63,8 +63,14 @@ export function useNotifications(userId: string): {
     },
     refetchInterval: isFocused ? NOTIFICATIONS_POLL_MS : false,
     refetchOnWindowFocus: true,
+    enabled: userId !== '',
   });
-  useFocusRefetch(isFocused, q);
+  // TanStack's refetch() ignores `enabled`, so a signed-out focus regain must not reach it.
+  const signedOut = userId === '';
+  useFocusRefetch(isFocused, {
+    isStale: q.isStale,
+    refetch: signedOut ? () => Promise.resolve() : q.refetch,
+  });
   const [writeError, setWriteError] = useState<WriteError | null>(null);
   // What the last "Mark all as read" changed, and its write (Undo waits for it).
   const lastMarkedAll = useRef<{ ids: string[]; done: Promise<WriteOutcome> } | null>(null);
@@ -121,9 +127,9 @@ export function useNotifications(userId: string): {
     items,
     unread,
     // Offline the query pauses rather than fails: that is "couldn't load", not a spinner.
-    loading: q.isPending && !loadFailed(q),
+    loading: userId !== '' && q.isPending && !loadFailed(q),
     error: loadFailed(q),
-    refetch: q.refetch,
+    refetch: userId === '' ? () => Promise.resolve({ isError: false }) : q.refetch,
     open: (n) => {
       if (!n.read) void setRead([n.id], true);
     },

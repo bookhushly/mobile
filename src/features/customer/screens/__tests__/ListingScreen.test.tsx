@@ -242,17 +242,20 @@ describe('hotel', () => {
     await render(<ListingScreen kind="hotel" {...props} />);
     expect(screen.getByTestId('listing-title')).toHaveTextContent('Harbour Suites');
     expect(within(screen.getByTestId('room-rt1')).getByText('Deluxe king')).toBeTruthy();
-    expect(screen.getByText('Up to 2 guests · 1 king bed · 28 m²')).toBeTruthy();
+    // Each fact on its own icon line; the card reads them as one.
+    expect(screen.getByText('Up to 2 guests')).toBeTruthy();
+    expect(screen.getByText('1 king bed')).toBeTruthy();
+    expect(screen.getByText('28 m²')).toBeTruthy();
     expect(
       within(screen.getByTestId('listing-footer')).getByLabelText('From 55,000 naira per night'),
     ).toBeTruthy();
     expect(screen.getByTestId('description')).toHaveTextContent('Pool & gym.');
     expect(allText()).not.toMatch(/<p>|<b>|<script|alert\(/);
     expect(screen.getByText('Breakfast included')).toBeTruthy();
-    expect(screen.getByText('From 2:00 pm')).toBeTruthy();
+    expect(screen.getByText('Check-in from 2:00 pm')).toBeTruthy();
     expect(mockReviews).toHaveBeenCalledWith('hotel', ID, 10, { enabled: true });
     expect(screen.getByText('Lovely stay')).toBeTruthy();
-    expect(screen.getByText('See all reviews (5)')).toBeTruthy();
+    expect(screen.getByText('See all 5 reviews')).toBeTruthy();
     expect(screen.getByText('All amenities (7)')).toBeTruthy();
     expect(allText()).not.toContain(PHONE);
   });
@@ -312,7 +315,7 @@ describe('hotel', () => {
     });
     show(HOTEL);
     await render(<ListingScreen kind="hotel" {...props} />);
-    await fireEvent.press(screen.getByText('See all reviews (5)'));
+    await fireEvent.press(screen.getByText('See all 5 reviews'));
     const sheet = within(screen.getByTestId('all-reviews'));
     expect(sheet.getByText('Couldn’t load more reviews — check your connection.')).toBeTruthy();
     expect(sheet.queryByRole('button', { name: 'Load more reviews' })).toBeNull();
@@ -350,7 +353,7 @@ describe('hotel', () => {
   it('See all opens a virtualised sheet on the same query, no second fetch (P5)', async () => {
     show(HOTEL);
     await render(<ListingScreen kind="hotel" {...props} />);
-    await fireEvent.press(screen.getByText('See all reviews (5)'));
+    await fireEvent.press(screen.getByText('See all 5 reviews'));
     expect(screen.getByTestId('all-reviews-list')).toBeTruthy();
     expect(within(screen.getByTestId('all-reviews')).getByText('Lovely stay')).toBeTruthy();
     // Every call is the one shared query.
@@ -363,7 +366,7 @@ describe('hotel', () => {
     await render(<ListingScreen kind="hotel" {...props} />);
     const text = allText();
     expect(text.indexOf('"About"')).toBeGreaterThan(-1);
-    expect(text.indexOf('"About"')).toBeLessThan(text.indexOf('"Good to know"'));
+    expect(text.indexOf('"About"')).toBeLessThan(text.indexOf('"Highlights"'));
     expect(text.indexOf('"About"')).toBeLessThan(text.indexOf('"Rooms"'));
   });
 
@@ -380,16 +383,16 @@ describe('hotel', () => {
     });
   });
 
-  it('pages https photos with a counter and opens the full-screen viewer', async () => {
+  it('pages https photos with a "1 / 2" counter (Airbnb), and opens the viewer', async () => {
     show(HOTEL);
     await render(<ListingScreen kind="hotel" {...props} />);
     await fireEvent(screen.getByTestId('gallery'), 'layout', {
       nativeEvent: { layout: { width: 320, height: 200 } },
     });
-    // The counter is hidden from screen readers (each photo says "Photo 1 of 2").
+    // The count is hidden from screen readers (each photo says "Photo 1 of 2").
     expect(
       screen.getByTestId('gallery-counter', { includeHiddenElements: true }),
-    ).toHaveTextContent('1/2');
+    ).toHaveTextContent('1 / 2');
     // P4: only the first photo mounts with the page; the next follows once the list has measured
     // its window (on a device, not under Jest).
     expect(screen.getByTestId('gallery-photo-0')).toBeTruthy();
@@ -484,7 +487,9 @@ describe('event', () => {
     expect(within(screen.getByTestId('ticket-Regular')).getByText('Few tickets left')).toBeTruthy();
     // K4: tiers at different prices read as a range.
     expect(screen.getByLabelText('7,000 naira to 25,000 naira')).toBeTruthy();
-    expect(within(screen.getByTestId('footer-summary')).getByText('Sat 17 Oct')).toBeTruthy();
+    expect(
+      within(screen.getByTestId('footer-summary')).getByText('· Sat 17 Oct · 7:00 pm'),
+    ).toBeTruthy();
     await fireEvent.press(screen.getByText('Get tickets on bookhushly.com'));
     await fireEvent.press(screen.getByText('Continue'));
     expect(openBrowserAsync).toHaveBeenCalledWith(`https://bookhushly.com/services/${ID}`);

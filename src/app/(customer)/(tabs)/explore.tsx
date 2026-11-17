@@ -26,6 +26,9 @@ export default function ExploreRoute() {
       onShowCheckInCode={(bookingId) => {
         router.push({ pathname: '/check-in-code/[bookingId]', params: { bookingId } });
       }}
+      onOpenBookings={() => {
+        router.navigate('/bookings');
+      }}
       onSignInAgain={() => {
         signOut();
       }}

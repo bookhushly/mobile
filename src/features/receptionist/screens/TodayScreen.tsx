@@ -1,4 +1,4 @@
-import { ScanLine, Sunrise, UserRound } from 'lucide-react-native';
+import { ScanLine, CalendarCheck, UserRound } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { RefreshControl, View } from 'react-native';
 
@@ -68,12 +68,9 @@ export function TodayScreen({ onOpenGuests, onOpenFreeRooms, onOpenBooking }: Pr
     const arriving = lists.arriving;
     const shown = arriving.slice(0, ARRIVALS_SHOWN);
     body = (
-      <Stack gap="s5">
-        {freshness !== null ? (
-          <Text variant="bodySm" tone="textMuted" accessibilityLiveRegion="polite">
-            {freshness}
-          </Text>
-        ) : null}
+      // Sections sit 32 apart (counts, arrivals); the freshness line closes the list rather than
+      // splitting the main button from the counts.
+      <Stack gap="s8">
         <CountCard
           counts={{
             ...guestCounts(lists),
@@ -84,7 +81,7 @@ export function TodayScreen({ onOpenGuests, onOpenFreeRooms, onOpenBooking }: Pr
         <View>
           <SectionHeader label="Arriving today" count={arriving.length} />
           {shown.length === 0 ? (
-            <EmptyState icon={Sunrise} title="No more arrivals today" />
+            <EmptyState icon={CalendarCheck} title="No more arrivals today" />
           ) : (
             shown.map((b) => (
               <GuestRow key={b.id} booking={b} today={today} onPress={onOpenBooking} />
@@ -102,6 +99,11 @@ export function TodayScreen({ onOpenGuests, onOpenFreeRooms, onOpenBooking }: Pr
             </View>
           ) : null}
         </View>
+        {freshness !== null ? (
+          <Text variant="bodySm" tone="textMuted" accessibilityLiveRegion="polite">
+            {freshness}
+          </Text>
+        ) : null}
       </Stack>
     );
   }
@@ -118,15 +120,17 @@ export function TodayScreen({ onOpenGuests, onOpenFreeRooms, onOpenBooking }: Pr
         />
       }
     >
-      {/* Always offered: typing a code needs no list, so a failed read must not block a check-in. */}
-      <Button
-        label="Check in a guest"
-        icon={ScanLine}
-        onPress={() => {
-          openCheckIn();
-        }}
-      />
-      {body}
+      <Stack gap="s8">
+        {/* Always offered: typing a code needs no list, so a failed read must not block a check-in. */}
+        <Button
+          label="Check in a guest"
+          icon={ScanLine}
+          onPress={() => {
+            openCheckIn();
+          }}
+        />
+        {body}
+      </Stack>
     </Screen>
   );
 }

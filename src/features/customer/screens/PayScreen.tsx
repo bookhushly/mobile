@@ -1,10 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigation } from 'expo-router';
 import { ReceiptText } from 'lucide-react-native';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BackHandler } from 'react-native';
 
 import { rowPayState, type FlowState } from '@/features/customer/domain/checkout/paymentFlow';
+import type { StartErrorAction } from '@/features/customer/domain/checkout/paymentStatus';
 import {
   chargeEstimate,
   priceLines,
@@ -15,7 +16,8 @@ import {
 import { customerKeys } from '@/features/customer/hooks/customerKeys';
 import { useBooking } from '@/features/customer/hooks/useBooking';
 import { useServiceCharge } from '@/features/customer/hooks/useCheckoutData';
-import { usePayment, type PayKind } from '@/features/customer/hooks/usePayment';
+import { sentNotice } from '@/features/customer/hooks/sentNotice';
+import { usePayment, type ReviewCancel, type PayKind } from '@/features/customer/hooks/usePayment';
 import { checkoutStore } from '@/features/customer/offline/checkoutStore';
 import { NoticeScreen } from '@/features/customer/screens/NoticeScreen';
 import { BookedDone } from '@/features/customer/ui/checkout/BookedDone';
@@ -42,6 +44,39 @@ type Props = {
   onViewBooking: (kind: PayKind, bookingId: string) => void;
   onDone: () => void;
 };
+
+/**
+ * The button beside a start error (P14, W1). Try again and Check again both re-run Pay, which asks
+ * check-status first; an already-paid booking and a refusal have none.
+ */
+function startErrorButton(
+  action: StartErrorAction,
+  startAgain: () => void,
+  checkAgain: () => void,
+): { label: string; onPress: () => void } | null {
+  switch (action) {
+    case 'startAgain':
+      return { label: 'Start again', onPress: startAgain };
+    case 'tryAgain':
+      return { label: 'Try again', onPress: checkAgain };
+    case 'checkAgain':
+      return { label: 'Check again', onPress: checkAgain };
+    case 'paid':
+    case null:
+      return null;
+  }
+}
+
+/** Why Cancel booking didn't cancel (G1). Never a refusal for a lost answer. */
+const CANCEL_WORDS: Record<Exclude<ReviewCancel, 'cancelled'>, string> = {
+  paymentInProgress: 'This booking has a payment in progress, so it wasn’t cancelled.',
+  refused: 'This booking can’t be cancelled now.',
+  notDone: 'Couldn’t cancel — check your connection and try again',
+};
+
+/** G5: web's free route can answer before the tickets exist. */
+const TICKETS_PREPARING = 'Your tickets are being prepared — they’ll appear in Bookings shortly';
+const TICKETS_RECHECK_MS = 5000;
 
 /** Leaving is blocked: a payment is being started or checked (P6). */
 const BUSY: ReadonlySet<FlowState['step']> = new Set(['starting', 'inBrowser', 'checking']);
@@ -97,15 +132,19 @@ function Pay({
   // that already reads paid (paid elsewhere, or settled meanwhile) is Done the same way (A2b).
   const freeEvent = free && kind === 'event';
   const rowPaid = rowState === 'paid';
-  /** Cancel booking already ran leave(): the removal that follows must not run it again. */
+  /** Cancel booking is running or ran: the removal that follows must not cancel again. */
   const left = useRef(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  // G4: a row that reads paid is Done at once, with its buttons and Back, even mid-Checking.
+  const busy = BUSY.has(step) && !rowPaid;
 
   // P7: back, swipe or close from Review cancels an unpaid hold (the hook skips it once a
   // payment started). Nothing leaves while a payment is being started or checked.
   useEffect(
     () =>
       navigation.addListener('beforeRemove', (e) => {
-        if (BUSY.has(step)) {
+        if (busy) {
           e.preventDefault();
           return;
         }
@@ -113,16 +152,40 @@ function Pay({
         if (freeEvent || left.current) return;
         leave();
       }),
-    [navigation, step, freeEvent, leave],
+    [navigation, busy, freeEvent, leave],
   );
 
   useEffect(() => {
-    if (!BUSY.has(step)) return;
+    if (!busy) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
     return () => {
       sub.remove();
     };
-  }, [step]);
+  }, [busy]);
+
+  // G5: an event Done whose booking has no tickets yet is read again once, 5 s later.
+  const done = step === 'done' || rowPaid;
+  const noTicketsYet =
+    kind === 'event' &&
+    row != null &&
+    'tickets' in row &&
+    (row.tickets === null || row.tickets.length === 0);
+  const ticketsPreparing = done && noTicketsYet;
+  const refetchRow = useRef(b.refetch);
+  useEffect(() => {
+    refetchRow.current = b.refetch;
+  });
+  const rechecked = useRef(false);
+  useEffect(() => {
+    if (!ticketsPreparing || rechecked.current) return;
+    const t = setTimeout(() => {
+      rechecked.current = true;
+      void refetchRow.current();
+    }, TICKETS_RECHECK_MS);
+    return () => {
+      clearTimeout(t);
+    };
+  }, [ticketsPreparing]);
 
   // A paid row (a free registration included) has no payment left to settle: drop its entry (or
   // Bookings reads it as being checked, P21) and reload bookings and tickets (P20).
@@ -141,12 +204,13 @@ function Pay({
     onStartAgain(startAgainTarget(kind, entry, row));
   };
 
-  if (step === 'done' || rowPaid) {
+  if (done) {
     return (
       <BookedDone
         isEvent={kind === 'event'}
         title={summary.title}
         when={summary.when}
+        note={ticketsPreparing ? TICKETS_PREPARING : null}
         email={guestEmail}
         onView={() => {
           if (kind === 'event') onViewTickets(id);
@@ -157,7 +221,7 @@ function Pay({
     );
   }
   // A2b: a cancelled booking is never paid for. Nothing is interrupted while a payment is busy.
-  if (rowState === 'cancelled' && !BUSY.has(step)) {
+  if (rowState === 'cancelled' && !busy) {
     return (
       <PayStates
         state="cancelled"
@@ -233,40 +297,49 @@ function Pay({
           ? null
           : lagosClock12(new Date(p.holdEndsAt).toISOString())
       }
-      starting={BUSY.has(step)}
+      starting={busy}
       // The label must carry the charge: Pay waits for the estimate (or its failure).
-      canPay={p.canPay && !chargeQ.isPending}
+      canPay={p.canPay && !chargeQ.isPending && !cancelling}
       chargeUnknown={chargeQ.isError}
       // Offline (paused) or retrying after a failure: say why Pay is waiting.
       chargeChecking={
         chargeQ.fetchStatus === 'paused' || (chargeQ.isPending && chargeQ.failureCount > 0)
       }
       payInApp={CHECKOUT_PAYMENTS_ENABLED}
-      recentAttempt={p.recentAttempt}
+      providerPending={p.providerPending}
       startError={
         failure === null
           ? null
           : {
               words: failure.words,
-              action:
-                failure.action === 'startAgain'
-                  ? { label: 'Start again', onPress: startAgain }
-                  : failure.action === 'tryAgain'
-                    ? { label: 'Try again', onPress: p.checkAgain }
-                    : null,
+              action: startErrorButton(failure.action, startAgain, p.checkAgain),
             }
       }
       onPay={p.pay}
       // P7: only a booking leaving would cancel is offered as Cancel booking; else Not now.
+      // G1: the checks and the cancel run here, with a spinner; back and swipe stay silent.
       onCancel={
-        p.willCancelOnLeave
+        p.willCancelOnLeave || cancelling
           ? () => {
+              if (cancelling) return;
               left.current = true;
-              leave();
-              onBack();
+              setCancelling(true);
+              setCancelError(null);
+              void p.cancelNow().then((r) => {
+                setCancelling(false);
+                if (r === 'cancelled') {
+                  sentNotice.note(userId, 'Booking cancelled');
+                  onBookings();
+                  return;
+                }
+                left.current = false;
+                setCancelError(CANCEL_WORDS[r]);
+              });
             }
           : null
       }
+      cancelling={cancelling}
+      cancelError={cancelError}
       onBack={onBack}
     />
   );

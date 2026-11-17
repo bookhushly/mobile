@@ -17,6 +17,8 @@ type Input = {
   mode: ModeState;
   chosenMode: Mode | null;
   recovery: boolean;
+  /** Chose to browse without an account; `null` until the stored choice has been read. */
+  browsing: boolean | null;
 };
 
 export function resolveRoute(i: Input): AppRoute {
@@ -24,11 +26,15 @@ export function resolveRoute(i: Input): AppRoute {
   // A reset code signs the user in; the auth screens stay in front until the new password is saved.
   if (i.recovery) return 'auth';
   if (i.auth === 'loading') return 'loading';
-  if (i.auth === 'signedOut') return 'auth';
+  if (i.auth === 'signedOut') {
+    if (i.browsing === null) return 'loading';
+    return i.browsing ? 'customer' : 'auth';
+  }
   switch (i.mode.status) {
     case 'idle':
     case 'loading':
-      return 'loading';
+      // Signing in from browsing: holding customer keeps the stack, and Select's state, mounted.
+      return i.browsing === true ? 'customer' : 'loading';
     case 'error':
       return 'modeError';
     case 'ready': {
@@ -37,4 +43,16 @@ export function resolveRoute(i: Input): AppRoute {
       return i.chosenMode && r.modes.includes(i.chosenMode) ? i.chosenMode : r.defaultMode;
     }
   }
+}
+
+// A browsing person opens the auth screens over the customer stack; signing in closes them.
+export function authScreensAllowed(route: AppRoute, auth: AuthKind): boolean {
+  return route === 'auth' || (route === 'customer' && auth === 'signedOut');
+}
+
+// Staff and web-only accounts have nowhere to keep a save asked for from the customer stack. A mode
+// error keeps it: retrying can still land on customer.
+export function shouldDropPending(route: AppRoute, auth: AuthKind): boolean {
+  if (auth !== 'signedIn') return false;
+  return route === 'gate' || route === 'receptionist' || route === 'webOnly';
 }

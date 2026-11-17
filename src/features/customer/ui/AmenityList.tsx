@@ -1,7 +1,7 @@
-import { Check } from 'lucide-react-native';
 import { View } from 'react-native';
 
-import { space } from '@/shared/theme';
+import { amenityIcon } from '@/features/customer/ui/amenityIcon';
+import { space, typeVariants } from '@/shared/theme';
 import { Button, Icon, Text } from '@/shared/ui';
 
 /** How many amenities show before "All amenities". */
@@ -14,13 +14,25 @@ type Props = {
   testID?: string;
 };
 
-/** Icon and word, one per line. */
+/** Expedia's "About this property": each amenity with its own icon, two to a row. */
 export function AmenityLines({ items }: { items: readonly string[] }) {
   return (
-    <View style={{ gap: space.s3 }}>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: space.s4 }}>
       {items.map((a) => (
-        <View key={a} style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}>
-          <Icon as={Check} size="xs" tone="textSecondary" />
+        <View
+          key={a}
+          style={{
+            width: '50%',
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            gap: space.s3,
+            paddingRight: space.s3,
+          }}
+        >
+          {/* Level with the first line when the name wraps (icon rules §6). */}
+          <View style={{ height: typeVariants.body.lineHeight, justifyContent: 'center' }}>
+            <Icon as={amenityIcon(a)} size="md" />
+          </View>
           <Text variant="body" style={{ flex: 1 }}>
             {a}
           </Text>

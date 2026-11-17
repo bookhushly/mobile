@@ -2,22 +2,49 @@ import { fireEvent, render, screen, within } from '@testing-library/react-native
 
 import type { Filters } from '@/features/customer/domain/discover';
 import type { ResultsQuery } from '@/features/customer/domain/routeParams';
-import { useListings, type Listings } from '@/features/customer/hooks/useListings';
+import { useListings, useListingsRail, type Listings } from '@/features/customer/hooks/useListings';
 import { useSaved, type Saved } from '@/features/customer/hooks/useSaved';
 import type { EventItem, HotelItem } from '@/features/customer/schemas/listings';
 import { ResultsScreen } from '@/features/customer/screens/ResultsScreen';
 import type { ApiError } from '@/shared/lib/errors';
-import { color } from '@/shared/theme';
 
 // Factories, not automocks: an automock loads the real module (supabase → native storage).
 jest.mock('@/features/customer/hooks/useSaved', () => ({ useSaved: jest.fn() }));
-jest.mock('@/features/customer/hooks/useListings', () => ({ useListings: jest.fn() }));
+jest.mock('@/features/customer/hooks/useListings', () => ({
+  useListings: jest.fn(),
+  // The filter sheet's live count ("Show 12 hotels").
+  useListingsRail: jest.fn(() => ({
+    items: [],
+    totalCount: 12,
+    loading: false,
+    failed: false,
+    error: null,
+    retryAfterSec: null,
+    refetch: jest.fn(),
+  })),
+}));
 jest.mock('expo-router', () => ({ useIsFocused: () => true }));
 jest.mock('@/shared/api/instance', () => ({ clock: { serverNow: () => mockNow } }));
 const mockNow = Date.parse('2026-10-13T11:00:00Z');
 
 const mockSaved = jest.mocked(useSaved);
 const mockListings = jest.mocked(useListings);
+const mockRail = jest.mocked(useListingsRail);
+/** Every rail (the sheet's live count, the closest-match rails) answers with these. */
+function railReturns(items: HotelItem[], totalCount: number | null, only?: string) {
+  mockRail.mockImplementation((cat) => ({
+    items: only === undefined || cat === only ? items : [],
+    totalCount,
+    loading: false,
+    failed: false,
+    error: null,
+    retryAfterSec: null,
+    refetch: jest.fn(),
+  }));
+}
+afterEach(() => {
+  railReturns([], 12);
+});
 
 const hotel = (id: string, title: string): HotelItem => ({
   id,
@@ -86,6 +113,7 @@ function props(query: Partial<ResultsQuery> = {}) {
     onBack: jest.fn(),
     onOpenListing: jest.fn(),
     onChangeSearch: jest.fn(),
+    onSeeResults: jest.fn(),
     onSignInAgain: jest.fn(),
   };
 }
@@ -115,7 +143,7 @@ it('shows the query, the rows and the count only when the route sent one', async
   expect(screen.queryByTestId('results-count')).toBeNull();
   current = listings(current.items, { totalCount: 1170 });
   await view.rerender(<ResultsScreen {...p} />);
-  expect(screen.getByTestId('results-count')).toHaveTextContent('1,170 results');
+  expect(screen.getByTestId('results-count')).toHaveTextContent('· 1,170 results');
   await fireEvent.press(screen.getByRole('button', { name: /^Bay Lodge/ }));
   expect(p.onOpenListing).toHaveBeenCalledWith('hotel', 'h2');
 });
@@ -164,27 +192,33 @@ it('a server-side failure never says to check the connection (U7)', async () => 
   expect(screen.queryByText(/connection/)).toBeNull();
 });
 
-it('an empty list with no filters offers Change search (U7)', async () => {
+it('nothing matches: says so and shows what is closest, never a dead end', async () => {
   current = listings([]);
-  const p = props({ q: 'Ikeja' });
+  // Every loosened search finds the same listing (the rails are what matter here).
+  railReturns([hotel('h9', 'Garden City Suites')], 1);
+  const p = props();
   await render(<ResultsScreen {...p} />);
-  const empty = within(screen.getByTestId('results-empty'));
-  expect(empty.queryByRole('button', { name: 'Clear filters' })).toBeNull();
-  await fireEvent.press(empty.getByRole('button', { name: 'Change search' }));
-  expect(p.onChangeSearch).toHaveBeenCalled();
+  const near = within(screen.getByTestId('near-matches'));
+  expect(near.getByText('No exact matches')).toBeTruthy();
+  expect(near.getByText('No hotels in Lagos yet. Here’s what’s closest.')).toBeTruthy();
+  // No filters on: nothing to remove; other kinds in Lagos, then hotels elsewhere.
+  expect(near.queryByRole('button', { name: /, filter$/ })).toBeNull();
+  expect(near.getByRole('header', { name: 'Apartments in Lagos' })).toBeTruthy();
+  expect(near.getByRole('header', { name: 'Hotels in other places' })).toBeTruthy();
+  await fireEvent.press(near.getByRole('link', { name: 'See all, Apartments in Lagos' }));
+  expect(p.onSeeResults).toHaveBeenCalledWith({
+    category: 'serviced_apartments',
+    q: '',
+    state: 'Lagos',
+  });
 });
 
-it('filters apply only on Show results, and the chip counts them', async () => {
+it('filters apply only on Show results, and the button counts them', async () => {
   await render(<ResultsScreen {...props()} />);
-  expect(screen.getByRole('button', { name: 'Filters' })).toHaveStyle({
-    backgroundColor: color.surface,
-    borderColor: color.borderStrong,
-  });
   await fireEvent.press(screen.getByRole('button', { name: 'Filters' }));
   const sheet = within(screen.getByTestId('filters-sheet'));
   await fireEvent.press(sheet.getByRole('checkbox', { name: 'Breakfast included' }));
   await fireEvent.press(sheet.getByRole('radio', { name: '4+' }));
-  await fireEvent.press(sheet.getByRole('radio', { name: 'Lowest price' }));
   await fireEvent.changeText(sheet.getByLabelText('Minimum (₦)'), '20000');
   // Shown grouped; kept as a whole number.
   expect(sheet.getByLabelText('Minimum (₦)')).toHaveDisplayValue('20,000');
@@ -192,32 +226,25 @@ it('filters apply only on Show results, and the chip counts them', async () => {
   expect(lastFilters()).toEqual({ sort: 'newest' });
   await fireEvent.press(sheet.getByRole('button', { name: 'Show results' }));
   expect(lastFilters()).toEqual({
-    sort: 'price_asc',
+    sort: 'newest',
     minRating: 4,
     breakfastIncluded: true,
     priceMin: 20000,
   });
-  // The sort isn't counted: its own chip shows it.
-  // U4: an active Filters chip is filled with the selected wash, and says so.
-  const chip = screen.getByRole('button', { name: 'Filters (3)' });
-  expect(chip).toHaveStyle({
-    backgroundColor: color.selectedWash,
-    borderColor: color.borderStrong,
-  });
-  expect(chip).toBeSelected();
-  expect(screen.getByRole('button', { name: 'Sort: Lowest price' })).not.toBeSelected();
+  // The sort isn't counted: its own pill shows it. The count is drawn on the button and spoken.
+  expect(screen.getByRole('button', { name: 'Filters, 3 on' })).toBeTruthy();
 });
 
 it('closing the sheet discards the draft', async () => {
   await render(<ResultsScreen {...props()} />);
   await fireEvent.press(screen.getByRole('button', { name: 'Filters' }));
   const sheet = within(screen.getByTestId('filters-sheet'));
-  await fireEvent.press(sheet.getByRole('checkbox', { name: 'Generator' }));
+  await fireEvent.press(sheet.getByRole('checkbox', { name: 'Has a generator' }));
   await fireEvent.press(sheet.getByRole('button', { name: 'Close' }));
   expect(lastFilters()).toEqual({ sort: 'newest' });
   await fireEvent.press(screen.getByRole('button', { name: 'Filters' }));
   expect(
-    within(screen.getByTestId('filters-sheet')).getByRole('checkbox', { name: 'Generator' }),
+    within(screen.getByTestId('filters-sheet')).getByRole('checkbox', { name: 'Has a generator' }),
   ).not.toBeChecked();
 });
 
@@ -243,14 +270,15 @@ it('hotel filters never offer bed size, floor or dates; events get dates', async
   current = listings([EVENT]);
   await view.rerender(<ResultsScreen {...props({ category: 'events' })} />);
   const eventSheet = within(screen.getByTestId('filters-sheet'));
-  expect(eventSheet.getByRole('radio', { name: 'Soonest' })).toBeTruthy();
+  // Sort lives in its own pill on Results, not in the sheet.
+  expect(eventSheet.queryByRole('radio', { name: 'Soonest' })).toBeNull();
   await fireEvent.press(eventSheet.getByRole('radio', { name: 'Pick a date' }));
   await fireEvent.press(eventSheet.getByRole('radio', { name: 'Tue 20 Oct' }));
   await fireEvent.press(eventSheet.getByRole('button', { name: 'Show results' }));
   expect(lastFilters()).toEqual({ sort: 'newest', eventDate: '2026-10-20' });
 });
 
-it('no matches: says so, and Clear filters resets them', async () => {
+it('filters that rule everything out: each one can be removed in a tap', async () => {
   await render(<ResultsScreen {...props()} />);
   await fireEvent.press(screen.getByRole('button', { name: 'Filters' }));
   await fireEvent.press(
@@ -262,13 +290,40 @@ it('no matches: says so, and Clear filters resets them', async () => {
   await fireEvent.press(
     within(screen.getByTestId('filters-sheet')).getByRole('button', { name: 'Show results' }),
   );
-  const empty = within(screen.getByTestId('results-empty'));
-  expect(empty.getByText('No matches')).toBeTruthy();
-  expect(empty.getByText('Try a different place or fewer filters.')).toBeTruthy();
-  await fireEvent.press(empty.getByRole('button', { name: 'Clear filters' }));
+  const near = within(screen.getByTestId('near-matches'));
+  // Nothing close turned up (the rails are empty here), so the note promises nothing more.
+  expect(near.getByText('Nothing in Lagos matches all your filters yet.')).toBeTruthy();
+  await fireEvent.press(near.getByRole('button', { name: 'Remove Breakfast included, filter' }));
   expect(lastFilters()).toEqual({ sort: 'newest' });
-  expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Filters' })).toBeTruthy();
+});
+
+it('hotel needs: generator, breakfast, certified, guests and amenities, with a live count', async () => {
+  await render(<ResultsScreen {...props()} />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Filters' }));
+  const sheet = within(screen.getByTestId('filters-sheet'));
+  // Opened: the count for what is applied ("Show 12 hotels", from the route's total).
+  expect(sheet.getByTestId('filters-show')).toHaveTextContent('Show 12 hotels');
+  await fireEvent.press(sheet.getByRole('checkbox', { name: 'NIHOTOUR certified' }));
+  await fireEvent.press(sheet.getByRole('checkbox', { name: 'Pool' }));
+  await fireEvent.press(sheet.getByRole('checkbox', { name: 'Wi-Fi' }));
+  await fireEvent(sheet.getByTestId('guests-stepper'), 'accessibilityAction', {
+    nativeEvent: { actionName: 'increment' },
+  });
+  expect(sheet.getByTestId('guests-label')).toHaveTextContent('2 or more');
+  // Until the draft holds still, the button doesn't claim a number.
+  expect(sheet.getByTestId('filters-show')).toHaveTextContent('Show results');
+  await fireEvent.press(sheet.getByRole('radio', { name: '₦50k–₦100k' }));
+  await fireEvent.press(sheet.getByTestId('filters-show'));
+  expect(lastFilters()).toEqual({
+    sort: 'newest',
+    certified: true,
+    amenities: ['waves', 'wifi'],
+    guests: 2,
+    priceMin: 50000,
+    priceMax: 100000,
+  });
+  expect(screen.getByRole('button', { name: 'Filters, 5 on' })).toBeTruthy();
 });
 
 it('sort applies from its own sheet', async () => {
@@ -281,15 +336,54 @@ it('sort applies from its own sheet', async () => {
   expect(screen.getByRole('button', { name: 'Filters' })).toBeTruthy();
 });
 
-it('a sort alone never offers Clear filters on an empty list', async () => {
+// UX and code review 2026-11-17: never promise what didn't come back, never hide a failure.
+it('nothing close either: no promise, and Change search as the way out', async () => {
+  current = listings([]);
+  const p = props();
+  await render(<ResultsScreen {...p} />);
+  const near = within(screen.getByTestId('near-matches'));
+  expect(near.getByText('No hotels in Lagos yet.')).toBeTruthy();
+  await fireEvent.press(near.getByRole('button', { name: 'Change search' }));
+  expect(p.onChangeSearch).toHaveBeenCalled();
+});
+
+it('suggestions that failed to load say so with Try again, never "nothing close"', async () => {
+  current = listings([]);
+  const refetch = jest.fn();
+  mockRail.mockImplementation(() => ({
+    items: [],
+    totalCount: null,
+    loading: false,
+    failed: true,
+    error: { kind: 'network' as const },
+    retryAfterSec: null,
+    refetch,
+  }));
+  await render(<ResultsScreen {...props()} />);
+  const near = within(screen.getByTestId('near-matches'));
+  expect(near.queryByRole('button', { name: 'Change search' })).toBeNull();
+  await fireEvent.press(near.getByRole('button', { name: 'Try again' }));
+  expect(refetch).toHaveBeenCalled();
+});
+
+it('a sort alone is never offered as a filter to remove', async () => {
   current = listings([]);
   await render(<ResultsScreen {...props()} />);
   await fireEvent.press(screen.getByRole('button', { name: 'Sort: Newest' }));
   await fireEvent.press(
     within(screen.getByTestId('sort-sheet')).getByRole('radio', { name: 'Highest price' }),
   );
-  expect(screen.getByTestId('results-empty')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
+  expect(screen.getByTestId('near-matches')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /, filter$/ })).toBeNull();
+});
+
+it('one or two exact matches: the closest follow under them, never repeating one', async () => {
+  current = listings([hotel('h1', 'Lagoon-view room')]);
+  railReturns([hotel('h1', 'Lagoon-view room'), hotel('h2', 'Island Suites')], 2, 'hotels');
+  await render(<ResultsScreen {...props()} />);
+  expect(screen.getByRole('header', { name: 'Close to what you asked' })).toBeTruthy();
+  expect(screen.getAllByText('Lagoon-view room')).toHaveLength(1);
+  expect(screen.getAllByText('Island Suites').length).toBeGreaterThan(0);
 });
 
 it('pages that held nothing yet say so above Load more', async () => {

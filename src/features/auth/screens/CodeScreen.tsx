@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
+import { AuthSheet } from '@/features/auth/components/AuthSheet';
 import type { AccountFailure } from '@/features/auth/api/accountApi';
 import { transientMessage } from '@/features/auth/domain/transientMessage';
 import type { VerifyError } from '@/features/auth/domain/verifyErrors';
@@ -12,7 +13,6 @@ import {
   Button,
   CodeField,
   Inline,
-  Screen,
   Spinner,
   Stack,
   Text,
@@ -34,6 +34,7 @@ type Props = {
   /** iOS only: `message://` can be opened. Hidden otherwise. */
   canOpenMail: boolean;
   onOpenMail: () => void;
+  onBack?: () => void;
 };
 
 // `retry`: a verify that could not be judged; the code is kept and can be sent again.
@@ -72,6 +73,7 @@ export function CodeScreen({
   onVerified,
   canOpenMail,
   onOpenMail,
+  onBack,
 }: Props) {
   const [code, setCode] = useState('');
   const [verifying, setVerifying] = useState(false);
@@ -187,8 +189,9 @@ export function CodeScreen({
   }
 
   return (
-    <Screen
-      scroll
+    <AuthSheet
+      startRaised
+      onLeave={onBack}
       footer={
         <Stack gap="s3">
           <Button
@@ -201,7 +204,7 @@ export function CodeScreen({
             }}
           />
           <View style={{ alignItems: 'center' }}>
-            <Text variant="caption" tone="textSecondary" align="center">
+            <Text variant="bodySm" tone="textSecondary" align="center">
               Check spam or junk if it hasn’t arrived.
             </Text>
             {canOpenMail ? <TextLink label="Open email app" onPress={onOpenMail} /> : null}
@@ -214,10 +217,10 @@ export function CodeScreen({
           {TITLE[purpose]}
         </Text>
         <Inline gap="s1" style={{ flexWrap: 'wrap' }}>
-          <Text variant="body" tone="textSecondary">
+          <Text variant="subtitle" tone="textSecondary">
             Sent to {maskEmail(email)}
           </Text>
-          <TextLink label="Change" onPress={onChangeEmail} />
+          <TextLink size="lg" label="Change" onPress={onChangeEmail} />
         </Inline>
       </Stack>
       <Stack gap="s3">
@@ -247,6 +250,8 @@ export function CodeScreen({
         {notice?.kind === 'retry' && canRetry ? (
           <View style={{ alignSelf: 'flex-start' }}>
             <TextLink
+              size="lg"
+              inline
               label="Try again"
               onPress={() => {
                 void verify(code);
@@ -258,6 +263,6 @@ export function CodeScreen({
           <Banner tone="success" message="We sent a new code." live="polite" testID="resent" />
         ) : null}
       </Stack>
-    </Screen>
+    </AuthSheet>
   );
 }

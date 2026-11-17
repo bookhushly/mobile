@@ -136,6 +136,16 @@ export function createApiClient(deps: Deps) {
     const withAuth = opts.auth !== false;
     let token = withAuth ? await deps.getAccessToken() : null;
     let refreshed = false;
+    // A revoked refresh token reads as no token while the store still says signed in. Nothing that
+    // needs a session may go out without one: event create would answer 201 with no owner.
+    if (withAuth && token === null) {
+      refreshed = true;
+      const next = await deps.refreshSession();
+      if ('failure' in next) {
+        return err(next.failure === 'network' ? { kind: 'network' } : { kind: 'auth' });
+      }
+      token = next.token;
+    }
     let attempt = 0;
 
     for (;;) {

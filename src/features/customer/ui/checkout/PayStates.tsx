@@ -37,16 +37,16 @@ type Props = {
 
 type Look = { icon: LucideIcon; tone: ColorRole; title: string; message: string | null };
 
-// Spec P14, P26, P8 words; Mobbin §4: plain words, one main action, no upsells. A failure never
-// says "you weren't charged": a transfer or USSD can still land (A1c).
+// Spec P14, P26, P8 words; Mobbin §4: plain words, one main action, no upsells. Failed is only
+// reached when Paystack says `failed`/`reversed` (V1), so it may say "you weren't charged".
 const LOOK: Record<Exclude<PayStateKind, 'checking'>, Look> = {
   failed: {
     icon: CircleX,
     tone: 'dangerFg',
-    title: 'Payment didn’t go through.',
-    message: 'If money left your account, it’ll be confirmed or refunded — check Bookings.',
+    title: 'Payment didn’t go through. You weren’t charged.',
+    message: null,
   },
-  // A1b: a failure for a payment started under 15 min ago is not final.
+  // V1: a failure without Paystack's final word, or a transfer or USSD still clearing.
   unconfirmed: {
     icon: Clock,
     tone: 'neutralFg',
@@ -58,7 +58,8 @@ const LOOK: Record<Exclude<PayStateKind, 'checking'>, Look> = {
     icon: Ban,
     tone: 'neutralFg',
     title: 'This booking was cancelled.',
-    message: null,
+    // G2: a payment can land after a hold is swept; web flags it for a refund.
+    message: 'If money left your account, it’ll be refunded — check Bookings.',
   },
   stillChecking: {
     icon: Clock,

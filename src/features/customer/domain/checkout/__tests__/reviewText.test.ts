@@ -142,7 +142,7 @@ describe('priceLines', () => {
     expect(priceLines('event', null)).toBeNull();
     expect(priceLines('apartment', null)).toBeNull();
   });
-  it('never shows an apartment discount as reducing the price', () => {
+  it('shows an apartment discount as a minus line (W3: auto discount plus promo, subtracted)', () => {
     expect(
       priceLines('apartment', {
         price_per_night: 45000,
@@ -155,11 +155,17 @@ describe('priceLines', () => {
     ).toEqual({
       lines: [
         { label: 'Stay', amount: 90000 },
+        { label: 'Discount', amount: -9000 },
         { label: 'Caution deposit', amount: 20000 },
         { label: 'Airport transfer', amount: 15000 },
       ],
       discountIncluded: null,
     });
+  });
+  it('leaves the apartment discount line out when there is none', () => {
+    expect(
+      priceLines('apartment', { subtotal: 90000, discount_amount: 0, caution_deposit: 0 }),
+    ).toEqual({ lines: [{ label: 'Stay', amount: 90000 }], discountIncluded: null });
   });
 });
 
@@ -169,7 +175,15 @@ describe('reviewSummary', () => {
       title: 'Harbour Suites',
       when: '24–27 Oct · 3 nights',
       extra: 'Deluxe king · 2 adults, 1 child',
+      image: null,
     });
+  });
+  it('carries the place’s first photo for the summary card (Airbnb, Booking.com)', () => {
+    const withPhoto = hotelBookingRow.parse({
+      ...hotelRow,
+      hotel: { ...hotelRow.hotel, image_urls: ['https://example.com/a.jpg'] },
+    });
+    expect(reviewSummary('hotel', null, withPhoto, TODAY).image).toBe('https://example.com/a.jpg');
   });
   it('uses the cached entry while the row loads', () => {
     expect(
@@ -182,7 +196,12 @@ describe('reviewSummary', () => {
         undefined,
         TODAY,
       ),
-    ).toEqual({ title: 'Harbour Suites', when: '24–25 Oct · 1 night', extra: 'Twin · 1 guest' });
+    ).toEqual({
+      title: 'Harbour Suites',
+      when: '24–25 Oct · 1 night',
+      extra: 'Twin · 1 guest',
+      image: null,
+    });
   });
   it('shows the event time and tickets', () => {
     const s = reviewSummary('event', null, eventRow, TODAY);
@@ -198,7 +217,7 @@ describe('reviewSummary', () => {
         undefined,
         TODAY,
       ),
-    ).toEqual({ title: 'Jazz', when: 'Fri 30 Oct', extra: '3 tickets' });
+    ).toEqual({ title: 'Jazz', when: 'Fri 30 Oct', extra: '3 tickets', image: null });
   });
   it('apartment guests', () => {
     expect(reviewSummary('apartment', null, aptRow, TODAY).extra).toBe('3 guests');

@@ -46,7 +46,8 @@ function Summary({
         <Banner key={w.kind} tone="info" message={warningText(w)} />
       ))}
       <Stack gap="s1">
-        <Text variant="titleLg">{guestName(booking)}</Text>
+        {/* Under the sheet's title ("Check out …"), never louder than it. */}
+        <Text variant="bodyStrong">{guestName(booking)}</Text>
         <Text variant="body" tone="textSecondary">
           {roomLine(booking)}
         </Text>

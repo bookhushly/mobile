@@ -7,16 +7,18 @@
     "icon": "./assets/images/icon.png",
     "scheme": "bookhushly",
     "userInterfaceStyle": "light",
+    "backgroundColor": "#7C3AED",
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.bookhushly.app",
       "infoPlist": {
-        "LSApplicationQueriesSchemes": ["message"]
+        "LSApplicationQueriesSchemes": ["message"],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#F4F1FF",
+        "backgroundColor": "#7C3AED",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -38,20 +40,18 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#F8F7FB",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "backgroundColor": "#7C3AED",
+          "image": "./assets/images/brand-mark-white.png",
+          "imageWidth": 72
         }
       ],
       [
         "expo-font",
         {
           "fonts": [
-            "./assets/fonts/RadioCanada_400Regular.ttf",
-            "./assets/fonts/RadioCanada_500Medium.ttf",
-            "./assets/fonts/RadioCanada_600SemiBold.ttf",
-            "./assets/fonts/SourceSerif4_500Medium.ttf",
-            "./assets/fonts/SourceSerif4_500Medium_Italic.ttf"
+            "./assets/fonts/HankenGrotesk_400Regular.ttf",
+            "./assets/fonts/HankenGrotesk_500Medium.ttf",
+            "./assets/fonts/HankenGrotesk_600SemiBold.ttf"
           ]
         }
       ],

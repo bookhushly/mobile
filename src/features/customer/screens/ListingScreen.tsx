@@ -1,8 +1,14 @@
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, MapPin } from 'lucide-react-native';
 import { useRef, useState } from 'react';
-import type { ScrollView } from 'react-native';
+import { View, type ScrollView } from 'react-native';
 
 import { webListingUrl, type ListingKind } from '@/features/customer/domain/discover';
+import { plainText } from '@/features/customer/domain/plainText';
+import {
+  apartmentSpecs,
+  eventDateLine,
+  stayKindLine,
+} from '@/features/customer/domain/listingDetail';
 import { minuteOf } from '@/features/customer/domain/listingCard';
 import { useListing } from '@/features/customer/hooks/useListing';
 import { useReviews } from '@/features/customer/hooks/useReviews';
@@ -15,13 +21,15 @@ import { ApartmentBody } from '@/features/customer/ui/ApartmentBody';
 import { DetailSection } from '@/features/customer/ui/DetailSection';
 import { loadFailedMessage } from '@/features/customer/ui/discoverLabels';
 import { EventBody } from '@/features/customer/ui/EventBody';
+import { EventHero } from '@/features/customer/ui/EventHero';
 import { Gallery } from '@/features/customer/ui/Gallery';
 import { GalleryViewer } from '@/features/customer/ui/GalleryViewer';
 import { HotelBody } from '@/features/customer/ui/HotelBody';
-import { openWeb } from '@/features/customer/ui/links';
-import { ListingActions } from '@/features/customer/ui/ListingActions';
+import { IconRow } from '@/features/customer/ui/IconRow';
+import { openMaps, openWeb } from '@/features/customer/ui/links';
+import { ListingActions, shareListing } from '@/features/customer/ui/ListingActions';
 import { ListingFooter, WEB_NOTE } from '@/features/customer/ui/ListingFooter';
-import { ListingOverview } from '@/features/customer/ui/ListingOverview';
+import { OrganiserCard } from '@/features/customer/ui/OrganiserCard';
 import { listingSummary } from '@/features/customer/ui/listingSummary';
 import { ReadMoreText } from '@/features/customer/ui/ReadMoreText';
 import {
@@ -30,6 +38,7 @@ import {
   ReviewsSection,
 } from '@/features/customer/ui/ReviewsSection';
 import { SavedBanner, savedBannerShown } from '@/features/customer/ui/SavedBanner';
+import { SHEET_OVERLAP, StayOverview } from '@/features/customer/ui/StayOverview';
 import { clock } from '@/shared/api/instance';
 import {
   CHECKOUT_EVENTS_ENABLED,
@@ -96,10 +105,11 @@ export function ListingScreen({ kind, id, userId, onCheckout, onBack, onSignInAg
   if (data === null) return <ListingNotFound onBack={onBack} />;
   const s = data === undefined ? null : listingSummary(data, now);
   const url = webListingUrl(kind, id);
+  const back = <IconButton icon={ArrowLeft} accessibilityLabel="Back" onPress={onBack} />;
   const header = (
     <Header
       title={KIND_WORD[kind]}
-      left={<IconButton icon={ArrowLeft} accessibilityLabel="Back" onPress={onBack} />}
+      left={back}
       right={
         s === null ? undefined : (
           <ListingActions kind={kind} id={id} summary={s} url={url} saved={saved} />
@@ -107,6 +117,17 @@ export function ListingScreen({ kind, id, userId, onCheckout, onBack, onSignInAg
       }
     />
   );
+  // Loaded: the buttons float over the photo (Airbnb) or the dark hero (Luma), with no title bar.
+  // Events keep only Back up there: Share and Save are tiles in the hero.
+  const floating =
+    s === null ? null : (
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        {back}
+        {kind !== 'event' ? (
+          <ListingActions kind={kind} id={id} summary={s} url={url} saved={saved} />
+        ) : null}
+      </View>
+    );
 
   if (s === null || data === undefined)
     return (
@@ -185,7 +206,7 @@ export function ListingScreen({ kind, id, userId, onCheckout, onBack, onSignInAg
   const footer = (
     <ListingFooter
       price={s.price}
-      when={s.when}
+      when={'event_date' in data ? eventDateLine(data) : s.when}
       label={label}
       blocked={s.action.blocked}
       onBook={book}
@@ -194,17 +215,76 @@ export function ListingScreen({ kind, id, userId, onCheckout, onBack, onSignInAg
     />
   );
 
+  const where =
+    stay !== null && s.mapQuery !== null ? (
+      <DetailSection label="Where you’ll be" testID="listing-where">
+        <IconRow
+          icon={MapPin}
+          title={s.area ?? s.mapQuery}
+          subtitle="Open in Maps"
+          accessibilityLabel={`${s.area ?? s.mapQuery}, open in Maps`}
+          onPress={() => {
+            if (s.mapQuery !== null) openMaps(s.mapQuery);
+          }}
+        />
+      </DetailSection>
+    ) : null;
+  const openPhoto = (index: number) => {
+    setOpen({ to: 'photos', index });
+  };
+
   return (
-    <Screen scroll scrollRef={scroll} header={header} footer={footer}>
-      <Gallery
-        kind={kind}
-        title={s.title}
-        images={s.images}
-        onOpen={(index) => {
-          setOpen({ to: 'photos', index });
-        }}
-      />
-      <ListingOverview summary={s} showArea={kind !== 'event'} />
+    <Screen scroll scrollRef={scroll} header={floating} footer={footer} overlayHeader>
+      {'event_date' in data ? (
+        <EventHero
+          title={s.title}
+          when={eventDateLine(data)}
+          venue={data.location?.trim() || null}
+          images={s.images}
+          onOpenPhoto={openPhoto}
+          saved={saved.isSaved(kind, id)}
+          savedReady={saved.ready}
+          onToggleSaved={() => {
+            void saved.toggle({
+              listingId: id,
+              kind,
+              title: s.title,
+              image: s.images[0] ?? null,
+              location: s.area,
+            });
+          }}
+          onShare={() => {
+            shareListing(s.title, url);
+          }}
+          onDirections={
+            data.location?.trim()
+              ? () => {
+                  openMaps(data.location?.trim() ?? '');
+                }
+              : null
+          }
+        />
+      ) : (
+        <>
+          <Gallery
+            kind={kind}
+            title={s.title}
+            images={s.images}
+            onOpen={openPhoto}
+            footInset={SHEET_OVERLAP}
+          />
+          <StayOverview
+            title={s.title}
+            kindLine={stayKindLine(
+              kind === 'hotel' ? 'hotel' : 'apartment',
+              'apartment' in data ? data.apartment.apartment_type : null,
+              s.area,
+            )}
+            specs={'apartment' in data ? apartmentSpecs(data.apartment) : null}
+            rating={s.rating}
+          />
+        </>
+      )}
       {stay !== null ? about : null}
       {'hotel' in data ? (
         <HotelBody
@@ -227,9 +307,25 @@ export function ListingScreen({ kind, id, userId, onCheckout, onBack, onSignInAg
         <EventBody event={data} stock={s.stock ?? 'onSale'} nowMs={now} />
       )}
       {stay === null ? about : null}
+      {'event_date' in data ? (
+        <>
+          {plainText(data.cancellation_policy) !== null ? (
+            <DetailSection label="Cancellation">
+              <ReadMoreText text={plainText(data.cancellation_policy) ?? ''} />
+            </DetailSection>
+          ) : null}
+          {data.vendor_name?.trim() ? (
+            <DetailSection label="Organised by">
+              <OrganiserCard name={data.vendor_name.trim()} />
+            </DetailSection>
+          ) : null}
+        </>
+      ) : null}
+      {where}
       {stay !== null ? (
         <ReviewsSection
           reviews={reviews}
+          rating={s.rating}
           onSeeAll={() => {
             setOpen({ to: 'reviews' });
           }}

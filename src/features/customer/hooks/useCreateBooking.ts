@@ -27,7 +27,7 @@ import { api, clock } from '@/shared/api/instance';
 
 // Spec P12, P28. Stays carry an Idempotency-Key kept while the selection is unchanged and the key
 // is under 9 min old (the server keeps it 10 min, contract check M6), so a re-send is a safe
-// replay. The client never re-sends a stay create by itself (A5): only Continue or Check again
+// replay. Past that, a pending booking from the unsettled send is looked for first (G3). The client never re-sends a stay create by itself (A5): only Continue or Check again
 // does. Events have none: a lost answer is never re-posted, it is settled by reading this user's
 // pending or confirmed booking back (RLS).
 
@@ -50,9 +50,11 @@ export type CreateCtx = {
   eventDate?: string;
 };
 
-/** 409 in_progress is waited out this many times with the same key before a fresh key (P12). */
+/** 409 in_progress is waited out this many times with the same key (P12)… */
 export const BUSY_RETRIES = 3;
-/** The event lookup starts this long before the create was sent (P12; server-clock drift). */
+/** …then once more for the server's whole stuck-key window (60 s since web #223, V5). */
+export const BUSY_LAST_WAIT_SECONDS = 60;
+/** A lost create's lookup starts this long before it was sent (P12, G3; server-clock drift). */
 export const EVENT_LOOKBACK_MS = 5000;
 /** A key this old is replaced even for the same selection: the server forgets it at 10 min (A6). */
 export const KEY_MAX_AGE_MS = 9 * 60_000;
@@ -225,6 +227,40 @@ export function useCreateBooking(
       if (kind === 'event') return;
       const fingerprint = selectionFingerprint(kind, listingId, ctx.roomTypeId ?? null, s);
       const now = clock.serverNow();
+      const prev = idem.current;
+      inFlight.current = true;
+      show({ phase: 'sending' });
+      const gen = checkoutStore.generation();
+      if (prev?.fingerprint === fingerprint && now - prev.mintedAt >= KEY_MAX_AGE_MS) {
+        // G3: this selection's last send is unsettled and its key too old to replay. A booking it
+        // made is adopted rather than sending again with a new key.
+        let found: { id: string } | null;
+        try {
+          found = await checkoutDb.findRecentStayBooking(
+            kind,
+            userId,
+            {
+              targetId: kind === 'hotel' ? (ctx.roomTypeId ?? '') : listingId,
+              checkIn: s.checkIn ?? '',
+              checkOut: s.checkOut ?? '',
+            },
+            new Date(prev.mintedAt - EVENT_LOOKBACK_MS).toISOString(),
+          );
+        } catch {
+          // Couldn't read: still unknown, so nothing is sent.
+          inFlight.current = false;
+          show({ phase: 'unsure' });
+          return;
+        }
+        if (!alive()) return;
+        if (found !== null) {
+          inFlight.current = false;
+          idem.current = null;
+          // The read gives no amounts: Review shows the booking's total (P28).
+          await adopt(null, found.id, gen);
+          return;
+        }
+      }
       if (
         idem.current?.fingerprint !== fingerprint ||
         now - idem.current.mintedAt >= KEY_MAX_AGE_MS
@@ -232,13 +268,12 @@ export function useCreateBooking(
         idem.current = { fingerprint, key: Crypto.randomUUID(), busyRetries: 0, mintedAt: now };
       }
       const k = idem.current;
+      // Each send gets its own waits; an in_progress key is never replaced (V5).
+      k.busyRetries = 0;
       const body =
         kind === 'hotel'
           ? hotelBody(ctx.roomTypeId ?? '', listingId, s)
           : apartmentBody(listingId, s);
-      inFlight.current = true;
-      show({ phase: 'sending' });
-      const gen = checkoutStore.generation();
       for (;;) {
         const r = await createStay(api, kind, body, k.key);
         if (r.ok) {
@@ -248,18 +283,19 @@ export function useCreateBooking(
           return;
         }
         const o = stayCreateOutcome(r.error, kind);
-        if (o.kind === 'busy' && k.busyRetries < BUSY_RETRIES) {
-          // 409 in_progress: the same key is still being worked on; wait it out (P12).
+        if (o.kind === 'busy' && k.busyRetries <= BUSY_RETRIES) {
+          // 409 in_progress: the same key is still being worked on; wait it out (P12), the last
+          // time for the server's whole 60 s window (V5).
+          const seconds = k.busyRetries < BUSY_RETRIES ? o.seconds : BUSY_LAST_WAIT_SECONDS;
           k.busyRetries += 1;
-          show({ phase: 'busy', waitSeconds: o.seconds });
-          await sleep(o.seconds);
+          show({ phase: 'busy', waitSeconds: seconds });
+          await sleep(seconds);
           if (!alive()) return;
           continue;
         }
         inFlight.current = false;
         if (o.kind === 'busy') {
-          // The earlier try may still land; the next Continue uses a fresh key (P12).
-          idem.current = null;
+          // The earlier try may still land: the key is kept, so the next send is a replay (V5).
           show({ phase: 'failed', words: STILL_WORKING });
           return;
         }
@@ -300,6 +336,8 @@ export function useCreateBooking(
 
   const submit = useCallback(
     async (selection: StaySelection | EventSelection, ctx: CreateCtx): Promise<void> => {
+      // The hard guard: with no session the server would create a booking nobody owns.
+      if (userId === '') return;
       if (inFlight.current) return;
       // An event whose answer was lost is settled by Check again, never by a second post.
       if (kind === 'event' && eventSentAt.current !== null) return;
@@ -310,7 +348,7 @@ export function useCreateBooking(
         await sendStay(selection, ctx);
       }
     },
-    [kind, sendEvent, sendStay],
+    [userId, kind, sendEvent, sendStay],
   );
 
   const checkAgain = useCallback(async (): Promise<void> => {

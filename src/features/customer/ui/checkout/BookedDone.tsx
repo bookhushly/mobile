@@ -14,6 +14,8 @@ type Props = {
   when: string;
   /** Where the confirmation went; the line is left out without one. */
   email: string | null;
+  /** A line under the title, e.g. tickets still being prepared (G5). */
+  note?: string | null;
   onView: () => void;
   onDone: () => void;
 };
@@ -41,7 +43,7 @@ function Tick() {
 }
 
 // Spec P20, Mobbin §5: "You're booked", key facts, View tickets / View booking, then Done.
-export function BookedDone({ isEvent, title, when, email, onView, onDone }: Props) {
+export function BookedDone({ isEvent, title, when, note = null, email, onView, onDone }: Props) {
   // Haptic only, never the gate's sounds (not loaded).
   const [feedback] = useState(createFeedback);
   // StrictMode (dev) runs mount effects twice; the ref keeps it to one buzz.
@@ -72,6 +74,11 @@ export function BookedDone({ isEvent, title, when, email, onView, onDone }: Prop
         >
           You’re booked
         </Text>
+        {note !== null ? (
+          <Text variant="body" tone="textSecondary" testID="booked-note">
+            {note}
+          </Text>
+        ) : null}
         <View style={{ gap: space.s1 }}>
           {title !== '' ? <Text variant="bodyStrong">{title}</Text> : null}
           {when !== '' ? (

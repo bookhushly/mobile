@@ -1,16 +1,25 @@
 export const palette = {
   white: '#FFFFFF',
-  canvas: '#F8F7FB',
-  wash: '#F0EDF8',
-  line: '#E0DBF0',
-  lineStrong: '#857FA8',
-  inkMuted: '#6B6987',
-  inkSoft: '#4A4670',
-  ink: '#1A0D4D',
+  // Neutral foundation (2026-11-13): black, white and plain greys carry the UI; violet is kept
+  // for the primary action and selected state only (the Booking.com balance).
+  canvas: '#F7F7F7',
+  wash: '#F2F2F2',
+  line: '#E5E5E5',
+  lineStrong: '#8C8C8C',
+  inkMuted: '#6B6B6B',
+  inkSoft: '#474747',
+  ink: '#141414',
+  // On the dark event hero (Luma): raised tiles, and secondary text (9.8:1 on ink).
+  inkRaised: '#2B2B2B',
+  onInkMuted: '#BDBDBD',
   violet50: '#F4F1FF',
   violet100: '#EBE5FF',
   violet600: '#7C3AED',
   violet700: '#6D28D9',
+  // Customer accents (2026-11-14, Expedia/Booking reference): a rating badge, a deal tag, and the
+  // tinted disc behind highlight icons. Small areas only; the page stays neutral.
+  ratingGreen: '#1E7A46',
+  dealYellow: '#FFD84D',
   success: '#15803D',
   successWash: '#DCFCE7',
   successInk: '#14532D',
@@ -26,9 +35,13 @@ export const palette = {
   gateAdmitted: '#166534',
   gateRefused: '#991B1B',
   gateUsedBg: '#FBBF24',
-  gateRetry: '#4A4670',
+  gateRetry: '#474747',
   // Neutral status ("couldn't reach", lookup/override markers): ink-soft text on wash.
-  neutral: '#4A4670',
+  neutral: '#474747',
+  // Legibility fade over auth photos (neutral black); the middle stop sits behind text.
+  scrimClear: 'rgba(0,0,0,0)',
+  scrimMid: 'rgba(0,0,0,0.55)',
+  scrimEnd: 'rgba(0,0,0,0.8)',
 } as const;
 
 export const space = {

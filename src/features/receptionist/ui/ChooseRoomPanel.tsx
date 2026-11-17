@@ -139,7 +139,8 @@ export function ChooseRoomBody({ booking, r, now, onClose, onOpenRooms }: BodyPr
 
   const room = `Room ${String(state.room.room_number)}`;
   const question = (
-    <Text variant="titleLg" accessibilityRole="header">
+    // The sheet's own title stays the loudest line; the question reads as its first line.
+    <Text variant="headline" accessibilityRole="header">
       {`Move ${name} to ${room}?`}
     </Text>
   );
