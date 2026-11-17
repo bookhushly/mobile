@@ -6,6 +6,20 @@ const list = { count: 1240, syncedAt: NOW - 2 * 60_000 };
 const s = (p: Partial<SyncStatus>): SyncStatus => ({ ...EMPTY_SYNC, ...p });
 
 describe('statusPill priority', () => {
+  it('data from a newer app version says to update, above everything', () => {
+    expect(statusPill(s({ appOutdated: true, blocked: true, attention: 2 }), NOW)).toMatchObject({
+      kind: 'outdated',
+      tone: 'warning',
+      text: 'Online · update the app to turn offline mode back on',
+    });
+    expect(statusPill(s({ appOutdated: true, blocked: true, mode: 'offline' }), NOW)).toMatchObject(
+      {
+        kind: 'outdated',
+        tone: 'danger',
+        text: 'Offline · update the app to decide on this phone',
+      },
+    );
+  });
   it('blocked beats everything', () => {
     expect(statusPill(s({ blocked: true, attention: 2, mode: 'offline' }), NOW)).toMatchObject({
       kind: 'blocked',

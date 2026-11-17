@@ -1,4 +1,4 @@
-import { migrate } from '@/shared/db/sql';
+import { DatabaseTooNewError, migrate } from '@/shared/db/sql';
 import { MIGRATIONS } from '@/features/gate/offline/schema';
 
 import { nodeSql } from './nodeSql';
@@ -18,6 +18,21 @@ describe('migrate', () => {
     expect(await db.get<{ user_version: number }>('PRAGMA user_version')).toEqual({
       user_version: 1,
     });
+  });
+  it('a database newer than the code is refused and left as it is', async () => {
+    // An OTA rollback can run older code against a database a newer update migrated.
+    const db = nodeSql();
+    await migrate(db, ['CREATE TABLE a (x)', 'CREATE TABLE b (y)', 'CREATE TABLE c (z)']);
+    await db.run('INSERT INTO a (x) VALUES (?)', ['kept']);
+    const err = await migrate(db, ['CREATE TABLE a (x)', 'CREATE TABLE b (y)']).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(DatabaseTooNewError);
+    expect(err).toMatchObject({ found: 3, known: 2 });
+    expect(await db.get<{ user_version: number }>('PRAGMA user_version')).toEqual({
+      user_version: 3,
+    });
+    expect(await db.all<{ x: string }>('SELECT x FROM a')).toEqual([{ x: 'kept' }]);
   });
   it('concurrent transactions run one after another', async () => {
     const db = nodeSql();

@@ -6,6 +6,7 @@ import type { LookupQuery } from '@/features/gate/domain/lookupQuery';
 import type { SyncStatus } from '@/features/gate/domain/syncLine';
 import type { ClockState } from '@/shared/lib/clockGuard';
 import type { Connectivity } from '@/shared/lib/connectivity';
+import { DatabaseTooNewError } from '@/shared/db/sql';
 
 import { syncOutbox, type PostBatch } from './batchSync';
 import type { GateDb } from './gateDb';
@@ -67,7 +68,14 @@ export function createOfflineController(deps: ControllerDeps) {
     if (!stopped) deps.publish(st);
   };
 
+  let reportedTooNew = false;
   const fail = (e: unknown) => {
+    if (e instanceof DatabaseTooNewError) {
+      publish({ appOutdated: true });
+      // Every retry fails the same way until the app is updated: one report is enough.
+      if (reportedTooNew) return;
+      reportedTooNew = true;
+    }
     deps.report(e);
   };
 

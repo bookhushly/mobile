@@ -4,7 +4,7 @@ import { ago } from './ago';
 import { groupDigits, type SyncStatus } from './syncLine';
 
 export type PillKind =
-  'blocked' | 'attention' | 'clock' | 'syncing' | 'offline' | 'downloading' | 'online';
+  'outdated' | 'blocked' | 'attention' | 'clock' | 'syncing' | 'offline' | 'downloading' | 'online';
 export type PillTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
 export type StatusPillView = {
   kind: PillKind;
@@ -40,6 +40,11 @@ export function statusPill(s: SyncStatus, nowMs: number): StatusPillView {
   });
   // FR-3.9: a higher-priority state never hides admissions still waiting to sync.
   const toSync = s.pending > 0 ? ` · ${String(s.pending)} to sync` : '';
+  // Saved admissions are kept, untouched, and sync after the update; online scanning still works.
+  if (s.appOutdated)
+    return s.mode === 'offline'
+      ? view('outdated', 'danger', 'Offline · update the app to decide on this phone')
+      : view('outdated', 'warning', 'Online · update the app to turn offline mode back on');
   if (s.blocked)
     return view('blocked', 'danger', 'Removed from this event — admissions can’t be sent');
   if (s.attention > 0)
