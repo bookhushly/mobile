@@ -104,6 +104,12 @@
         "projectId": "71d0cd71-ea71-415a-a8dd-e38e60d86711"
       }
     },
-    "owner": "dnl-bookhushly"
+    "owner": "dnl-bookhushly",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/71d0cd71-ea71-415a-a8dd-e38e60d86711"
+    }
   }
 }
