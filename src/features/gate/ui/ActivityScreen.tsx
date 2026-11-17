@@ -1,4 +1,10 @@
-import { CircleCheck, Clock, TriangleAlert, type LucideIcon } from 'lucide-react-native';
+import {
+  CircleCheck,
+  Clock,
+  ListChecks,
+  TriangleAlert,
+  type LucideIcon,
+} from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { FlatList, View } from 'react-native';
 
@@ -14,11 +20,13 @@ import {
   Banner,
   Button,
   Card,
+  EmptyState,
   Icon,
   ListRow,
   SectionHeader,
   SegmentedControl,
   Sheet,
+  SkeletonRows,
   StatusPill,
   Text,
 } from '@/shared/ui';
@@ -171,13 +179,17 @@ function Row({ item }: { item: AttentionItem }) {
       leading={<StateIcon state={item.state} />}
       title={ticketLabel(item)}
       subtitle={subtitle === '' ? undefined : subtitle}
-      trailing={<StatusPill tone={toneOf(item.state)} label={stateWord(item.state)} />}
+      numberOfLines={2}
+      // Status once, under the name (the icon already leads): the title keeps the full width.
       note={
-        note !== '' ? (
-          <Text variant="bodySm" tone="textSecondary">
-            {note}
-          </Text>
-        ) : undefined
+        <View style={{ gap: space.s2, marginTop: space.s1 }}>
+          <StatusPill tone={toneOf(item.state)} label={stateWord(item.state)} size="sm" />
+          {note !== '' ? (
+            <Text variant="bodySm" tone="textSecondary">
+              {note}
+            </Text>
+          ) : null}
+        </View>
       }
       accessibilityLabel={label}
     />
@@ -360,13 +372,9 @@ export function ActivityScreen({
         }
         ListEmptyComponent={
           shown !== null ? (
-            <Text tone="textMuted" accessibilityLiveRegion="polite">
-              {empty}
-            </Text>
+            <EmptyState icon={ListChecks} title={empty} />
           ) : loadFailed ? null : (
-            <Text tone="textMuted" accessibilityLiveRegion="polite">
-              Loading…
-            </Text>
+            <SkeletonRows count={4} />
           )
         }
         ListFooterComponent={

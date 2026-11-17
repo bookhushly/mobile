@@ -28,14 +28,14 @@ beforeEach(() => {
   mockTabs.options = null;
 });
 
-it('marks the active tab with a selected wash as well as the tint (bottom bar)', async () => {
+it('marks the active tab with the 7:1 violet and no wash behind it (bottom bar)', async () => {
   jest.mocked(useWide).mockReturnValue(false);
   await render(<DeskTabsLayout />);
   expect(mockTabs.options).toMatchObject({
     tabBarPosition: 'bottom',
-    tabBarActiveTintColor: color.linkText,
-    tabBarActiveBackgroundColor: color.selectedWash,
+    tabBarActiveTintColor: color.actionPressed,
   });
+  expect(mockTabs.options?.tabBarActiveBackgroundColor).toBeUndefined();
   expect(mockTabs.options?.tabBarStyle?.width).toBeUndefined();
 });
 
@@ -44,7 +44,7 @@ it('uses the same cue on the tablet rail, whose width is pinned', async () => {
   await render(<DeskTabsLayout />);
   expect(mockTabs.options).toMatchObject({
     tabBarPosition: 'left',
-    tabBarActiveBackgroundColor: color.selectedWash,
+    tabBarActiveTintColor: color.actionPressed,
     tabBarStyle: { width: layout.tabletRailWidth, minWidth: layout.tabletRailWidth },
   });
 });

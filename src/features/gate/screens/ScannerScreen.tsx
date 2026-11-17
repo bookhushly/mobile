@@ -163,7 +163,8 @@ function Checking() {
       testID="checking-pill"
       style={{
         backgroundColor: color.surface,
-        borderRadius: radius.r2,
+        // A pill, like the status chip over Luma's scanner.
+        borderRadius: radius.rFull,
         paddingVertical: space.s3,
         paddingHorizontal: space.s4,
       }}
@@ -200,17 +201,15 @@ function DoorCounter({
       onPress={onPress}
       hitSlop={8}
     >
-      <Text variant="numLg" tone="onInverse" tabular>
-        {admitted}
-      </Text>
-      <Text variant="label" tone="onInverse">
-        admitted
-      </Text>
-      {total !== null ? (
-        <Text variant="caption" tone="onInverse">
-          {`of ${total}`}
+      {/* One line: the count and what it's out of; the total is key, never a footnote. */}
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.s3 }}>
+        <Text variant="numLg" tone="onInverse" tabular>
+          {admitted}
         </Text>
-      ) : null}
+        <Text variant="label" tone="onInverse" tabular>
+          {total !== null ? `of ${total} admitted` : 'admitted'}
+        </Text>
+      </View>
       {caption !== null ? (
         <Text variant="caption" tone="onInverse">
           {caption}
@@ -291,7 +290,7 @@ export function ScannerScreen(p: Props) {
           accessibilityLabel="Change event"
           onPress={p.onChangeEvent}
         />
-        <Text variant="bodyStrong" tone="onInverse" numberOfLines={1} style={{ flex: 1 }}>
+        <Text variant="headline" tone="onInverse" numberOfLines={2} style={{ flex: 1 }}>
           {p.title}
         </Text>
         <ToggleButton
@@ -382,43 +381,53 @@ export function ScannerScreen(p: Props) {
         </View>
       </View>
 
+      {/* Three equal columns with a 16 pt floor between them, so the gate's spacing holds on a
+          narrow phone at large text (gate density: controls ≥56, ≥16 apart). */}
       <View
         testID="scanner-controls"
         style={{
           flexDirection: 'row',
-          justifyContent: 'space-around',
+          gap: space.s5,
+          paddingHorizontal: space.s5,
           paddingTop: space.s4,
           paddingBottom: Math.max(insets.bottom, space.s5),
         }}
       >
-        <ToggleButton
-          icon={Flashlight}
-          label="Torch"
-          variant="inverse"
-          size="lg"
-          checked={torch}
-          onChange={setTorch}
-        />
-        <IconButton
-          icon={UserSearch}
-          label="Find guest"
-          accessibilityLabel="Find guest"
-          variant="filled"
-          size="lg"
-          onPress={() => {
-            setFinding(true);
-          }}
-        />
-        <IconButton
-          icon={Keyboard}
-          label="Enter code"
-          accessibilityLabel="Enter code"
-          variant="inverse"
-          size="lg"
-          onPress={() => {
-            setEntering(true);
-          }}
-        />
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <ToggleButton
+            icon={Flashlight}
+            label="Torch"
+            variant="inverse"
+            size="lg"
+            checked={torch}
+            onChange={setTorch}
+          />
+        </View>
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          {/* Inverse like its neighbours: a filled face is the same ink as this bar. */}
+          <IconButton
+            icon={UserSearch}
+            label="Find guest"
+            accessibilityLabel="Find guest"
+            variant="inverse"
+            size="lg"
+            onPress={() => {
+              setFinding(true);
+            }}
+          />
+        </View>
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <IconButton
+            icon={Keyboard}
+            label="Enter code"
+            accessibilityLabel="Enter code"
+            variant="inverse"
+            size="lg"
+            onPress={() => {
+              setEntering(true);
+            }}
+          />
+        </View>
       </View>
 
       <Overlay

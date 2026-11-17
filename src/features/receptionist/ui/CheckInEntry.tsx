@@ -62,7 +62,7 @@ function ScanPane({
         testID="scan-box"
         style={{
           aspectRatio: 1,
-          borderRadius: radius.r3,
+          borderRadius: radius.r4,
           borderCurve: 'continuous',
           overflow: 'hidden',
           backgroundColor: color.inverse,

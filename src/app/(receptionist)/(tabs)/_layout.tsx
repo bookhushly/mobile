@@ -1,8 +1,9 @@
 import { Tabs } from 'expo-router';
-import { BedDouble, LayoutDashboard, Users } from 'lucide-react-native';
+import { BedDouble, CalendarDays, Users } from 'lucide-react-native';
 
 import { color, layout, typeVariants } from '@/shared/theme';
 import { fontFamily } from '@/shared/theme/fonts';
+import { DeskTabIcon } from '@/features/receptionist/ui/DeskTabIcon';
 import { useDensity, useWide } from '@/shared/ui';
 
 const label = typeVariants.labelSm;
@@ -16,11 +17,10 @@ export default function DeskTabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarPosition: wide ? 'left' : 'bottom',
-        // linkText (violet 700) rather than the fill: a 12 px label needs the 7:1 shade.
-        tabBarActiveTintColor: color.linkText,
+        // Violet 700 rather than the fill: a small label needs the 7:1 shade. The non-colour cue
+        // (WCAG 1.4.1) is the bar above the icon (DeskTabIcon), not a wash behind the tab.
+        tabBarActiveTintColor: color.actionPressed,
         tabBarInactiveTintColor: color.textSecondary,
-        // A non-colour cue for the active tab (WCAG 1.4.1): a selected wash behind it.
-        tabBarActiveBackgroundColor: color.selectedWash,
         tabBarStyle: {
           backgroundColor: color.surface,
           borderTopColor: color.border,
@@ -40,21 +40,27 @@ export default function DeskTabsLayout() {
         name="today"
         options={{
           title: 'Today',
-          tabBarIcon: ({ color: tint, size }) => <LayoutDashboard color={tint} size={size} />,
+          tabBarIcon: ({ focused, color: tint, size }) => (
+            <DeskTabIcon icon={CalendarDays} focused={focused} tint={tint} size={size} />
+          ),
         }}
       />
       <Tabs.Screen
         name="guests"
         options={{
           title: 'Guests',
-          tabBarIcon: ({ color: tint, size }) => <Users color={tint} size={size} />,
+          tabBarIcon: ({ focused, color: tint, size }) => (
+            <DeskTabIcon icon={Users} focused={focused} tint={tint} size={size} />
+          ),
         }}
       />
       <Tabs.Screen
         name="rooms"
         options={{
           title: 'Rooms',
-          tabBarIcon: ({ color: tint, size }) => <BedDouble color={tint} size={size} />,
+          tabBarIcon: ({ focused, color: tint, size }) => (
+            <DeskTabIcon icon={BedDouble} focused={focused} tint={tint} size={size} />
+          ),
         }}
       />
     </Tabs>

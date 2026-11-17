@@ -132,7 +132,13 @@ export function BookingSummary({ booking: b, view, today, testID }: Props) {
                 }}
               >
                 <Icon as={Phone} size="sm" tone="linkText" />
-                <Text variant="body" tone="linkText" tabular>
+                {/* Links are ink and underlined: the underline is what says it can be tapped. */}
+                <Text
+                  variant="body"
+                  tone="linkText"
+                  tabular
+                  style={{ textDecorationLine: 'underline' }}
+                >
                   {phone}
                 </Text>
               </Pressable>

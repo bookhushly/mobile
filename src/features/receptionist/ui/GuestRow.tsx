@@ -25,7 +25,9 @@ export function roomLine(b: BookingRow): string {
   const r = b.hotel_rooms;
   if (r === null) return 'No room yet';
   const type = r.hotel_room_types?.name;
-  return type === undefined || type === '' ? `Room ${String(r.room_number)}` : `Room ${String(r.room_number)} · ${type}`;
+  return type === undefined || type === ''
+    ? `Room ${String(r.room_number)}`
+    : `Room ${String(r.room_number)} · ${type}`;
 }
 
 export function nightsLabel(n: number): string {

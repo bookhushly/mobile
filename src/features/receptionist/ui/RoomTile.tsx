@@ -28,7 +28,7 @@ export function RoomTile({ room, onPress, testID }: Props) {
         minWidth: ROOM_TILE_MIN_WIDTH,
         gap: space.s2,
         padding: space.s4,
-        borderRadius: radius.r3,
+        borderRadius: radius.r4,
         borderWidth: borderWidth.hairline,
         borderColor: color.border,
         backgroundColor: pressed ? color.wash : color.surface,
@@ -37,7 +37,8 @@ export function RoomTile({ room, onPress, testID }: Props) {
       <Text variant="titleLg" tabular numberOfLines={1}>
         {String(room.room_number)}
       </Text>
-      <Text variant="bodySm" tone="textSecondary" numberOfLines={1}>
+      {/* Two lines: long room types wrap at the larger type scale instead of being cut. */}
+      <Text variant="bodySm" tone="textSecondary" numberOfLines={2}>
         {type === '' ? ' ' : type}
       </Text>
       <RoomStatusMark status={room.status} />
