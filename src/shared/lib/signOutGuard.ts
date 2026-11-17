@@ -1,4 +1,9 @@
-export type SignOutCheck = { unsynced: number; unsyncable: number };
+export type SignOutCheck = {
+  unsynced: number;
+  unsyncable: number;
+  /** Offline data was written by a newer app version: unreadable here until an update. */
+  appOutdated?: true;
+};
 export type ShiftSummary = {
   admitted: number;
   used: number;
@@ -24,12 +29,14 @@ export function registerSignOutGuard(g: SignOutGuard): void {
 export async function checkSignOut(userId: string): Promise<SignOutCheck> {
   let unsynced = 0;
   let unsyncable = 0;
+  let appOutdated = false;
   for (const g of guards) {
     const c = await g.check(userId);
     unsynced += c.unsynced;
     unsyncable += c.unsyncable;
+    if (c.appOutdated === true) appOutdated = true;
   }
-  return { unsynced, unsyncable };
+  return appOutdated ? { unsynced, unsyncable, appOutdated } : { unsynced, unsyncable };
 }
 
 export async function syncBeforeSignOut(userId: string): Promise<void> {

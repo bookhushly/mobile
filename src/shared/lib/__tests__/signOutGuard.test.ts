@@ -69,3 +69,13 @@ describe('always-wipes', () => {
     expect(always).not.toHaveBeenCalled();
   });
 });
+
+// Last: guards can't be unregistered, so this one would flag every later check.
+it('any guard whose data is from a newer app version flags the whole check', async () => {
+  registerSignOutGuard({
+    check: () => Promise.resolve({ unsynced: 0, unsyncable: 0, appOutdated: true }),
+    syncNow: () => Promise.resolve(),
+    wipe: () => Promise.resolve(),
+  });
+  expect(await checkSignOut('u1')).toMatchObject({ appOutdated: true });
+});

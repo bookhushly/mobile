@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import type { AccountFailure } from '@/features/auth/api/accountApi';
-import { unsyncedWarning } from '@/features/auth/domain/deletionPlan';
+import { unsyncedWarning, type Unsynced } from '@/features/auth/domain/deletionPlan';
 import { transientMessage } from '@/features/auth/domain/transientMessage';
 import type { Result } from '@/shared/lib/result';
 import { space } from '@/shared/theme';
@@ -14,7 +14,7 @@ type PasswordCheck = 'ok' | 'wrong' | 'transient' | 'closed';
 type Props = {
   email: string;
   /** Gate admissions still waiting to sync; `null` while counting, `-1` when it could not be read. */
-  unsynced: number | null;
+  unsynced: Unsynced | null;
   onCheckPassword: (password: string) => Promise<PasswordCheck>;
   onDelete: () => Promise<Result<true, AccountFailure>>;
   /** After an uncertain delete: did a session refresh fail with `user_banned` (it went through)? */

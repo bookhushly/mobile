@@ -1,5 +1,6 @@
 import { postBatch } from '@/features/gate/api/batch';
 import { api } from '@/shared/api/instance';
+import { DatabaseTooNewError } from '@/shared/db/sql';
 import { registerSignOutGuard, type SignOutGuard } from '@/shared/lib/signOutGuard';
 import { captureException } from '@/shared/monitoring';
 
@@ -9,7 +10,13 @@ import { gateDb, hasGateDb, wipeGateDb } from './gateDb';
 const gateGuard: SignOutGuard = {
   async check(userId) {
     if (!(await hasGateDb(userId))) return { unsynced: 0, unsyncable: 0 };
-    return (await gateDb(userId)).outbox.totals();
+    try {
+      return await (await gateDb(userId)).outbox.totals();
+    } catch (e) {
+      if (e instanceof DatabaseTooNewError)
+        return { unsynced: 0, unsyncable: 0, appOutdated: true };
+      throw e;
+    }
   },
   async syncNow(userId) {
     if (!(await hasGateDb(userId))) return;

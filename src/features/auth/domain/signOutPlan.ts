@@ -9,6 +9,8 @@ export function planSignOut(
   opts: SignOutOptions,
 ): 'wipe' | 'keep' | { blocked: SignOutCheck } {
   if (opts.keepOfflineData === true || check === null) return 'keep';
+  // Unreadable by this version: nothing here can say what would be lost.
+  if (check.appOutdated === true) return { blocked: check };
   if (check.unsynced > 0) return { blocked: check };
   if (check.unsyncable > 0 && opts.discardUnsyncable !== true) return { blocked: check };
   return 'wipe';

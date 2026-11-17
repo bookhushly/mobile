@@ -18,6 +18,11 @@ describe('planSignOut', () => {
   it('a session-expiry sign-out keeps the data for the same account', () => {
     expect(planSignOut({ unsynced: 5, unsyncable: 0 }, { keepOfflineData: true })).toBe('keep');
   });
+  it('offline data from a newer app version blocks, whatever was confirmed', () => {
+    const check = { unsynced: 0, unsyncable: 0, appOutdated: true as const };
+    expect(planSignOut(check, { discardUnsyncable: true })).toEqual({ blocked: check });
+    expect(planSignOut(check, { keepOfflineData: true })).toBe('keep');
+  });
   it('a failed check keeps the data rather than risk losing admissions', () => {
     expect(planSignOut(null, {})).toBe('keep');
   });

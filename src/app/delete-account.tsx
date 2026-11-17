@@ -2,7 +2,11 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 
 import { deleteAccount } from '@/features/auth/api/accountApi';
-import { afterUncertain } from '@/features/auth/domain/deletionPlan';
+import {
+  afterUncertain,
+  unsyncedFromCheck,
+  type Unsynced,
+} from '@/features/auth/domain/deletionPlan';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { DeleteAccountScreen } from '@/features/auth/screens/DeleteAccountScreen';
 import { api } from '@/shared/api/instance';
@@ -20,7 +24,7 @@ export default function DeleteAccountRoute() {
   const userId = state.status === 'signedIn' ? state.userId : null;
   // null = still counting (no warning yet); -1 = the guard failed: "some admissions may not have
   // synced".
-  const [unsynced, setUnsynced] = useState<number | null>(null);
+  const [unsynced, setUnsynced] = useState<Unsynced | null>(null);
 
   useEffect(() => {
     if (userId === null) {
@@ -32,7 +36,7 @@ export default function DeleteAccountRoute() {
     let live = true;
     checkSignOut(userId)
       .then((c) => {
-        if (live) setUnsynced(c.unsynced);
+        if (live) setUnsynced(unsyncedFromCheck(c));
       })
       .catch(() => {
         if (live) setUnsynced(-1);
