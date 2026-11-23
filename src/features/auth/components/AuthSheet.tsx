@@ -155,7 +155,9 @@ export function AuthSheet({
               source={mark}
               style={{ width: MARK_PT, height: MARK_PT }}
               contentFit="contain"
-              tintColor={color.textPrimary}
+              // The logo is violet on light surfaces, white on violet or photos, never black
+              // (owner, 2026-11-23: the ink mark here read as a different logo).
+              tintColor={color.brand}
             />
           </View>
           {children}

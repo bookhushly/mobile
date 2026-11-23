@@ -114,7 +114,7 @@ Hand-tuned scale anchored on the web scale (a strict modular ratio gives fractio
 
 **Text fields (2026-11-14, after Airbnb):** the title sits inside the box: it rests where the text goes, then moves up and shrinks to 13 grey when the field is focused or filled. 58 tall (gate 64), 1 px grey border, 2 px black when focused, red on error. Search boxes: no title, placeholder only. Forms: 24 side margins, 32 between sections, 16 between fields, helper text 8 below its field.
 
-**Logo:** the full lockup on brand moments only (the opening screen and Welcome); the mark alone inside flows, left-aligned above the form headline at 40 pt, as Nike, IHG and Eventbrite do.
+**Logo:** the full lockup on brand moments only (the opening screen and Welcome); the mark alone inside flows, left-aligned above the form headline at 40 pt, as Nike, IHG and Eventbrite do. One colour rule (owner, 2026-11-23): the logo is brand violet `#7C3AED` on white and light surfaces, white on violet (splash, intro, loading, app icon) and on photos (Welcome), and never ink or grey. Violet on white is 5.7:1. The logo is the brand mark, so this isn't a use of violet as an action colour.
 
 **Semantic (PROPOSED — darker than web; D5)**
 
