@@ -16,6 +16,9 @@ import { ev, makeQueryClient, TODAY, USER, wrapper } from '../../hooks/__tests__
 jest.mock('expo-router', () => ({ useIsFocused: () => true }));
 jest.mock('@/shared/api/instance', () => ({ api: {}, clock: { serverNow: () => Date.now() } }));
 jest.mock('@/features/customer/hooks/useMyBookings', () => ({ useMyBookings: jest.fn() }));
+jest.mock('@/features/customer/hooks/useCarRequests', () => ({
+  useCarRequests: () => ({ requests: [], loading: false, failed: false, refetch: jest.fn() }),
+}));
 jest.mock('@/features/customer/hooks/useUnreadCount', () => ({ useUnreadCount: () => 0 }));
 jest.mock('@/features/customer/api/claimApi', () => ({
   claimCounts: jest.fn(),
@@ -67,6 +70,7 @@ async function show() {
       onShowTickets={jest.fn()}
       onShowCheckInCode={jest.fn()}
       onOpenNotifications={jest.fn()}
+      onOpenCarRequest={jest.fn()}
       onBrowse={jest.fn()}
     />,
     { wrapper: wrapper(qc) },

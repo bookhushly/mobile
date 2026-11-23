@@ -26,6 +26,9 @@ export const customerKeys = {
   claimCounts: (u: string) => ['customer', u, 'claimCounts'] as const,
   /** One event booking's live codes (`GET /api/bookings/event/{id}/codes`). Never cached. */
   liveCodes: (u: string, bookingId: string) => ['customer', u, 'liveCodes', bookingId] as const,
+  /** Car rental requests (`/api/car-rental/requests`), the list and one with its quotes. */
+  carRequests: (u: string) => ['customer', u, 'carRequests'] as const,
+  carRequest: (u: string, id: string) => ['customer', u, 'carRequest', id] as const,
 };
 
 export type ListingsWhere = { q: string; state?: string; city?: string };
@@ -39,6 +42,9 @@ export const discoverKeys = {
   rail: (cat: Category, where: ListingsWhere, filters: Filters) =>
     ['discover', 'rail', cat, where, filters] as const,
   listing: (kind: ListingKind, id: string) => ['discover', 'listing', kind, id] as const,
+  /** The car rental guide price (public, cached 5 min by the server). */
+  carPriceGuide: (state: string | null, vehicleType: string | null, pricingModel: string | null) =>
+    ['discover', 'carPriceGuide', state, vehicleType, pricingModel] as const,
   reviews: (kind: 'hotel' | 'apartment', id: string, pageSize: number) =>
     ['discover', 'reviews', kind, id, pageSize] as const,
 };

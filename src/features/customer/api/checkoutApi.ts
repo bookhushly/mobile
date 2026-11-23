@@ -101,7 +101,7 @@ export function serviceCharge(c: Requester, type: string): Api<ServiceCharge> {
  */
 export function initializePayment(
   c: Requester,
-  kind: 'event' | StayKind,
+  kind: 'event' | StayKind | 'car_rental',
   bookingId: string,
   email?: string,
 ): Api<Initialized> {
@@ -120,7 +120,7 @@ export function initializePayment(
 
 export function checkPayment(
   c: Requester,
-  kind: 'event' | StayKind,
+  kind: 'event' | StayKind | 'car_rental',
   bookingId: string,
 ): Api<CheckStatus> {
   return c.request('/api/payment/check-status', {
