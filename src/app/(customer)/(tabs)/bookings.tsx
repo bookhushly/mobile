@@ -41,6 +41,9 @@ function SignedInBookings({ userId, email }: { userId: string; email: string }) 
       onOpenNotifications={() => {
         router.push('/notifications');
       }}
+      onOpenCarRequest={(id) => {
+        router.push({ pathname: '/car-rental/[id]', params: { id } });
+      }}
       onBrowse={() => {
         router.navigate('/explore');
       }}

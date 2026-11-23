@@ -151,6 +151,7 @@ function props() {
     onShowTickets: jest.fn(),
     onShowCheckInCode: jest.fn(),
     onOpenBookings: jest.fn(),
+    onOpenCarRental: jest.fn(),
     onSignInAgain: jest.fn(),
   };
 }
@@ -378,6 +379,15 @@ it('the place chip changes the stays query', async () => {
     { sort: 'newest' },
     { enabled: true },
   );
+});
+
+it('car rentals is the fourth tile and opens the request flow, not results', async () => {
+  const p = props();
+  await render(<ExploreScreen {...p} />);
+  const tiles = screen.getByTestId('explore-categories');
+  await fireEvent.press(within(tiles).getByRole('button', { name: 'Car rentals, New' }));
+  expect(p.onOpenCarRental).toHaveBeenCalled();
+  expect(p.onOpenResults).not.toHaveBeenCalled();
 });
 
 it('categories are tiles, and the place lives in the stays headings, tappable (U2)', async () => {

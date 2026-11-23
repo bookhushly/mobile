@@ -12,6 +12,7 @@ import { useMyBookings } from '@/features/customer/hooks/useMyBookings';
 import { useSaved } from '@/features/customer/hooks/useSaved';
 import { useSavedNotices } from '@/features/customer/hooks/useSavedNotices';
 import { CategoryTiles, type Tile } from '@/features/customer/ui/CategoryTiles';
+import { CAR_RENTALS_PHOTO } from '@/features/customer/ui/car/carPhotos';
 import { PromoCard } from '@/features/customer/ui/PromoCard';
 import { isConnectionFailure } from '@/features/customer/ui/discoverLabels';
 import { PlaceSheet } from '@/features/customer/ui/PlaceSheet';
@@ -32,6 +33,8 @@ type Props = {
   onShowTickets: (bookingId: string) => void;
   onShowCheckInCode: (bookingId: string) => void;
   onOpenBookings: () => void;
+  /** Phase 6: car rentals are asked for, not listed (request-for-quote). */
+  onOpenCarRental: () => void;
   /** A stale session on a heart: the route signs out so the customer can sign in again. */
   onSignInAgain: () => void;
 };
@@ -41,10 +44,19 @@ const HOTEL_PHOTO = require('../../../../assets/images/auth/hotel.webp') as numb
 const APARTMENT_PHOTO = require('../../../../assets/images/auth/apartment.webp') as number;
 const EVENT_PHOTO = require('../../../../assets/images/auth/event.webp') as number;
 
-const CATEGORIES: readonly Tile<Category>[] = [
+type Way = Category | 'car_rentals';
+
+const CATEGORIES: readonly Tile<Way>[] = [
   { key: 'hotels', label: 'Hotels', blurb: 'Rooms & suites', image: HOTEL_PHOTO },
   { key: 'serviced_apartments', label: 'Apartments', blurb: 'Whole homes', image: APARTMENT_PHOTO },
   { key: 'events', label: 'Events', blurb: 'Tickets to shows', image: EVENT_PHOTO },
+  {
+    key: 'car_rentals',
+    label: 'Car rentals',
+    blurb: 'With a driver or self-drive',
+    image: CAR_RENTALS_PHOTO,
+    badge: 'New',
+  },
 ];
 
 // D6: "Happening soon" is events soonest first; stays are newest in the chosen place.
@@ -73,6 +85,7 @@ export function ExploreScreen({
   onShowTickets,
   onShowCheckInCode,
   onOpenBookings,
+  onOpenCarRental,
   onSignInAgain,
 }: Props) {
   const d = useDensity();
@@ -225,7 +238,8 @@ export function ExploreScreen({
           <CategoryTiles
             tiles={CATEGORIES}
             onPress={(cat) => {
-              onOpenResults({ category: cat });
+              if (cat === 'car_rentals') onOpenCarRental();
+              else onOpenResults({ category: cat });
             }}
             testID="explore-categories"
           />

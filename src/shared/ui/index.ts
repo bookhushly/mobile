@@ -47,3 +47,4 @@ export { Text } from './Text';
 export { TextLink } from './TextLink';
 export { ToggleButton } from './ToggleButton';
 export { useWide } from './useWide';
+export { RangeCalendar } from './RangeCalendar';

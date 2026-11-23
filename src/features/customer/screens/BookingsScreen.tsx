@@ -2,13 +2,16 @@ import { CalendarClock, History, Ticket } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { FlatList, RefreshControl, View } from 'react-native';
 
+import { isPast, requestStage } from '@/features/customer/domain/carRental/carStatus';
 import type { BookingKind, MyBooking } from '@/features/customer/domain/myBookings';
+import { useCarRequests } from '@/features/customer/hooks/useCarRequests';
 import { useClaim } from '@/features/customer/hooks/useClaim';
 import { useMyBookings } from '@/features/customer/hooks/useMyBookings';
 import { useSentNotice } from '@/features/customer/hooks/sentNotice';
 import { useUnreadCount } from '@/features/customer/hooks/useUnreadCount';
 import { BellButton } from '@/features/customer/ui/BellButton';
 import { BookingRow } from '@/features/customer/ui/BookingRow';
+import { CarRequestRow } from '@/features/customer/ui/car/CarRequestRow';
 import { ClaimCard, claimCardKind } from '@/features/customer/ui/ClaimCard';
 import { ClaimSheet } from '@/features/customer/ui/ClaimSheet';
 import { mainAction } from '@/features/customer/ui/mainAction';
@@ -37,6 +40,8 @@ type Props = {
   onShowTickets: (bookingId: string) => void;
   onShowCheckInCode: (bookingId: string) => void;
   onOpenNotifications: () => void;
+  /** A car rental request (Phase 6). */
+  onOpenCarRequest: (id: string) => void;
   /** The empty state's way on: the Explore tab (final review F3). */
   onBrowse: () => void;
 };
@@ -49,9 +54,12 @@ export function BookingsScreen({
   onShowTickets,
   onShowCheckInCode,
   onOpenNotifications,
+  onOpenCarRequest,
   onBrowse,
 }: Props) {
   const my = useMyBookings(userId);
+  // Car requests load on their own: a failure there never hides the bookings (or reads as none).
+  const cars = useCarRequests(userId);
   const unread = useUnreadCount(userId);
   // Spec E7: where the tickets of a transfer just made went (the booking has left the list).
   const sent = useSentNotice(userId);
@@ -84,7 +92,7 @@ export function BookingsScreen({
 
   const refresh = () => {
     setRefreshing(true);
-    void my.refetch().finally(() => {
+    void Promise.all([my.refetch(), cars.refetch()]).finally(() => {
       setRefreshing(false);
     });
   };
@@ -112,8 +120,20 @@ export function BookingsScreen({
     // C9: the saved copy holds today and upcoming only, so offline it never claims "no bookings"
     // and never counts the past (spec §5, C17).
     const saved = my.saved !== null;
+    const now = clock.serverNow();
+    const carRows = (cars.requests ?? []).map((r) => ({ r, stage: requestStage(r, now) }));
+    const carsUpcoming = carRows.filter((c) => !isPast(c.stage));
+    const carsPast = carRows.filter((c) => isPast(c.stage));
+    const carsShown = segment === 'upcoming' ? carsUpcoming : saved ? [] : carsPast;
+    // Car requests that failed (or haven't loaded) are unknown, never "none" (C17).
+    const carsKnown = cars.requests !== null;
     const nothing =
-      !saved && lists.today.length === 0 && lists.upcoming.length === 0 && lists.past.length === 0;
+      !saved &&
+      carsKnown &&
+      carRows.length === 0 &&
+      lists.today.length === 0 &&
+      lists.upcoming.length === 0 &&
+      lists.past.length === 0;
     const rows = segment === 'upcoming' ? lists.upcoming : saved ? [] : lists.past;
     const header = (
       <View style={{ gap: space.s4, paddingBottom: space.s3 }}>
@@ -129,6 +149,13 @@ export function BookingsScreen({
             message={sent.message}
             onDismiss={sent.dismiss}
             testID="sent-notice"
+          />
+        ) : null}
+        {cars.failed && !saved ? (
+          <Banner
+            tone="neutral"
+            message="Couldn’t load your car rentals. Pull to refresh."
+            testID="cars-failed"
           />
         ) : null}
         {nothing || claimDismissed ? null : claimCard(true)}
@@ -151,18 +178,34 @@ export function BookingsScreen({
           <SegmentedControl
             value={segment}
             options={[
-              { value: 'upcoming', label: 'Upcoming', count: lists.upcoming.length },
+              {
+                value: 'upcoming',
+                label: 'Upcoming',
+                count: lists.upcoming.length + carsUpcoming.length,
+              },
               saved
                 ? { value: 'past', label: 'Past' }
-                : { value: 'past', label: 'Past', count: lists.past.length },
+                : { value: 'past', label: 'Past', count: lists.past.length + carsPast.length },
             ]}
             onChange={setSegment}
           />
         )}
+        {nothing
+          ? null
+          : carsShown.map((c) => (
+              <CarRequestRow
+                key={c.r.id}
+                request={c.r}
+                stage={c.stage}
+                onPress={onOpenCarRequest}
+              />
+            ))}
       </View>
     );
     let empty: ReactNode;
-    if (nothing)
+    if (carsShown.length > 0) empty = null;
+    else if (cars.loading) empty = <SkeletonRows count={2} />;
+    else if (nothing)
       empty = (
         <View style={{ gap: space.s4 }}>
           <EmptyState

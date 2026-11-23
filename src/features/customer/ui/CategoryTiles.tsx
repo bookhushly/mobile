@@ -12,6 +12,8 @@ export type Tile<T extends string> = {
   /** One short, true line under the name ("Whole homes"). */
   blurb: string;
   image: number;
+  /** A short tag over the photo ("New"): ink text on a white pill. */
+  badge?: string;
 };
 
 type Props<T extends string> = {
@@ -36,7 +38,7 @@ export function CategoryTiles<T extends string>({ tiles, onPress, testID }: Prop
     <PressableScale
       key={t.key}
       accessibilityRole="button"
-      accessibilityLabel={t.label}
+      accessibilityLabel={t.badge === undefined ? t.label : `${t.label}, ${t.badge}`}
       accessibilityHint={t.blurb}
       onPress={() => {
         onPress(t.key);
@@ -64,6 +66,23 @@ export function CategoryTiles<T extends string>({ tiles, onPress, testID }: Prop
           locations={[0.3, 0.65, 1]}
           style={StyleSheet.absoluteFill}
         />
+        {t.badge === undefined ? null : (
+          <View
+            style={{
+              position: 'absolute',
+              top: space.s4,
+              left: space.s4,
+              paddingHorizontal: space.s3,
+              paddingVertical: space.s1,
+              borderRadius: radius.rFull,
+              backgroundColor: color.surface,
+            }}
+          >
+            <Text variant="caption" maxScale={1.2}>
+              {t.badge}
+            </Text>
+          </View>
+        )}
         <View
           style={{
             flexDirection: 'row',
@@ -103,6 +122,21 @@ export function CategoryTiles<T extends string>({ tiles, onPress, testID }: Prop
       </View>
     </PressableScale>
   );
+  // Four tiles (car rentals joined, 2026-11-23): two equal rows of two, as in the approved design.
+  if (tiles.length === 4) {
+    return (
+      <View testID={testID} style={{ gap: d.targetGap }}>
+        {[tiles.slice(0, 2), tiles.slice(2)].map((row) => (
+          <View
+            key={row.map((t) => t.key).join()}
+            style={{ flexDirection: 'row', gap: d.targetGap }}
+          >
+            {row.map((t) => card(t, false))}
+          </View>
+        ))}
+      </View>
+    );
+  }
   return (
     <View testID={testID} style={{ gap: d.targetGap }}>
       <View style={{ flexDirection: 'row' }}>{card(first, true)}</View>

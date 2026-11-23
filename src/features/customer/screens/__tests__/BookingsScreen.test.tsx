@@ -12,6 +12,8 @@ import { useMyBookings, type BookingRows } from '@/features/customer/hooks/useMy
 import { useUnreadCount } from '@/features/customer/hooks/useUnreadCount';
 import type { WalletEntry } from '@/features/customer/offline/wallet';
 import { color } from '@/shared/theme';
+import type { CarRequest } from '@/features/customer/schemas/carRental';
+import { useCarRequests } from '@/features/customer/hooks/useCarRequests';
 import { BookingsScreen } from '@/features/customer/screens/BookingsScreen';
 import { refreshColors } from '@/shared/ui';
 
@@ -20,6 +22,7 @@ import { ap, ev, ho, TODAY } from '../../hooks/__tests__/customerTestUtils';
 // Factories, not automocks: an automock loads the real module (supabase → native storage).
 jest.mock('@/features/customer/hooks/useMyBookings', () => ({ useMyBookings: jest.fn() }));
 jest.mock('@/features/customer/hooks/useUnreadCount', () => ({ useUnreadCount: jest.fn() }));
+jest.mock('@/features/customer/hooks/useCarRequests', () => ({ useCarRequests: jest.fn() }));
 // The guest bookings card has its own test (BookingsClaim.test.tsx): here nothing is claimable.
 jest.mock('@/features/customer/hooks/useClaim', () => ({
   CLAIM_RESEND_SEC: 60,
@@ -41,6 +44,45 @@ const mockNow = Date.parse('2026-10-13T11:00:00Z');
 
 const mockMy = jest.mocked(useMyBookings);
 const mockUnread = jest.mocked(useUnreadCount);
+const mockCars = jest.mocked(useCarRequests);
+
+function cars(requests: CarRequest[]) {
+  mockCars.mockReturnValue({
+    requests,
+    loading: false,
+    failed: false,
+    refetch: jest.fn(() => Promise.resolve()),
+  });
+}
+
+function car(over: Partial<CarRequest>): CarRequest {
+  return {
+    id: 'c1',
+    status: 'open',
+    tripType: 'chauffeur',
+    vehicleType: 'sedan',
+    pickupState: 'Lagos',
+    pickupAddress: 'Ikeja',
+    destinationState: 'Ogun',
+    destinationAddress: null,
+    pickupDate: '2026-10-20',
+    returnDate: '2026-10-22',
+    pickupTime: null,
+    passengers: 2,
+    purpose: null,
+    notes: null,
+    pricingModel: null,
+    urgent: false,
+    expiresAt: '2026-10-16T11:00:00Z',
+    createdAt: '2026-10-13T10:00:00Z',
+    vendorCompletedAt: null,
+    offerCount: 0,
+    selectedVendor: null,
+    selectedOffer: null,
+    offers: [],
+    ...over,
+  };
+}
 
 type My = ReturnType<typeof useMyBookings>;
 
@@ -99,6 +141,7 @@ function handlers(): Omit<Props, 'userId'> {
     onShowTickets: jest.fn(),
     onShowCheckInCode: jest.fn(),
     onOpenNotifications: jest.fn(),
+    onOpenCarRequest: jest.fn(),
     onBrowse: jest.fn(),
   };
 }
@@ -111,6 +154,28 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
   unread(0);
+  cars([]);
+});
+
+it('lists car requests with their status in words, upcoming and past apart', async () => {
+  ready({ events: [upcoming], hotels: [], apartments: [] });
+  cars([
+    car({ id: 'c1', offerCount: 3 }),
+    car({ id: 'c2', status: 'expired', destinationState: null }),
+  ]);
+  const h = handlers();
+  await render(<BookingsScreen userId="u1" {...h} />);
+  expect(screen.getByRole('tab', { name: 'Upcoming (2)', selected: true })).toBeTruthy();
+  const row = screen.getByRole('button', {
+    name: 'Car · Lagos → Ogun, Tue 20 → Thu 22 Oct, 3 quotes to compare',
+  });
+  await fireEvent.press(row);
+  expect(h.onOpenCarRequest).toHaveBeenCalledWith('c1');
+
+  await fireEvent.press(screen.getByRole('tab', { name: 'Past (1)' }));
+  expect(screen.getByText('No quotes this time')).toBeTruthy();
+  // A past car request fills the segment: it never also says "No past bookings".
+  expect(screen.queryByText('No past bookings')).toBeNull();
 });
 
 it('splits upcoming and past with counts, and a row opens its booking', async () => {
@@ -294,4 +359,17 @@ it('pull to refresh uses the theme colours', async () => {
   expect(json).toContain(`"tintColor":"${refreshColors.tintColor}"`);
   expect(json).toContain(`"colors":${JSON.stringify(refreshColors.colors)}`);
   expect(json).toContain(`"progressBackgroundColor":"${refreshColors.progressBackgroundColor}"`);
+});
+
+it('a failed car rentals load says so, and never reads as no bookings', async () => {
+  ready({ events: [], hotels: [], apartments: [] });
+  mockCars.mockReturnValue({
+    requests: null,
+    loading: false,
+    failed: true,
+    refetch: jest.fn(() => Promise.resolve()),
+  });
+  await render(<BookingsScreen userId="u1" {...handlers()} />);
+  expect(screen.getByText('Couldn’t load your car rentals. Pull to refresh.')).toBeTruthy();
+  expect(screen.queryByText('No bookings yet')).toBeNull();
 });
