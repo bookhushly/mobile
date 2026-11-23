@@ -128,6 +128,10 @@ describe('present', () => {
       'noOfflineList',
       "We couldn't reach the server and there's no offline list on this phone — scan again",
     ],
+    [
+      'appOutdated',
+      'This app needs an update to check tickets offline — update it, or get back online',
+    ],
   ])('couldnt check %s: neutral, never red', (cause, detail) => {
     const p = present({ kind: 'couldntCheck', cause }, NOW);
     expect(p).toMatchObject({ tone: 'retry', title: "Couldn't check", detail, action: 'tryAgain' });

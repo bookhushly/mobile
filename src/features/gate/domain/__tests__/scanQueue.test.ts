@@ -386,6 +386,18 @@ describe('offline fallback (Phase 2a)', () => {
     expect(h.submit).toHaveBeenCalled();
   });
 
+  // Offline-scan review 2026-11-23: a database from a newer app can't decide locally, but the
+  // server still can whenever it's reachable.
+  it('degraded but the app is too old for its offline list: tries the server anyway', async () => {
+    const fallback = jest.fn(() =>
+      Promise.resolve<ScanOutcome>({ kind: 'couldntCheck', cause: 'appOutdated' }),
+    );
+    const h = harness({ fallback, skipOnline: () => true });
+    h.q.enqueue(code(1));
+    await flush();
+    expect(h.submit).toHaveBeenCalled();
+  });
+
   it('a failing local decision leaves the live "couldnt check"', async () => {
     const h = harness({ fallback: () => Promise.reject(new Error('disk')), maxRetries: 0 });
     h.q.enqueue(code(1));

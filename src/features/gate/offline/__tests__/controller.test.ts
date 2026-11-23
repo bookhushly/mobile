@@ -1,3 +1,4 @@
+import { parseTicketCode } from '@/features/gate/domain/parseTicketCode';
 import { DatabaseTooNewError, migrate } from '@/shared/db/sql';
 import { nodeSql } from '@/shared/db/__tests__/nodeSql';
 import { createOfflineController, type ControllerDeps } from '@/features/gate/offline/controller';
@@ -12,6 +13,12 @@ import { ok } from '@/shared/lib/result';
 
 const EV = 'e0000000-0000-4000-8000-000000000001';
 const T = '00000000-0000-4000-8000-000000000001';
+// A real TicketCode, minted the only way the app mints one (no type escapes).
+const TICKET = (() => {
+  const parsed = parseTicketCode(T);
+  if (parsed === null) throw new Error('test ticket code does not parse');
+  return parsed.value;
+})();
 const flush = () => new Promise<void>((r) => setImmediate(r));
 // Known-answer verifier for PIN 123456 (see overridePin tests).
 const KAT = {
@@ -114,7 +121,7 @@ describe('offline controller', () => {
     await flush();
     await flush();
     connectivity.networkLost();
-    const o = await ctl.decide(T as never);
+    const o = await ctl.decide(TICKET);
     expect(o).toMatchObject({ kind: 'admitted', offline: true });
     post.mockClear();
     connectivity.reached();
@@ -145,8 +152,34 @@ describe('offline controller', () => {
     ctl.start();
     await flush();
     await flush();
-    expect(status).toContainEqual({ appOutdated: true });
+    expect(status).toContainEqual({ appOutdated: true, mode: 'online' });
     ctl.stop();
+  });
+
+  // Offline-scan review 2026-11-23 (S1): opened while already offline, the pill must not say Online.
+  it('a database from a newer app version, opened while offline, says offline', async () => {
+    const { ctl, status } = await setup({
+      db: () => Promise.reject(new DatabaseTooNewError(3, 2)),
+      connectivity: { isDegraded: () => true, subscribe: () => () => undefined },
+    });
+    ctl.start();
+    await flush();
+    await flush();
+    expect(status).toContainEqual({ appOutdated: true, mode: 'offline' });
+    expect(status).not.toContainEqual(expect.objectContaining({ mode: 'online' }));
+    ctl.stop();
+  });
+
+  // Offline-scan review 2026-11-23 (S2): "scan again" can never work here; say "update the app".
+  it('a scan decided on a database from a newer app version says the app needs an update', async () => {
+    const { ctl, status } = await setup({
+      db: () => Promise.reject(new DatabaseTooNewError(3, 2)),
+    });
+    await expect(ctl.decide(TICKET)).resolves.toEqual({
+      kind: 'couldntCheck',
+      cause: 'appOutdated',
+    });
+    expect(status).toContainEqual(expect.objectContaining({ appOutdated: true }));
   });
 
   it('a database from a newer app version is reported once, however often it fails', async () => {
@@ -158,7 +191,7 @@ describe('offline controller', () => {
     ctl.start();
     await flush();
     await flush();
-    ctl.tally({ kind: 'couldntCheck', cause: 'network' } as never);
+    ctl.tally({ kind: 'couldntCheck', cause: 'network' });
     ctl.syncNow();
     await flush();
     await flush();
@@ -174,8 +207,8 @@ describe('offline controller', () => {
       db: () =>
         ++calls === 1 ? Promise.reject(new Error('open failed')) : Promise.resolve(real.stores),
     });
-    await expect(ctl.decide(T as never)).rejects.toThrow('open failed');
-    await expect(ctl.decide(T as never)).resolves.toBeDefined();
+    await expect(ctl.decide(TICKET)).rejects.toThrow('open failed');
+    await expect(ctl.decide(TICKET)).resolves.toBeDefined();
     ctl.stop();
   });
 
@@ -225,9 +258,9 @@ describe('offline controller', () => {
     ctl.start();
     await flush();
     await flush();
-    await expect(
-      ctl.override(T as never, { approvedBy: 'Ada', reason: 'phone died' }),
-    ).rejects.toThrow('approval required');
+    await expect(ctl.override(TICKET, { approvedBy: 'Ada', reason: 'phone died' })).rejects.toThrow(
+      'approval required',
+    );
     ctl.stop();
   });
 

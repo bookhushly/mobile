@@ -1,4 +1,4 @@
-import { CircleCheck, Clock, OctagonX, RotateCw, WifiOff } from 'lucide-react-native';
+import { CircleCheck, Clock, Download, OctagonX, RotateCw, WifiOff } from 'lucide-react-native';
 
 import type { OverlayView } from '@/features/gate/domain/scanSession';
 import { present, type Tone } from '@/features/gate/domain/present';
@@ -13,9 +13,12 @@ const glyphFor = (tone: Tone, cause: string | null) =>
       ? Clock
       : tone === 'refused'
         ? OctagonX
-        : cause === 'network' || cause === 'timeout' || cause === 'noOfflineList'
-          ? WifiOff
-          : RotateCw;
+        : cause === 'appOutdated'
+          ? // The fix is an app update, not the connection or another scan.
+            Download
+          : cause === 'network' || cause === 'timeout' || cause === 'noOfflineList'
+            ? WifiOff
+            : RotateCw;
 
 type Props = {
   view: OverlayView;
