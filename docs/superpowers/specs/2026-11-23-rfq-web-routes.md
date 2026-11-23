@@ -72,6 +72,34 @@ All under `app/api/{car-rental|logistics|security}/requests/`.
 ### 9. `GET /api/{type}/price-estimate`: the guide price on the form
 - No auth. Query mirrors `getEstimated{…}PriceRange` (car: `state`, `vehicleType`, `pricingModel`). → **200** `{ min, max, currency: "NGN" } | { min: null, max: null }`. `public` tier, `Cache-Control: public, s-maxage=300`.
 
+## Places and routes (Google Maps Platform), added 2026-11-23
+
+The owner is setting up a Google Cloud project with billing (staying inside the free monthly caps). The app uses these for the request forms: addresses picked from suggestions (exact point and the right **state**, which decides which vendors get the request) and the real trip distance for per-km pricing and the guide price. Calls go through the web so the paid key never ships in the app (mobile rule: no secrets in the app).
+
+- **Key:** a new **server-only** env var `GOOGLE_MAPS_SERVER_KEY` (not `NEXT_PUBLIC_`; the existing `NEXT_PUBLIC_GOOGLE_GEOCODING_KEY` is browser-exposed). Restrict it in Google Cloud to Places API (New), Geocoding API and Routes API.
+- **Tier:** `geo` (20/60 s), as `/api/geocode` uses. Auth optional (the request form works signed out until it's sent). `Cache-Control: no-store` for autocomplete; details and distance may cache by their inputs (check the Maps Platform terms for how long coordinates may be cached before relying on it).
+- **Free caps (checked 2026-11-23 on developers.google.com/maps/billing-and-pricing/pricing):** Autocomplete requests 10,000/month (session usage unlimited), Place Details Essentials 10,000, Geocoding 10,000, Compute Routes Essentials 10,000; then $2.83–$5.00 per 1,000. Use **session tokens** so a typed search and its chosen place bill as one session.
+
+### 10. `GET /api/places/autocomplete?q=&session=`
+- Places API (New) Autocomplete, restricted to Nigeria (`includedRegionCodes: ["ng"]`), `q` 2–100 chars, `session` a client-generated UUID reused until a place is picked.
+- → **200** `{ suggestions: [{ placeId, primary, secondary }] }` (e.g. `{ primary: "Allen Avenue", secondary: "Ikeja, Lagos" }`), at most 5. 400 `bad_request`; 429 `rate_limited`; 503 `unavailable` when Google fails (the app then keeps the typed text as the address).
+
+### 11. `GET /api/places/{placeId}?session=`
+- Place Details (Essentials fields only: formatted address, location, address components), same `session` as the autocomplete calls.
+- → **200** `{ placeId, address, lat, lng, state, city }`. `state` normalised the way `/api/geocode` already does (`normalizeNigerian`: "Lagos", "FCT", …), so it matches `vendor_service_areas.state`. 404 `not_found`.
+
+### 12. `GET /api/routes/distance?from=lat,lng&to=lat,lng`
+- Routes API Compute Routes (Essentials), driving, no traffic-aware routing (Essentials tier).
+- → **200** `{ distanceKm, durationMinutes }` (rounded: 1 decimal km, whole minutes). 400 `bad_request` for unparseable or out-of-Nigeria points; 404 `no_route`; 503 `unavailable`.
+
+### 13. Coordinates on the request tables (migration)
+- Add nullable `pickup_lat`, `pickup_lng`, `destination_lat`, `destination_lng` (`numeric(10,7)`) and `estimated_distance_km` (`numeric(7,1)`) to `car_rental_requests`; the same pickup/delivery pair and distance on `logistics_requests`; `service_lat`, `service_lng` on `security_requests`.
+- The submit routes (1) accept them (optional; validate ranges for Nigeria). When `pricing_model = "per_km"` and both points are set, the server computes `estimated_distance_km` itself with route 12 and uses it as `duration_value` (never trust a client distance).
+- Show the distance to vendors on the web request card ("about 80 km") so quotes start from the real trip.
+
+### Later (separate PR): coordinates for listings
+- Hotels, apartments and events store only address, city and state. For maps on listing pages and a map view in results: add `lat`/`lng`, geocode when a vendor saves an address, and backfill existing listings once (within the Geocoding free cap). Not part of this PR.
+
 ### Not in this PR
 - Messages and the trip planner (`app/actions/trips.js`): later, after all three categories ship in the app.
 - `GET /api/payment/status/{ref}` returns `request: null` for `car_rental` (it fills logistics and security only). **Please include the car-rental case** in this PR if it's a small change; the app needs it to show the right state after paying.
@@ -80,6 +108,7 @@ All under `app/api/{car-rental|logistics|security}/requests/`.
 
 For car rental at minimum, then the same per type:
 - Each route returns 401 `unauthorized` without a user, and never reads a user id from the client.
+- Places/routes: Google is mocked; autocomplete passes the session token through and caps at 5; place details returns the normalised `state`; a Google failure returns 503 `unavailable`, never 500; submit with `per_km` and two points stores the server's distance, ignoring any client distance.
 - Submit: 400 `bad_request` with `issues` for a bad `trip_type`, a past `pickup_date`, `return_date` before `pickup_date`; 201 on a valid body and the action is called once.
 - Select-offer: 409 `request_not_open` when not open; 409 `offer_unavailable` for another request's offer; **two concurrent selects accept exactly one offer**.
 - Cancel: 409 `not_cancellable` for `completed`; `refund: "pending"` from `paid`.
@@ -88,5 +117,6 @@ For car rental at minimum, then the same per type:
 
 ## Done when
 
-- The routes above exist for all three types (car rental first if splitting commits), with tests passing, `npm run lint` clean.
+- The routes above exist for all three types (car rental first if splitting commits), plus the places and routes endpoints and the coordinate columns, with tests passing, `npm run lint` clean.
+- `GOOGLE_MAPS_SERVER_KEY` is documented in `.env.example` (name only).
 - The PR description lists each route with its codes. The mobile repo records them in `docs/BACKEND_STATUS.md` §7 (mobile does that, not this PR).
