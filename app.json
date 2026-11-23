@@ -11,6 +11,7 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.bookhushly.app",
+      "associatedDomains": ["applinks:bookhushly.com"],
       "infoPlist": {
         "LSApplicationQueriesSchemes": ["message"],
         "ITSAppUsesNonExemptEncryption": false
@@ -26,6 +27,20 @@
       "predictiveBackGestureEnabled": false,
       "allowBackup": false,
       "package": "com.bookhushly.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "bookhushly.com",
+              "pathPrefix": "/payment/app-return"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "blockedPermissions": [
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.DETECT_SCREEN_CAPTURE"
