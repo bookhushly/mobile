@@ -120,8 +120,11 @@ export function createScanQueue(deps: ScanQueueDeps) {
     if (deps.skipOnline?.() === true) {
       const o = await local(code);
       if (gen !== generation) return null;
-      // No offline list on this phone: the server is still the only one who can answer.
-      if (o !== null && !(o.kind === 'couldntCheck' && o.cause === 'noOfflineList')) {
+      // No offline list this app can read (none on the phone, or one from a newer app version):
+      // the server is still the only one who can answer.
+      const serverOnly =
+        o?.kind === 'couldntCheck' && (o.cause === 'noOfflineList' || o.cause === 'appOutdated');
+      if (o !== null && !serverOnly) {
         return { outcome: o, uncertainSince };
       }
     }

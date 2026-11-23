@@ -34,7 +34,9 @@ export type CouldntCheckCause =
   | 'keysOutdated'
   | 'clockChanged'
   | 'offlineUnverifiable'
-  | 'noOfflineList';
+  | 'noOfflineList'
+  /** The offline list was written by a newer app version: only the server can answer. */
+  | 'appOutdated';
 
 export type ScanOutcome =
   | {

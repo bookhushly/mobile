@@ -71,7 +71,9 @@ export function createOfflineController(deps: ControllerDeps) {
   let reportedTooNew = false;
   const fail = (e: unknown) => {
     if (e instanceof DatabaseTooNewError) {
-      publish({ appOutdated: true });
+      // With the real connection state: this may be the first status the pill gets, and it
+      // started as Online (offline-scan review, 2026-11-23).
+      publish({ appOutdated: true, mode: deps.connectivity.isDegraded() ? 'offline' : 'online' });
       // Every retry fails the same way until the app is updated: one report is enough.
       if (reportedTooNew) return;
       reportedTooNew = true;
@@ -253,7 +255,16 @@ export function createOfflineController(deps: ControllerDeps) {
       unsubscribe?.();
       unsubscribe = null;
     },
-    decide: async (code: TicketCode): Promise<ScanOutcome> => (await gate()).decide(code),
+    decide: async (code: TicketCode): Promise<ScanOutcome> => {
+      try {
+        return await (await gate()).decide(code);
+      } catch (e) {
+        // A list from a newer app can't be read: say "update the app", never "scan again".
+        if (!(e instanceof DatabaseTooNewError)) throw e;
+        fail(e);
+        return { kind: 'couldntCheck', cause: 'appOutdated' };
+      }
+    },
     noteLive: (code: TicketCode, outcome: ScanOutcome): void => {
       void gate()
         .then((g) => g.noteLive(code, outcome))

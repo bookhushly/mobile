@@ -46,6 +46,8 @@ const COULDNT_CHECK: Record<CouldntCheckCause, string> = {
     "Can't check this code offline — ask them to reopen their ticket when online",
   noOfflineList:
     "We couldn't reach the server and there's no offline list on this phone — scan again",
+  // Scanning again can't help here (offline-scan review, 2026-11-23): say what can.
+  appOutdated: 'This app needs an update to check tickets offline — update it, or get back online',
 };
 
 const pad = (n: number) => String(n).padStart(2, '0');

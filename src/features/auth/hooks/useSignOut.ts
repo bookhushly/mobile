@@ -44,7 +44,7 @@ function confirmDiscard(unsyncable: number, signOut: SignOut): void {
 function alertUpdateFirst(signOut: SignOut): void {
   Alert.alert(
     'Update the app before signing out',
-    'This version can’t read what’s saved on this phone, including admissions that may not have synced. If you sign out now, they stay on this phone and sync when you sign in to this account on the updated app.',
+    'This version can’t read what’s saved on this phone, including admissions that may not have synced. If you sign out now, they stay on this phone. They sync after you update the app, sign in to this account again and open that event’s scanner.',
     [
       { text: 'Not now', style: 'cancel' },
       {
