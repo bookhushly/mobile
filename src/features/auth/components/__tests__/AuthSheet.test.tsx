@@ -1,9 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { X } from 'lucide-react-native';
-import { Keyboard, StyleSheet } from 'react-native';
+import { Keyboard, processColor, StyleSheet } from 'react-native';
 
 import { AuthSheet } from '@/features/auth/components/AuthSheet';
 import { sheetTop } from '@/features/auth/domain/authBackdrop';
+import { color } from '@/shared/theme';
 import { Text } from '@/shared/ui';
 import { useMotionTier } from '@/shared/ui/motion';
 
@@ -92,6 +93,18 @@ it('puts the leave button first for screen readers', async () => {
   // Same row; the leave button comes before the logo in reading order.
   expect(header?.children.indexOf(leave)).toBe(0);
   expect(logo).toBeTruthy();
+});
+
+// Owner, 2026-11-23: one logo colour rule. On the white sheet the mark is brand violet, never ink.
+it('draws the logo in brand violet on the white sheet', async () => {
+  await render(
+    <AuthSheet>
+      <Text>Body</Text>
+    </AuthSheet>,
+  );
+  const logo = screen.getByTestId('auth-sheet-logo', { includeHiddenElements: true });
+  // The image view receives the colour as a native value.
+  expect(logo.props.tintColor).toBe(processColor(color.brand));
 });
 
 it('opens raised with no slide on a screen that focuses a field on arrival', async () => {

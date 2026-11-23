@@ -40,13 +40,35 @@ function confirmDiscard(unsyncable: number, signOut: SignOut): void {
   );
 }
 
-async function syncThenRetry(uid: string, signOut: SignOut): Promise<void> {
+// The gate data was written by a newer app version: nothing here can count or sync it.
+function alertUpdateFirst(signOut: SignOut): void {
+  Alert.alert(
+    'Update the app before signing out',
+    'This version can’t read what’s saved on this phone, including admissions that may not have synced. If you sign out now, they stay on this phone and sync when you sign in to this account on the updated app.',
+    [
+      { text: 'Not now', style: 'cancel' },
+      {
+        text: 'Sign out anyway',
+        // Keeps every guard's data (today only the gate's); none of it is counted or shown here.
+        onPress: () => {
+          void signOut({ keepOfflineData: true });
+        },
+      },
+    ],
+  );
+}
+
+export async function syncThenRetry(uid: string, signOut: SignOut): Promise<void> {
   const left = await syncThenSignOut({
     sync: () => syncBeforeSignOut(uid),
     signOut: () => signOut(),
     report: captureException,
   });
   if (left === null) return;
+  if (left.appOutdated === true) {
+    alertUpdateFirst(signOut);
+    return;
+  }
   if (left.unsynced > 0) {
     Alert.alert(
       `${plural(left.unsynced, 'admission still hasn’t', 'admissions still haven’t')} synced`,
@@ -57,9 +79,13 @@ async function syncThenRetry(uid: string, signOut: SignOut): Promise<void> {
   confirmDiscard(left.unsyncable, signOut);
 }
 
-async function runSignOut(userId: string | null, signOut: SignOut): Promise<void> {
+export async function runSignOut(userId: string | null, signOut: SignOut): Promise<void> {
   const r = await signOut();
   if (r.blocked === null) return;
+  if (r.blocked.appOutdated === true) {
+    alertUpdateFirst(signOut);
+    return;
+  }
   const { unsynced, unsyncable } = r.blocked;
   if (unsynced === 0) {
     confirmDiscard(unsyncable, signOut);

@@ -1,4 +1,4 @@
-import { migrate } from '@/shared/db/sql';
+import { DatabaseTooNewError, migrate } from '@/shared/db/sql';
 import { nodeSql } from '@/shared/db/__tests__/nodeSql';
 import { createOfflineController, type ControllerDeps } from '@/features/gate/offline/controller';
 import { createDeviceStore } from '@/features/gate/offline/deviceStore';
@@ -135,6 +135,34 @@ describe('offline controller', () => {
     await flush();
     expect(fetchPage).toHaveBeenCalledTimes(1);
     expect(fetchPage).toHaveBeenCalledWith({ cursor: null, since: null, limit: 1 });
+    ctl.stop();
+  });
+
+  it('a database from a newer app version publishes appOutdated', async () => {
+    const { ctl, status } = await setup({
+      db: () => Promise.reject(new DatabaseTooNewError(3, 2)),
+    });
+    ctl.start();
+    await flush();
+    await flush();
+    expect(status).toContainEqual({ appOutdated: true });
+    ctl.stop();
+  });
+
+  it('a database from a newer app version is reported once, however often it fails', async () => {
+    const report = jest.fn();
+    const { ctl } = await setup({
+      db: () => Promise.reject(new DatabaseTooNewError(3, 2)),
+      report,
+    });
+    ctl.start();
+    await flush();
+    await flush();
+    ctl.tally({ kind: 'couldntCheck', cause: 'network' } as never);
+    ctl.syncNow();
+    await flush();
+    await flush();
+    expect(report.mock.calls.filter(([e]) => e instanceof DatabaseTooNewError)).toHaveLength(1);
     ctl.stop();
   });
 

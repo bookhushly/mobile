@@ -14,6 +14,8 @@ export type SyncStatus = {
   clock: ClockState;
   localCounts: { admitted: number; total: number } | null;
   override: OverrideAvailability;
+  /** The offline data was written by a newer app version; offline work pauses until an update. */
+  appOutdated: boolean;
 };
 
 export const EMPTY_SYNC: SyncStatus = {
@@ -27,6 +29,7 @@ export const EMPTY_SYNC: SyncStatus = {
   clock: { suspect: false, checkedAgoMs: null },
   localCounts: null,
   override: { kind: 'none' },
+  appOutdated: false,
 };
 
 export function groupDigits(n: number): string {

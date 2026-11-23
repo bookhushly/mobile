@@ -65,13 +65,20 @@ async function open(userId: string): Promise<GateDb> {
     await deleteDatabase(fileOf(userId)).catch(() => undefined);
     conn = await openEncrypted(fileOf(userId), key);
   }
-  await migrate(conn.sql, MIGRATIONS);
-  const roster = createRosterStore(conn.sql);
-  const outbox = createOutboxStore(conn.sql, { newDeviceId: () => Crypto.randomUUID() });
-  const device = createDeviceStore(conn.sql, { lockKv: lockKvFor(userId) });
-  await outbox.resetSending();
-  await sweepExpired(roster, outbox, Date.now());
-  return { roster, outbox, device, close: conn.close };
+  // A failed open is retried later: close this connection, or it stays cached natively and a
+  // later deleteDatabase (wipe) fails.
+  try {
+    await migrate(conn.sql, MIGRATIONS);
+    const roster = createRosterStore(conn.sql);
+    const outbox = createOutboxStore(conn.sql, { newDeviceId: () => Crypto.randomUUID() });
+    const device = createDeviceStore(conn.sql, { lockKv: lockKvFor(userId) });
+    await outbox.resetSending();
+    await sweepExpired(roster, outbox, Date.now());
+    return { roster, outbox, device, close: conn.close };
+  } catch (e) {
+    await conn.close().catch(() => undefined);
+    throw e;
+  }
 }
 
 const opened = new Map<string, Promise<GateDb>>();

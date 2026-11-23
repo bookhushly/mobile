@@ -11,6 +11,7 @@ paths:
 
 - Secrets/tokens only in `expo-secure-store`, small values only. First-launch marker in non-secure storage: if absent but Keychain items exist (iOS survives uninstall), wipe them.
 - Large/PII data: `expo-sqlite` with SQLCipher (`PRAGMA key` right after open), random 32-byte key in SecureStore, WAL, `PRAGMA user_version` migrations, async API, bulk writes in one exclusive transaction with prepared statements.
+- Migrations are append-only and additive: never edit or remove a shipped one (OTA updates and rollbacks run old and new code against the same file). A database newer than the code throws `DatabaseTooNewError` and is left untouched — never wipe or "repair" it; the gate shows "Update the app". Since any newer version is refused, rolling back an OTA that added a migration pauses offline mode until the next update: ship migrations with a native build where possible.
 - Supabase session: AES key in SecureStore + encrypted session blob (SecureStore can't hold it); `AppState` → `startAutoRefresh`/`stopAutoRefresh`; `detectSessionInUrl: false`. Client checks are never authorisation.
 - Outbox rows: client UUID + `(device_id, client_seq)`, state, attempts, backoff with jitter; delete only after server ack; written in the same transaction as the local change.
 - Crypto: `@noble/curves` Ed25519 (strictness must match the server); **benchmark scrypt N=8192 on a low-end Android before committing** (fallback `react-native-quick-crypto`); verify with the KAT in requirements FR-3.15; XOR-accumulate compares. Never hand-roll primitives.

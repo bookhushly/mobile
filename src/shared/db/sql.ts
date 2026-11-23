@@ -50,10 +50,29 @@ export function serialSql(d: DirectSql): Sql {
   };
 }
 
-/** migrations[i] moves the database from user_version i to i + 1, each in its own transaction. */
+/**
+ * The database was migrated by a newer app version (e.g. an OTA update that was then rolled
+ * back). Older code must not read or write it: the data stays untouched until the app is updated.
+ */
+export class DatabaseTooNewError extends Error {
+  constructor(
+    readonly found: number,
+    readonly known: number,
+  ) {
+    super(`database schema ${String(found)} is newer than this app's ${String(known)}`);
+    this.name = 'DatabaseTooNewError';
+  }
+}
+
+/**
+ * migrations[i] moves the database from user_version i to i + 1, each in its own transaction.
+ * Append only: never edit or remove a migration that has shipped.
+ */
 export async function migrate(db: Sql, migrations: readonly string[]): Promise<void> {
   const row = await db.get<{ user_version: number }>('PRAGMA user_version');
-  for (let v = row?.user_version ?? 0; v < migrations.length; v++) {
+  const found = row?.user_version ?? 0;
+  if (found > migrations.length) throw new DatabaseTooNewError(found, migrations.length);
+  for (let v = found; v < migrations.length; v++) {
     const step = migrations[v];
     if (step === undefined) return;
     await db.tx(async (t) => {
