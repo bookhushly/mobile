@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import { AppState, Platform, type NativeEventSubscription } from 'react-native';
 import { create } from 'zustand';
 
-import { getCarRequest } from '@/features/customer/api/carRentalApi';
 import {
   checkPayment,
   initializePayment,
@@ -18,7 +17,7 @@ import {
   providerStillProcessing,
   startErrorWords,
 } from '@/features/customer/domain/checkout/paymentStatus';
-import { customerKeys } from '@/features/customer/hooks/customerKeys';
+import { CAR_KIND, type RfqKind, type RfqRow } from '@/features/customer/hooks/rfqKinds';
 import { BROWSER_OPTIONS } from '@/features/customer/hooks/usePayment';
 import { carPayStore } from '@/features/customer/offline/carPayStore';
 import { api, clock } from '@/shared/api/instance';
@@ -68,7 +67,8 @@ const sleep = (ms: number) =>
     setTimeout(r, ms);
   });
 
-export function useCarPayment(
+export function useRfqPayment<R extends RfqRow, B>(
+  kind: RfqKind<R, B>,
   userId: string,
   id: string,
   matched: boolean,
@@ -79,6 +79,8 @@ export function useCarPayment(
   paymentOpen: () => Promise<'clear' | 'open' | 'unknown'>;
 } {
   const qc = useQueryClient();
+  // Payment records are kept per service and request (ids are unique per table, not across).
+  const payKey = `${kind.requestType}:${id}`;
   const [state, setState] = useState<CarPayState>({ kind: 'idle' });
   const alive = useRef(true);
   // Single flight: a second tap before React re-renders must not start another charge.
@@ -98,14 +100,14 @@ export function useCarPayment(
 
   const refresh = async () => {
     await Promise.all([
-      qc.invalidateQueries({ queryKey: customerKeys.carRequest(userId, id) }),
-      qc.invalidateQueries({ queryKey: customerKeys.carRequests(userId) }),
+      qc.invalidateQueries({ queryKey: kind.keys.one(userId, id) }),
+      qc.invalidateQueries({ queryKey: kind.keys.list(userId) }),
     ]);
   };
 
   /** True once the request reads paid on the server. */
   const readsPaid = async () => {
-    const r = await getCarRequest(api, id);
+    const r = await kind.get(api, id);
     return r.ok && isPaidStatus(r.value.status);
   };
 
@@ -114,7 +116,7 @@ export function useCarPayment(
     set({ kind: 'checking' });
     const v = await verifyPayment(api, reference);
     if (v.ok && isDefinitiveFailure(v.value)) {
-      await carPayStore.drop(userId, id).catch(() => undefined);
+      await carPayStore.drop(userId, payKey).catch(() => undefined);
       set({ kind: 'failed' });
       return;
     }
@@ -122,7 +124,7 @@ export function useCarPayment(
     const began = Date.now();
     for (let attempt = 0; alive.current; attempt += 1) {
       if (await readsPaid()) {
-        await carPayStore.drop(userId, id).catch(() => undefined);
+        await carPayStore.drop(userId, payKey).catch(() => undefined);
         await refresh();
         set({ kind: 'paid' });
         return;
@@ -161,7 +163,7 @@ export function useCarPayment(
 
   /** A new charge: initialise, save the reference, then (only then) open the checkout. */
   const startNew = async () => {
-    const r = await initializePayment(api, 'car_rental', id);
+    const r = await initializePayment(api, kind.requestType, id);
     if (!r.ok) {
       set({ kind: 'error', words: startErrorWords(r.error) });
       return;
@@ -172,7 +174,7 @@ export function useCarPayment(
       return;
     }
     try {
-      await carPayStore.put(userId, id, { reference, url, startedAt: clock.serverNow() });
+      await carPayStore.put(userId, payKey, { reference, url, startedAt: clock.serverNow() });
     } catch {
       // Without the reference on disk a checkout we can't find again is never opened.
       set({ kind: 'error', words: 'Couldn’t save this payment on your phone. Try again.' });
@@ -194,8 +196,8 @@ export function useCarPayment(
     run(async () => {
       set({ kind: 'starting' });
       const [c, stored] = await Promise.all([
-        checkPayment(api, 'car_rental', id),
-        carPayStore.get(userId, id),
+        checkPayment(api, kind.requestType, id),
+        carPayStore.get(userId, payKey),
       ]);
       const plan = planCarPay(c.ok ? c.value : null, stored, clock.serverNow());
       switch (plan.kind) {
@@ -233,8 +235,8 @@ export function useCarPayment(
   const checkAgain = () => {
     run(async () => {
       const [c, stored] = await Promise.all([
-        checkPayment(api, 'car_rental', id),
-        carPayStore.get(userId, id),
+        checkPayment(api, kind.requestType, id),
+        carPayStore.get(userId, payKey),
       ]);
       const ref =
         c.ok && (c.value.hasPaid || c.value.hasPending)
@@ -256,7 +258,7 @@ export function useCarPayment(
   useEffect(() => {
     if (!matched || resumed.current || userId === '') return;
     resumed.current = true;
-    void carPayStore.get(userId, id).then((s) => {
+    void carPayStore.get(userId, payKey).then((s) => {
       if (s === null || !alive.current) return;
       run(() => settle(s.reference));
     });
@@ -270,7 +272,7 @@ export function useCarPayment(
    * pending one; 'unknown' when it couldn't say. Only 'clear' may cancel.
    */
   const paymentOpen = async (): Promise<'clear' | 'open' | 'unknown'> => {
-    const c = await checkPayment(api, 'car_rental', id);
+    const c = await checkPayment(api, kind.requestType, id);
     if (!c.ok) return 'unknown';
     const plan = planCarPay(c.value, null, clock.serverNow());
     if (plan.kind === 'start') return 'clear';
@@ -283,3 +285,7 @@ export function useCarPayment(
 
   return { state, pay, checkAgain, paymentOpen };
 }
+
+/** Car rental's name, kept for the car screens. */
+export const useCarPayment = (userId: string, id: string, matched: boolean) =>
+  useRfqPayment(CAR_KIND, userId, id, matched);

@@ -9,16 +9,38 @@ import { CarQuoteScreen } from '@/features/customer/screens/CarQuoteScreen';
 import { CarRequestScreen } from '@/features/customer/screens/CarRequestScreen';
 
 jest.mock('expo-router', () => ({ useIsFocused: () => true }));
-jest.mock('@/features/customer/hooks/useCarRequests', () => ({ useCarRequest: jest.fn() }));
-jest.mock('@/features/customer/hooks/useCarActions', () => ({
-  useCarActions: jest.fn(),
-  useCarReview: jest.fn(),
-}));
-jest.mock('@/features/customer/hooks/useCarPayment', () => ({
-  ...jest.requireActual<Record<string, unknown>>('@/features/customer/hooks/useCarPayment'),
-  useCarPayment: jest.fn(),
-}));
+// The screens are shared (useRequestScreen, QuoteScreen) and read through the generic hooks; the
+// car names wrap them, so both answer from the same mock (the kind argument is ignored).
+jest.mock('@/features/customer/hooks/useCarRequests', () => {
+  const one = jest.fn();
+  return {
+    useCarRequest: one,
+    useRfqRequest: (_k: unknown, u: string, id: string): unknown => one(u, id),
+  };
+});
+jest.mock('@/features/customer/hooks/useCarActions', () => {
+  const actions = jest.fn();
+  const review = jest.fn();
+  return {
+    useCarActions: actions,
+    useRfqActions: (_k: unknown, u: string, id: string): unknown => actions(u, id),
+    useCarReview: review,
+    useRfqReview: (_k: unknown, u: string, id: string): unknown => review(u, id),
+  };
+});
+jest.mock('@/features/customer/hooks/useCarPayment', () => {
+  const payment = jest.fn();
+  return {
+    ...jest.requireActual<Record<string, unknown>>('@/features/customer/hooks/useCarPayment'),
+    useCarPayment: payment,
+    useRfqPayment: (_k: unknown, u: string, id: string, m: boolean): unknown => payment(u, id, m),
+  };
+});
 jest.mock('@/features/customer/offline/carPayStore', () => ({ carPayStore: {} }));
+jest.mock('@/features/customer/hooks/useCheckoutData', () => ({
+  useServiceCharge: () => mockCharge(),
+}));
+const mockCharge = jest.fn((): { data: unknown } => ({ data: null }));
 jest.mock('@/shared/api/instance', () => ({ clock: { serverNow: () => mockNow } }));
 const mockNow = Date.parse('2026-12-01T10:00:00Z');
 
@@ -215,7 +237,7 @@ describe('CarRequestScreen', () => {
     await render(screenFor());
     await fireEvent.press(screen.getByRole('button', { name: 'Cancel booking' }));
     await fireEvent.press(screen.getByTestId('car-cancel-confirm'));
-    expect(screen.getByText('Cancelled. A refund of your payment has been started.')).toBeTruthy();
+    expect(screen.getByText('Cancelled. A refund has been started.')).toBeTruthy();
   });
 
   it('booked: the car, pick-up with Directions and Call, and confirm only once the company marks it done', async () => {

@@ -31,6 +31,10 @@ describe('requestStage', () => {
     );
   });
 
+  it('a request with no deadline keeps waiting', () => {
+    expect(requestStage({ status: 'open', offerCount: 0, expiresAt: null }, NOW)).toBe('waiting');
+  });
+
   it('follows the paid statuses', () => {
     const at = (status: Parameters<typeof requestStage>[0]['status']) =>
       requestStage({ status, offerCount: 0, expiresAt: LATER }, NOW);

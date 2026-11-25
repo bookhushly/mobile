@@ -23,6 +23,9 @@ import { ap, ev, ho, TODAY } from '../../hooks/__tests__/customerTestUtils';
 jest.mock('@/features/customer/hooks/useMyBookings', () => ({ useMyBookings: jest.fn() }));
 jest.mock('@/features/customer/hooks/useUnreadCount', () => ({ useUnreadCount: jest.fn() }));
 jest.mock('@/features/customer/hooks/useCarRequests', () => ({ useCarRequests: jest.fn() }));
+jest.mock('@/features/customer/hooks/useLogistics', () => ({
+  useLogisticsRequests: () => ({ requests: [], loading: false, failed: false, refetch: jest.fn() }),
+}));
 // The guest bookings card has its own test (BookingsClaim.test.tsx): here nothing is claimable.
 jest.mock('@/features/customer/hooks/useClaim', () => ({
   CLAIM_RESEND_SEC: 60,
@@ -142,6 +145,7 @@ function handlers(): Omit<Props, 'userId'> {
     onShowCheckInCode: jest.fn(),
     onOpenNotifications: jest.fn(),
     onOpenCarRequest: jest.fn(),
+    onOpenLogisticsRequest: jest.fn(),
     onBrowse: jest.fn(),
   };
 }
@@ -372,4 +376,20 @@ it('a failed car rentals load says so, and never reads as no bookings', async ()
   await render(<BookingsScreen userId="u1" {...handlers()} />);
   expect(screen.getByText('Couldn’t load your car rentals. Pull to refresh.')).toBeTruthy();
   expect(screen.queryByText('No bookings yet')).toBeNull();
+});
+
+it('car requests sit among the bookings in date order, not above them', async () => {
+  ready({ events: [upcoming], hotels: [], apartments: [] });
+  cars([
+    car({ id: 'soon', pickupDate: '2026-10-15', returnDate: '2026-10-16' }),
+    car({ id: 'later', pickupDate: '2026-11-02', returnDate: '2026-11-03' }),
+  ]);
+  await render(<BookingsScreen userId="u1" {...handlers()} />);
+  const names = screen
+    .getAllByRole('button')
+    .map((b) => String(b.props.accessibilityLabel ?? ''))
+    .filter((n) => n.startsWith('Car ·') || n.startsWith('Afrobeats'));
+  expect(
+    names.map((n) => (n.startsWith('Afrobeats') ? 'event' : n.includes('15') ? 'soon' : 'later')),
+  ).toEqual(['soon', 'event', 'later']);
 });

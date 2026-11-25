@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, type ReactElement } from 'react';
 import { FlatList, Pressable, View } from 'react-native';
 
 import { MONTHS_LONG, longDate, type IsoDate } from '@/shared/lib/lagosDay';
@@ -19,8 +19,28 @@ type Props = {
   endWord: string;
   /** The days between: violet wash (stays) or the neutral grey band (car rentals). */
   band?: 'selected' | 'neutral';
+  /**
+   * Content that scrolls away above the months (a title, the chosen dates). With it, each month
+   * carries its own weekday row, so the whole page scrolls and small phones with large text still
+   * see a full month (the fixed weekday row would scroll out with the header otherwise).
+   */
+  header?: ReactElement;
   testID?: string;
 };
+
+function Weekdays() {
+  return (
+    <View style={{ flexDirection: 'row' }} importantForAccessibility="no-hide-descendants">
+      {WEEK.map((w) => (
+        <View key={w} style={{ flex: 1 }}>
+          <Text variant="caption" tone="textSecondary" align="center">
+            {w}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 type MonthData = { key: string; title: string; lead: number; days: IsoDate[] };
 
@@ -44,11 +64,11 @@ function buildMonths(today: IsoDate, count: number): MonthData[] {
   });
 }
 
-type DayOpts = Omit<Props, 'months' | 'testID'>;
-type MonthProps = DayOpts & { month: MonthData };
+type DayOpts = Omit<Props, 'months' | 'testID' | 'header'>;
+type MonthProps = DayOpts & { month: MonthData; weekdays: boolean };
 
 // memo: a tap changes the range, but months the range doesn't touch receive null/null and skip.
-const Month = memo(function Month({ month, ...o }: MonthProps) {
+const Month = memo(function Month({ month, weekdays, ...o }: MonthProps) {
   const cells: (IsoDate | null)[] = [...Array<null>(month.lead).fill(null), ...month.days];
   while (cells.length % 7 !== 0) cells.push(null);
   const rows: (IsoDate | null)[][] = [];
@@ -58,6 +78,7 @@ const Month = memo(function Month({ month, ...o }: MonthProps) {
       <Text variant="headline" accessibilityRole="header" style={{ paddingBottom: space.s3 }}>
         {month.title}
       </Text>
+      {weekdays ? <Weekdays /> : null}
       {rows.map((row) => (
         <View key={row.find((c) => c !== null) ?? 'pad'} style={{ flexDirection: 'row' }}>
           {row.map((d, i) => (
@@ -132,22 +153,15 @@ function Day({
 }
 
 /** Weekday row and a scrolling list of months; past days are greyed and can't be chosen. */
-export function RangeCalendar({ months = 12, testID, ...o }: Props) {
+export function RangeCalendar({ months = 12, testID, header, ...o }: Props) {
   // Stable list data across renders; rebuilt only when the window changes.
   const data = useMemo(() => buildMonths(o.today, months), [o.today, months]);
   const { start, end } = o;
   return (
     <View style={{ flex: 1, gap: space.s3 }} testID={testID}>
-      <View style={{ flexDirection: 'row' }} importantForAccessibility="no-hide-descendants">
-        {WEEK.map((w) => (
-          <View key={w} style={{ flex: 1 }}>
-            <Text variant="caption" tone="textSecondary" align="center">
-              {w}
-            </Text>
-          </View>
-        ))}
-      </View>
+      {header === undefined ? <Weekdays /> : null}
       <FlatList
+        {...(header === undefined ? {} : { ListHeaderComponent: header })}
         data={data}
         keyExtractor={(m) => m.key}
         initialNumToRender={3}
@@ -160,7 +174,13 @@ export function RangeCalendar({ months = 12, testID, ...o }: Props) {
           const touches =
             start !== null && start <= last && (end === null ? start >= first : end >= first);
           return (
-            <Month month={item} {...o} start={touches ? start : null} end={touches ? end : null} />
+            <Month
+              month={item}
+              weekdays={header !== undefined}
+              {...o}
+              start={touches ? start : null}
+              end={touches ? end : null}
+            />
           );
         }}
       />

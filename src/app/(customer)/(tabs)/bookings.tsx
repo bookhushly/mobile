@@ -44,6 +44,9 @@ function SignedInBookings({ userId, email }: { userId: string; email: string }) 
       onOpenCarRequest={(id) => {
         router.push({ pathname: '/car-rental/[id]', params: { id } });
       }}
+      onOpenLogisticsRequest={(id) => {
+        router.push({ pathname: '/logistics/[id]', params: { id } });
+      }}
       onBrowse={() => {
         router.navigate('/explore');
       }}

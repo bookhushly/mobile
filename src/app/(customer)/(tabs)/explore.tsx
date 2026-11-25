@@ -32,6 +32,9 @@ export default function ExploreRoute() {
       onOpenCarRental={() => {
         router.push('/car-rental/new');
       }}
+      onOpenLogistics={() => {
+        router.push('/logistics/new');
+      }}
       onSignInAgain={() => {
         signOut();
       }}

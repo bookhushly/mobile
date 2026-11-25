@@ -1,3 +1,4 @@
+import type { LucideIcon } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import { useState } from 'react';
 import { FlatList, View } from 'react-native';
@@ -10,16 +11,18 @@ type Props = {
   /** https URLs from the company, or one bundled option photo. */
   photos: readonly (string | number)[];
   label: string;
+  /** For a quote with no photos. */
+  icon?: LucideIcon;
 };
 
 const HEIGHT = 240;
 
 // The company's photos of the car, swiped one at a time with an "n / total" count (Turo, Airbnb).
-export function QuotePhotos({ photos, label }: Props) {
+export function QuotePhotos({ photos, label, icon }: Props) {
   // Measured, not the window: on tablets the page is narrower than the screen.
   const [w, setW] = useState(0);
   const [at, setAt] = useState(0);
-  if (photos.length === 0) return <CarPhoto source={null} height={HEIGHT} />;
+  if (photos.length === 0) return <CarPhoto source={null} height={HEIGHT} icon={icon} />;
   return (
     // Not merged into one element: each photo is its own, so a screen reader can move through them.
     <View

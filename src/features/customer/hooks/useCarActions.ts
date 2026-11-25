@@ -1,19 +1,11 @@
 import { useRef, useState } from 'react';
 
-import {
-  cancelCarRequest,
-  confirmCarTripDone,
-  getCarRequest,
-  listCarRequests,
-  reviewCarTrip,
-  selectCarOffer,
-  submitCarRequest,
-} from '@/features/customer/api/carRentalApi';
 import { reviewOutcome, type ReviewDone } from '@/features/customer/domain/actionOutcome';
 import type { SubmitBody } from '@/features/customer/domain/carRental/carRequest';
 import { useAction, type ActionState } from '@/features/customer/hooks/actionState';
-import { useRefreshCarRequest } from '@/features/customer/hooks/useCarRequests';
+import { CAR_KIND, type RfqKind, type RfqRow } from '@/features/customer/hooks/rfqKinds';
 import type { CarRequest } from '@/features/customer/schemas/carRental';
+import { useRefreshRfq } from '@/features/customer/hooks/useCarRequests';
 import { api, clock } from '@/shared/api/instance';
 import { isRetryable, type ApiError } from '@/shared/lib/errors';
 
@@ -64,34 +56,35 @@ export const LOST_ANSWER_WINDOW_MS = 10 * 60_000;
  * saying "try again": a matching request made in the last few minutes counts as sent, and the
  * customer never sends the same trip twice.
  */
-export function useSubmitCarRequest(userId: string): {
-  send: (body: SubmitBody) => Promise<CarWrite<{ id: string }>>;
+export function useSubmitRfq<R extends RfqRow, B>(
+  kind: RfqKind<R, B>,
+  userId: string,
+): {
+  send: (body: B) => Promise<CarWrite<{ id: string }>>;
   sending: boolean;
 } {
-  const refresh = useRefreshCarRequest(userId);
+  const refresh = useRefreshRfq(kind, userId);
   const [sending, setSending] = useState(false);
   // A ref, not state: the auto-send after sign-in and a tap can land in the same render.
   const inFlight = useRef(false);
-  const send = async (body: SubmitBody) => {
+  const send = async (body: B) => {
     if (inFlight.current) return { kind: 'tryAgain' } as const;
     inFlight.current = true;
     setSending(true);
     try {
-      const out = writeResult(await submitCarRequest(api, body));
+      const out = writeResult(await kind.submit(api, body));
       if (out.kind === 'ok') {
         await refresh(out.value.id);
         return out;
       }
       if (out.kind !== 'tryAgain') return out;
-      const list = await listCarRequests(api);
+      const list = await kind.list(api);
       if (!list.ok) return out;
       const now = clock.serverNow();
       const landed = list.value.requests.find(
         (r) =>
           r.status === 'open' &&
-          r.pickupDate === body.pickup_date &&
-          r.pickupState === body.pickup_state &&
-          r.tripType === body.trip_type &&
+          kind.sameAs(r, body) &&
           now - Date.parse(r.createdAt) < LOST_ANSWER_WINDOW_MS,
       );
       if (landed === undefined) return out;
@@ -108,7 +101,8 @@ export function useSubmitCarRequest(userId: string): {
 type Action = 'select' | 'cancel' | 'confirm';
 
 /** Choose a quote, cancel, confirm the trip's done. Each re-reads the request after. */
-export function useCarActions(
+export function useRfqActions<R extends RfqRow, B>(
+  kind: RfqKind<R, B>,
   userId: string,
   id: string,
 ): {
@@ -118,7 +112,7 @@ export function useCarActions(
   cancel: (reason: string) => Promise<CarWrite<{ refund: 'none' | 'pending' | 'unknown' }>>;
   confirmDone: () => Promise<CarWrite<unknown>>;
 } {
-  const refresh = useRefreshCarRequest(userId);
+  const refresh = useRefreshRfq(kind, userId);
   const [busy, setBusy] = useState<Action | null>(null);
   // Single flight on a ref: a second tap before React re-renders does nothing.
   const inFlight = useRef(false);
@@ -140,8 +134,8 @@ export function useCarActions(
     }
   }
   /** A lost answer or a retry's 409 may hide a write that landed: read back what the request says. */
-  async function landed(test: (r: CarRequest) => boolean): Promise<boolean> {
-    const r = await getCarRequest(api, id);
+  async function landed(test: (r: R) => boolean): Promise<boolean> {
+    const r = await kind.get(api, id);
     return r.ok && test(r.value);
   }
   return {
@@ -149,7 +143,7 @@ export function useCarActions(
     // A lost answer (or a retry's 409) may hide the customer's own successful choice: the request
     // is read back, and if this offer is now the chosen one, it was chosen.
     select: async (offerId) => {
-      const out = await run('select', () => selectCarOffer(api, id, offerId));
+      const out = await run('select', () => kind.select(api, id, offerId));
       if (out.kind === 'ok' || out.kind === 'signIn') return out;
       return (await landed((r) => r.status === 'matched' && r.selectedOffer?.id === offerId))
         ? { kind: 'ok', value: undefined }
@@ -157,7 +151,7 @@ export function useCarActions(
     },
     cancel: async (reason) => {
       const out = await run<{ refund: 'none' | 'pending' | 'unknown' }>('cancel', () =>
-        cancelCarRequest(api, id, reason),
+        kind.cancel(api, id, reason),
       );
       if (out.kind === 'ok' || out.kind === 'signIn') return out;
       return (await landed((r) => r.status === 'cancelled' || r.status === 'refunded'))
@@ -165,7 +159,7 @@ export function useCarActions(
         : out;
     },
     confirmDone: async () => {
-      const out = await run('confirm', () => confirmCarTripDone(api, id));
+      const out = await run('confirm', () => kind.confirm(api, id));
       if (out.kind === 'ok' || out.kind === 'signIn') return out;
       return (await landed((r) => r.status === 'completed'))
         ? { kind: 'ok', value: undefined }
@@ -175,7 +169,8 @@ export function useCarActions(
 }
 
 /** The trip review in the shared ReviewSheet: a 409 `already_reviewed` counts as done. */
-export function useCarReview(
+export function useRfqReview<R extends RfqRow, B>(
+  kind: RfqKind<R, B>,
   userId: string,
   id: string,
 ): {
@@ -183,13 +178,13 @@ export function useCarReview(
   post: (rating: number, comment: string) => void;
   reset: () => void;
 } {
-  const refresh = useRefreshCarRequest(userId);
+  const refresh = useRefreshRfq(kind, userId);
   const a = useAction<ReviewDone>();
   return {
     state: a.state,
     post: (rating, comment) => {
       void a.run({ kind: 'sending' }, async () => {
-        const o = reviewOutcome(await reviewCarTrip(api, id, rating, comment));
+        const o = reviewOutcome(await kind.review(api, id, rating, comment));
         if (o.kind === 'done') await refresh(id);
         return o;
       });
@@ -197,3 +192,9 @@ export function useCarReview(
     reset: a.reset,
   };
 }
+
+// Car rental names, kept for the car screens.
+export const useSubmitCarRequest = (userId: string) =>
+  useSubmitRfq<CarRequest, SubmitBody>(CAR_KIND, userId);
+export const useCarActions = (userId: string, id: string) => useRfqActions(CAR_KIND, userId, id);
+export const useCarReview = (userId: string, id: string) => useRfqReview(CAR_KIND, userId, id);

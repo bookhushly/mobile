@@ -10,11 +10,21 @@ type Props = {
   paid: boolean;
   busy: boolean;
   problem: string | null;
+  /** Logistics and security need a reason (the web refuses an empty one). */
+  reasonRequired?: boolean;
   onCancel: (reason: string) => void;
   onClose: () => void;
 };
 
-export function CarCancelSheet({ visible, paid, busy, problem, onCancel, onClose }: Props) {
+export function CarCancelSheet({
+  visible,
+  paid,
+  busy,
+  problem,
+  reasonRequired = false,
+  onCancel,
+  onClose,
+}: Props) {
   const [reason, setReason] = useState('');
   return (
     <Sheet
@@ -30,7 +40,7 @@ export function CarCancelSheet({ visible, paid, busy, problem, onCancel, onClose
             label={paid ? 'Cancel booking' : 'Cancel request'}
             variant="destructive"
             loading={busy}
-            disabled={busy}
+            disabled={busy || (reasonRequired && reason.trim() === '')}
             onPress={() => {
               onCancel(reason);
             }}
@@ -43,11 +53,12 @@ export function CarCancelSheet({ visible, paid, busy, problem, onCancel, onClose
       <View style={{ gap: space.s5 }}>
         <Text variant="body">
           {paid
-            ? 'The company is told at once, and a refund of your payment is started.'
+            ? 'The company is told at once, and a refund is started.'
             : 'Companies can’t quote on it any more. Nothing has been charged.'}
         </Text>
         <Input
-          label="Why are you cancelling? (optional)"
+          label={reasonRequired ? 'Why are you cancelling?' : 'Why are you cancelling? (optional)'}
+          {...(reasonRequired ? { hint: 'A reason is needed to cancel.' } : {})}
           value={reason}
           onChangeText={setReason}
           maxLength={500}

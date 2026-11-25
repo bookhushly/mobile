@@ -83,9 +83,9 @@ export type CarRequest = {
   offers: CarOffer[];
 };
 
-const str = z.string().nullable().optional().catch(null);
-const num = z.coerce.number().nullable().optional().catch(null);
-const bool = z.boolean().nullable().optional().catch(null);
+export const str = z.string().nullable().optional().catch(null);
+export const num = z.coerce.number().nullable().optional().catch(null);
+export const bool = z.boolean().nullable().optional().catch(null);
 const urls = z
   .array(z.string())
   .nullable()
@@ -126,7 +126,8 @@ const driver = z
     verified: d.is_verified === true,
   }));
 
-const offer = z
+/** One quote, shared by car rental and logistics (same `vendor_offers` shape). */
+export const offer = z
   .object({
     id: z.string(),
     // A number, or PostgREST's numeric-as-string; never null coerced to ₦0.
@@ -170,7 +171,7 @@ const offer = z
         ? null
         : {
             id: o.vendor.id,
-            name: o.vendor.business_name ?? 'Car rental company',
+            name: o.vendor.business_name ?? 'Company',
             rating: o.vendor.rating ?? null,
             reviewCount: o.vendor.review_count ?? 0,
           },
@@ -178,7 +179,9 @@ const offer = z
     driver: o.driver ?? null,
   }));
 
-const time = str.transform((t) => (t == null ? null : (/^\d{2}:\d{2}/.exec(t)?.[0] ?? null)));
+export const time = str.transform((t) =>
+  t == null ? null : (/^\d{2}:\d{2}/.exec(t)?.[0] ?? null),
+);
 
 export const carRequest = z
   .object({
