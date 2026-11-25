@@ -108,15 +108,18 @@ const TIME_OPTIONS = [
 export function PickupTimeChips({
   value,
   onChange,
+  label = 'Pick-up time',
 }: {
   value: string | null;
   onChange: (t: string | null) => void;
+  /** "Pick-up time", "Start time". */
+  label?: string;
 }) {
   return (
     <View style={{ gap: space.s2 }}>
-      <Text variant="label">Pick-up time</Text>
+      <Text variant="label">{label}</Text>
       <FilterChips
-        label="Pick-up time"
+        label={label}
         value={value ?? 'any'}
         options={TIME_OPTIONS}
         onChange={(v) => {

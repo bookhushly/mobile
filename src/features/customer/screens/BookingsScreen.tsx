@@ -9,6 +9,9 @@ import { useCarRequests } from '@/features/customer/hooks/useCarRequests';
 import { useLogisticsRequests } from '@/features/customer/hooks/useLogistics';
 import type { CarRequest } from '@/features/customer/schemas/carRental';
 import type { LogisticsRequest } from '@/features/customer/schemas/logistics';
+import type { SecurityRequest } from '@/features/customer/schemas/security';
+import { useSecurityRequests } from '@/features/customer/hooks/useSecurity';
+import { SecurityRequestRow } from '@/features/customer/ui/security/SecurityRequestRow';
 import { useClaim } from '@/features/customer/hooks/useClaim';
 import { useMyBookings } from '@/features/customer/hooks/useMyBookings';
 import { useSentNotice } from '@/features/customer/hooks/sentNotice';
@@ -40,7 +43,8 @@ type Segment = 'upcoming' | 'past';
 /** A request-for-quote in Bookings (car rental or logistics). */
 type ReqItem =
   | { service: 'car'; r: CarRequest; stage: Stage }
-  | { service: 'logistics'; r: LogisticsRequest; stage: Stage };
+  | { service: 'logistics'; r: LogisticsRequest; stage: Stage }
+  | { service: 'security'; r: SecurityRequest; stage: Stage };
 type Row =
   | { type: 'booking'; key: string; booking: MyBooking }
   | { type: 'request'; key: string; req: ReqItem };
@@ -57,6 +61,8 @@ type Props = {
   onOpenCarRequest: (id: string) => void;
   /** A logistics request (Phase 6). */
   onOpenLogisticsRequest: (id: string) => void;
+  /** A security request (Phase 6). */
+  onOpenSecurityRequest: (id: string) => void;
   /** The empty state's way on: the Explore tab (final review F3). */
   onBrowse: () => void;
 };
@@ -71,12 +77,14 @@ export function BookingsScreen({
   onOpenNotifications,
   onOpenCarRequest,
   onOpenLogisticsRequest,
+  onOpenSecurityRequest,
   onBrowse,
 }: Props) {
   const my = useMyBookings(userId);
   // Car requests load on their own: a failure there never hides the bookings (or reads as none).
   const cars = useCarRequests(userId);
   const sends = useLogisticsRequests(userId);
+  const guards = useSecurityRequests(userId);
   const unread = useUnreadCount(userId);
   // Spec E7: where the tickets of a transfer just made went (the booking has left the list).
   const sent = useSentNotice(userId);
@@ -109,9 +117,11 @@ export function BookingsScreen({
 
   const refresh = () => {
     setRefreshing(true);
-    void Promise.all([my.refetch(), cars.refetch(), sends.refetch()]).finally(() => {
-      setRefreshing(false);
-    });
+    void Promise.all([my.refetch(), cars.refetch(), sends.refetch(), guards.refetch()]).finally(
+      () => {
+        setRefreshing(false);
+      },
+    );
   };
   const open = (b: MyBooking) => {
     onOpenBooking(b.kind, b.id);
@@ -149,12 +159,17 @@ export function BookingsScreen({
         r,
         stage: requestStage(r, now),
       })),
+      ...(guards.requests ?? []).map((r) => ({
+        service: 'security' as const,
+        r,
+        stage: requestStage(r, now),
+      })),
     ];
     const carsUpcoming = carRows.filter((c) => !isPast(c.stage));
     const carsPast = carRows.filter((c) => isPast(c.stage));
     const carsShown = segment === 'upcoming' ? carsUpcoming : saved ? [] : carsPast;
     // Requests that failed (or haven't loaded) are unknown, never "none" (C17).
-    const carsKnown = cars.requests !== null && sends.requests !== null;
+    const carsKnown = cars.requests !== null && sends.requests !== null && guards.requests !== null;
     const nothing =
       !saved &&
       carsKnown &&
@@ -194,16 +209,10 @@ export function BookingsScreen({
             testID="sent-notice"
           />
         ) : null}
-        {(cars.failed || sends.failed) && !saved ? (
+        {(cars.failed || sends.failed || guards.failed) && !saved ? (
           <Banner
             tone="neutral"
-            message={
-              cars.failed && sends.failed
-                ? 'Couldn’t load your car rentals and deliveries. Pull to refresh.'
-                : cars.failed
-                  ? 'Couldn’t load your car rentals. Pull to refresh.'
-                  : 'Couldn’t load your deliveries. Pull to refresh.'
-            }
+            message="Couldn’t load some of your requests (car rentals, deliveries or security). Pull to refresh."
             testID="cars-failed"
           />
         ) : null}
@@ -243,7 +252,7 @@ export function BookingsScreen({
     );
     let empty: ReactNode;
     if (carsShown.length > 0) empty = null;
-    else if (cars.loading || sends.loading) empty = <SkeletonRows count={2} />;
+    else if (cars.loading || sends.loading || guards.loading) empty = <SkeletonRows count={2} />;
     else if (nothing)
       empty = (
         <View style={{ gap: space.s4 }}>
@@ -288,11 +297,17 @@ export function BookingsScreen({
             <BookingRow booking={item.booking} onPress={open} />
           ) : item.req.service === 'car' ? (
             <CarRequestRow request={item.req.r} stage={item.req.stage} onPress={onOpenCarRequest} />
-          ) : (
+          ) : item.req.service === 'logistics' ? (
             <LogisticsRequestRow
               request={item.req.r}
               stage={item.req.stage}
               onPress={onOpenLogisticsRequest}
+            />
+          ) : (
+            <SecurityRequestRow
+              request={item.req.r}
+              stage={item.req.stage}
+              onPress={onOpenSecurityRequest}
             />
           )
         }

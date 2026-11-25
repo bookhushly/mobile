@@ -153,6 +153,7 @@ function props() {
     onOpenBookings: jest.fn(),
     onOpenCarRental: jest.fn(),
     onOpenLogistics: jest.fn(),
+    onOpenSecurity: jest.fn(),
     onSignInAgain: jest.fn(),
   };
 }
@@ -390,6 +391,8 @@ it('car rentals and logistics open their request flows, not results', async () =
   expect(p.onOpenCarRental).toHaveBeenCalled();
   await fireEvent.press(within(tiles).getByRole('button', { name: 'Send or move something, New' }));
   expect(p.onOpenLogistics).toHaveBeenCalled();
+  await fireEvent.press(within(tiles).getByRole('button', { name: 'Hire security, New' }));
+  expect(p.onOpenSecurity).toHaveBeenCalled();
   expect(p.onOpenResults).not.toHaveBeenCalled();
 });
 
