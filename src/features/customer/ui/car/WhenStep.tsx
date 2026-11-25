@@ -1,5 +1,5 @@
 import { ArrowRight } from 'lucide-react-native';
-import { useCallback } from 'react';
+import { useCallback, type ReactElement } from 'react';
 import { View } from 'react-native';
 
 import { pickDay, type CarDraft } from '@/features/customer/domain/carRental/carRequest';
@@ -12,6 +12,8 @@ import { FilterChips, Icon, RangeCalendar, Text } from '@/shared/ui';
 type Props = {
   draft: CarDraft;
   today: IsoDate;
+  /** The step's heading, scrolled with the calendar. */
+  title: ReactElement;
   onChange: (p: Partial<CarDraft>) => void;
 };
 
@@ -43,7 +45,7 @@ function Box({ label, value, active }: { label: string; value: string | null; ac
 
 // Step 2, after Turo and Agoda: Pick-up → Return on top, then the months scroll. A single tap is a
 // one-day trip; tapping the same day again makes that explicit.
-export function WhenStep({ draft, today, onChange }: Props) {
+export function WhenStep({ draft, today, title, onChange }: Props) {
   const { pickupDate, returnDate } = draft;
   // Stable across taps (the store's patch is stable and the dates are read when tapped), so months
   // the range doesn't touch skip re-rendering (RangeCalendar's memo).
@@ -54,8 +56,11 @@ export function WhenStep({ draft, today, onChange }: Props) {
     [onChange],
   );
   const choosingReturn = pickupDate !== null && returnDate === null;
-  return (
-    <View style={{ flex: 1, gap: space.s5 }}>
+  // The title and the chosen dates scroll away with the months (RangeCalendar `header`), so a small
+  // phone with large text still gets the whole page for the calendar.
+  const header = (
+    <View style={{ gap: space.s5, paddingBottom: space.s5 }}>
+      {title}
       <View
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s3 }}
         accessible
@@ -73,7 +78,12 @@ export function WhenStep({ draft, today, onChange }: Props) {
           active={choosingReturn}
         />
       </View>
+    </View>
+  );
+  return (
+    <View style={{ flex: 1 }}>
       <RangeCalendar
+        header={header}
         today={today}
         months={12}
         start={pickupDate}
@@ -94,17 +104,23 @@ const TIME_OPTIONS = [
   ...TIMES.map((t) => ({ value: t, label: timeWords(t) })),
 ] as const;
 
-/** Pick-up time, in the footer just above Next. */
-export function PickupTimeChips({ draft, onChange }: Omit<Props, 'today'>) {
+/** Pick-up time, in the footer just above Next (car rental and logistics). */
+export function PickupTimeChips({
+  value,
+  onChange,
+}: {
+  value: string | null;
+  onChange: (t: string | null) => void;
+}) {
   return (
     <View style={{ gap: space.s2 }}>
       <Text variant="label">Pick-up time</Text>
       <FilterChips
         label="Pick-up time"
-        value={draft.pickupTime ?? 'any'}
+        value={value ?? 'any'}
         options={TIME_OPTIONS}
         onChange={(v) => {
-          onChange({ pickupTime: v === 'any' ? null : v });
+          onChange(v === 'any' ? null : v);
         }}
         testID="car-pickup-time"
       />

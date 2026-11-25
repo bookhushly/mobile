@@ -122,16 +122,22 @@ export function CategoryTiles<T extends string>({ tiles, onPress, testID }: Prop
       </View>
     </PressableScale>
   );
-  // Four tiles (car rentals joined, 2026-11-23): two equal rows of two, as in the approved design.
-  if (tiles.length === 4) {
+  // Four or more (car rentals joined 2026-11-23, logistics after): the first four as two even rows
+  // of two, then any more as wide cards below (the approved design), so the grid stays even.
+  if (tiles.length >= 4) {
     return (
       <View testID={testID} style={{ gap: d.targetGap }}>
-        {[tiles.slice(0, 2), tiles.slice(2)].map((row) => (
+        {[tiles.slice(0, 2), tiles.slice(2, 4)].map((row) => (
           <View
             key={row.map((t) => t.key).join()}
             style={{ flexDirection: 'row', gap: d.targetGap }}
           >
             {row.map((t) => card(t, false))}
+          </View>
+        ))}
+        {tiles.slice(4).map((t) => (
+          <View key={t.key} style={{ flexDirection: 'row' }}>
+            {card(t, true)}
           </View>
         ))}
       </View>

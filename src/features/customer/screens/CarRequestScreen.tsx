@@ -1,7 +1,6 @@
-import { useIsFocused } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Alert, Linking, RefreshControl, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { RefreshControl, View } from 'react-native';
 
 import {
   askAgainDraft,
@@ -13,36 +12,21 @@ import {
   pendingQuotes,
   requestStage,
 } from '@/features/customer/domain/carRental/carStatus';
-import { useCarActions, useCarReview } from '@/features/customer/hooks/useCarActions';
+import { CAR_KIND } from '@/features/customer/hooks/rfqKinds';
 import { useCarDraft } from '@/features/customer/hooks/useCarDraft';
-import {
-  useCarPayment,
-  usePayOnOpen,
-  type CarPayState,
-} from '@/features/customer/hooks/useCarPayment';
-import { useCarRequest } from '@/features/customer/hooks/useCarRequests';
-import { useFocusRefetch } from '@/features/customer/hooks/useFocusRefetch';
+import { useRequestScreen } from '@/features/customer/hooks/useRequestScreen';
 import { ReviewSheet } from '@/features/customer/ui/ReviewSheet';
 import { BookedView } from '@/features/customer/ui/car/BookedView';
 import { CarCancelSheet } from '@/features/customer/ui/car/CarCancelSheet';
+import { PayFooter } from '@/features/customer/ui/car/PayFooter';
+import { RequestFooter } from '@/features/customer/ui/car/RequestFooter';
 import { RequestLoadError } from '@/features/customer/ui/car/RequestLoadError';
 import { StatusView } from '@/features/customer/ui/car/StatusView';
-import { CAR_TRY_AGAIN, carRefusedWords } from '@/features/customer/ui/car/carActionWords';
 import { carName, dateRange } from '@/features/customer/ui/car/carWords';
 import { clock } from '@/shared/api/instance';
-import { formatNaira } from '@/shared/lib/formatNaira';
 import { lagosToday, longDate } from '@/shared/lib/lagosDay';
 import { space } from '@/shared/theme';
-import {
-  Banner,
-  Button,
-  Header,
-  IconButton,
-  refreshColors,
-  Screen,
-  SkeletonRows,
-  Text,
-} from '@/shared/ui';
+import { Button, Header, IconButton, refreshColors, Screen, SkeletonRows, Text } from '@/shared/ui';
 
 type Props = {
   userId: string;
@@ -53,45 +37,12 @@ type Props = {
   onAskAgain: () => void;
 };
 
-const SUPPORT = 'support@bookhushly.com';
-
-const PAY_WORDS: Partial<Record<CarPayState['kind'], string>> = {
-  checking: 'Checking your payment…',
-  notYet:
-    'Your payment isn’t confirmed yet. Don’t pay again: this page updates when it is. Check again in a minute.',
-  failed: 'The payment didn’t go through and you weren’t charged. You can try again.',
-};
-
 export function CarRequestScreen({ userId, id, onBack, onSeeQuotes, onAskAgain }: Props) {
-  const q = useCarRequest(userId, id);
-  useFocusRefetch(useIsFocused(), q);
-  const r = q.request;
-  const actions = useCarActions(userId, id);
-  const review = useCarReview(userId, id);
+  const v = useRequestScreen(CAR_KIND, userId, id);
+  const { q, r, actions, review, pay } = v;
   const startDraft = useCarDraft((s) => s.start);
-  const pay = useCarPayment(userId, id, r?.status === 'matched');
   const [change, setChange] = useState<AskAgainChange | null>(null);
-  const [cancelling, setCancelling] = useState(false);
-  const [reviewing, setReviewing] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  // The open-payment check before a cancel: one at a time, and the sheet shows it working.
-  const cancelChecking = useRef(false);
-  const [checking, setChecking] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const today = lagosToday(clock.serverNow());
-
-  // Straight from "Choose and pay" (an in-app flag, never a link): open the checkout once the
-  // request reads matched.
-  // Subscribed to the flag itself: it is set after the request already reads matched (the screen
-  // underneath has refreshed), so the effect must re-run when the flag arrives.
-  const asked = usePayOnOpen((s) => s.id === id);
-  const takePayOnOpen = usePayOnOpen((s) => s.take);
-  const matched = r?.status === 'matched';
-  const startPay = pay.pay;
-  useEffect(() => {
-    if (asked && matched && takePayOnOpen(id)) startPay();
-  }, [asked, matched, id, takePayOnOpen, startPay]);
 
   const header = (
     <Header
@@ -115,70 +66,12 @@ export function CarRequestScreen({ userId, id, onBack, onSeeQuotes, onAskAgain }
   const paid = isPaidStatus(r.status);
   const cancellable = canCancel(r.status);
 
-  const doConfirm = async () => {
-    setProblem(null);
-    const out = await actions.confirmDone();
-    if (out.kind === 'tryAgain') setProblem(CAR_TRY_AGAIN);
-    else if (out.kind === 'refused') setProblem(carRefusedWords(out.code));
-  };
-  const doCancel = async (reason: string) => {
-    if (cancelChecking.current) return;
-    setProblem(null);
-    // A payment started anywhere (the web, another phone) may still land: never cancel over it.
-    if (r.status === 'matched') {
-      cancelChecking.current = true;
-      setChecking(true);
-      const open = await pay.paymentOpen().finally(() => {
-        cancelChecking.current = false;
-        setChecking(false);
-      });
-      if (open !== 'clear') {
-        setProblem(
-          open === 'open'
-            ? 'A payment for this is still being processed. Wait until it finishes, then check again.'
-            : CAR_TRY_AGAIN,
-        );
-        return;
-      }
-    }
-    const out = await actions.cancel(reason);
-    if (out.kind === 'ok') {
-      setCancelling(false);
-      setNotice(
-        out.value.refund === 'pending'
-          ? 'Cancelled. A refund of your payment has been started.'
-          : out.value.refund === 'none'
-            ? 'Cancelled. Nothing was charged.'
-            : 'Cancelled. If you had paid, a refund was started.',
-      );
-    } else if (out.kind === 'tryAgain') setProblem(CAR_TRY_AGAIN);
-    else if (out.kind === 'refused') setProblem(carRefusedWords(out.code));
-  };
-  const reportProblem = () => {
-    const subject = encodeURIComponent(`Car rental ${r.id}`);
-    Linking.openURL(`mailto:${SUPPORT}?subject=${subject}`).catch(() => {
-      // No mail app (common on iPads): say where to write instead of doing nothing.
-      Alert.alert('Report a problem', `Email ${SUPPORT} and mention car rental ${r.id}.`);
-    });
-  };
-  // While a payment may be under way, cancelling could leave money taken on a cancelled request
-  // (the web's verify/webhook would still mark it paid): Cancel waits for the payment to settle.
-  const payOpen =
-    pay.state.kind === 'starting' ||
-    pay.state.kind === 'inBrowser' ||
-    pay.state.kind === 'checking' ||
-    pay.state.kind === 'notYet' ||
-    pay.state.kind === 'paid';
-
   const cancelLink =
-    cancellable && !payOpen ? (
+    cancellable && !v.payOpen ? (
       <Button
         label={paid ? 'Cancel booking' : 'Cancel request'}
         variant="ghost"
-        onPress={() => {
-          setProblem(null);
-          setCancelling(true);
-        }}
+        onPress={v.openCancel}
         testID="car-cancel"
       />
     ) : null;
@@ -212,37 +105,18 @@ export function CarRequestScreen({ userId, id, onBack, onSeeQuotes, onAskAgain }
         />
       );
       break;
-    case 'chosen': {
-      const amount = r.selectedOffer?.amount ?? null;
-      const words = pay.state.kind === 'error' ? pay.state.words : PAY_WORDS[pay.state.kind];
+    case 'chosen':
       footer = (
-        <View style={{ gap: space.s3 }}>
-          {words === undefined ? null : <Banner tone="neutral" message={words} />}
-          {pay.state.kind === 'notYet' ? (
-            <Button
-              label="Check again"
-              variant="secondary"
-              onPress={pay.checkAgain}
-              testID="car-check-again"
-            />
-          ) : (
-            <Button
-              label={amount === null ? 'Pay' : `Pay ${formatNaira(amount)}`}
-              loading={
-                pay.state.kind === 'starting' ||
-                pay.state.kind === 'inBrowser' ||
-                pay.state.kind === 'checking'
-              }
-              disabled={pay.state.kind === 'paid'}
-              onPress={pay.pay}
-              testID="car-pay"
-            />
-          )}
-          {cancelLink}
-        </View>
+        <PayFooter
+          state={pay.state}
+          amount={v.payTotal}
+          note={v.payNote}
+          onPay={pay.pay}
+          onCheckAgain={pay.checkAgain}
+          cancel={cancelLink}
+        />
       );
       break;
-    }
     case 'booked':
       footer = cancelLink;
       after = (
@@ -264,7 +138,7 @@ export function CarRequestScreen({ userId, id, onBack, onSeeQuotes, onAskAgain }
             label="Confirm trip’s done"
             disabled={!ready}
             loading={actions.busy === 'confirm'}
-            onPress={() => void doConfirm()}
+            onPress={() => void v.confirmDone()}
             testID="car-confirm-done"
           />
         </View>
@@ -282,7 +156,7 @@ export function CarRequestScreen({ userId, id, onBack, onSeeQuotes, onAskAgain }
           label="Rate your trip"
           variant="secondary"
           onPress={() => {
-            setReviewing(true);
+            v.setReviewing(true);
           }}
           testID="car-rate"
         />
@@ -305,34 +179,19 @@ export function CarRequestScreen({ userId, id, onBack, onSeeQuotes, onAskAgain }
       scroll
       header={header}
       footer={
-        footer === null && problem === null && notice === null ? undefined : (
-          <View style={{ gap: space.s3 }}>
-            {problem === null || cancelling ? null : <Banner tone="neutral" message={problem} />}
-            {notice === null ? null : (
-              <Banner
-                tone="neutral"
-                message={notice}
-                onDismiss={() => {
-                  setNotice(null);
-                }}
-                testID="car-notice"
-              />
-            )}
+        footer === null && v.problem === null && v.notice === null ? undefined : (
+          <RequestFooter
+            problem={v.problem}
+            cancelling={v.cancelling}
+            notice={v.notice}
+            onDismissNotice={v.clearNotice}
+          >
             {footer}
-          </View>
+          </RequestFooter>
         )
       }
       refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => {
-            setRefreshing(true);
-            void q.refetch().finally(() => {
-              setRefreshing(false);
-            });
-          }}
-          {...refreshColors}
-        />
+        <RefreshControl refreshing={v.refreshing} onRefresh={v.refresh} {...refreshColors} />
       }
     >
       <View style={{ gap: space.s7, paddingTop: space.s5, paddingBottom: space.s7 }}>
@@ -357,24 +216,24 @@ export function CarRequestScreen({ userId, id, onBack, onSeeQuotes, onAskAgain }
             <Button
               label="Report a problem"
               variant="secondary"
-              onPress={reportProblem}
+              onPress={() => {
+                v.reportProblem('Car rental');
+              }}
               testID="car-report"
             />
           </View>
         ) : null}
       </View>
       <CarCancelSheet
-        visible={cancelling}
+        visible={v.cancelling}
         paid={paid}
-        busy={actions.busy === 'cancel' || checking}
-        problem={cancelling ? problem : null}
-        onCancel={(reason) => void doCancel(reason)}
-        onClose={() => {
-          setCancelling(false);
-        }}
+        busy={v.cancelBusy}
+        problem={v.cancelling ? v.problem : null}
+        onCancel={(reason) => void v.cancel(reason)}
+        onClose={v.closeCancel}
       />
       <ReviewSheet
-        visible={reviewing}
+        visible={v.reviewing}
         title={carName(r.selectedOffer?.vehicle ?? null, r.vehicleType)}
         when={
           r.returnDate === r.pickupDate
@@ -385,7 +244,7 @@ export function CarRequestScreen({ userId, id, onBack, onSeeQuotes, onAskAgain }
         onPost={review.post}
         onClose={() => {
           review.reset();
-          setReviewing(false);
+          v.setReviewing(false);
         }}
       />
     </Screen>

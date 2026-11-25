@@ -38,7 +38,7 @@ type Props = {
   onEdit: (s: Step) => void;
 };
 
-function Answer({
+export function Answer({
   label,
   value,
   onEdit,

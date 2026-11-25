@@ -12,7 +12,7 @@ type Props = { draft: CarDraft; onChange: (p: Partial<CarDraft>) => void };
 
 export { stateName } from '@/features/customer/ui/car/StateSheet';
 
-function StateField({
+export function StateField({
   label,
   value,
   onPress,

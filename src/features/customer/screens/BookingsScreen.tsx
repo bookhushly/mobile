@@ -2,9 +2,13 @@ import { CalendarClock, History, Ticket } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { FlatList, RefreshControl, View } from 'react-native';
 
-import { isPast, requestStage } from '@/features/customer/domain/carRental/carStatus';
+import { isPast, requestStage, type Stage } from '@/features/customer/domain/carRental/carStatus';
+import { mergeByDate, sortByDate } from '@/features/customer/domain/mergeByDate';
 import type { BookingKind, MyBooking } from '@/features/customer/domain/myBookings';
 import { useCarRequests } from '@/features/customer/hooks/useCarRequests';
+import { useLogisticsRequests } from '@/features/customer/hooks/useLogistics';
+import type { CarRequest } from '@/features/customer/schemas/carRental';
+import type { LogisticsRequest } from '@/features/customer/schemas/logistics';
 import { useClaim } from '@/features/customer/hooks/useClaim';
 import { useMyBookings } from '@/features/customer/hooks/useMyBookings';
 import { useSentNotice } from '@/features/customer/hooks/sentNotice';
@@ -12,6 +16,7 @@ import { useUnreadCount } from '@/features/customer/hooks/useUnreadCount';
 import { BellButton } from '@/features/customer/ui/BellButton';
 import { BookingRow } from '@/features/customer/ui/BookingRow';
 import { CarRequestRow } from '@/features/customer/ui/car/CarRequestRow';
+import { LogisticsRequestRow } from '@/features/customer/ui/logistics/LogisticsRequestRow';
 import { ClaimCard, claimCardKind } from '@/features/customer/ui/ClaimCard';
 import { ClaimSheet } from '@/features/customer/ui/ClaimSheet';
 import { mainAction } from '@/features/customer/ui/mainAction';
@@ -32,6 +37,14 @@ import {
 
 type Segment = 'upcoming' | 'past';
 
+/** A request-for-quote in Bookings (car rental or logistics). */
+type ReqItem =
+  | { service: 'car'; r: CarRequest; stage: Stage }
+  | { service: 'logistics'; r: LogisticsRequest; stage: Stage };
+type Row =
+  | { type: 'booking'; key: string; booking: MyBooking }
+  | { type: 'request'; key: string; req: ReqItem };
+
 type Props = {
   userId: string;
   /** The account email, shown masked on the guest bookings card and sheet. */
@@ -42,6 +55,8 @@ type Props = {
   onOpenNotifications: () => void;
   /** A car rental request (Phase 6). */
   onOpenCarRequest: (id: string) => void;
+  /** A logistics request (Phase 6). */
+  onOpenLogisticsRequest: (id: string) => void;
   /** The empty state's way on: the Explore tab (final review F3). */
   onBrowse: () => void;
 };
@@ -55,11 +70,13 @@ export function BookingsScreen({
   onShowCheckInCode,
   onOpenNotifications,
   onOpenCarRequest,
+  onOpenLogisticsRequest,
   onBrowse,
 }: Props) {
   const my = useMyBookings(userId);
   // Car requests load on their own: a failure there never hides the bookings (or reads as none).
   const cars = useCarRequests(userId);
+  const sends = useLogisticsRequests(userId);
   const unread = useUnreadCount(userId);
   // Spec E7: where the tickets of a transfer just made went (the booking has left the list).
   const sent = useSentNotice(userId);
@@ -92,7 +109,7 @@ export function BookingsScreen({
 
   const refresh = () => {
     setRefreshing(true);
-    void Promise.all([my.refetch(), cars.refetch()]).finally(() => {
+    void Promise.all([my.refetch(), cars.refetch(), sends.refetch()]).finally(() => {
       setRefreshing(false);
     });
   };
@@ -121,12 +138,23 @@ export function BookingsScreen({
     // and never counts the past (spec §5, C17).
     const saved = my.saved !== null;
     const now = clock.serverNow();
-    const carRows = (cars.requests ?? []).map((r) => ({ r, stage: requestStage(r, now) }));
+    const carRows: ReqItem[] = [
+      ...(cars.requests ?? []).map((r) => ({
+        service: 'car' as const,
+        r,
+        stage: requestStage(r, now),
+      })),
+      ...(sends.requests ?? []).map((r) => ({
+        service: 'logistics' as const,
+        r,
+        stage: requestStage(r, now),
+      })),
+    ];
     const carsUpcoming = carRows.filter((c) => !isPast(c.stage));
     const carsPast = carRows.filter((c) => isPast(c.stage));
     const carsShown = segment === 'upcoming' ? carsUpcoming : saved ? [] : carsPast;
-    // Car requests that failed (or haven't loaded) are unknown, never "none" (C17).
-    const carsKnown = cars.requests !== null;
+    // Requests that failed (or haven't loaded) are unknown, never "none" (C17).
+    const carsKnown = cars.requests !== null && sends.requests !== null;
     const nothing =
       !saved &&
       carsKnown &&
@@ -134,7 +162,22 @@ export function BookingsScreen({
       lists.today.length === 0 &&
       lists.upcoming.length === 0 &&
       lists.past.length === 0;
-    const rows = segment === 'upcoming' ? lists.upcoming : saved ? [] : lists.past;
+    const bookingRows = segment === 'upcoming' ? lists.upcoming : saved ? [] : lists.past;
+    // One list in date order (owner, 2026-11-23): car requests by pick-up date among the stays and
+    // events, soonest first under Upcoming and latest first under Past, as bookings already are.
+    const order = segment === 'upcoming' ? 'asc' : 'desc';
+    const rows: Row[] = mergeByDate(
+      bookingRows.map((b) => ({ date: b.start, item: b })),
+      sortByDate(
+        carsShown.map((c) => ({ date: c.r.pickupDate, item: c })),
+        order,
+      ),
+      order,
+    ).map((x) =>
+      x.from === 'a'
+        ? { type: 'booking', key: `${x.item.kind}:${x.item.id}`, booking: x.item }
+        : { type: 'request', key: `${x.item.service}:${x.item.r.id}`, req: x.item },
+    );
     const header = (
       <View style={{ gap: space.s4, paddingBottom: space.s3 }}>
         {my.saved !== null ? (
@@ -151,10 +194,16 @@ export function BookingsScreen({
             testID="sent-notice"
           />
         ) : null}
-        {cars.failed && !saved ? (
+        {(cars.failed || sends.failed) && !saved ? (
           <Banner
             tone="neutral"
-            message="Couldn’t load your car rentals. Pull to refresh."
+            message={
+              cars.failed && sends.failed
+                ? 'Couldn’t load your car rentals and deliveries. Pull to refresh.'
+                : cars.failed
+                  ? 'Couldn’t load your car rentals. Pull to refresh.'
+                  : 'Couldn’t load your deliveries. Pull to refresh.'
+            }
             testID="cars-failed"
           />
         ) : null}
@@ -190,21 +239,11 @@ export function BookingsScreen({
             onChange={setSegment}
           />
         )}
-        {nothing
-          ? null
-          : carsShown.map((c) => (
-              <CarRequestRow
-                key={c.r.id}
-                request={c.r}
-                stage={c.stage}
-                onPress={onOpenCarRequest}
-              />
-            ))}
       </View>
     );
     let empty: ReactNode;
     if (carsShown.length > 0) empty = null;
-    else if (cars.loading) empty = <SkeletonRows count={2} />;
+    else if (cars.loading || sends.loading) empty = <SkeletonRows count={2} />;
     else if (nothing)
       empty = (
         <View style={{ gap: space.s4 }}>
@@ -238,13 +277,25 @@ export function BookingsScreen({
       <FlatList
         data={rows}
         style={{ flex: 1 }}
-        keyExtractor={(b: MyBooking) => `${b.kind}:${b.id}`}
+        keyExtractor={(row: Row) => row.key}
         initialNumToRender={10}
         windowSize={7}
         refreshControl={refreshControl}
         ListHeaderComponent={header}
         ListEmptyComponent={empty}
-        renderItem={({ item }) => <BookingRow booking={item} onPress={open} />}
+        renderItem={({ item }) =>
+          item.type === 'booking' ? (
+            <BookingRow booking={item.booking} onPress={open} />
+          ) : item.req.service === 'car' ? (
+            <CarRequestRow request={item.req.r} stage={item.req.stage} onPress={onOpenCarRequest} />
+          ) : (
+            <LogisticsRequestRow
+              request={item.req.r}
+              stage={item.req.stage}
+              onPress={onOpenLogisticsRequest}
+            />
+          )
+        }
       />
     );
   }

@@ -7,7 +7,9 @@ import {
   initializePayment,
   verifyPayment,
 } from '@/features/customer/api/checkoutApi';
-import { useCarPayment } from '@/features/customer/hooks/useCarPayment';
+import { getLogistics } from '@/features/customer/api/logisticsApi';
+import { LOGISTICS_KIND } from '@/features/customer/hooks/rfqKinds';
+import { useCarPayment, useRfqPayment } from '@/features/customer/hooks/useCarPayment';
 import { carPayStore } from '@/features/customer/offline/carPayStore';
 
 import { makeQueryClient, wrapper } from './customerTestUtils';
@@ -17,6 +19,7 @@ jest.mock('expo-web-browser', () => ({
   WebBrowserResultType: { OPENED: 'opened' },
 }));
 jest.mock('@/features/customer/api/carRentalApi', () => ({ getCarRequest: jest.fn() }));
+jest.mock('@/features/customer/api/logisticsApi', () => ({ getLogistics: jest.fn() }));
 jest.mock('@/features/customer/api/checkoutApi', () => ({
   checkPayment: jest.fn(),
   initializePayment: jest.fn(),
@@ -170,4 +173,21 @@ describe('paymentOpen (before a cancel)', () => {
     const { result } = await hook();
     await expect(result.current.paymentOpen()).resolves.toBe('unknown');
   });
+});
+
+it('a logistics payment is checked and started as logistics, and read back from logistics', async () => {
+  mocked.check.mockResolvedValue(none);
+  jest.mocked(getLogistics).mockResolvedValue({ ok: true, value: { status: 'paid' } } as never);
+  const { result } = await renderHook(() => useRfqPayment(LOGISTICS_KIND, 'u1', 'l1', false), {
+    wrapper: wrapper(makeQueryClient()),
+  });
+  await act(async () => {
+    result.current.pay();
+    await Promise.resolve();
+  });
+  expect(mocked.check).toHaveBeenCalledWith({}, 'logistics', 'l1');
+  expect(mocked.init).toHaveBeenCalledWith({}, 'logistics', 'l1');
+  expect(getLogistics).toHaveBeenCalled();
+  expect(mocked.get).not.toHaveBeenCalled();
+  expect(result.current.state).toEqual({ kind: 'paid' });
 });

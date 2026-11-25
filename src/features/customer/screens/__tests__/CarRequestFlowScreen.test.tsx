@@ -1,13 +1,13 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
-import { useSubmitCarRequest } from '@/features/customer/hooks/useCarActions';
+import { useSubmitRfq } from '@/features/customer/hooks/useCarActions';
 import { useCarDraft } from '@/features/customer/hooks/useCarDraft';
 import { useProfile } from '@/features/customer/hooks/useProfile';
 import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
 import { CarRequestFlowScreen } from '@/features/customer/screens/CarRequestFlowScreen';
 
 jest.mock('@/features/customer/hooks/useProfile', () => ({ useProfile: jest.fn() }));
-jest.mock('@/features/customer/hooks/useCarActions', () => ({ useSubmitCarRequest: jest.fn() }));
+jest.mock('@/features/customer/hooks/useCarActions', () => ({ useSubmitRfq: jest.fn() }));
 jest.mock('@/features/customer/hooks/useCarRequests', () => ({
   useCarPriceGuide: () => ({ min: 35000, max: 55000 }),
 }));
@@ -15,7 +15,7 @@ jest.mock('@/shared/api/instance', () => ({ clock: { serverNow: () => mockNow } 
 const mockNow = Date.parse('2026-12-01T10:00:00Z');
 
 const mockProfile = jest.mocked(useProfile);
-const mockSubmit = jest.mocked(useSubmitCarRequest);
+const mockSubmit = jest.mocked(useSubmitRfq);
 
 let send: jest.Mock;
 

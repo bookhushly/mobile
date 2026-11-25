@@ -1,4 +1,4 @@
-// Where a car rental request stands, in the customer's words (design 2A: one timeline, ink and
+// Where a request-for-quote (car rental, logistics) stands, in the customer's words (design 2A: one timeline, ink and
 // grey only; the same words in Bookings). Server statuses: web `car_rental_requests_status_check`.
 
 export type RequestStatusName =
@@ -24,7 +24,8 @@ export type Stage =
   | 'refunded'
   | 'cancelled';
 
-type StageInput = { status: RequestStatusName; offerCount: number; expiresAt: string };
+/** `expiresAt` null: no deadline set (logistics rows may have none), so it never closes on time. */
+type StageInput = { status: RequestStatusName; offerCount: number; expiresAt: string | null };
 
 /**
  * An open request past its deadline takes no new quotes, but the ones it has can still be chosen
@@ -34,6 +35,7 @@ export function requestStage(r: StageInput, nowMs: number): Stage {
   switch (r.status) {
     case 'open': {
       if (r.offerCount > 0) return 'quotes';
+      if (r.expiresAt === null) return 'waiting';
       const ends = Date.parse(r.expiresAt);
       return Number.isFinite(ends) && ends <= nowMs ? 'noQuotes' : 'waiting';
     }

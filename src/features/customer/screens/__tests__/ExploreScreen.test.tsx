@@ -152,6 +152,7 @@ function props() {
     onShowCheckInCode: jest.fn(),
     onOpenBookings: jest.fn(),
     onOpenCarRental: jest.fn(),
+    onOpenLogistics: jest.fn(),
     onSignInAgain: jest.fn(),
   };
 }
@@ -381,12 +382,14 @@ it('the place chip changes the stays query', async () => {
   );
 });
 
-it('car rentals is the fourth tile and opens the request flow, not results', async () => {
+it('car rentals and logistics open their request flows, not results', async () => {
   const p = props();
   await render(<ExploreScreen {...p} />);
   const tiles = screen.getByTestId('explore-categories');
-  await fireEvent.press(within(tiles).getByRole('button', { name: 'Car rentals, New' }));
+  await fireEvent.press(within(tiles).getByRole('button', { name: 'Car rentals' }));
   expect(p.onOpenCarRental).toHaveBeenCalled();
+  await fireEvent.press(within(tiles).getByRole('button', { name: 'Send or move something, New' }));
+  expect(p.onOpenLogistics).toHaveBeenCalled();
   expect(p.onOpenResults).not.toHaveBeenCalled();
 });
 

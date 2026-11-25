@@ -1,4 +1,4 @@
-import { ChevronRight } from 'lucide-react-native';
+import { ChevronRight, type LucideIcon } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 
 import { needsYou, stageWords, type Stage } from '@/features/customer/domain/carRental/carStatus';
@@ -24,30 +24,30 @@ export function carRowTitle(r: CarRequest): string {
   return to === null ? `Car · ${from}` : `Car · ${from} → ${to}`;
 }
 
+type RowProps = {
+  id: string;
+  title: string;
+  when: string;
+  status: string;
+  /** Bold status: the customer has something to do. */
+  urgent: boolean;
+  photo: string | number | null;
+  /** For a request with no photo (a car, a truck). */
+  icon?: LucideIcon;
+  onPress: (id: string) => void;
+};
+
 // Owner, 2026-11-23: a photo, the status as a quiet line above the name (bold when it needs you),
-// the dates, a chevron. No coloured tags.
-export function CarRequestRow({ request: r, stage, onPress }: Props) {
+// the dates, a chevron. No coloured tags. Car rental and logistics rows.
+export function RequestRow({ id, title, when, status, urgent, photo, icon, onPress }: RowProps) {
   const d = useDensity();
-  const status = stageWords(stage, r.offerCount);
-  const urgent = needsYou(stage, r.vendorCompletedAt);
-  // Once a quote is chosen, only the company's own photo stands for the car; before that, the
-  // option photo of the type asked for (what the request is for, not a company's car).
-  const chosen = r.selectedOffer;
-  const source =
-    chosen === null
-      ? r.vehicleType === null
-        ? null
-        : VEHICLE_PHOTO[r.vehicleType]
-      : (chosen.vehicle?.imageUrls[0] ?? chosen.imageUrls[0] ?? null);
-  const title = carRowTitle(r);
-  const when = dateRange(r.pickupDate, r.returnDate);
   return (
     <Pressable
-      testID={`car-row-${r.id}`}
+      testID={`request-row-${id}`}
       accessibilityRole="button"
       accessibilityLabel={`${title}, ${when}, ${status}`}
       onPress={() => {
-        onPress(r.id);
+        onPress(id);
       }}
       style={({ pressed }) => ({
         minHeight: d.rowMin,
@@ -61,11 +61,12 @@ export function CarRequestRow({ request: r, stage, onPress }: Props) {
       })}
     >
       <CarPhoto
-        source={source}
+        source={photo}
         width={THUMB}
         height={THUMB}
-        recyclingKey={r.id}
+        recyclingKey={id}
         corner={radius.r3}
+        {...(icon === undefined ? {} : { icon })}
       />
       <View style={{ flex: 1, gap: space.s1 }}>
         <Text
@@ -84,5 +85,29 @@ export function CarRequestRow({ request: r, stage, onPress }: Props) {
       </View>
       <Icon as={ChevronRight} size="md" tone="textSecondary" />
     </Pressable>
+  );
+}
+
+/** A car rental request in Bookings. */
+export function CarRequestRow({ request: r, stage, onPress }: Props) {
+  // Once a quote is chosen, only the company's own photo stands for the car; before that, the
+  // option photo of the type asked for (what the request is for, not a company's car).
+  const chosen = r.selectedOffer;
+  const photo =
+    chosen === null
+      ? r.vehicleType === null
+        ? null
+        : VEHICLE_PHOTO[r.vehicleType]
+      : (chosen.vehicle?.imageUrls[0] ?? chosen.imageUrls[0] ?? null);
+  return (
+    <RequestRow
+      id={r.id}
+      title={carRowTitle(r)}
+      when={dateRange(r.pickupDate, r.returnDate)}
+      status={stageWords(stage, r.offerCount)}
+      urgent={needsYou(stage, r.vendorCompletedAt)}
+      photo={photo}
+      onPress={onPress}
+    />
   );
 }

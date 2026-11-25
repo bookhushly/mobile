@@ -53,7 +53,9 @@ export function useRoomAvailability(
 }
 
 /** The service charge estimate shown on Review; initialise computes the real one. */
-export function useServiceCharge(type: 'hotel' | 'apartment' | 'event') {
+export function useServiceCharge(
+  type: 'hotel' | 'apartment' | 'event' | 'car_rental' | 'logistics',
+) {
   return useQuery({
     queryKey: checkoutKeys.serviceCharge(type),
     queryFn: async () => {
