@@ -151,6 +151,7 @@ function handlers(): Omit<Props, 'userId'> {
     onOpenLogisticsRequest: jest.fn(),
     onOpenSecurityRequest: jest.fn(),
     onBrowse: jest.fn(),
+    onOpenTrips: jest.fn(),
   };
 }
 

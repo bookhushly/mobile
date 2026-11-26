@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { refreshTrips } from '@/features/customer/hooks/useTrips';
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
@@ -51,6 +52,7 @@ export function useResumePayments(userId: string): void {
         if (verdict === 'paid') await checkoutStore.drop(userId, e.kind, e.bookingId, reference);
         else await checkoutStore.clearPayment(userId, e.kind, e.bookingId, reference);
         void qc.invalidateQueries({ queryKey: customerKeys.bookings(userId) });
+        refreshTrips(userId);
         void qc.invalidateQueries({ queryKey: customerKeys.booking(userId, e.kind, e.bookingId) });
         if (verdict === 'paid')
           void qc.invalidateQueries({ queryKey: customerKeys.wallet(userId) });

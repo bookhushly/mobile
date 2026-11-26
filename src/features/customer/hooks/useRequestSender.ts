@@ -8,10 +8,11 @@ import type { RfqKind, RfqRow } from '@/features/customer/hooks/rfqKinds';
 import { useSubmitRfq, type CarWrite } from '@/features/customer/hooks/useCarActions';
 import { useProfile } from '@/features/customer/hooks/useProfile';
 import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
+import { clearTripLink, refreshTrips, tripServiceIdFor } from '@/features/customer/hooks/useTrips';
 import { CAR_TRY_AGAIN, carRefusedWords } from '@/features/customer/ui/car/carActionWords';
 import { parseNigerianPhone } from '@/shared/lib/phone';
 
-type Args<D, S extends string, R extends RfqRow, B> = {
+type Args<D, S extends string, R extends RfqRow, B extends object> = {
   kind: RfqKind<R, B>;
   store: UseBoundStore<StoreApi<DraftStore<D, S>>>;
   /** '' when signed out: every step works; sending asks for sign-in first. */
@@ -30,17 +31,22 @@ type Args<D, S extends string, R extends RfqRow, B> = {
  * Android back stepping back, and the outcome in words (a lost answer is "try again", never a
  * refusal).
  */
-export function useRequestSender<D, S extends string, R extends RfqRow, B>({
+export function useRequestSender<D, S extends string, R extends RfqRow, B extends object>({
   kind,
   store,
   userId,
   email,
   firstStep,
   checkStep,
-  bodyOf,
+  bodyOf: draftBody,
   onSent,
 }: Args<D, S, R, B>) {
   const profile = useProfile(userId);
+  const bodyOf = (d: D, c: Contact): B | null => {
+    const b = draftBody(d, c);
+    const trip = tripServiceIdFor(userId, kind.requestType);
+    return b === null || trip === null ? b : { ...b, trip_service_id: trip };
+  };
   const { send, sending } = useSubmitRfq(kind, userId);
   const ask = useSignInPrompt((s) => s.ask);
   const step = store((s) => s.step);
@@ -70,6 +76,8 @@ export function useRequestSender<D, S extends string, R extends RfqRow, B>({
     switch (out.kind) {
       case 'ok':
         start();
+        clearTripLink(kind.requestType);
+        refreshTrips(userId);
         onSent(out.value.id);
         return;
       case 'signIn':

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { TripLinkField } from '@/features/customer/ui/trips/TripLinkField';
 import { View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -162,6 +163,9 @@ export function SecurityFlowScreen({ userId, email, onClose, onSent }: Props) {
       <View style={{ flex: step === 'when' ? 1 : undefined, gap: space.s6, paddingTop: space.s5 }}>
         {step === 'when' ? null : heading}
         {body}
+        {step === 'check' && userId !== '' ? (
+          <TripLinkField userId={userId} type="security" />
+        ) : null}
       </View>
     </Screen>
   );

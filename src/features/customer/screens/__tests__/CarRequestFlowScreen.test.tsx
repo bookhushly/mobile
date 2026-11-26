@@ -6,6 +6,8 @@ import { useProfile } from '@/features/customer/hooks/useProfile';
 import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
 import { CarRequestFlowScreen } from '@/features/customer/screens/CarRequestFlowScreen';
 
+// The trip choice reads trips through TanStack Query; its own test covers it.
+jest.mock('@/features/customer/ui/trips/TripLinkField', () => ({ TripLinkField: () => null }));
 jest.mock('@/features/customer/hooks/useProfile', () => ({ useProfile: jest.fn() }));
 jest.mock('@/features/customer/hooks/useCarActions', () => ({ useSubmitRfq: jest.fn() }));
 jest.mock('@/features/customer/hooks/useCarRequests', () => ({

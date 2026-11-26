@@ -53,6 +53,9 @@ function SignedInBookings({ userId, email }: { userId: string; email: string }) 
       onBrowse={() => {
         router.navigate('/explore');
       }}
+      onOpenTrips={() => {
+        router.push('/trips');
+      }}
     />
   );
 }

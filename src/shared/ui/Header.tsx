@@ -27,9 +27,16 @@ export function Header({ title, subtitle, left, right }: Props) {
     >
       {left}
       <View style={{ flex: 1, gap: space.s1 }}>
-        <Text variant={top ? 'displaySm' : 'headline'} accessibilityRole="header" numberOfLines={1}>
-          {title}
-        </Text>
+        {/* No title (a back button over a page with its own heading): no empty heading for readers. */}
+        {title === '' ? null : (
+          <Text
+            variant={top ? 'displaySm' : 'headline'}
+            accessibilityRole="header"
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
+        )}
         {subtitle !== undefined ? (
           <Text variant="bodySm" tone="textSecondary" numberOfLines={1}>
             {subtitle}
