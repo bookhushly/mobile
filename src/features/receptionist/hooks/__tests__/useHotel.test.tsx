@@ -7,13 +7,16 @@ import { useHotel, type HotelState } from '@/features/receptionist/hooks/useHote
 import type { StaffHotelRow } from '@/features/receptionist/schemas/desk';
 import { plainKv } from '@/shared/platform/storage';
 
-jest.mock('@/features/receptionist/api/deskDb', () => ({ deskDb: { staffHotels: jest.fn() } }));
+jest.mock('@/features/receptionist/api/deskDb', () => ({
+  deskDb: { staffHotels: jest.fn(), ownedHotels: jest.fn() },
+}));
 jest.mock('@/shared/platform/storage', () => ({
   plainKv: { get: jest.fn(), set: jest.fn(), delete: jest.fn() },
 }));
 
 // Spies, not jest.mocked(obj.method): referencing a method unbound trips the lint rule.
 let mockStaff: jest.SpiedFunction<typeof deskDb.staffHotels>;
+let mockOwned: jest.SpiedFunction<typeof deskDb.ownedHotels>;
 let kv: {
   get: jest.SpiedFunction<typeof plainKv.get>;
   set: jest.SpiedFunction<typeof plainKv.set>;
@@ -31,6 +34,7 @@ const hidden = (id: string): StaffHotelRow => ({ hotel_id: id, hotels: null });
 beforeEach(() => {
   jest.clearAllMocks();
   mockStaff = jest.spyOn(deskDb, 'staffHotels');
+  mockOwned = jest.spyOn(deskDb, 'ownedHotels').mockResolvedValue({ ok: true, value: [] });
   kv = {
     get: jest.spyOn(plainKv, 'get').mockResolvedValue(null),
     set: jest.spyOn(plainKv, 'set').mockResolvedValue(undefined),
@@ -176,4 +180,40 @@ it('keeps serving the hotel when a background refresh fails', async () => {
   expect(mockStaff).toHaveBeenCalledTimes(2);
   expect(expectStatus(result.current, 'ready').hotel.id).toBe('h1');
   await done();
+});
+
+describe('useHotel for hotel owners (vendor mode)', () => {
+  it('no staff row: the hotels the signed-in vendor owns open the desk', async () => {
+    mockOwned.mockResolvedValue({
+      ok: true,
+      value: [row('h9', 'Harbour View Hotel', 'Victoria Island')],
+    });
+    const r = await run([]);
+    expect(r.result.current).toMatchObject({
+      status: 'ready',
+      hotel: { id: 'h9', name: 'Harbour View Hotel', place: 'Victoria Island, Lagos' },
+    });
+    expect(mockOwned).toHaveBeenCalledWith(USER);
+    await r.done();
+  });
+
+  it('staff rows win: owned hotels are not looked up', async () => {
+    const r = await run([row('h1', 'Desk Hotel')]);
+    expect(r.result.current).toMatchObject({ status: 'ready', hotel: { id: 'h1' } });
+    expect(mockOwned).not.toHaveBeenCalled();
+    await r.done();
+  });
+
+  it('neither staff nor owner: none, as before', async () => {
+    const r = await run([]);
+    expect(r.result.current.status).toBe('none');
+    await r.done();
+  });
+
+  it('a failed owner lookup is an error to retry, not "no hotel"', async () => {
+    mockOwned.mockResolvedValue({ ok: false, error: { kind: 'network' } });
+    const r = await run([]);
+    expect(r.result.current.status).toBe('error');
+    await r.done();
+  });
 });

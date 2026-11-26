@@ -87,7 +87,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Bookhushly uses the camera to scan tickets at the door.",
+          "cameraPermission": "Bookhushly uses the camera to scan tickets and check-in codes, and to photograph deliveries for customers.",
           "microphonePermission": false,
           "recordAudioAndroid": false
         }

@@ -21,10 +21,12 @@ type Props = {
   /** The route passes <ModeSwitcher/> (renders nothing for a one-mode user): staff with no usable
    * hotel can still reach their other mode. Desk code must not import the mode feature. */
   modeSwitcher: ReactNode;
+  /** A hotel owner (vendor mode) rather than staff: their own hotels, so different next steps. */
+  owner?: boolean;
 };
 
 // R7/R8: what stands between sign-in and the desk until exactly one hotel is in hand.
-export function HotelGateScreen({ state, onSignOut, modeSwitcher }: Props) {
+export function HotelGateScreen({ state, onSignOut, modeSwitcher, owner = false }: Props) {
   const signOut = <Button variant="secondary" label="Sign out" onPress={onSignOut} />;
   switch (state.status) {
     case 'loading':
@@ -54,8 +56,12 @@ export function HotelGateScreen({ state, onSignOut, modeSwitcher }: Props) {
         <Screen scroll footer={signOut}>
           <EmptyState
             icon={Building2}
-            title="No hotel assigned"
-            message="Ask the hotel owner to add you as front desk staff."
+            title={owner ? 'No hotel yet' : 'No hotel assigned'}
+            message={
+              owner
+                ? 'Add your hotel and rooms on bookhushly.com, then check guests in here.'
+                : 'Ask the hotel owner to add you as front desk staff.'
+            }
           />
           {modeSwitcher}
         </Screen>

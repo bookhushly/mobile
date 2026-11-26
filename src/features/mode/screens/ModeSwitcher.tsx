@@ -8,12 +8,14 @@ const LABEL: Record<Mode, string> = {
   customer: 'Customer',
   gate: 'Gate staff',
   receptionist: 'Front desk',
+  vendor: 'Your business',
 };
 
 const HINT: Record<Mode, string> = {
   customer: 'Book and see your tickets',
   gate: 'Scan tickets at the door',
   receptionist: 'Check in hotel guests',
+  vendor: 'Requests, bookings and earnings',
 };
 
 type Props = { modes: Mode[]; current: Mode; onChoose: (m: Mode) => void };

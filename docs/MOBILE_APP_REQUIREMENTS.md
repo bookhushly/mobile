@@ -34,7 +34,7 @@ Bookhushly is a Nigerian marketplace and booking platform. Customers discover an
 
 ### 1.2 Explicitly out of scope for v1
 
-- **Vendor** console (listings, KYC, wallet, payouts, analytics) — stays on web.
+- ~~**Vendor** console (listings, KYC, wallet, payouts, analytics) — stays on web.~~ **Reversed 2026-11-25 (DECISION-11):** vendors get a mobile mode covering all vendor kinds. KYC, listing creation and payout setup stay on web at first.
 - **Admin** console — stays on web.
 - **Support inbox** — stays on web.
 - **Customer wallet payments** — the backend returns HTTP 410 on purpose (`app/api/wallet/pay/route.js`). Do not build UI for it. v1 pays by **Paystack and crypto (NOWPayments)** (DECISION-4); wallet deposit/top-up is not in v1.
@@ -656,6 +656,7 @@ Rationale for ordering: Phases 1–3 are small and well-defined. **Phase 2 now d
 | **DECISION-8**  | Offline roster PII                    | **Name + masked phone**; full contact only on vendor opt-in                                                                           | BACKEND-REQ-3, NFR-3.3, FR-3.7.                                                                                                          |
 | **DECISION-9**  | OS floor / Expo SDK                   | **Latest stable Expo SDK; derive the OS floor from it** (default, not yet confirmed by the owner)                                     | Revisit against the Nigerian device mix before release.                                                                                  |
 | **DECISION-10** | Repo layout / contract types          | **Single Expo app**; generate types from the Supabase schema; hand-maintain route contracts (default, not yet confirmed by the owner) | Reconsider a monorepo only if a shared package is needed.                                                                                |
+| **DECISION-11** | Vendors on mobile (2026-11-25, owner) | **Reverses §1.2:** vendors get a fourth app mode, resolved at sign-in like the others. First release covers all vendor kinds (owner, 2026-11-25): request-for-quote vendors (requests, quotes, jobs, earnings) and hotels, apartments and events (bookings, apartment confirm/decline and calendar, check-in via front-desk screens, scanning via gate screens; paid to bank by Paystack, no withdraw). Listing creation stays on web. Needs Bearer-callable vendor routes on the web and push notifications | FR-1.6 changes for vendors once vendor mode ships; web routes spec; design directions approved before building |
 
 ---
 

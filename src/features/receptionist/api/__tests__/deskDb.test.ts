@@ -186,3 +186,47 @@ describe('rooms', () => {
     expect(await f.db.rooms('h1')).toEqual({ ok: false, error: { kind: 'forbidden' } });
   });
 });
+
+describe('ownedHotels (hotel owners at the desk)', () => {
+  const hotel = (vendor: Record<string, unknown>) => ({
+    id: 'h9',
+    name: 'Harbour View',
+    city: 'V.I.',
+    state: 'Lagos',
+    vendors: { user_id: 'u1', approved: true, suspended_at: null, ...vendor },
+  });
+
+  it('reads the hotels whose vendor is the signed-in user, shaped like staff rows', async () => {
+    const { db, calls, state } = fake({ data: [hotel({})] });
+    const r = await db.ownedHotels('u1');
+    expect(state.table).toBe('hotels');
+    expect(state.select).toBe(
+      'id, name, city, state, vendors!inner ( user_id, approved, suspended_at )',
+    );
+    expect(calls).toContainEqual(['eq', 'vendors.user_id', 'u1']);
+    expect(r).toEqual({
+      ok: true,
+      value: [
+        {
+          hotel_id: 'h9',
+          hotels: { id: 'h9', name: 'Harbour View', city: 'V.I.', state: 'Lagos' },
+        },
+      ],
+    });
+  });
+
+  it('a suspended or unapproved owner’s hotel is not available (as for staff)', async () => {
+    for (const v of [{ suspended_at: '2026-11-20T00:00:00Z' }, { approved: false }]) {
+      const { db } = fake({ data: [hotel(v)] });
+      expect(await db.ownedHotels('u1')).toEqual({
+        ok: true,
+        value: [{ hotel_id: 'h9', hotels: null }],
+      });
+    }
+  });
+
+  it('never trusts the filter alone: someone else’s hotel is dropped', async () => {
+    const { db } = fake({ data: [hotel({ user_id: 'other' })] });
+    expect(await db.ownedHotels('u1')).toEqual({ ok: true, value: [] });
+  });
+});

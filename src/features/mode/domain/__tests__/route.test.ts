@@ -219,6 +219,7 @@ describe('resolveRoute', () => {
     it.each<[AppRoute, AuthKind, boolean]>([
       ['gate', 'signedIn', true],
       ['receptionist', 'signedIn', true],
+      ['vendor', 'signedIn', true],
       ['webOnly', 'signedIn', true],
       ['customer', 'signedIn', false],
       ['customer', 'signedOut', false],

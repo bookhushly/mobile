@@ -9,7 +9,15 @@ export type ModeState =
 export type AuthKind = 'loading' | 'signedOut' | 'signedIn';
 
 export type AppRoute =
-  'loading' | 'update' | 'auth' | 'modeError' | 'webOnly' | 'gate' | 'receptionist' | 'customer';
+  | 'loading'
+  | 'update'
+  | 'auth'
+  | 'modeError'
+  | 'webOnly'
+  | 'gate'
+  | 'receptionist'
+  | 'vendor'
+  | 'customer';
 
 type Input = {
   versionOk: boolean;
@@ -54,5 +62,5 @@ export function authScreensAllowed(route: AppRoute, auth: AuthKind): boolean {
 // error keeps it: retrying can still land on customer.
 export function shouldDropPending(route: AppRoute, auth: AuthKind): boolean {
   if (auth !== 'signedIn') return false;
-  return route === 'gate' || route === 'receptionist' || route === 'webOnly';
+  return route === 'gate' || route === 'receptionist' || route === 'vendor' || route === 'webOnly';
 }

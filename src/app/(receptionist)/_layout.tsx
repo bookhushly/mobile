@@ -61,7 +61,12 @@ export default function ReceptionistLayout() {
   if (hotel.status !== 'ready')
     return (
       <DensityProvider density="work">
-        <HotelGateScreen state={hotel} onSignOut={signOut} modeSwitcher={modeSwitcher} />
+        <HotelGateScreen
+          state={hotel}
+          onSignOut={signOut}
+          modeSwitcher={modeSwitcher}
+          owner={modes.includes('vendor')}
+        />
       </DensityProvider>
     );
 

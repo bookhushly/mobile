@@ -121,3 +121,28 @@ describe('withCachedMode', () => {
     ).toEqual({ status: 'idle' });
   });
 });
+
+describe('a saved vendor mode while vendor mode is off', () => {
+  it('is ignored, so a production build never opens vendor screens from an old save', async () => {
+    const store = new Map<string, string>();
+    const kv = {
+      get: (k: string) => Promise.resolve(store.get(k) ?? null),
+      set: (k: string, v: string) => {
+        store.set(k, v);
+        return Promise.resolve();
+      },
+      delete: (k: string) => {
+        store.delete(k);
+        return Promise.resolve();
+      },
+    };
+    store.set(
+      'bh.mode.last.u1',
+      JSON.stringify({ modes: ['vendor', 'receptionist', 'customer'], defaultMode: 'vendor' }),
+    );
+    expect(await createModeCache(kv, { vendorMode: false }).load('u1')).toBeNull();
+    expect(await createModeCache(kv, { vendorMode: true }).load('u1')).toMatchObject({
+      defaultMode: 'vendor',
+    });
+  });
+});

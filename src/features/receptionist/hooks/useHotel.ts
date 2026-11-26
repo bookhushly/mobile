@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { deskDb } from '@/features/receptionist/api/deskDb';
 import type { StaffHotelRow } from '@/features/receptionist/schemas/desk';
 import type { ApiError } from '@/shared/lib/errors';
+import { VENDOR_MODE_ENABLED } from '@/shared/config/features';
 import { plainKv } from '@/shared/platform/storage';
 
 export type DeskHotel = { id: string; name: string; place: string /* 'Ikeja, Lagos' or '' */ };
@@ -54,7 +55,12 @@ export function useHotel(userId: string): HotelState {
     queryFn: async () => {
       const r = await deskDb.staffHotels(userId);
       if (!r.ok) throw new StaffLoadError(r.error);
-      return toRows(r.value);
+      // Owners only reach the desk through vendor mode; with it off, staff rows are the only way.
+      if (r.value.length > 0 || !VENDOR_MODE_ENABLED) return toRows(r.value);
+      // No staff row: a hotel owner in vendor mode runs the same desk for the hotels they own.
+      const owned = await deskDb.ownedHotels(userId);
+      if (!owned.ok) throw new StaffLoadError(owned.error);
+      return toRows(owned.value);
     },
   });
   const [stored, setStored] = useState<Stored | null>(null);

@@ -27,3 +27,29 @@ export const cardSize = { railWidth: 240, rowImage: 96, avatarLg: 96 } as const;
 
 /** Skeleton bars standing in for a line of text: a title line and a caption line. */
 export const skeletonLine = { title: 16, caption: 12 } as const;
+
+/** Vendor Today (design v13): photo-card sizes, the route's marks, the month chart. */
+export const vendorSize = {
+  jobPhoto: 128,
+  requestCard: 220,
+  requestPhoto: 104,
+  /** A request row's square photo, and a request's own photo at the top. */
+  rowPhoto: 64,
+  heroPhoto: 220,
+  routeMark: 12,
+  routeLine: 2,
+  chartHeight: 88,
+  chartPad: 6,
+  chartLine: 2,
+  chartLineStrong: 2.5,
+  chartDot: 3.5,
+  chartDotStrong: 4.5,
+  /** Requests shown on Today; the rest are a tap away in "See all". */
+  todayRequests: 5,
+} as const;
+
+/** A pressed row or card that has no fill of its own to darken. */
+export const pressedOpacity = 0.6;
+
+/** At this Dynamic Type scale, side-by-side figures stack so nothing clips. */
+export const largeTextScale = 1.3;
