@@ -131,6 +131,25 @@ describe('BookingsScreen and BookingScreen', () => {
     expect(screen.getAllByText('Waiting for you to confirm').length).toBeGreaterThan(0);
   });
 
+  it('after cancelling a paid stay, says where the guest’s refund is', async () => {
+    await render(
+      <BookingScreen
+        busy={false}
+        problem={null}
+        onBack={noop}
+        onFrontDesk={null}
+        onMove={noop}
+        state={{
+          status: 'ready',
+          booking: { ...find('apartment', 'a3'), status: 'cancelled', refund: 'beingFinished' },
+        }}
+      />,
+    );
+    expect(screen.getByTestId('vendor-booking-refund')).toHaveTextContent(
+      /Bookhushly has been alerted and will finish it/,
+    );
+  });
+
   it('a pending apartment booking: confirm, or decline after a warning that tells the truth', async () => {
     const onMove = jest.fn();
     await render(
@@ -146,7 +165,7 @@ describe('BookingsScreen and BookingScreen', () => {
     await fireEvent.press(screen.getByTestId('vendor-booking-forward'));
     expect(onMove).toHaveBeenCalledWith('pending', 'confirmed');
     await fireEvent.press(screen.getByTestId('vendor-booking-cancel'));
-    expect(screen.getByText(/isn’t told and isn’t refunded automatically yet/)).toBeTruthy();
+    expect(screen.getByText(/is told, and refunded ₦240,000 to how they paid/)).toBeTruthy();
     await fireEvent.press(screen.getByTestId('vendor-booking-cancel-confirm'));
     expect(onMove).toHaveBeenCalledWith('pending', 'cancelled');
   });

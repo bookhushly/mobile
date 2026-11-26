@@ -18,6 +18,11 @@ export type ListingBooking = {
   status: StayStatus;
   /** Hotels may take payment at the desk; that decides check-in. */
   payment: 'paid' | 'payAtHotel' | 'unpaid';
+  /**
+   * Only right after the vendor cancels a paid stay (web #249): the guest's refund is on its way, or
+   * it failed and Bookhushly is finishing it by hand.
+   */
+  refund?: 'onItsWay' | 'beingFinished';
 };
 
 export function staySummary(

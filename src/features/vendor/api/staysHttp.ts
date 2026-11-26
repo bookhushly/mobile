@@ -57,7 +57,12 @@ export function createStaysHttp(c: Requester, clear: () => void) {
       const after = await stays(kind);
       if (!after.ok) return after;
       const b = after.value.find((x) => x.id === id);
-      return b === undefined ? err({ kind: 'notFound' }) : ok(b);
+      if (b === undefined) return err({ kind: 'notFound' });
+      // A paid stay's cancel refunds the guest; a refund that failed is finished by Bookhushly.
+      const refunded = r.value.refunded;
+      if (to === 'cancelled' && current.payment === 'paid' && refunded !== undefined)
+        return ok({ ...b, refund: refunded ? 'onItsWay' : 'beingFinished' });
+      return ok(b);
     },
   };
 }

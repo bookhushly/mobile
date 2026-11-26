@@ -44,7 +44,8 @@ export type DeskDb = {
 };
 
 // `!inner` keeps only hotels whose vendor row matches the filter below.
-const OWNED_COLUMNS = 'id, name, city, state, vendors!inner ( user_id, approved, suspended_at )';
+const OWNED_COLUMNS =
+  'id, name, city, state, vendors!inner ( user_id, approved, suspended_at, status )';
 const staffRows = z.array(staffHotelRow);
 const ownedRows = z.array(
   z.object({
@@ -56,6 +57,7 @@ const ownedRows = z.array(
       user_id: z.string(),
       approved: z.boolean().nullable(),
       suspended_at: z.string().nullable(),
+      status: z.string().nullable(),
     }),
   }),
 );
@@ -78,9 +80,9 @@ export function createDeskDb(client: SupabaseLike): DeskDb {
   return {
     staffHotels: (userId) =>
       read(client.from('hotel_staff').select(STAFF_COLUMNS).eq('user_id', userId), staffRows),
-    // Owners see their own hotels even while suspended (RLS), but the web's desk checks don't yet
-    // refuse a suspended or unapproved owner (BACKEND_STATUS §9): their hotel shows as not
-    // available, as a hidden hotel does for staff. Rows not owned by this user are dropped too,
+    // Owners see their own hotels even while suspended (RLS). The web refuses an inactive owner at
+    // the desk (lib/vendor/active.js, web #249); the app agrees, showing their hotel as not
+    // available, as a hidden hotel is for staff. Rows not owned by this user are dropped too,
     // so the filter is never the only guard.
     ownedHotels: async (userId) => {
       const r = await read(
@@ -94,7 +96,9 @@ export function createDeskDb(client: SupabaseLike): DeskDb {
           .map((h) => ({
             hotel_id: h.id,
             hotels:
-              h.vendors.suspended_at === null && h.vendors.approved === true
+              h.vendors.suspended_at === null &&
+              h.vendors.approved === true &&
+              h.vendors.status !== 'suspended'
                 ? { id: h.id, name: h.name, city: h.city, state: h.state }
                 : null,
           })),
