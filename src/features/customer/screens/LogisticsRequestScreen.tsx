@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, Truck } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { RefreshControl, View } from 'react-native';
 
@@ -87,7 +87,13 @@ export function LogisticsRequestScreen({ userId, id, onBack, onSeeQuotes, onAskA
         {q.loading ? (
           <SkeletonRows count={5} />
         ) : (
-          <RequestLoadError error={q.error} what="this request" onRetry={() => void q.refetch()} />
+          <RequestLoadError
+            error={q.error}
+            what="this request"
+            icon={Truck}
+            requestsWord="Delivery requests"
+            onRetry={() => void q.refetch()}
+          />
         )}
       </Screen>
     );

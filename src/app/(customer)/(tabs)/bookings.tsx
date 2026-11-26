@@ -47,6 +47,9 @@ function SignedInBookings({ userId, email }: { userId: string; email: string }) 
       onOpenLogisticsRequest={(id) => {
         router.push({ pathname: '/logistics/[id]', params: { id } });
       }}
+      onOpenSecurityRequest={(id) => {
+        router.push({ pathname: '/security/[id]', params: { id } });
+      }}
       onBrowse={() => {
         router.navigate('/explore');
       }}

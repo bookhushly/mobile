@@ -14,6 +14,7 @@ import { useSavedNotices } from '@/features/customer/hooks/useSavedNotices';
 import { CategoryTiles, type Tile } from '@/features/customer/ui/CategoryTiles';
 import { CAR_RENTALS_PHOTO } from '@/features/customer/ui/car/carPhotos';
 import { SEND_OR_MOVE_PHOTO } from '@/features/customer/ui/logistics/logisticsPhotos';
+import { SECURITY_CARD_PHOTO } from '@/features/customer/ui/security/securityPhotos';
 import { PromoCard } from '@/features/customer/ui/PromoCard';
 import { isConnectionFailure } from '@/features/customer/ui/discoverLabels';
 import { PlaceSheet } from '@/features/customer/ui/PlaceSheet';
@@ -38,6 +39,8 @@ type Props = {
   onOpenCarRental: () => void;
   /** Phase 6: logistics is asked for too (send, move, cargo). */
   onOpenLogistics: () => void;
+  /** Phase 6: security is asked for too (guards for a place, an event or a person). */
+  onOpenSecurity: () => void;
   /** A stale session on a heart: the route signs out so the customer can sign in again. */
   onSignInAgain: () => void;
 };
@@ -47,7 +50,7 @@ const HOTEL_PHOTO = require('../../../../assets/images/auth/hotel.webp') as numb
 const APARTMENT_PHOTO = require('../../../../assets/images/auth/apartment.webp') as number;
 const EVENT_PHOTO = require('../../../../assets/images/auth/event.webp') as number;
 
-type Way = Category | 'car_rentals' | 'logistics';
+type Way = Category | 'car_rentals' | 'logistics' | 'security';
 
 const CATEGORIES: readonly Tile<Way>[] = [
   { key: 'hotels', label: 'Hotels', blurb: 'Rooms & suites', image: HOTEL_PHOTO },
@@ -64,6 +67,13 @@ const CATEGORIES: readonly Tile<Way>[] = [
     label: 'Send or move something',
     blurb: 'Deliveries, packages, moving, cargo',
     image: SEND_OR_MOVE_PHOTO,
+    badge: 'New',
+  },
+  {
+    key: 'security',
+    label: 'Hire security',
+    blurb: 'Guards for homes, offices and events',
+    image: SECURITY_CARD_PHOTO,
     badge: 'New',
   },
 ];
@@ -96,6 +106,7 @@ export function ExploreScreen({
   onOpenBookings,
   onOpenCarRental,
   onOpenLogistics,
+  onOpenSecurity,
   onSignInAgain,
 }: Props) {
   const d = useDensity();
@@ -250,6 +261,7 @@ export function ExploreScreen({
             onPress={(cat) => {
               if (cat === 'car_rentals') onOpenCarRental();
               else if (cat === 'logistics') onOpenLogistics();
+              else if (cat === 'security') onOpenSecurity();
               else onOpenResults({ category: cat });
             }}
             testID="explore-categories"

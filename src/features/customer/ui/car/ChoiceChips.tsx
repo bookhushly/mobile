@@ -8,8 +8,9 @@ type Props<T extends string> = {
   label: string;
   value: T | null;
   options: readonly { value: T; label: string }[];
-  /** Tapping the chosen chip again clears it (every group here is optional). */
+  /** Tapping the chosen chip again clears it, unless `clearable` is false (a required answer). */
   onChange: (v: T | null) => void;
+  clearable?: boolean;
   testID?: string;
 };
 
@@ -20,6 +21,7 @@ export function ChoiceChips<T extends string>({
   value,
   options,
   onChange,
+  clearable = true,
   testID,
 }: Props<T>) {
   const d = useDensity();
@@ -39,7 +41,7 @@ export function ChoiceChips<T extends string>({
             accessibilityLabel={o.label}
             accessibilityState={{ checked }}
             onPress={() => {
-              onChange(checked ? null : o.value);
+              onChange(checked ? (clearable ? null : o.value) : o.value);
             }}
             style={{
               minHeight: d.minTarget,

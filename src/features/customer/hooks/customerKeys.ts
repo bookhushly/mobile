@@ -32,6 +32,9 @@ export const customerKeys = {
   /** Logistics requests (`/api/logistics/requests`), the list and one with its quotes. */
   logisticsRequests: (u: string) => ['customer', u, 'logisticsRequests'] as const,
   logisticsRequest: (u: string, id: string) => ['customer', u, 'logisticsRequest', id] as const,
+  /** Security requests (`/api/security/requests`), the list and one with its quotes. */
+  securityRequests: (u: string) => ['customer', u, 'securityRequests'] as const,
+  securityRequest: (u: string, id: string) => ['customer', u, 'securityRequest', id] as const,
 };
 
 export type ListingsWhere = { q: string; state?: string; city?: string };
@@ -48,6 +51,9 @@ export const discoverKeys = {
   /** The car rental guide price (public, cached 5 min by the server). */
   carPriceGuide: (state: string | null, vehicleType: string | null, pricingModel: string | null) =>
     ['discover', 'carPriceGuide', state, vehicleType, pricingModel] as const,
+  /** The security guide price (public, cached 5 min by the server). */
+  securityPriceGuide: (state: string | null, guard: string | null, duration: string | null) =>
+    ['discover', 'securityPriceGuide', state, guard, duration] as const,
   /** The logistics guide price (public, cached 5 min by the server). */
   logisticsPriceGuide: (state: string | null, vehicle: string | null) =>
     ['discover', 'logisticsPriceGuide', state, vehicle] as const,

@@ -20,6 +20,10 @@ type Props = {
   showSeats: boolean;
   /** For a quote with no photo. */
   icon: LucideIcon;
+  /** Replaces the default facts line (security: service · team). */
+  facts?: string;
+  /** No photo: no block at all. */
+  photoOptional?: boolean;
   onPress: (o: CarOffer) => void;
 };
 
@@ -42,7 +46,17 @@ export function quoteFacts(o: CarOffer, vehicleWord = 'car', showSeats = true): 
 }
 
 // Design 3A (Turo): one big card per quote, led by the car; the trip total, then per day.
-export function QuoteCard({ offer: o, name, span, vehicleWord, showSeats, icon, onPress }: Props) {
+export function QuoteCard({
+  offer: o,
+  name,
+  span,
+  vehicleWord,
+  showSeats,
+  icon,
+  facts,
+  photoOptional = false,
+  onPress,
+}: Props) {
   const photo = quotePhoto(o);
   const daily = span === null ? null : perDay(o.amount, span.days);
   const total = `${formatNaira(o.amount)} total`;
@@ -51,7 +65,7 @@ export function QuoteCard({ offer: o, name, span, vehicleWord, showSeats, icon, 
       accessibilityRole="button"
       accessibilityLabel={[
         name,
-        quoteFacts(o, vehicleWord, showSeats),
+        facts ?? quoteFacts(o, vehicleWord, showSeats),
         total,
         daily === null ? null : `${formatNaira(daily)} a day`,
       ]
@@ -72,7 +86,9 @@ export function QuoteCard({ offer: o, name, span, vehicleWord, showSeats, icon, 
           backgroundColor: color.surface,
         }}
       >
-        <CarPhoto source={photo} height={PHOTO} corner={0} recyclingKey={o.id} icon={icon} />
+        {photo === null && photoOptional ? null : (
+          <CarPhoto source={photo} height={PHOTO} corner={0} recyclingKey={o.id} icon={icon} />
+        )}
         <View style={{ padding: space.s5, gap: space.s3 }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.s3 }}>
             <Text variant="title" style={{ flex: 1 }} numberOfLines={2}>
@@ -85,7 +101,7 @@ export function QuoteCard({ offer: o, name, span, vehicleWord, showSeats, icon, 
             />
           </View>
           <Text variant="bodySm" tone="textSecondary" numberOfLines={2}>
-            {quoteFacts(o, vehicleWord, showSeats)}
+            {facts ?? quoteFacts(o, vehicleWord, showSeats)}
           </Text>
           <View style={{ gap: space.s1 }}>
             <Text variant="bodyStrong" tabular>
