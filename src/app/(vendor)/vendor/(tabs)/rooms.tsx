@@ -1,4 +1,4 @@
-import { VendorRooms } from '@/features/vendor/screens/VendorListingContainers';
+import { VendorRooms } from '@/features/vendor/containers/VendorRooms';
 
 export default function VendorRoomsTab() {
   return <VendorRooms />;

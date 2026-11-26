@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 
-import { VendorQuote } from '@/features/vendor/screens/VendorRequestsContainers';
+import { VendorQuote } from '@/features/vendor/containers/VendorQuote';
 
 export default function VendorQuoteRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();

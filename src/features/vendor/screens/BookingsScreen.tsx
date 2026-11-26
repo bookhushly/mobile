@@ -1,5 +1,5 @@
 import { CalendarDays } from 'lucide-react-native';
-import { RefreshControl, View } from 'react-native';
+import { FlatList, RefreshControl, View } from 'react-native';
 
 import {
   bookingLine,
@@ -60,63 +60,70 @@ export function BookingsScreen({ kind, today, tab, onTab, state, onOpen }: Props
     { value: 'staying' as const, label: 'Staying', ...count('staying') },
     { value: 'past' as const, label: 'Past' },
   ];
+  const header = (
+    <View style={{ gap: space.s5, paddingBottom: space.s4 }}>
+      <Text variant="titleLg" accessibilityRole="header">
+        Bookings
+      </Text>
+      <SegmentedControl
+        value={tab}
+        onChange={onTab}
+        options={options}
+        testID="vendor-bookings-tabs"
+      />
+    </View>
+  );
+  // Past holds every stay the business ever had (the route isn't paged).
   return (
-    <Screen
-      scroll
-      refreshControl={
-        state.status === 'ready' ? (
-          <RefreshControl
-            refreshing={state.refreshing}
-            onRefresh={state.refresh}
-            {...refreshColors}
+    <Screen>
+      <FlatList
+        data={state.status === 'ready' ? list : []}
+        style={{ flex: 1 }}
+        keyExtractor={(b) => b.id}
+        initialNumToRender={10}
+        windowSize={7}
+        ListHeaderComponent={header}
+        renderItem={({ item: b }) => (
+          <ListRow
+            title={b.guest}
+            subtitle={`${b.unit}\n${bookingLine(b)}`}
+            numberOfLines={2}
+            trailing={
+              <Text
+                variant="caption"
+                tone={b.status === 'pending' ? 'textPrimary' : 'textSecondary'}
+              >
+                {STATUS[b.status]}
+              </Text>
+            }
+            onPress={() => {
+              onOpen(b);
+            }}
           />
-        ) : undefined
-      }
-    >
-      <View style={{ gap: space.s5, paddingTop: space.s5, paddingBottom: space.s8 }}>
-        <Text variant="titleLg" accessibilityRole="header">
-          Bookings
-        </Text>
-        <SegmentedControl
-          value={tab}
-          onChange={onTab}
-          options={options}
-          testID="vendor-bookings-tabs"
-        />
-        {state.status === 'loading' ? (
-          <SkeletonRows count={4} />
-        ) : state.status === 'error' ? (
-          <ErrorState
-            title="We couldn’t load your bookings"
-            message="Check your connection and try again."
-            onRetry={state.retry}
-          />
-        ) : list.length === 0 ? (
-          <EmptyState icon={CalendarDays} title={EMPTY[tab]} />
-        ) : (
-          <View>
-            {list.map((b) => (
-              <ListRow
-                key={b.id}
-                title={b.guest}
-                subtitle={`${b.unit}\n${bookingLine(b)}`}
-                numberOfLines={2}
-                trailing={
-                  <Text
-                    variant="caption"
-                    tone={b.status === 'pending' ? 'textPrimary' : 'textSecondary'}
-                  >
-                    {STATUS[b.status]}
-                  </Text>
-                }
-                onPress={() => {
-                  onOpen(b);
-                }}
-              />
-            ))}
-          </View>
         )}
-      </View>
+        ListEmptyComponent={
+          state.status === 'loading' ? (
+            <SkeletonRows count={4} />
+          ) : state.status === 'error' ? (
+            <ErrorState
+              title="We couldn’t load your bookings"
+              message="Check your connection and try again."
+              onRetry={state.retry}
+            />
+          ) : (
+            <EmptyState icon={CalendarDays} title={EMPTY[tab]} />
+          )
+        }
+        refreshControl={
+          state.status === 'ready' ? (
+            <RefreshControl
+              refreshing={state.refreshing}
+              onRefresh={state.refresh}
+              {...refreshColors}
+            />
+          ) : undefined
+        }
+      />
     </Screen>
   );
 }

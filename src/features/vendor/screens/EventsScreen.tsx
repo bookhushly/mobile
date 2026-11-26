@@ -1,5 +1,5 @@
 import { Ticket } from 'lucide-react-native';
-import { RefreshControl, View } from 'react-native';
+import { RefreshControl, SectionList } from 'react-native';
 
 import { ticketsLine, type VendorEvent } from '@/features/vendor/domain/listings';
 import { lagosTime, lagosToday, shortDate } from '@/shared/lib/lagosDay';
@@ -34,69 +34,76 @@ export function EventsScreen({ nowMs, state, onManage }: Props) {
     .sort((a, b) => Date.parse(b.startsAt) - Date.parse(a.startsAt));
   const row = (e: VendorEvent) => (
     <ListRow
-      key={e.id}
       title={e.title}
       subtitle={`${shortDate(lagosToday(Date.parse(e.startsAt)))}, ${lagosTime(e.startsAt)} · ${ticketsLine(e)}`}
       onPress={onManage}
       accessibilityLabel={`${e.title}, ${ticketsLine(e)}. Manage on bookhushly.com`}
     />
   );
+  const sections = [
+    ...(upcoming.length > 0 ? [{ key: 'upcoming', title: 'Coming up', data: upcoming }] : []),
+    ...(past.length > 0 ? [{ key: 'past', title: 'Past', data: past }] : []),
+  ];
   return (
-    <Screen
-      scroll
-      refreshControl={
-        state.status === 'ready' ? (
-          <RefreshControl
-            refreshing={state.refreshing}
-            onRefresh={state.refresh}
-            {...refreshColors}
-          />
-        ) : undefined
-      }
-    >
-      <View style={{ gap: space.s5, paddingTop: space.s5, paddingBottom: space.s8 }}>
-        <Text variant="titleLg" accessibilityRole="header">
-          Events
-        </Text>
-        {state.status === 'loading' ? (
-          <SkeletonRows count={4} />
-        ) : state.status === 'error' ? (
-          <ErrorState
-            title="We couldn’t load your events"
-            message="Check your connection and try again."
-            onRetry={state.retry}
-          />
-        ) : events.length === 0 ? (
-          <EmptyState
-            icon={Ticket}
-            title="No events yet"
-            message="Create events and tickets on bookhushly.com."
-            action={{ label: 'Open bookhushly.com', onPress: onManage }}
-          />
-        ) : (
-          <>
-            {upcoming.length === 0 ? null : (
-              <View>
-                <Text variant="labelSm" tone="textSecondary" accessibilityRole="header">
-                  Coming up
-                </Text>
-                {upcoming.map(row)}
-              </View>
-            )}
-            {past.length === 0 ? null : (
-              <View>
-                <Text variant="labelSm" tone="textSecondary" accessibilityRole="header">
-                  Past
-                </Text>
-                {past.map(row)}
-              </View>
-            )}
-            <Text variant="caption" tone="textSecondary">
+    <Screen>
+      <SectionList
+        sections={state.status === 'ready' ? sections : []}
+        style={{ flex: 1 }}
+        keyExtractor={(e) => e.id}
+        initialNumToRender={10}
+        windowSize={7}
+        stickySectionHeadersEnabled={false}
+        ListHeaderComponent={
+          <Text variant="titleLg" accessibilityRole="header" style={{ paddingBottom: space.s4 }}>
+            Events
+          </Text>
+        }
+        renderSectionHeader={({ section }) => (
+          <Text
+            variant="labelSm"
+            tone="textSecondary"
+            accessibilityRole="header"
+            style={{ paddingTop: space.s4 }}
+          >
+            {section.title}
+          </Text>
+        )}
+        renderItem={({ item }) => row(item)}
+        ListFooterComponent={
+          events.length === 0 ? null : (
+            <Text variant="caption" tone="textSecondary" style={{ paddingTop: space.s5 }}>
               Create and edit events and tickets on bookhushly.com.
             </Text>
-          </>
-        )}
-      </View>
+          )
+        }
+        ListEmptyComponent={
+          state.status === 'loading' ? (
+            <SkeletonRows count={4} />
+          ) : state.status === 'error' ? (
+            <ErrorState
+              title="We couldn’t load your events"
+              message="Check your connection and try again."
+              onRetry={state.retry}
+            />
+          ) : (
+            <EmptyState
+              icon={Ticket}
+              title="No events yet"
+              message="Create events and tickets on bookhushly.com."
+              action={{ label: 'Open bookhushly.com', onPress: onManage }}
+            />
+          )
+        }
+        refreshControl={
+          state.status === 'ready' ? (
+            <RefreshControl
+              refreshing={state.refreshing}
+              onRefresh={state.refresh}
+              {...refreshColors}
+            />
+          ) : undefined
+        }
+      />
     </Screen>
   );
 }

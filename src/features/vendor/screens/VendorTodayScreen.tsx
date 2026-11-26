@@ -4,11 +4,9 @@ import { isQuoteKind } from '@/features/vendor/domain/vendorProfile';
 import { useVendorSession } from '@/features/vendor/hooks/VendorContext';
 import { useVendorToday } from '@/features/vendor/hooks/useVendorToday';
 import { QuoteTodayScreen } from '@/features/vendor/screens/QuoteTodayScreen';
-import {
-  ApartmentToday,
-  EventToday,
-  HotelToday,
-} from '@/features/vendor/screens/VendorListingContainers';
+import { ApartmentToday } from '@/features/vendor/containers/ApartmentToday';
+import { EventToday } from '@/features/vendor/containers/EventToday';
+import { HotelToday } from '@/features/vendor/containers/HotelToday';
 import { KIND_WORD } from '@/features/vendor/ui/kindWords';
 import { clock } from '@/shared/api/instance';
 import { lagosToday } from '@/shared/lib/lagosDay';

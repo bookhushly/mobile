@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 
-import { VendorJob } from '@/features/vendor/screens/VendorJobsContainers';
+import { VendorJob } from '@/features/vendor/containers/VendorJob';
 
 export default function VendorJobRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();

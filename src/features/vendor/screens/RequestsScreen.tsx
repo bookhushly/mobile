@@ -1,5 +1,5 @@
 import { Inbox } from 'lucide-react-native';
-import { RefreshControl, View } from 'react-native';
+import { FlatList, RefreshControl, View } from 'react-native';
 
 import {
   splitRequests,
@@ -45,58 +45,66 @@ const EMPTY: Record<RequestTab, { title: string; message: string }> = {
 export function RequestsScreen({ nowMs, tab, onTab, state, onOpen }: Props) {
   const split = state.status === 'ready' ? splitRequests(state.requests, nowMs) : null;
   const list = split?.[tab] ?? [];
+  const header = (
+    <View style={{ gap: space.s5, paddingBottom: space.s4 }}>
+      <Text variant="titleLg" accessibilityRole="header">
+        Requests
+      </Text>
+      <SegmentedControl
+        value={tab}
+        onChange={onTab}
+        testID="vendor-requests-tabs"
+        options={[
+          { value: 'new', label: 'New', ...(split ? { count: split.new.length } : {}) },
+          { value: 'quoted', label: 'Quoted', ...(split ? { count: split.quoted.length } : {}) },
+          { value: 'won', label: 'Won', ...(split ? { count: split.won.length } : {}) },
+        ]}
+      />
+    </View>
+  );
+  // Quoted and Won hold every offer the vendor ever sent (the route isn't paged): a list that only
+  // draws what's on screen.
   return (
-    <Screen
-      scroll
-      refreshControl={
-        state.status === 'ready' ? (
-          <RefreshControl
-            refreshing={state.refreshing}
-            onRefresh={state.refresh}
-            {...refreshColors}
+    <Screen>
+      <FlatList
+        data={state.status === 'ready' ? list : []}
+        style={{ flex: 1 }}
+        keyExtractor={(r) => r.id}
+        initialNumToRender={10}
+        windowSize={7}
+        ListHeaderComponent={header}
+        renderItem={({ item }) => (
+          <RequestRow
+            request={item}
+            nowMs={nowMs}
+            onPress={() => {
+              onOpen(item);
+            }}
           />
-        ) : undefined
-      }
-    >
-      <View style={{ gap: space.s5, paddingTop: space.s5, paddingBottom: space.s8 }}>
-        <Text variant="titleLg" accessibilityRole="header">
-          Requests
-        </Text>
-        <SegmentedControl
-          value={tab}
-          onChange={onTab}
-          testID="vendor-requests-tabs"
-          options={[
-            { value: 'new', label: 'New', ...(split ? { count: split.new.length } : {}) },
-            { value: 'quoted', label: 'Quoted', ...(split ? { count: split.quoted.length } : {}) },
-            { value: 'won', label: 'Won', ...(split ? { count: split.won.length } : {}) },
-          ]}
-        />
-        {state.status === 'loading' ? (
-          <SkeletonRows count={4} />
-        ) : state.status === 'error' ? (
-          <ErrorState
-            title="We couldn’t load your requests"
-            message="Check your connection and try again."
-            onRetry={state.retry}
-          />
-        ) : list.length === 0 ? (
-          <EmptyState icon={Inbox} title={EMPTY[tab].title} message={EMPTY[tab].message} />
-        ) : (
-          <View>
-            {list.map((r) => (
-              <RequestRow
-                key={r.id}
-                request={r}
-                nowMs={nowMs}
-                onPress={() => {
-                  onOpen(r);
-                }}
-              />
-            ))}
-          </View>
         )}
-      </View>
+        ListEmptyComponent={
+          state.status === 'loading' ? (
+            <SkeletonRows count={4} />
+          ) : state.status === 'error' ? (
+            <ErrorState
+              title="We couldn’t load your requests"
+              message="Check your connection and try again."
+              onRetry={state.retry}
+            />
+          ) : (
+            <EmptyState icon={Inbox} title={EMPTY[tab].title} message={EMPTY[tab].message} />
+          )
+        }
+        refreshControl={
+          state.status === 'ready' ? (
+            <RefreshControl
+              refreshing={state.refreshing}
+              onRefresh={state.refresh}
+              {...refreshColors}
+            />
+          ) : undefined
+        }
+      />
     </Screen>
   );
 }
