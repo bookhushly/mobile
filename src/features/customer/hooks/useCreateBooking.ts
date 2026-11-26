@@ -1,3 +1,4 @@
+import { clearTripLink, refreshTrips, tripServiceIdFor } from '@/features/customer/hooks/useTrips';
 import * as Crypto from 'expo-crypto';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -225,7 +226,9 @@ export function useCreateBooking(
   const sendStay = useCallback(
     async (s: StaySelection, ctx: CreateCtx): Promise<void> => {
       if (kind === 'event') return;
-      const fingerprint = selectionFingerprint(kind, listingId, ctx.roomTypeId ?? null, s);
+      // The trip is part of the body the server fingerprints: a changed choice needs a new key.
+      const trip = tripServiceIdFor(userId, kind);
+      const fingerprint = `${selectionFingerprint(kind, listingId, ctx.roomTypeId ?? null, s)}|${trip ?? ''}`;
       const now = clock.serverNow();
       const prev = idem.current;
       inFlight.current = true;
@@ -270,15 +273,19 @@ export function useCreateBooking(
       const k = idem.current;
       // Each send gets its own waits; an in_progress key is never replaced (V5).
       k.busyRetries = 0;
-      const body =
-        kind === 'hotel'
+      const body = {
+        ...(kind === 'hotel'
           ? hotelBody(ctx.roomTypeId ?? '', listingId, s)
-          : apartmentBody(listingId, s);
+          : apartmentBody(listingId, s)),
+        ...(trip === null ? {} : { trip_service_id: trip }),
+      };
       for (;;) {
         const r = await createStay(api, kind, body, k.key);
         if (r.ok) {
           inFlight.current = false;
           idem.current = null;
+          clearTripLink(kind);
+          refreshTrips(userId);
           await adopt(stayEntry(userId, listingId, r.value.booking, s), r.value.booking.id, gen);
           return;
         }
@@ -313,10 +320,17 @@ export function useCreateBooking(
       show({ phase: 'sending' });
       eventSentAt.current = clock.serverNow();
       const gen = checkoutStore.generation();
-      const r = await createEvent(api, eventBody(listingId, s, free), free);
+      const trip = tripServiceIdFor(userId, 'event');
+      const body = {
+        ...eventBody(listingId, s, free),
+        ...(trip === null ? {} : { trip_service_id: trip }),
+      };
+      const r = await createEvent(api, body, free);
       inFlight.current = false;
       if (r.ok) {
         eventSentAt.current = null;
+        clearTripLink('event');
+        refreshTrips(userId);
         // A free registration is never paid for: no entry, so nothing can resume or cancel it.
         await adopt(
           free ? null : eventEntry(userId, listingId, r.value.booking, s, ctx),

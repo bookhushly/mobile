@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { TripLinkField } from '@/features/customer/ui/trips/TripLinkField';
 import type { TextInput } from 'react-native';
 
 import type { ApartmentListing, HotelListing } from '@/features/customer/api/listingDetailDb';
@@ -311,6 +312,7 @@ export function StaySelect({
           }}
         />
       ) : null}
+      {userId === '' ? null : <TripLinkField userId={userId} type={stay.kind} />}
     </Screen>
   );
 }

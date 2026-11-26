@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { refreshTrips } from '@/features/customer/hooks/useTrips';
 import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform, type NativeEventSubscription } from 'react-native';
@@ -546,6 +547,7 @@ export function usePayment(
       case 'done':
         await checkoutStore.drop(userId, kind, bookingId).catch(() => undefined);
         void qc.invalidateQueries({ queryKey: customerKeys.bookings(userId) });
+        refreshTrips(userId);
         return 'cancelled';
       case 'refused':
         return 'refused';
@@ -613,6 +615,7 @@ export function usePayment(
       }
     }
     void qc.invalidateQueries({ queryKey: customerKeys.bookings(userId) });
+    refreshTrips(userId);
     void qc.invalidateQueries({ queryKey: customerKeys.booking(userId, kind, bookingId) });
     void qc.invalidateQueries({ queryKey: customerKeys.wallet(userId) });
   }, [state, userId, kind, bookingId, qc]);

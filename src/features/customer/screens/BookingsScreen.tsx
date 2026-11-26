@@ -32,6 +32,7 @@ import {
   EmptyState,
   ErrorState,
   Header,
+  ListRow,
   refreshColors,
   Screen,
   SegmentedControl,
@@ -65,6 +66,8 @@ type Props = {
   onOpenSecurityRequest: (id: string) => void;
   /** The empty state's way on: the Explore tab (final review F3). */
   onBrowse: () => void;
+  /** Trip planning: the customer's trips (each groups bookings). */
+  onOpenTrips: () => void;
 };
 
 // Spec §3 Bookings, C3, C16, C17.
@@ -79,6 +82,7 @@ export function BookingsScreen({
   onOpenLogisticsRequest,
   onOpenSecurityRequest,
   onBrowse,
+  onOpenTrips,
 }: Props) {
   const my = useMyBookings(userId);
   // Car requests load on their own: a failure there never hides the bookings (or reads as none).
@@ -216,6 +220,12 @@ export function BookingsScreen({
             testID="cars-failed"
           />
         ) : null}
+        <ListRow
+          title="Your trips"
+          subtitle="Plan a trip and see what’s booked for it"
+          onPress={onOpenTrips}
+          testID="bookings-trips"
+        />
         {nothing || claimDismissed ? null : claimCard(true)}
         {lists.today.map((b, i) => (
           <TodayCard

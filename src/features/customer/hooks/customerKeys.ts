@@ -35,6 +35,9 @@ export const customerKeys = {
   /** Security requests (`/api/security/requests`), the list and one with its quotes. */
   securityRequests: (u: string) => ['customer', u, 'securityRequests'] as const,
   securityRequest: (u: string, id: string) => ['customer', u, 'securityRequest', id] as const,
+  /** Trips (`trips` + `trip_services` under RLS): the list and one trip. */
+  trips: (u: string) => ['customer', u, 'trips'] as const,
+  trip: (u: string, id: string) => ['customer', u, 'trips', id] as const,
 };
 
 export type ListingsWhere = { q: string; state?: string; city?: string };

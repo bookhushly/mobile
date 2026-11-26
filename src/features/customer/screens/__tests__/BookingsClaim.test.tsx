@@ -80,6 +80,7 @@ async function show() {
       onOpenLogisticsRequest={jest.fn()}
       onOpenSecurityRequest={jest.fn()}
       onBrowse={jest.fn()}
+      onOpenTrips={jest.fn()}
     />,
     { wrapper: wrapper(qc) },
   );

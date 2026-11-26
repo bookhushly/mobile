@@ -4,8 +4,13 @@ import { useSubmitRfq } from '@/features/customer/hooks/useCarActions';
 import { useProfile } from '@/features/customer/hooks/useProfile';
 import { useSecurityDraft } from '@/features/customer/hooks/useSecurity';
 import { useSignInPrompt } from '@/features/customer/hooks/useSignInPrompt';
+import { customerKeys } from '@/features/customer/hooks/customerKeys';
+import { useTripLink } from '@/features/customer/hooks/useTrips';
+import { queryClient } from '@/shared/api/queryClient';
 import { SecurityFlowScreen } from '@/features/customer/screens/SecurityFlowScreen';
 
+// The trip choice reads trips through TanStack Query; its own test covers it.
+jest.mock('@/features/customer/ui/trips/TripLinkField', () => ({ TripLinkField: () => null }));
 jest.mock('@/features/customer/hooks/useProfile', () => ({ useProfile: jest.fn() }));
 jest.mock('@/features/customer/hooks/useCarActions', () => ({ useSubmitRfq: jest.fn() }));
 jest.mock('@/features/customer/hooks/useSecurity', () => ({
@@ -99,6 +104,65 @@ it('walks seven steps and sends what the web form sends', async () => {
     }),
   );
   expect(onSent).toHaveBeenCalledWith('s-new');
+});
+
+it('a request chosen for a trip carries its trip service, and the next one starts unlinked', async () => {
+  useTripLink.getState().choose('security', 'ts-1');
+  queryClient.setQueryData(customerKeys.trips('u1'), [
+    {
+      id: 't1',
+      name: 'Lagos trip',
+      destination: 'Lagos',
+      startDate: null,
+      endDate: null,
+      status: 'planning',
+      notes: null,
+      createdAt: '',
+      services: [{ id: 'ts-1', type: 'security', status: 'planned' }],
+    },
+  ]);
+  useSecurityDraft.getState().start({ service: 'residential' }, 'check');
+  const onSent = jest.fn();
+  await render(
+    <SecurityFlowScreen userId="u1" email="ada@example.com" onClose={jest.fn()} onSent={onSent} />,
+  );
+  useSecurityDraft.getState().patch({
+    address: '7 Bourdillon Road, Ikoyi',
+    state: 'Lagos',
+    startDate: '2026-12-05',
+    duration: 'monthly',
+    guardType: 'unarmed',
+  });
+  await fireEvent.press(await screen.findByRole('button', { name: 'Ask for quotes' }));
+  expect(send).toHaveBeenCalledWith(expect.objectContaining({ trip_service_id: 'ts-1' }));
+  expect(useTripLink.getState().chosen.security ?? null).toBeNull();
+  queryClient.clear();
+});
+
+it('a remembered trip that’s no longer open isn’t sent', async () => {
+  useTripLink.getState().choose('security', 'ts-gone');
+  queryClient.setQueryData(customerKeys.trips('u1'), []);
+  useSecurityDraft.getState().start({ service: 'residential' }, 'check');
+  await render(
+    <SecurityFlowScreen
+      userId="u1"
+      email="ada@example.com"
+      onClose={jest.fn()}
+      onSent={jest.fn()}
+    />,
+  );
+  useSecurityDraft.getState().patch({
+    address: '7 Bourdillon Road, Ikoyi',
+    state: 'Lagos',
+    startDate: '2026-12-05',
+    duration: 'monthly',
+    guardType: 'unarmed',
+  });
+  send.mockClear();
+  await fireEvent.press(await screen.findByRole('button', { name: 'Ask for quotes' }));
+  expect(send).toHaveBeenCalledTimes(1);
+  expect(send).not.toHaveBeenCalledWith(expect.objectContaining({ trip_service_id: 'ts-gone' }));
+  queryClient.clear();
 });
 
 it('asks event questions for an event, not property ones', async () => {

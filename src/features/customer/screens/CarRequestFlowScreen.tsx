@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { TripLinkField } from '@/features/customer/ui/trips/TripLinkField';
 import { useShallow } from 'zustand/react/shallow';
 import { View } from 'react-native';
 
@@ -171,6 +172,9 @@ export function CarRequestFlowScreen({ userId, email, onClose, onSent }: Props) 
       <View style={{ flex: step === 'when' ? 1 : undefined, gap: space.s6, paddingTop: space.s5 }}>
         {step === 'when' ? null : heading}
         {body}
+        {step === 'check' && userId !== '' ? (
+          <TripLinkField userId={userId} type="car_rental" />
+        ) : null}
       </View>
     </Screen>
   );
