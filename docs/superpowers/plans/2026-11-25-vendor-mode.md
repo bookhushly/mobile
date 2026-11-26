@@ -30,7 +30,7 @@ Push notifications come after these (owner, 2026-11-25).
 
 ## Status (2026-11-26)
 
-Slices 1–7 are built. Slice 8 is partly done: live data for request-for-quote vendors, the wallet, and hotel and apartment bookings. Events, the apartment calendar and the fleet are still on sample data. Hotel owners also get the front desk. Vendor mode itself stays dev-only until it's checked with a real vendor account.
+Slices 1–7 are built. Slice 8 is partly done: live data for request-for-quote vendors, the wallet, and hotel and apartment bookings. The apartment calendar is live too (2026-11-26: `/api/vendor/apartments/blocked-dates`, with an apartment picker for vendors with several). Events and the fleet are still on sample data. Hotel owners also get the front desk. Vendor mode itself stays dev-only until it's checked with a real vendor account.
 
 ## Follow-ups from the pre-PR reviews (not in this PR)
 

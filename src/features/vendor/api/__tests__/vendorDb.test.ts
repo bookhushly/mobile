@@ -13,7 +13,8 @@ function fakeClient(res: { data: unknown; error: { code?: string } | null; statu
           return {
             eq(column, value) {
               calls.eq = [column, value];
-              return { maybeSingle: () => Promise.resolve({ status: 200, ...res }) };
+              const answer = Promise.resolve({ status: 200, ...res });
+              return Object.assign(answer, { maybeSingle: () => answer });
             },
           };
         },
@@ -63,5 +64,30 @@ describe('vendorDb.me', () => {
     const { client } = fakeClient({ data: null, error: { code: 'PGRST301' }, status: 401 });
     const r = await createVendorDb(client).me('u1');
     expect(r.ok).toBe(false);
+  });
+});
+
+describe('vendorDb.apartments', () => {
+  it('reads the vendor’s own apartments, live ones first, then by name', async () => {
+    const { client, calls } = fakeClient({
+      data: [
+        { id: 'b', name: 'Palmgrove Court', status: 'active' },
+        { id: 'c', name: 'Annex', status: 'draft' },
+        { id: 'a', name: ' Garden Creek ', status: 'active' },
+      ],
+      error: null,
+    });
+    const r = await createVendorDb(client).apartments('v1');
+    expect(calls.table).toBe('serviced_apartments');
+    expect(calls.eq).toEqual(['vendor_id', 'v1']);
+    expect(calls.columns).toBe('id, name, status');
+    expect(r).toEqual({
+      ok: true,
+      value: [
+        { id: 'a', name: 'Garden Creek' },
+        { id: 'b', name: 'Palmgrove Court' },
+        { id: 'c', name: 'Annex' },
+      ],
+    });
   });
 });

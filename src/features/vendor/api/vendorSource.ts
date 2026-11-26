@@ -20,6 +20,7 @@ import {
 import {
   sampleBooking,
   sampleBookings,
+  sampleApartments,
   sampleCalendar,
   sampleEvents,
   sampleMoveBooking,
@@ -39,6 +40,8 @@ import type {
 import type { VendorToday } from '@/features/vendor/domain/today';
 import type { ServedKind } from '@/features/vendor/domain/vendorProfile';
 import { createVendorHttp } from '@/features/vendor/api/vendorHttp';
+import { vendorDb } from '@/features/vendor/api/vendorDb';
+import type { VendorApartment } from '@/features/vendor/domain/calendarBlocks';
 import { isQuoteKind } from '@/features/vendor/domain/vendorProfile';
 import { api } from '@/shared/api/instance';
 import { VENDOR_LIVE_DATA } from '@/shared/config/features';
@@ -96,8 +99,20 @@ export type VendorSource = {
     to: StayStatus,
     nowMs: number,
   ): Promise<Result<ListingBooking, ApiError>>;
-  calendar(nowMs: number): Promise<Result<{ booked: IsoDate[]; blocked: IsoDate[] }, ApiError>>;
-  toggleBlocked(date: IsoDate, nowMs: number): Promise<Result<boolean, ApiError>>;
+  /** Apartments: the vendor's own, for the calendar. */
+  apartments(vendorId: string): Promise<Result<VendorApartment[], ApiError>>;
+  /** One apartment's month (`month`: any day in it): nights booked by guests, and blocked by you. */
+  calendar(
+    apartmentId: string,
+    month: IsoDate,
+    nowMs: number,
+  ): Promise<Result<{ booked: IsoDate[]; blocked: IsoDate[] }, ApiError>>;
+  /** True when the night ends up blocked; a booked night is refused (`date_booked`). */
+  toggleBlocked(
+    apartmentId: string,
+    date: IsoDate,
+    nowMs: number,
+  ): Promise<Result<boolean, ApiError>>;
   events(nowMs: number): Promise<Result<VendorEvent[], ApiError>>;
 };
 
@@ -123,12 +138,13 @@ const sampleSource: VendorSource = {
   booking: (kind, id, nowMs) => Promise.resolve(sampleBooking(kind, id, nowMs)),
   moveBooking: (kind, id, from, to, nowMs) =>
     Promise.resolve(sampleMoveBooking(kind, id, from, to, nowMs)),
-  calendar: (nowMs) => Promise.resolve(ok(sampleCalendar(nowMs))),
-  toggleBlocked: (date, nowMs) => Promise.resolve(sampleToggleBlocked(date, nowMs)),
+  apartments: () => Promise.resolve(ok(sampleApartments())),
+  calendar: (_apartmentId, _month, nowMs) => Promise.resolve(ok(sampleCalendar(nowMs))),
+  toggleBlocked: (_apartmentId, date, nowMs) => Promise.resolve(sampleToggleBlocked(date, nowMs)),
   events: (nowMs) => Promise.resolve(ok(sampleEvents(nowMs))),
 };
 
-/** Live routes where they exist (request-for-quote vendors and the wallet); sample data elsewhere. */
+/** Live routes where they exist; sample data for events and for hotels' Today and Earnings. */
 function liveSource(): VendorSource {
   const http = createVendorHttp(api);
   return {
@@ -157,6 +173,9 @@ function liveSource(): VendorSource {
     bookings: (kind) => http.bookings(kind),
     booking: (kind, id) => http.booking(kind, id),
     moveBooking: (kind, id, from, to) => http.moveBooking(kind, id, from, to),
+    apartments: (vendorId) => vendorDb.apartments(vendorId),
+    calendar: (apartmentId, month) => http.calendar(apartmentId, month),
+    toggleBlocked: (apartmentId, date) => http.toggleBlocked(apartmentId, date),
   };
 }
 

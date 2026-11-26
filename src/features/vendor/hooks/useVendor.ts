@@ -17,6 +17,9 @@ export const vendorKeys = {
   bookings: (vendorId: string) => ['vendor', 'bookings', vendorId] as const,
   booking: (vendorId: string, id: string) => ['vendor', 'bookings', vendorId, id] as const,
   calendar: (vendorId: string) => ['vendor', 'calendar', vendorId] as const,
+  calendarMonth: (vendorId: string, apartmentId: string, month: string) =>
+    ['vendor', 'calendar', vendorId, apartmentId, month] as const,
+  apartments: (vendorId: string) => ['vendor', 'apartments', vendorId] as const,
   events: (vendorId: string) => ['vendor', 'events', vendorId] as const,
   job: (vendorId: string, id: string) => ['vendor', 'jobs', vendorId, id] as const,
 };

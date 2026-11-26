@@ -180,3 +180,22 @@ export const moveBody = z.object({
   refunded: z.boolean().optional(),
   refund_method: z.string().nullable().optional(),
 });
+
+/**
+ * `GET /api/vendor/apartments/blocked-dates?apartment_id&year&month` (older route, no contract doc,
+ * no `code`s): the vendor's blocks (both ends included) and the guests' stays around that month.
+ */
+export const blockedDatesBody = z.object({
+  blocked: z.array(z.object({ id: z.string(), start_date: z.string(), end_date: z.string() })),
+  booked: z.array(z.object({ check_in_date: z.string(), check_out_date: z.string() })),
+});
+export const blockCreatedBody = z.object({ data: z.object({ id: z.string() }) });
+export const blockDeletedBody = z.object({ success: z.literal(true) });
+
+/** The vendor's own apartments (RLS lets an owner read them whatever their status). */
+export const apartmentRow = z.object({
+  id: z.string(),
+  name: z.string(),
+  status: z.string().nullable(),
+});
+export const APARTMENT_COLUMNS = 'id, name, status';

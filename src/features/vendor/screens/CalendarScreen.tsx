@@ -1,15 +1,32 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { Building2, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 
+import type { VendorApartment } from '@/features/vendor/domain/calendarBlocks';
 import { addMonths, monthGrid } from '@/features/vendor/domain/calendarMonth';
 import type { StayProblem } from '@/features/vendor/hooks/useListings';
 import { longDate, type IsoDate } from '@/shared/lib/lagosDay';
 import { borderWidth, color, pressedOpacity, radius, space } from '@/shared/theme';
-import { Banner, ErrorState, IconButton, Screen, SkeletonRows, Text } from '@/shared/ui';
+import {
+  Banner,
+  EmptyState,
+  ErrorState,
+  FilterChips,
+  IconButton,
+  Screen,
+  SkeletonRows,
+  Text,
+} from '@/shared/ui';
 
 const WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 type Props = {
+  /** The vendor's apartments; the month below is the chosen one's. */
+  apartments:
+    | { status: 'loading' }
+    | { status: 'error'; retry: () => void }
+    | { status: 'ready'; list: VendorApartment[]; selected: string | null };
+  onApartment: (id: string) => void;
+  onOpenWeb: () => void;
   today: IsoDate;
   month: IsoDate;
   onMonth: (m: IsoDate) => void;
@@ -27,6 +44,9 @@ type Props = {
  * are solid ink; blocked ones are outlined; tap a free or blocked night to switch it.
  */
 export function CalendarScreen({
+  apartments,
+  onApartment,
+  onOpenWeb,
   today,
   month,
   onMonth,
@@ -39,12 +59,61 @@ export function CalendarScreen({
   const booked = new Set(state.status === 'ready' ? state.booked : []);
   const blocked = new Set(state.status === 'ready' ? state.blocked : []);
   const atStart = month <= addMonths(today, 0);
+  const title = (
+    <Text variant="titleLg" accessibilityRole="header">
+      Calendar
+    </Text>
+  );
+  const only =
+    apartments.status === 'ready' && apartments.list.length === 1 ? apartments.list[0] : undefined;
+  if (apartments.status !== 'ready' || apartments.list.length === 0)
+    return (
+      <Screen scroll>
+        <View style={{ gap: space.s5, paddingTop: space.s5, paddingBottom: space.s8 }}>
+          {title}
+          {apartments.status === 'loading' ? (
+            <SkeletonRows count={5} />
+          ) : apartments.status === 'error' ? (
+            <ErrorState
+              title="We couldn’t load your apartments"
+              message="Nothing has changed on your calendar. Try again."
+              onRetry={apartments.retry}
+            />
+          ) : (
+            <EmptyState
+              icon={Building2}
+              title="No apartment yet"
+              message="Add your apartment on bookhushly.com, then manage its nights here."
+              action={{ label: 'Open bookhushly.com', onPress: onOpenWeb }}
+            />
+          )}
+        </View>
+      </Screen>
+    );
+  const list = apartments.list;
   return (
     <Screen scroll>
       <View style={{ gap: space.s5, paddingTop: space.s5, paddingBottom: space.s8 }}>
-        <Text variant="titleLg" accessibilityRole="header">
-          Calendar
-        </Text>
+        {only !== undefined ? (
+          // One apartment: its name is the subject of the page, read with the heading.
+          <View accessible accessibilityRole="header" accessibilityLabel={`Calendar, ${only.name}`}>
+            {title}
+            <Text variant="body" tone="textSecondary">
+              {only.name}
+            </Text>
+          </View>
+        ) : (
+          title
+        )}
+        {only !== undefined ? null : (
+          <FilterChips
+            label="Apartment"
+            value={apartments.selected ?? ''}
+            options={list.map((a) => ({ value: a.id, label: a.name }))}
+            onChange={onApartment}
+            testID="vendor-calendar-apartments"
+          />
+        )}
         <Text variant="bodySm" tone="textSecondary">
           Tap a night to block it so nobody can book it. Tap again to open it.
         </Text>
@@ -80,7 +149,7 @@ export function CalendarScreen({
         ) : state.status === 'error' ? (
           <ErrorState
             title="We couldn’t load your calendar"
-            message="Check your connection and try again."
+            message="Your blocked nights haven’t changed. Try again."
             onRetry={state.retry}
           />
         ) : (
