@@ -148,7 +148,9 @@ export function sampleMoveBooking(
   if (r.value.status !== from || !apartmentMoves(r.value).includes(to))
     return err({ kind: 'conflict', code: 'stale_status' });
   changed.set(id, to);
-  return ok({ ...r.value, status: to });
+  const refund =
+    to === 'cancelled' && r.value.payment === 'paid' ? ('onItsWay' as const) : undefined;
+  return ok({ ...r.value, status: to, ...(refund === undefined ? {} : { refund }) });
 }
 
 const blocked = new Set<IsoDate>();

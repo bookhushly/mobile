@@ -25,6 +25,12 @@ describe('vendorStanding', () => {
     expect(vendorStanding(ok)).toEqual({ kind: 'ready' });
   });
 
+  it("suspended by status alone is suspended too (the web's isVendorActive rule)", () => {
+    expect(vendorStanding({ ...ok, approved: false, status: 'suspended' })).toEqual({
+      kind: 'suspended',
+    });
+  });
+
   it('suspension wins over approval', () => {
     expect(vendorStanding({ ...ok, suspendedAt: '2026-11-20T10:00:00Z' })).toEqual({
       kind: 'suspended',

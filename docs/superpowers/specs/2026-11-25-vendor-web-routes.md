@@ -113,9 +113,9 @@ Today `POST /api/upload` lets the client choose the `folder`. For vendor uploads
 - **`GET /api/vendor/bank-details` returns the full account number.** The app shows only the last two digits. Return `account_number_last2` (or a masked value) and keep the full number server side.
 - **Withdrawals are reviewed by an admin** (`status: pending` → processing → completed or failed). Return the withdrawal's `id` and `status` from `/withdraw`, and list withdrawals with their status in `/transactions`, so the app can show "being checked", "on its way", "sent", and "didn't go through, money returned".
 
-- **A vendor cancelling an apartment booking doesn't refund or notify the guest.** `POST /api/vendor/apartment-bookings/{id}/status` with `cancelled` only sets `booking_status` and `cancelled_at`. On a paid booking, the guest's money stays taken and they aren't told. Before vendor mode ships: start the refund (or queue it for an admin) and notify the guest, as the customer-side cancel does. The app currently tells the vendor to contact the guest and support.
+- ~~**A vendor cancelling an apartment booking doesn't refund or notify the guest.**~~ Fixed in web #249. `POST /api/vendor/apartment-bookings/{id}/status` with `cancelled` only sets `booking_status` and `cancelled_at`. On a paid booking, the guest's money stays taken and they aren't told. Before vendor mode ships: start the refund (or queue it for an admin) and notify the guest, as the customer-side cancel does. The app currently tells the vendor to contact the guest and support.
 
-- **Suspended or unapproved hotel owners can still run the front desk. High priority.**
+- ~~**Suspended or unapproved hotel owners can still run the front desk. High priority.**~~ Fixed in web #249.
   - Where: the vendor branch of `hotel_staff_can_manage` (used by check-in, check-out and reassign), the room-status route's vendor check, and the owner branches of the `hotel_bookings` / `hotel_rooms` policies all check ownership only. The same applies to `hotel_realtime_topic_allowed`.
   - The risk: a vendor suspended for fraud can read guest bookings, check guests in and out, and change rooms. They can do this through direct REST calls today, and through the app once vendor mode ships.
   - Fix: add `vendors.status <> 'suspended' and vendors.approved` (or the agreed rule) to each of these.

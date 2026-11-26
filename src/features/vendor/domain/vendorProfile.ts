@@ -51,7 +51,8 @@ type StandingInput = {
 
 /** Where the account stands. The server re-checks all of it on every vendor action. */
 export function vendorStanding(v: StandingInput): Standing {
-  if (v.suspendedAt !== null) return { kind: 'suspended' };
+  // The web's rule (lib/vendor/active.js): any of suspended_at, status 'suspended' means suspended.
+  if (v.suspendedAt !== null || v.status === 'suspended') return { kind: 'suspended' };
   if (v.approved) return { kind: 'ready' };
   if (v.status === 'rejected') return { kind: 'rejected', reason: v.rejectionReason ?? null };
   return { kind: 'waiting' };

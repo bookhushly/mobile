@@ -296,4 +296,35 @@ describe('vendorHttp', () => {
     await http.jobs();
     expect(calls.filter((c) => c.path === '/api/vendor/rfq/jobs')).toHaveLength(2);
   });
+
+  it('cancelling a paid stay says whether the guest’s refund went through', async () => {
+    const row = (status: string) => ({
+      id: 'a1',
+      booking_type: 'apartment',
+      status,
+      booking_date: '2026-12-05',
+      check_out_date: '2026-12-08',
+      guests: 4,
+      total_amount: 240_000,
+      guest_name: 'Tolu',
+      payment_status: 'completed',
+      listings: { title: '2-bed suite' },
+    });
+    let cancelled = false;
+    const { http } = fake([
+      [
+        /\/status$/,
+        () => {
+          cancelled = true;
+          return ok({ success: true, booking: {}, refunded: false, refund_method: null });
+        },
+      ],
+      [
+        /\/api\/vendor\/bookings$/,
+        () => ok({ bookings: [row(cancelled ? 'cancelled' : 'confirmed')] }),
+      ],
+    ]);
+    const r = await http.moveBooking('apartment', 'a1', 'confirmed', 'cancelled');
+    expect(r).toMatchObject({ ok: true, value: { status: 'cancelled', refund: 'beingFinished' } });
+  });
 });

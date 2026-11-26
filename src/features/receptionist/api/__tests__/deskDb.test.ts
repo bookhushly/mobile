@@ -193,7 +193,7 @@ describe('ownedHotels (hotel owners at the desk)', () => {
     name: 'Harbour View',
     city: 'V.I.',
     state: 'Lagos',
-    vendors: { user_id: 'u1', approved: true, suspended_at: null, ...vendor },
+    vendors: { user_id: 'u1', approved: true, suspended_at: null, status: 'approved', ...vendor },
   });
 
   it('reads the hotels whose vendor is the signed-in user, shaped like staff rows', async () => {
@@ -201,7 +201,7 @@ describe('ownedHotels (hotel owners at the desk)', () => {
     const r = await db.ownedHotels('u1');
     expect(state.table).toBe('hotels');
     expect(state.select).toBe(
-      'id, name, city, state, vendors!inner ( user_id, approved, suspended_at )',
+      'id, name, city, state, vendors!inner ( user_id, approved, suspended_at, status )',
     );
     expect(calls).toContainEqual(['eq', 'vendors.user_id', 'u1']);
     expect(r).toEqual({
@@ -216,7 +216,11 @@ describe('ownedHotels (hotel owners at the desk)', () => {
   });
 
   it('a suspended or unapproved owner’s hotel is not available (as for staff)', async () => {
-    for (const v of [{ suspended_at: '2026-11-20T00:00:00Z' }, { approved: false }]) {
+    for (const v of [
+      { suspended_at: '2026-11-20T00:00:00Z' },
+      { approved: false },
+      { status: 'suspended' },
+    ]) {
       const { db } = fake({ data: [hotel(v)] });
       expect(await db.ownedHotels('u1')).toEqual({
         ok: true,

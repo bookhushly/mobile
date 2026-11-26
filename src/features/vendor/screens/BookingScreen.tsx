@@ -153,6 +153,18 @@ export function BookingScreen({ state, busy, problem, onBack, onMove, onFrontDes
           <Text variant="label" testID="vendor-booking-status">
             {HEADLINE[b.status]}
           </Text>
+          {b.refund === undefined ? null : (
+            <Text
+              variant="bodySm"
+              tone="textSecondary"
+              accessibilityLiveRegion="polite"
+              testID="vendor-booking-refund"
+            >
+              {b.refund === 'onItsWay'
+                ? `${b.guest} has been told, and their refund of ${formatNaira(b.total)} is on its way.`
+                : `${b.guest} has been told. Their refund didn’t go through straight away: Bookhushly has been alerted and will finish it.`}
+            </Text>
+          )}
         </View>
         <View
           style={{
@@ -195,8 +207,8 @@ export function BookingScreen({ state, busy, problem, onBack, onMove, onFrontDes
       >
         <Text variant="body" tone="textSecondary">
           {b.payment === 'paid'
-            ? `The booking is marked cancelled. ${b.guest} isn’t told and isn’t refunded automatically yet: contact them, and email support@bookhushly.com about the refund.`
-            : `The booking is marked cancelled. ${b.guest} isn’t told automatically yet, so let them know.`}
+            ? `${b.guest} is told, and refunded ${formatNaira(b.total)} to how they paid. It can take a few working days to reach them.`
+            : `${b.guest} is told the booking is cancelled.`}
         </Text>
       </Sheet>
     </Screen>

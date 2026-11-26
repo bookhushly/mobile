@@ -174,4 +174,9 @@ export const apiStay = z.object({
 export type ApiStay = z.infer<typeof apiStay>;
 export const staysBody = z.object({ bookings: z.array(apiStay) });
 
-export const moveBody = z.object({ success: z.literal(true) });
+/** A cancel also says whether the guest's refund went through (web #249). */
+export const moveBody = z.object({
+  success: z.literal(true),
+  refunded: z.boolean().optional(),
+  refund_method: z.string().nullable().optional(),
+});

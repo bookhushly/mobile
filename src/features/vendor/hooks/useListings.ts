@@ -100,6 +100,12 @@ export function stayErrorWords(e: unknown): StayProblem {
       message: 'A guest has it. Only free dates can be blocked.',
       transient: false,
     };
+  if (a?.kind === 'forbidden')
+    return {
+      title: 'Your account can’t manage bookings right now',
+      message: 'Open bookhushly.com to see why, or contact Bookhushly support.',
+      transient: false,
+    };
   if (a?.kind === 'conflict')
     return {
       title: 'This booking has changed',
