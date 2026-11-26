@@ -1,4 +1,4 @@
-import { ArrowLeft, Camera, Lock, Navigation, Phone } from 'lucide-react-native';
+import { ArrowLeft, Camera, Lock, Navigation } from 'lucide-react-native';
 import { useState } from 'react';
 import { View } from 'react-native';
 
@@ -13,9 +13,11 @@ import {
 } from '@/features/vendor/domain/jobs';
 import type { JobAction, JobProblem } from '@/features/vendor/hooks/useVendorJobs';
 import { DeliveryPhotoSheet } from '@/features/vendor/ui/DeliveryPhotoSheet';
+import { CustomerCard } from '@/features/vendor/ui/CustomerCard';
+import { JobProgress } from '@/features/vendor/ui/JobProgress';
 import { Route } from '@/features/vendor/ui/Route';
 import { shortDate, lagosTime, lagosToday } from '@/shared/lib/lagosDay';
-import { borderWidth, color, radius, space } from '@/shared/theme';
+import { color, radius, space } from '@/shared/theme';
 import {
   Banner,
   Button,
@@ -169,67 +171,9 @@ export function JobScreen({
           )}
         </View>
 
-        <View
-          style={{ gap: space.s2 }}
-          accessible
-          accessibilityLabel={`Progress: ${progress.map((p) => `${p.label} ${p.done ? 'done' : 'to do'}`).join(', ')}`}
-        >
-          <View style={{ flexDirection: 'row', gap: space.s2 }}>
-            {progress.map((p) => (
-              <View
-                key={p.label}
-                style={{
-                  flex: 1,
-                  height: space.s2,
-                  borderRadius: radius.rFull,
-                  backgroundColor: p.done ? color.textPrimary : color.border,
-                }}
-              />
-            ))}
-          </View>
-          <View style={{ flexDirection: 'row', gap: space.s2 }}>
-            {progress.map((p) => (
-              <Text
-                key={p.label}
-                variant={p.done ? 'labelSm' : 'caption'}
-                tone={p.done ? 'textPrimary' : 'textSecondary'}
-                maxScale={1.3}
-                numberOfLines={2}
-                style={{ flex: 1 }}
-              >
-                {p.label}
-              </Text>
-            ))}
-          </View>
-        </View>
+        <JobProgress steps={progress} />
 
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: space.s4,
-            borderWidth: borderWidth.hairline,
-            borderColor: color.border,
-            borderRadius: radius.r4,
-            padding: space.s4,
-          }}
-        >
-          <View style={{ flex: 1, gap: space.s1 }}>
-            <Text variant="label">{j.customer.name}</Text>
-            <Text variant="caption" tone="textSecondary">
-              {j.customer.phone === null ? 'Their phone shows once they pay' : 'Customer'}
-            </Text>
-          </View>
-          {j.customer.phone === null ? null : (
-            <IconButton
-              icon={Phone}
-              accessibilityLabel={`Call ${j.customer.name}`}
-              onPress={() => {
-                if (j.customer.phone !== null) onCall(j.customer.phone);
-              }}
-            />
-          )}
-        </View>
+        <CustomerCard name={j.customer.name} phone={j.customer.phone} onCall={onCall} />
 
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.s4 }}>
           <View style={{ flex: 1 }}>

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 
-import { VendorRequests } from '@/features/vendor/screens/VendorRequestsContainers';
+import { VendorRequests } from '@/features/vendor/containers/VendorRequests';
 
 export default function VendorRequestsTab() {
   return (

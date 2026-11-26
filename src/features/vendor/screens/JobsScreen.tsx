@@ -1,5 +1,5 @@
 import { BriefcaseBusiness, ChevronRight } from 'lucide-react-native';
-import { Pressable, RefreshControl, View } from 'react-native';
+import { Pressable, RefreshControl, SectionList, View } from 'react-native';
 
 import {
   groupByDay,
@@ -113,74 +113,88 @@ export function JobsScreen({ nowMs, tab, onTab, state, onOpen }: Props) {
   // Done jobs read newest first; the rest in the order they happen.
   const groups = groupByDay(list, nowMs);
   if (tab === 'done') groups.reverse();
+  const header = (
+    <View style={{ gap: space.s5, paddingBottom: space.s4 }}>
+      <Text variant="titleLg" accessibilityRole="header">
+        Jobs
+      </Text>
+      <SegmentedControl
+        value={tab}
+        onChange={onTab}
+        testID="vendor-jobs-tabs"
+        options={[
+          {
+            value: 'upcoming',
+            label: 'Upcoming',
+            ...(split ? { count: split.upcoming.length } : {}),
+          },
+          { value: 'running', label: 'Running', ...(split ? { count: split.running.length } : {}) },
+          { value: 'done', label: 'Done' },
+        ]}
+      />
+    </View>
+  );
+  // Done grows with every job ever finished (the route isn't paged): a list that draws only what's
+  // on screen, one section per day.
   return (
-    <Screen
-      scroll
-      refreshControl={
-        state.status === 'ready' ? (
-          <RefreshControl
-            refreshing={state.refreshing}
-            onRefresh={state.refresh}
-            {...refreshColors}
-          />
-        ) : undefined
-      }
-    >
-      <View style={{ gap: space.s5, paddingTop: space.s5, paddingBottom: space.s8 }}>
-        <Text variant="titleLg" accessibilityRole="header">
-          Jobs
-        </Text>
-        <SegmentedControl
-          value={tab}
-          onChange={onTab}
-          testID="vendor-jobs-tabs"
-          options={[
-            {
-              value: 'upcoming',
-              label: 'Upcoming',
-              ...(split ? { count: split.upcoming.length } : {}),
-            },
-            {
-              value: 'running',
-              label: 'Running',
-              ...(split ? { count: split.running.length } : {}),
-            },
-            { value: 'done', label: 'Done' },
-          ]}
-        />
-        {state.status === 'loading' ? (
-          <SkeletonRows count={4} />
-        ) : state.status === 'error' ? (
-          <ErrorState
-            title="We couldn’t load your jobs"
-            message="Check your connection and try again."
-            onRetry={state.retry}
-          />
-        ) : list.length === 0 ? (
-          <EmptyState
-            icon={BriefcaseBusiness}
-            title={EMPTY[tab].title}
-            message={EMPTY[tab].message}
-          />
-        ) : (
-          groups.map((g) => (
-            <View key={g.day}>
-              <Text variant="labelSm" tone="textSecondary" accessibilityRole="header">
-                {g.label}
-              </Text>
-              {g.jobs.map((j) => (
-                <JobRow
-                  key={j.id}
-                  job={j}
-                  onPress={() => {
-                    onOpen(j);
-                  }}
-                />
-              ))}
-            </View>
-          ))
+    <Screen>
+      <SectionList
+        sections={
+          state.status === 'ready'
+            ? groups.map((g) => ({ key: g.day, title: g.label, data: g.jobs }))
+            : []
+        }
+        style={{ flex: 1 }}
+        keyExtractor={(j) => j.id}
+        initialNumToRender={10}
+        windowSize={7}
+        stickySectionHeadersEnabled={false}
+        ListHeaderComponent={header}
+        renderSectionHeader={({ section }) => (
+          <Text
+            variant="labelSm"
+            tone="textSecondary"
+            accessibilityRole="header"
+            style={{ paddingTop: space.s4, backgroundColor: color.surface }}
+          >
+            {section.title}
+          </Text>
         )}
-      </View>
+        renderItem={({ item }) => (
+          <JobRow
+            job={item}
+            onPress={() => {
+              onOpen(item);
+            }}
+          />
+        )}
+        ListEmptyComponent={
+          state.status === 'loading' ? (
+            <SkeletonRows count={4} />
+          ) : state.status === 'error' ? (
+            <ErrorState
+              title="We couldn’t load your jobs"
+              message="Check your connection and try again."
+              onRetry={state.retry}
+            />
+          ) : (
+            <EmptyState
+              icon={BriefcaseBusiness}
+              title={EMPTY[tab].title}
+              message={EMPTY[tab].message}
+            />
+          )
+        }
+        refreshControl={
+          state.status === 'ready' ? (
+            <RefreshControl
+              refreshing={state.refreshing}
+              onRefresh={state.refresh}
+              {...refreshColors}
+            />
+          ) : undefined
+        }
+      />
     </Screen>
   );
 }

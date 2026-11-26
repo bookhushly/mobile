@@ -12,20 +12,10 @@ import {
   type Vehicle,
 } from '@/features/vendor/domain/requests';
 import type { QuoteInput, QuoteProblem } from '@/features/vendor/hooks/useVendorRequests';
-import { ServicePhoto } from '@/features/vendor/ui/ServicePhoto';
-import { borderWidth, color, radius, space, vendorSize } from '@/shared/theme';
-import {
-  Banner,
-  Button,
-  formatNaira,
-  Header,
-  IconButton,
-  Input,
-  ListRow,
-  Screen,
-  SkeletonRows,
-  Text,
-} from '@/shared/ui';
+import { FeeBreakdown } from '@/features/vendor/ui/FeeBreakdown';
+import { VehiclePicker } from '@/features/vendor/ui/VehiclePicker';
+import { space } from '@/shared/theme';
+import { Banner, Button, formatNaira, Header, IconButton, Input, Screen, Text } from '@/shared/ui';
 
 type Props = {
   request: RequestDetail;
@@ -123,92 +113,15 @@ export function QuoteScreen({
           }
           testID="vendor-quote-amount"
         />
-        <View
-          style={{
-            borderWidth: borderWidth.hairline,
-            borderColor: color.border,
-            borderRadius: radius.r4,
-            paddingHorizontal: space.s5,
-          }}
-        >
-          {feeRate === undefined ? (
-            <SkeletonRows count={2} />
-          ) : feeRate === null ? (
-            <Text variant="caption" tone="textSecondary" style={{ paddingVertical: space.s4 }}>
-              Bookhushly’s fee comes off this price. You’ll see what you receive on the job once the
-              customer chooses you.
-            </Text>
-          ) : (
-            <>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  paddingVertical: space.s4,
-                }}
-              >
-                <Text variant="caption" tone="textSecondary">
-                  {`Bookhushly fee (${String(Math.round(feeRate * 100))}%)`}
-                </Text>
-                <Text variant="caption" tone="textSecondary" tabular>
-                  {split === null ? '–' : `−${formatNaira(split.fee)}`}
-                </Text>
-              </View>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  paddingVertical: space.s4,
-                  borderTopWidth: borderWidth.hairline,
-                  borderTopColor: color.border,
-                }}
-              >
-                <Text variant="label">You’ll receive</Text>
-                <Text variant="label" tabular testID="vendor-quote-receive">
-                  {split === null ? '–' : formatNaira(split.receive)}
-                </Text>
-              </View>
-            </>
-          )}
-        </View>
+        <FeeBreakdown feeRate={feeRate} split={split} />
 
         {pickVehicle ? (
-          <View style={{ gap: space.s3 }}>
-            <Text variant="label">Which vehicle?</Text>
-            {tried && vehicleMissing ? (
-              <Text variant="caption" tone="textPrimary" accessibilityLiveRegion="polite">
-                Choose the vehicle you’ll send
-              </Text>
-            ) : null}
-            <View accessibilityRole="radiogroup">
-              {vehicles.map((v) => (
-                <ListRow
-                  key={v.id}
-                  title={v.name}
-                  subtitle={v.detail}
-                  checked={vehicleId === v.id}
-                  leading={
-                    <View
-                      style={{
-                        width: vendorSize.rowPhoto,
-                        borderRadius: radius.r3,
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <ServicePhoto photo={v.photo} height={vendorSize.rowPhoto} />
-                    </View>
-                  }
-                  onPress={() => {
-                    setVehicleId(v.id);
-                  }}
-                  testID={`vendor-vehicle-${v.id}`}
-                />
-              ))}
-            </View>
-            <Text variant="caption" tone="textSecondary">
-              Add vehicles and drivers on bookhushly.com.
-            </Text>
-          </View>
+          <VehiclePicker
+            vehicles={vehicles}
+            chosen={vehicleId}
+            missing={tried && vehicleMissing}
+            onChoose={setVehicleId}
+          />
         ) : null}
 
         <Input
