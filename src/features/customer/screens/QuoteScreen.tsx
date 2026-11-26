@@ -99,7 +99,13 @@ export function QuoteScreen<R extends RfqRow, B>({
             message="Go back to see the others."
           />
         ) : (
-          <RequestLoadError error={q.error} what="this quote" onRetry={() => void q.refetch()} />
+          <RequestLoadError
+            error={q.error}
+            what="this quote"
+            icon={terms.icon}
+            requestsWord={terms.requestsWord}
+            onRetry={() => void q.refetch()}
+          />
         )}
       </Screen>
     );
@@ -175,7 +181,9 @@ export function QuoteScreen<R extends RfqRow, B>({
       }
     >
       <View style={{ gap: space.s6, paddingTop: space.s4, paddingBottom: space.s7 }}>
-        <QuotePhotos photos={photos} label={name} icon={terms.icon} />
+        {photos.length === 0 && terms.photoOptional === true ? null : (
+          <QuotePhotos photos={photos} label={name} icon={terms.icon} />
+        )}
         <View style={{ gap: space.s2 }}>
           <Text variant="titleLg" accessibilityRole="header">
             {name}

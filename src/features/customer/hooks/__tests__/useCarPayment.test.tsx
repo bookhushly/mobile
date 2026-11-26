@@ -8,7 +8,8 @@ import {
   verifyPayment,
 } from '@/features/customer/api/checkoutApi';
 import { getLogistics } from '@/features/customer/api/logisticsApi';
-import { LOGISTICS_KIND } from '@/features/customer/hooks/rfqKinds';
+import { getSecurity } from '@/features/customer/api/securityApi';
+import { LOGISTICS_KIND, SECURITY_KIND } from '@/features/customer/hooks/rfqKinds';
 import { useCarPayment, useRfqPayment } from '@/features/customer/hooks/useCarPayment';
 import { carPayStore } from '@/features/customer/offline/carPayStore';
 
@@ -20,6 +21,7 @@ jest.mock('expo-web-browser', () => ({
 }));
 jest.mock('@/features/customer/api/carRentalApi', () => ({ getCarRequest: jest.fn() }));
 jest.mock('@/features/customer/api/logisticsApi', () => ({ getLogistics: jest.fn() }));
+jest.mock('@/features/customer/api/securityApi', () => ({ getSecurity: jest.fn() }));
 jest.mock('@/features/customer/api/checkoutApi', () => ({
   checkPayment: jest.fn(),
   initializePayment: jest.fn(),
@@ -189,5 +191,20 @@ it('a logistics payment is checked and started as logistics, and read back from 
   expect(mocked.init).toHaveBeenCalledWith({}, 'logistics', 'l1');
   expect(getLogistics).toHaveBeenCalled();
   expect(mocked.get).not.toHaveBeenCalled();
+  expect(result.current.state).toEqual({ kind: 'paid' });
+});
+
+it('a security payment is checked and started as security', async () => {
+  mocked.check.mockResolvedValue(none);
+  jest.mocked(getSecurity).mockResolvedValue({ ok: true, value: { status: 'paid' } } as never);
+  const { result } = await renderHook(() => useRfqPayment(SECURITY_KIND, 'u1', 's1', false), {
+    wrapper: wrapper(makeQueryClient()),
+  });
+  await act(async () => {
+    result.current.pay();
+    await Promise.resolve();
+  });
+  expect(mocked.check).toHaveBeenCalledWith({}, 'security', 's1');
+  expect(mocked.init).toHaveBeenCalledWith({}, 'security', 's1');
   expect(result.current.state).toEqual({ kind: 'paid' });
 });

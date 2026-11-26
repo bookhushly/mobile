@@ -48,7 +48,13 @@ export function QuotesScreen<R extends RfqRow, B>({
         {q.loading ? (
           <SkeletonRows count={3} />
         ) : (
-          <RequestLoadError error={q.error} what="the quotes" onRetry={() => void q.refetch()} />
+          <RequestLoadError
+            error={q.error}
+            what="the quotes"
+            icon={terms.icon}
+            requestsWord={terms.requestsWord}
+            onRetry={() => void q.refetch()}
+          />
         )}
       </Screen>
     );
@@ -69,6 +75,8 @@ export function QuotesScreen<R extends RfqRow, B>({
             vehicleWord={terms.vehicleWord}
             showSeats={terms.showSeats}
             icon={terms.icon}
+            {...(terms.factsOf === undefined ? {} : { facts: terms.factsOf(item, r) })}
+            photoOptional={terms.photoOptional === true}
             onPress={(o) => {
               onOpenQuote(o.id);
             }}

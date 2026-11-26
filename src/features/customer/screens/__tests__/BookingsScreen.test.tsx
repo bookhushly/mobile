@@ -23,6 +23,9 @@ import { ap, ev, ho, TODAY } from '../../hooks/__tests__/customerTestUtils';
 jest.mock('@/features/customer/hooks/useMyBookings', () => ({ useMyBookings: jest.fn() }));
 jest.mock('@/features/customer/hooks/useUnreadCount', () => ({ useUnreadCount: jest.fn() }));
 jest.mock('@/features/customer/hooks/useCarRequests', () => ({ useCarRequests: jest.fn() }));
+jest.mock('@/features/customer/hooks/useSecurity', () => ({
+  useSecurityRequests: () => ({ requests: [], loading: false, failed: false, refetch: jest.fn() }),
+}));
 jest.mock('@/features/customer/hooks/useLogistics', () => ({
   useLogisticsRequests: () => ({ requests: [], loading: false, failed: false, refetch: jest.fn() }),
 }));
@@ -146,6 +149,7 @@ function handlers(): Omit<Props, 'userId'> {
     onOpenNotifications: jest.fn(),
     onOpenCarRequest: jest.fn(),
     onOpenLogisticsRequest: jest.fn(),
+    onOpenSecurityRequest: jest.fn(),
     onBrowse: jest.fn(),
   };
 }
@@ -374,7 +378,7 @@ it('a failed car rentals load says so, and never reads as no bookings', async ()
     refetch: jest.fn(() => Promise.resolve()),
   });
   await render(<BookingsScreen userId="u1" {...handlers()} />);
-  expect(screen.getByText('Couldn’t load your car rentals. Pull to refresh.')).toBeTruthy();
+  expect(screen.getByTestId('cars-failed')).toBeTruthy();
   expect(screen.queryByText('No bookings yet')).toBeNull();
 });
 

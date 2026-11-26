@@ -19,6 +19,9 @@ jest.mock('@/features/customer/hooks/useMyBookings', () => ({ useMyBookings: jes
 jest.mock('@/features/customer/hooks/useCarRequests', () => ({
   useCarRequests: () => ({ requests: [], loading: false, failed: false, refetch: jest.fn() }),
 }));
+jest.mock('@/features/customer/hooks/useSecurity', () => ({
+  useSecurityRequests: () => ({ requests: [], loading: false, failed: false, refetch: jest.fn() }),
+}));
 jest.mock('@/features/customer/hooks/useLogistics', () => ({
   useLogisticsRequests: () => ({ requests: [], loading: false, failed: false, refetch: jest.fn() }),
 }));
@@ -75,6 +78,7 @@ async function show() {
       onOpenNotifications={jest.fn()}
       onOpenCarRequest={jest.fn()}
       onOpenLogisticsRequest={jest.fn()}
+      onOpenSecurityRequest={jest.fn()}
       onBrowse={jest.fn()}
     />,
     { wrapper: wrapper(qc) },

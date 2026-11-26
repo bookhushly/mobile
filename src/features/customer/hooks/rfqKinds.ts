@@ -21,6 +21,17 @@ import type { LogisticsBody } from '@/features/customer/domain/logistics/logisti
 import { customerKeys } from '@/features/customer/hooks/customerKeys';
 import type { CarOffer, CarRequest, RequestStatus } from '@/features/customer/schemas/carRental';
 import type { LogisticsRequest } from '@/features/customer/schemas/logistics';
+import type { SecurityRequest } from '@/features/customer/schemas/security';
+import {
+  cancelSecurity,
+  confirmSecurityDone,
+  getSecurity,
+  listSecurity,
+  reviewSecurity,
+  selectSecurityOffer,
+  submitSecurity,
+} from '@/features/customer/api/securityApi';
+import type { SecurityBody } from '@/features/customer/domain/security/securityRequest';
 import type { ApiClient } from '@/shared/api/client';
 import type { ApiError } from '@/shared/lib/errors';
 import type { Result } from '@/shared/lib/result';
@@ -48,9 +59,9 @@ export type RfqRow = {
 };
 
 export type RfqKind<R extends RfqRow, B> = {
-  name: 'car' | 'logistics';
+  name: 'car' | 'logistics' | 'security';
   /** `requestType` for the payment routes. */
-  requestType: 'car_rental' | 'logistics';
+  requestType: 'car_rental' | 'logistics' | 'security';
   get: (c: Requester, id: string, signal?: AbortSignal) => Api<R>;
   list: (c: Requester, signal?: AbortSignal) => Api<{ requests: R[]; count: number }>;
   submit: (c: Requester, body: B) => Api<{ id: string }>;
@@ -104,4 +115,25 @@ export const LOGISTICS_KIND: RfqKind<LogisticsRequest, LogisticsBody> = {
     r.deliveryAddress.trim() === b.delivery_address &&
     r.itemDescription.trim() === b.item_description,
   keys: { list: customerKeys.logisticsRequests, one: customerKeys.logisticsRequest },
+};
+
+export const SECURITY_KIND: RfqKind<SecurityRequest, SecurityBody> = {
+  name: 'security',
+  requestType: 'security',
+  get: getSecurity,
+  list: listSecurity,
+  submit: submitSecurity,
+  select: selectSecurityOffer,
+  cancel: cancelSecurity,
+  confirm: confirmSecurityDone,
+  review: reviewSecurity,
+  // The same place, start day, service and team size: a second, different request is never taken
+  // for the first.
+  sameAs: (r, b) =>
+    r.pickupDate === b.start_date &&
+    r.pickupState === b.state &&
+    r.service === b.service_type &&
+    r.address.trim() === b.service_address &&
+    r.guards === b.number_of_guards,
+  keys: { list: customerKeys.securityRequests, one: customerKeys.securityRequest },
 };

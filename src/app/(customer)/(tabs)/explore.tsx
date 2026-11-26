@@ -35,6 +35,9 @@ export default function ExploreRoute() {
       onOpenLogistics={() => {
         router.push('/logistics/new');
       }}
+      onOpenSecurity={() => {
+        router.push('/security/new');
+      }}
       onSignInAgain={() => {
         signOut();
       }}
