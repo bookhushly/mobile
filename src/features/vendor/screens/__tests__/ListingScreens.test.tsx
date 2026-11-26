@@ -190,6 +190,9 @@ describe('CalendarScreen', () => {
     const onToggle = jest.fn();
     await render(
       <CalendarScreen
+        apartments={{ status: 'ready', list: [{ id: 'a1', name: 'Garden Creek' }], selected: 'a1' }}
+        onApartment={noop}
+        onOpenWeb={noop}
         today={TODAY}
         month="2026-12-01"
         onMonth={noop}
@@ -203,6 +206,52 @@ describe('CalendarScreen', () => {
     expect(screen.getByLabelText('Thursday 10 December, blocked')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Monday 14 December, free'));
     expect(onToggle).toHaveBeenCalledWith('2026-12-14');
+  });
+});
+
+describe('CalendarScreen apartments', () => {
+  const month = {
+    today: TODAY,
+    month: '2026-12-01',
+    onMonth: noop,
+    busyDate: null,
+    problem: null,
+    onToggle: noop,
+    state: { status: 'ready' as const, booked: [], blocked: [] },
+  };
+  it('with several apartments, the vendor picks whose nights they see', async () => {
+    const onApartment = jest.fn();
+    await render(
+      <CalendarScreen
+        {...month}
+        apartments={{
+          status: 'ready',
+          list: [
+            { id: 'a1', name: 'Garden Creek' },
+            { id: 'a2', name: 'Palmgrove Court' },
+          ],
+          selected: 'a1',
+        }}
+        onApartment={onApartment}
+        onOpenWeb={noop}
+      />,
+    );
+    await fireEvent.press(screen.getByText('Palmgrove Court'));
+    expect(onApartment).toHaveBeenCalledWith('a2');
+  });
+  it('no apartment yet: says where to add one, and shows no month', async () => {
+    const onOpenWeb = jest.fn();
+    await render(
+      <CalendarScreen
+        {...month}
+        apartments={{ status: 'ready', list: [], selected: null }}
+        onApartment={noop}
+        onOpenWeb={onOpenWeb}
+      />,
+    );
+    expect(screen.queryByLabelText('Next month')).toBeNull();
+    await fireEvent.press(screen.getByText('Open bookhushly.com'));
+    expect(onOpenWeb).toHaveBeenCalled();
   });
 });
 

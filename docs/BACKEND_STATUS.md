@@ -313,6 +313,7 @@ Everything else in this section is history: fixed items are marked below. In ord
 23. Search: one hotel amenity vocabulary (the edit form writes a boolean map, `details.jsx:40-53`); amenities filtered in SQL so `totalCount` stays exact (`lib/listings/feed.js:635-645`); a closest-first `match` mode; a featured/popular signal for Explore.
 24. Image thumbnails (Supabase transformations, a stored thumbnail URL, or approval to use `/_next/image`).
 25. Web docs that contradict `STAGING.md`: `docs/mobile/MOBILE_APP_REQUIREMENTS.md` (migrations "not applied"), `BOOKING_API.md` ("no app return yet"), `CUSTOMER_BOOKINGS_API.md:12` (`user` tier "per IP"), `PUSH_API.md:355` (staging blocks Bearer), `CUSTOMER_BOOKINGS_API.md:239` (no preference storage).
+26. `/api/vendor/apartments/blocked-dates` (the app's apartment Calendar, 2026-11-26): the GET's month window is wrong for January (`month - 1 || 12` keeps the same year, so the window starts after it ends; the app asks January as February); the POST's overlap check treats the inclusive `end_date` as exclusive (`check_in_date < end_date`), so a stay arriving on a block's last night isn't caught; no `code`s on any error (the app reads the POST's 409 as "booked"); the GET has no session or ownership check (it relies on RLS), and it ignores its query errors and answers 200 with empty lists, so a database hiccup draws every night as open (the app can't tell); the POST also ignores a failed conflict lookup and inserts anyway; the GET lists `pending` holds with the stays while the POST refuses only `confirmed`/`checked_in` (the app treats pending holds as booked); and opening one night of a longer block takes a create plus a delete (the app recreates the nights either side first, then removes the old block) — a `split`/`unblock-night` action, or PATCH, would make it one write. Also documenting it in `docs/mobile/VENDOR_API.md` would help.
 
 ### History (asks as first written, with status)
 
@@ -412,7 +413,7 @@ Delivered: hotel and apartment JSON (#221), my-bookings, scannable events (#192)
   - no events-with-capacity route for event vendors' Today → to-do 2;
   - `/api/vendor/bookings` has no room type on hotel stays and no paging → to-do 10;
   - three of the migrations behind #248/#249 aren't applied (web `docs/STAGING.md`) → to-do 1;
-  - mobile, not web: the apartment calendar isn't wired to `/api/vendor/apartments/blocked-dates` yet (the route is live).
+  - the apartment calendar uses `/api/vendor/apartments/blocked-dates` (since 2026-11-26; asks in to-do 26).
 - **Vendor mode (DECISION-11, inventory 2026-11-25, code read only). Ask: `docs/superpowers/specs/2026-11-25-vendor-web-routes.md`.**
   - **Bearer-callable today:**
     - `/api/wallet`, `/transactions`, `/statistics`, `/withdraw`;

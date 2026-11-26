@@ -66,18 +66,31 @@ export function useMoveAnyBooking({ vendorId, kind }: Who) {
   });
 }
 
-export function useCalendar({ vendorId }: Who) {
+export function useApartments({ vendorId }: Who) {
   return useQuery({
     retry: vendorRetry,
-    queryKey: vendorKeys.calendar(vendorId),
-    queryFn: () => unwrap(vendorSource.calendar(clock.serverNow())),
+    queryKey: vendorKeys.apartments(vendorId),
+    queryFn: () => unwrap(vendorSource.apartments(vendorId)),
   });
 }
 
+/** One apartment's month; nothing is asked until an apartment is chosen. */
+export function useCalendar({ vendorId }: Who, apartmentId: string | null, month: IsoDate) {
+  return useQuery({
+    retry: vendorRetry,
+    enabled: apartmentId !== null,
+    queryKey: vendorKeys.calendarMonth(vendorId, apartmentId ?? '', month),
+    queryFn: () => unwrap(vendorSource.calendar(apartmentId ?? '', month, clock.serverNow())),
+  });
+}
+
+/** Each toggle names its apartment, so switching apartments mid-save can't send it to the wrong one. */
 export function useToggleBlocked({ vendorId }: Who) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (date: IsoDate) => unwrap(vendorSource.toggleBlocked(date, clock.serverNow())),
+    mutationFn: (v: { apartmentId: string; date: IsoDate }) =>
+      unwrap(vendorSource.toggleBlocked(v.apartmentId, v.date, clock.serverNow())),
+    // Every month of every apartment: a block can run across months.
     onSettled: () => qc.invalidateQueries({ queryKey: vendorKeys.calendar(vendorId) }),
   });
 }
@@ -91,6 +104,30 @@ export function useEvents({ vendorId }: Who) {
 }
 
 export type StayProblem = { title: string; message: string; transient: boolean };
+
+/** The calendar's own words: a night, not a booking. */
+export function calendarErrorWords(e: unknown): StayProblem {
+  const a = e instanceof VendorError ? e.apiError : null;
+  if (a?.kind === 'conflict')
+    return {
+      title: 'A guest has that night',
+      message: 'Only free nights can be blocked. We’ve refreshed the calendar.',
+      transient: false,
+    };
+  if (a?.kind === 'forbidden')
+    return {
+      title: 'You can’t change this calendar right now',
+      message: 'Open bookhushly.com to see why, or contact Bookhushly support.',
+      transient: false,
+    };
+  const other = otherRefusal(a);
+  if (other !== null) return other;
+  return {
+    title: 'We couldn’t reach Bookhushly',
+    message: 'We’ve refreshed the calendar so you can see which nights are blocked. Try again.',
+    transient: true,
+  };
+}
 
 export function stayErrorWords(e: unknown): StayProblem {
   const a = e instanceof VendorError ? e.apiError : null;

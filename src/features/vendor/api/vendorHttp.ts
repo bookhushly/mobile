@@ -9,6 +9,7 @@ import { meBody } from '@/features/vendor/schemas/vendorApi';
 
 import { lagosToday } from '@/shared/lib/lagosDay';
 import { ok } from '@/shared/lib/result';
+import { createCalendarHttp } from '@/features/vendor/api/calendarHttp';
 import { createMoneyHttp } from '@/features/vendor/api/moneyHttp';
 import { createRfqHttp } from '@/features/vendor/api/rfqHttp';
 import { createStaysHttp } from '@/features/vendor/api/staysHttp';
@@ -26,12 +27,14 @@ export function createVendorHttp(raw: Requester, now: () => number = () => Date.
   const rfq = createRfqHttp(c);
   const money = createMoneyHttp(c, rfq.jobsRaw);
   const st = createStaysHttp(c, clear);
+  const cal = createCalendarHttp(c, clear);
   const { requests, jobsRaw, toJobs } = rfq;
   const { earnings } = money;
   return {
     ...rfq,
     ...money,
     ...st,
+    ...cal,
 
     async me(): R<VendorProfile & { states: string[] }> {
       const r = await c.request('/api/vendor/me', { schema: meBody });

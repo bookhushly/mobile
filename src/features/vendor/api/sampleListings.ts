@@ -155,6 +155,10 @@ export function sampleMoveBooking(
 
 const blocked = new Set<IsoDate>();
 
+export function sampleApartments(): { id: string; name: string }[] {
+  return [{ id: 'apt1', name: 'Palm Court, Lekki' }];
+}
+
 /** Apartment calendar: dates booked by guests, and dates the vendor blocked. */
 export function sampleCalendar(nowMs: number): { booked: IsoDate[]; blocked: IsoDate[] } {
   const booked: IsoDate[] = [];
