@@ -6,6 +6,40 @@ describe('resolveMode', () => {
   it.each(['vendor', 'admin', 'support'] as const)('%s -> web only', (role) => {
     expect(resolveMode({ ...base, role })).toEqual({ kind: 'webOnly' });
   });
+  it('admin and support stay web only even with vendor mode on', () => {
+    expect(resolveMode({ ...base, role: 'admin' }, null, { vendorMode: true })).toEqual({
+      kind: 'webOnly',
+    });
+    expect(resolveMode({ ...base, role: 'support' }, null, { vendorMode: true })).toEqual({
+      kind: 'webOnly',
+    });
+  });
+  it('vendor with vendor mode on -> vendor first, and they can still book as a customer', () => {
+    expect(resolveMode({ ...base, role: 'vendor' }, null, { vendorMode: true })).toEqual({
+      kind: 'modes',
+      modes: ['vendor', 'customer'],
+      defaultMode: 'vendor',
+    });
+  });
+  it('a hotel vendor also gets the front desk, after their business', () => {
+    expect(
+      resolveMode({ ...base, role: 'vendor', ownsHotel: true }, null, { vendorMode: true }),
+    ).toEqual({
+      kind: 'modes',
+      modes: ['vendor', 'receptionist', 'customer'],
+      defaultMode: 'vendor',
+    });
+  });
+  it('the front desk for owners is part of vendor mode: off with it', () => {
+    expect(resolveMode({ ...base, role: 'vendor', ownsHotel: true })).toEqual({ kind: 'webOnly' });
+  });
+  it('a vendor who owns events can also scan them', () => {
+    expect(
+      resolveMode({ ...base, role: 'vendor', activeScannerCount: 1 }, 'customer', {
+        vendorMode: true,
+      }),
+    ).toEqual({ kind: 'modes', modes: ['vendor', 'gate', 'customer'], defaultMode: 'customer' });
+  });
   it('receptionist with a hotel_staff row -> receptionist only (no customer mode)', () => {
     expect(
       resolveMode({ role: 'receptionist', hotelStaff: { hotelId: 'h' }, activeScannerCount: 0 }),

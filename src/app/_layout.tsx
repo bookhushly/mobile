@@ -140,6 +140,9 @@ function Navigator() {
         <Stack.Protected guard={route === 'receptionist'}>
           <Stack.Screen name="(receptionist)" />
         </Stack.Protected>
+        <Stack.Protected guard={route === 'vendor'}>
+          <Stack.Screen name="(vendor)" />
+        </Stack.Protected>
         <Stack.Protected guard={route === 'customer'}>
           <Stack.Screen name="(customer)" />
         </Stack.Protected>

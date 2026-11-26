@@ -35,13 +35,30 @@ export type SupabaseLike = {
 
 export type DeskDb = {
   staffHotels(userId: string): Promise<Result<StaffHotelRow[], ApiError>>;
+  /** Hotels the signed-in vendor owns, as staff rows: owners run the same desk (DECISION-11). */
+  ownedHotels(userId: string): Promise<Result<StaffHotelRow[], ApiError>>;
   guests(hotelId: string, today: IsoDate): Promise<Result<BookingRow[], ApiError>>;
   bookingByCode(hotelId: string, code: CheckInCode): Promise<Result<BookingRow | null, ApiError>>;
   bookingById(hotelId: string, id: string): Promise<Result<BookingRow | null, ApiError>>;
   rooms(hotelId: string): Promise<Result<RoomRow[], ApiError>>;
 };
 
+// `!inner` keeps only hotels whose vendor row matches the filter below.
+const OWNED_COLUMNS = 'id, name, city, state, vendors!inner ( user_id, approved, suspended_at )';
 const staffRows = z.array(staffHotelRow);
+const ownedRows = z.array(
+  z.object({
+    id: z.string(),
+    name: z.string(),
+    city: z.string().nullable(),
+    state: z.string().nullable(),
+    vendors: z.object({
+      user_id: z.string(),
+      approved: z.boolean().nullable(),
+      suspended_at: z.string().nullable(),
+    }),
+  }),
+);
 const bookingRows = z.array(bookingRow);
 const roomRows = z.array(roomRow);
 const maybeBooking = bookingRow.nullable();
@@ -61,6 +78,28 @@ export function createDeskDb(client: SupabaseLike): DeskDb {
   return {
     staffHotels: (userId) =>
       read(client.from('hotel_staff').select(STAFF_COLUMNS).eq('user_id', userId), staffRows),
+    // Owners see their own hotels even while suspended (RLS), but the web's desk checks don't yet
+    // refuse a suspended or unapproved owner (BACKEND_STATUS §9): their hotel shows as not
+    // available, as a hidden hotel does for staff. Rows not owned by this user are dropped too,
+    // so the filter is never the only guard.
+    ownedHotels: async (userId) => {
+      const r = await read(
+        client.from('hotels').select(OWNED_COLUMNS).eq('vendors.user_id', userId),
+        ownedRows,
+      );
+      if (!r.ok) return r;
+      return ok(
+        r.value
+          .filter((h) => h.vendors.user_id === userId)
+          .map((h) => ({
+            hotel_id: h.id,
+            hotels:
+              h.vendors.suspended_at === null && h.vendors.approved === true
+                ? { id: h.id, name: h.name, city: h.city, state: h.state }
+                : null,
+          })),
+      );
+    },
     // In house (incl. legacy rows with no booking_status but checked_in), plus today's paid
     // arrivals. Newest check-in first so the cap drops the oldest rows; splitGuests re-sorts.
     guests: (hotelId, today) =>

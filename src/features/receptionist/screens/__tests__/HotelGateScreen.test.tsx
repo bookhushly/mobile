@@ -87,3 +87,18 @@ it('shows the mode switcher the route passes on every state that blocks the desk
     await r.unmount();
   }
 });
+
+it('a hotel owner with no hotel yet is told to add it, not to ask the owner', async () => {
+  await render(
+    <HotelGateScreen
+      state={{ status: 'none' }}
+      onSignOut={() => undefined}
+      modeSwitcher={null}
+      owner
+    />,
+  );
+  expect(screen.getByText('No hotel yet')).toBeTruthy();
+  expect(
+    screen.getByText('Add your hotel and rooms on bookhushly.com, then check guests in here.'),
+  ).toBeTruthy();
+});

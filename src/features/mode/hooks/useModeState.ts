@@ -7,11 +7,14 @@ import { withCachedMode } from '@/features/mode/domain/modeCache';
 import { useChosenMode } from '@/features/mode/hooks/useChosenMode';
 import { resolveMode, type Mode } from '@/features/mode/domain/resolveMode';
 import type { ModeState } from '@/features/mode/domain/route';
+import { VENDOR_MODE_ENABLED } from '@/shared/config/features';
 import { loadScannableEvents } from '@/shared/api/scannableEvents';
 import { isRetryable, type ApiError } from '@/shared/lib/errors';
 import { supabase } from '@/shared/supabase/client';
 import { scannerDb } from '@/shared/supabase/scannerDb';
 import { wrap } from '@/shared/supabase/wrap';
+
+const MODE_OPTIONS = { vendorMode: VENDOR_MODE_ENABLED };
 
 const db: ModeDb = {
   profile: (id) =>
@@ -19,6 +22,8 @@ const db: ModeDb = {
   hotelStaff: (id) =>
     wrap(supabase.from('hotel_staff').select('hotel_id').eq('user_id', id).limit(1)),
   scannableEvents: (id) => loadScannableEvents(scannerDb, id),
+  vendorCategory: (id) =>
+    wrap(supabase.from('vendors').select('business_category').eq('user_id', id).maybeSingle()),
 };
 
 // Carries the typed ApiError (has `kind`) so the query retry policy can classify it.
@@ -49,7 +54,7 @@ export function useModeState(userId: string | null): {
     queryKey: ['mode', userId],
     enabled: userId !== null,
     queryFn: async () => {
-      const r = await loadModeInputs(db, userId ?? '');
+      const r = await loadModeInputs(db, userId ?? '', MODE_OPTIONS);
       if (!r.ok) throw new ModeLoadError(r.error);
       return r.value;
     },
@@ -69,7 +74,7 @@ export function useModeState(userId: string | null): {
   const data = q.data;
   useEffect(() => {
     if (userId === null || data === undefined) return;
-    const r = resolveMode(data);
+    const r = resolveMode(data, null, MODE_OPTIONS);
     queryClient.setQueryData(['modeCache', userId], r.kind === 'modes' ? r : null);
     void modeCache.save(userId, r).catch(() => undefined);
   }, [userId, data, queryClient]);
@@ -78,7 +83,7 @@ export function useModeState(userId: string | null): {
   if (userId !== null) {
     if (q.isPending || !loaded) state = { status: 'loading' };
     else if (q.isError) state = { status: 'error' };
-    else state = { status: 'ready', resolution: resolveMode(q.data, chosen) };
+    else state = { status: 'ready', resolution: resolveMode(q.data, chosen, MODE_OPTIONS) };
     if (loaded) {
       const failure = q.isError ? q.error : q.failureReason;
       state = withCachedMode(

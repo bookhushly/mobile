@@ -19,7 +19,7 @@ function parseJson(raw: string): unknown {
   }
 }
 
-function parseResolution(raw: string | null): ModesResolution | null {
+function parseResolution(raw: string | null, vendorMode: boolean): ModesResolution | null {
   if (raw === null) return null;
   const v = parseJson(raw);
   if (typeof v !== 'object' || v === null || !('modes' in v) || !('defaultMode' in v)) return null;
@@ -28,6 +28,8 @@ function parseResolution(raw: string | null): ModesResolution | null {
   for (const m of v.modes) {
     const p = typeof m === 'string' ? parseMode(m) : null;
     if (p === null) return null;
+    // Saved by a build with vendor mode on: vendor screens (and an owner's desk) stay closed here.
+    if (p === 'vendor' && !vendorMode) return null;
     modes.push(p);
   }
   const defaultMode = typeof v.defaultMode === 'string' ? parseMode(v.defaultMode) : null;
@@ -45,7 +47,10 @@ function parseIndex(raw: string | null): string[] {
  * cold start offline still reaches the user's saved data. Mode is not authority: the server
  * decides every action, so a stale cache can only show a screen, never grant anything.
  */
-export function createModeCache(kv: KeyValue) {
+export function createModeCache(
+  kv: KeyValue,
+  opts: { vendorMode: boolean } = { vendorMode: false },
+) {
   // Saves and wipes run one at a time, in call order (the index is read-modify-write).
   let queue: Promise<void> = Promise.resolve();
   const enqueue = (op: () => Promise<void>): Promise<void> => {
@@ -56,7 +61,7 @@ export function createModeCache(kv: KeyValue) {
   return {
     async load(userId: string): Promise<ModesResolution | null> {
       try {
-        return parseResolution(await kv.get(key(userId)));
+        return parseResolution(await kv.get(key(userId)), opts.vendorMode);
       } catch {
         return null;
       }

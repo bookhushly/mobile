@@ -27,3 +27,15 @@
 8. **Swap sample data for HTTP** per route as the web ships, verifying each contract first.
 
 Push notifications come after these (owner, 2026-11-25).
+
+## Status (2026-11-26)
+
+Slices 1–7 are built. Slice 8 is partly done: live data for request-for-quote vendors, the wallet, and hotel and apartment bookings. Events, the apartment calendar and the fleet are still on sample data. Hotel owners also get the front desk. Vendor mode itself stays dev-only until it's checked with a real vendor account.
+
+## Follow-ups from the pre-PR reviews (not in this PR)
+
+- **Virtualise the long lists:** Requests (Quoted/Won), Jobs (Done), Bookings (Past) and Earnings activity use `ScrollView` + `.map()`, and `/rfq/offers`, `/rfq/jobs` and `/api/vendor/bookings` aren't paged. Move them to FlashList/SectionList, with headers as their own row type and `recyclingKey` on photos.
+- **Split long files:** `mapVendor.ts`, `vendorHttp.ts`, `JobScreen.tsx`, `RequestScreen.tsx`, `VendorListingContainers.tsx`, `EarningsScreen.tsx` and `QuoteScreen.tsx` are over ~200 lines, and the containers files hold several components.
+- **Measure:** count requests per minute on a low-end Android release build with live data. The budget is under 30 a minute; Today is now about 6 calls, shared between screens for 20 s. Profile the Jobs and Requests lists with 200+ rows.
+- **Confirm with the owner:** whether the Today screens' mid-page primary buttons (Check a guest in, Scan tickets, apartment Confirm/Decline) are an accepted exception to "one full-width primary at the bottom". They were drawn that way in the approved design.
+- **Web:** `expected_status` on the apartment status route (the app's re-read-then-post leaves a small window), the fee rate in `/api/vendor/me`, a fleet route, an events-with-capacity route, room type and paging on `/api/vendor/bookings`, and the suspended-owner and apartment-refund fixes in BACKEND_STATUS §9.

@@ -113,6 +113,15 @@ Today `POST /api/upload` lets the client choose the `folder`. For vendor uploads
 - **`GET /api/vendor/bank-details` returns the full account number.** The app shows only the last two digits. Return `account_number_last2` (or a masked value) and keep the full number server side.
 - **Withdrawals are reviewed by an admin** (`status: pending` → processing → completed or failed). Return the withdrawal's `id` and `status` from `/withdraw`, and list withdrawals with their status in `/transactions`, so the app can show "being checked", "on its way", "sent", and "didn't go through, money returned".
 
+- **A vendor cancelling an apartment booking doesn't refund or notify the guest.** `POST /api/vendor/apartment-bookings/{id}/status` with `cancelled` only sets `booking_status` and `cancelled_at`. On a paid booking, the guest's money stays taken and they aren't told. Before vendor mode ships: start the refund (or queue it for an admin) and notify the guest, as the customer-side cancel does. The app currently tells the vendor to contact the guest and support.
+
+- **Suspended or unapproved hotel owners can still run the front desk. High priority.**
+  - Where: the vendor branch of `hotel_staff_can_manage` (used by check-in, check-out and reassign), the room-status route's vendor check, and the owner branches of the `hotel_bookings` / `hotel_rooms` policies all check ownership only. The same applies to `hotel_realtime_topic_allowed`.
+  - The risk: a vendor suspended for fraud can read guest bookings, check guests in and out, and change rooms. They can do this through direct REST calls today, and through the app once vendor mode ships.
+  - Fix: add `vendors.status <> 'suspended' and vendors.approved` (or the agreed rule) to each of these.
+  - In the meantime, the app shows a suspended or unapproved owner's hotel as "not available".
+- **`business_category` isn't protected by `protect_vendors_trust_fields`.** A vendor can change it themselves. Today that only unlocks a screen (no data, because ownership still decides), but it should be protected like `approved` and `status`.
+
 ### 12. Push deep links
 Put `{ requestType, requestId }` in `data` for `new_request_available` in all three fan-outs. Logistics sends no `requestId` today. Do the same for `offer_accepted`, `offer_rejected` and `payout_released`, adding `offerId` where there is one. The app turns these into a screen.
 
@@ -134,3 +143,13 @@ Put `{ requestType, requestId }` in `data` for `new_request_available` in all th
 - Every route above has a test for 401, for each 403 vendor code, for its 409s, and for the happy path.
 - `docs/mobile/VENDOR_API.md` documents the contract (shapes, codes, examples), as `RFQ_API.md` does.
 - The web vendor dashboard still works (it can keep calling the actions).
+
+## Follow-ups after PR #248 (mobile, 2026-11-26)
+
+The app's live layer is built against `docs/mobile/VENDOR_API.md`. These would close the remaining gaps:
+
+1. Bookhushly's fee rate per request type in `GET /api/vendor/me` (e.g. `commission_rates: { car_rental: 10, … }`). Today the app reads it off past jobs, so a new vendor can't see what they'll receive before quoting.
+2. `GET /api/vendor/fleet` (vehicles and drivers, ids and names) so a quote can name the vehicle.
+3. `GET /api/vendor/events` with each event's capacity, tickets sold per type, and sales this week, for the event vendor's Today.
+4. `/api/vendor/bookings`: add the room type to hotel stays, and paging (it returns every booking ever).
+5. ~~Deploy PR #248 to production.~~ Live 2026-11-26; the app uses the live routes.

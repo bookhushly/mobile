@@ -44,6 +44,18 @@ const schema = z.object({ ok: z.boolean() });
 const headersOf = (c: Call | undefined) => c?.init.headers as Record<string, string>;
 
 describe('api client', () => {
+  describe('a FormData body (uploads)', () => {
+    it('is sent as it is, with no JSON content type, so fetch sets the multipart boundary', async () => {
+      const { client, calls } = make([res(200, { ok: true })]);
+      const form = new FormData();
+      form.append('folder', 'proof');
+      const r = await client.request('/api/upload', { method: 'POST', body: form, schema });
+      expect(r.ok).toBe(true);
+      expect(calls[0]?.init.body).toBe(form);
+      expect(headersOf(calls[0])['Content-Type']).toBeUndefined();
+    });
+  });
+
   describe('an auth call with no token', () => {
     const noToken = () => Promise.resolve(null);
 

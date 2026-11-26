@@ -11,5 +11,15 @@ export { elevation } from './elevation';
 export type { ElevationKey } from './elevation';
 export { motion } from './motion';
 export type { MotionTier } from './motion';
-export { iconSize, iconStroke, borderWidth, cardSize, layout, skeletonLine } from './sizes';
+export {
+  iconSize,
+  iconStroke,
+  borderWidth,
+  cardSize,
+  largeTextScale,
+  layout,
+  pressedOpacity,
+  skeletonLine,
+  vendorSize,
+} from './sizes';
 export type { IconSizeKey } from './sizes';

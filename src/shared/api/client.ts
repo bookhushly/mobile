@@ -102,9 +102,11 @@ export function createApiClient(deps: Deps) {
         'X-Platform': deps.platform,
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      if (body !== undefined) headers['Content-Type'] = 'application/json';
+      // FormData (uploads) goes as it is: fetch sets the multipart Content-Type with its boundary.
+      const form = typeof FormData !== 'undefined' && body instanceof FormData;
+      if (body !== undefined && !form) headers['Content-Type'] = 'application/json';
       const init: RequestInit = { method, headers, signal: controller.signal };
-      if (body !== undefined) init.body = JSON.stringify(body);
+      if (body !== undefined) init.body = form ? body : JSON.stringify(body);
       const res = await deps.fetchFn(`${deps.baseUrl}${path}`, init);
       recordDate(res);
       reach(res.status < 500);

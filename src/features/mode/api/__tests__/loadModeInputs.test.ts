@@ -7,10 +7,47 @@ const db = (over: Partial<ModeDb> = {}): ModeDb => ({
   profile: () => okRes({ id: 'u', role: 'customer' }),
   hotelStaff: () => okRes([]),
   scannableEvents: () => Promise.resolve({ ok: true, value: [] }),
+  vendorCategory: () => okRes(null),
   ...over,
 });
 
 describe('loadModeInputs', () => {
+  it('a vendor: reads their business category, and hotels own a front desk', async () => {
+    const vendorCategory = jest.fn(() => okRes({ business_category: 'hotels' }));
+    const r = await loadModeInputs(
+      db({ profile: () => okRes({ id: 'u', role: 'vendor' }), vendorCategory }),
+      'u',
+    );
+    expect(r).toEqual({
+      ok: true,
+      value: { role: 'vendor', hotelStaff: null, activeScannerCount: 0, ownsHotel: true },
+    });
+  });
+  it('with vendor mode off, a vendor’s business isn’t read (they get the web dashboard)', async () => {
+    const vendorCategory = jest.fn(() => okRes({ business_category: 'hotels' }));
+    const r = await loadModeInputs(
+      db({ profile: () => okRes({ id: 'u', role: 'vendor' }), vendorCategory }),
+      'u',
+      { vendorMode: false },
+    );
+    expect(vendorCategory).not.toHaveBeenCalled();
+    expect(r).toEqual({
+      ok: true,
+      value: { role: 'vendor', hotelStaff: null, activeScannerCount: 0 },
+    });
+  });
+  it('only vendors are asked about a business', async () => {
+    const vendorCategory = jest.fn(() => okRes(null));
+    await loadModeInputs(db({ vendorCategory }), 'u');
+    expect(vendorCategory).not.toHaveBeenCalled();
+  });
+  it('a vendor whose business can’t be read is a mode error, not a guess', async () => {
+    const r = await loadModeInputs(
+      db({ profile: () => okRes({ id: 'u', role: 'vendor' }), vendorCategory: () => errRes(503) }),
+      'u',
+    );
+    expect(r.ok).toBe(false);
+  });
   it('assembles inputs', async () => {
     const r = await loadModeInputs(
       db({
