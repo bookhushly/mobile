@@ -46,5 +46,6 @@ export { SuccessMark } from './SuccessMark';
 export { Text } from './Text';
 export { TextLink } from './TextLink';
 export { ToggleButton } from './ToggleButton';
+export { useTabBarPad } from './useTabBarPad';
 export { useWide } from './useWide';
 export { RangeCalendar } from './RangeCalendar';

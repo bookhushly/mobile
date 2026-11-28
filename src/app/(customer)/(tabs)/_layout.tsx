@@ -11,7 +11,7 @@ import { TourScreen } from '@/features/customer/screens/TourScreen';
 import { useKnownCustomer } from '@/features/mode/hooks/useKnownCustomer';
 import { CUSTOMER_TOUR_ENABLED } from '@/shared/config/features';
 import { borderWidth, color } from '@/shared/theme';
-import { Text, useDensity } from '@/shared/ui';
+import { Text, useDensity, useTabBarPad } from '@/shared/ui';
 
 const LABEL_MAX_SCALE = 1.3;
 // The active icon draws a touch heavier, so the state reads without colour.
@@ -21,6 +21,7 @@ const STROKE_OFF = 1.75;
 // Spec 4b D1: Explore · Saved · Bookings · Account. A bottom bar on every size.
 export default function CustomerTabsLayout() {
   const d = useDensity();
+  const tabBarPad = useTabBarPad(LABEL_MAX_SCALE);
   const state = useAuth((s) => s.state);
   const recovery = useAuth((s) => s.recovery);
   // No tour during a mode lookup: the account signing in may yet be staff.
@@ -70,6 +71,7 @@ export default function CustomerTabsLayout() {
               backgroundColor: color.surface,
               borderTopColor: color.border,
               borderTopWidth: borderWidth.hairline,
+              ...tabBarPad,
             },
             tabBarItemStyle: { minHeight: d.controlHeight },
             // Labels follow Dynamic Type up to 1.3× so the fixed-height bar never clips (ruling B6).
