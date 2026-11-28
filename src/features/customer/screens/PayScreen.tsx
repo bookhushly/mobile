@@ -21,6 +21,8 @@ import { usePayment, type ReviewCancel, type PayKind } from '@/features/customer
 import { checkoutStore } from '@/features/customer/offline/checkoutStore';
 import { NoticeScreen } from '@/features/customer/screens/NoticeScreen';
 import { BookedDone } from '@/features/customer/ui/checkout/BookedDone';
+import type { CrossSellItem } from '@/features/customer/domain/trips/trips';
+import { TripCrossSell } from '@/features/customer/ui/trips/TripCrossSell';
 import { PayReview } from '@/features/customer/ui/checkout/PayReview';
 import { PayStates } from '@/features/customer/ui/checkout/PayStates';
 import { CHECKOUT_PAYMENTS_ENABLED } from '@/shared/config/features';
@@ -43,6 +45,9 @@ type Props = {
   onViewTickets: (bookingId: string) => void;
   onViewBooking: (kind: PayKind, bookingId: string) => void;
   onDone: () => void;
+  /** The trip suggestions after a booking: book another kind, or open or plan a trip. */
+  onCrossSell: (item: CrossSellItem) => void;
+  onTrip: (tripId: string | null) => void;
 };
 
 /**
@@ -108,6 +113,8 @@ function Pay({
   onViewTickets,
   onViewBooking,
   onDone,
+  onCrossSell,
+  onTrip,
 }: Props & { booking: { kind: PayKind; id: string } }) {
   const qc = useQueryClient();
   const navigation = useNavigation();
@@ -217,6 +224,9 @@ function Pay({
           else onViewBooking(kind, id);
         }}
         onDone={onDone}
+        extra={
+          <TripCrossSell userId={userId} justBooked={kind} onBook={onCrossSell} onTrip={onTrip} />
+        }
       />
     );
   }

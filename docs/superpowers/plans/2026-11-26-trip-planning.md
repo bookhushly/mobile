@@ -16,7 +16,7 @@
 - **Linking:** an optional "Part of a trip" choice on the hotel/apartment/event checkout and on the car/logistics/security check step, shown only when an open trip has a planned service of that type. "Browse hotels" / "Request a car" on a trip preselects that trip's service (a small in-memory store, wiped on sign-out). The chosen id is sent as `trip_service_id`; the server checks it.
 - **Pure logic** (`domain/trips/trips.ts`, TDD): services and words, draft steps and readiness, the suggested name, progress, missing services, can-complete, link targets.
 
-## Not in this pass
+## Added after (2026-11-26, PR after #26)
 
-- The web's post-booking cross-sell card ("Complete your trip").
-- An Explore tile (needs a photo).
+- Explore: a wide "Plan a trip" tile (Unsplash photo, owner's OK to download; credits in `assets/images/trips/SOURCES.md`) opening `/trips/new`.
+- The web's cross-sell after a booking: on "You're booked" (hotel, apartment, event), two suggestions by what was booked, then "Add to “{trip}”" (the newest trip still planning) or "Plan a full trip"; it can be hidden.

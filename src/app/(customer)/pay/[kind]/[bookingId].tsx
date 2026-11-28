@@ -1,5 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 
+import { bookingForType } from '@/features/customer/hooks/useTripScreen';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { bookingRefParams } from '@/features/customer/domain/routeParams';
 import { PayScreen } from '@/features/customer/screens/PayScreen';
@@ -54,6 +55,16 @@ export default function PayRoute() {
       }}
       onDone={() => {
         router.dismissTo('/explore');
+      }}
+      onCrossSell={(item) => {
+        const to = bookingForType(item.type);
+        if (to.to === 'results')
+          router.replace({ pathname: '/results', params: { category: to.category } });
+        else router.replace(`/${to.to}/new`);
+      }}
+      onTrip={(tripId) => {
+        if (tripId === null) router.replace('/trips/new');
+        else router.replace({ pathname: '/trips/[id]', params: { id: tripId } });
       }}
     />
   );

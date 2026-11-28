@@ -1,5 +1,7 @@
 import {
   canComplete,
+  crossSell,
+  openTrip,
   EMPTY_TRIP,
   linkTargets,
   stateOfDestination,
@@ -122,5 +124,18 @@ describe('words', () => {
     expect(progressLine(trip({ services: [{ id: 's1', type: 'hotel', status: 'booked' }] }))).toBe(
       'Booked',
     );
+  });
+});
+
+describe('after a booking (the web’s cross-sell)', () => {
+  it('suggests what travellers also need, by what was just booked', () => {
+    expect(crossSell('hotel').map((s) => s.label)).toEqual(['Rent a car', 'Book events']);
+    expect(crossSell('apartment').map((s) => s.label)).toEqual(['Rent a car', 'Add security']);
+    expect(crossSell('event').map((s) => s.label)).toEqual(['Book a hotel', 'Rent a car']);
+  });
+  it('offers the newest trip still being planned, with something left to book', () => {
+    const done = trip({ id: 'done', services: [{ id: 's1', type: 'hotel', status: 'booked' }] });
+    expect(openTrip([done, trip({ id: 't2' }), trip({ id: 't3' })])?.id).toBe('t2');
+    expect(openTrip([done])).toBeNull();
   });
 });

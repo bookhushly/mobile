@@ -154,6 +154,7 @@ function props() {
     onOpenCarRental: jest.fn(),
     onOpenLogistics: jest.fn(),
     onOpenSecurity: jest.fn(),
+    onPlanTrip: jest.fn(),
     onSignInAgain: jest.fn(),
   };
 }
@@ -383,7 +384,7 @@ it('the place chip changes the stays query', async () => {
   );
 });
 
-it('car rentals and logistics open their request flows, not results', async () => {
+it('car rentals, logistics, security and trips open their own flows, not results', async () => {
   const p = props();
   await render(<ExploreScreen {...p} />);
   const tiles = screen.getByTestId('explore-categories');
@@ -393,6 +394,8 @@ it('car rentals and logistics open their request flows, not results', async () =
   expect(p.onOpenLogistics).toHaveBeenCalled();
   await fireEvent.press(within(tiles).getByRole('button', { name: 'Hire security, New' }));
   expect(p.onOpenSecurity).toHaveBeenCalled();
+  await fireEvent.press(within(tiles).getByRole('button', { name: 'Plan a trip, New' }));
+  expect(p.onPlanTrip).toHaveBeenCalled();
   expect(p.onOpenResults).not.toHaveBeenCalled();
 });
 

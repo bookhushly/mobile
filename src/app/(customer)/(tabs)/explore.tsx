@@ -38,6 +38,9 @@ export default function ExploreRoute() {
       onOpenSecurity={() => {
         router.push('/security/new');
       }}
+      onPlanTrip={() => {
+        router.push('/trips/new');
+      }}
       onSignInAgain={() => {
         signOut();
       }}

@@ -15,6 +15,7 @@ import { CategoryTiles, type Tile } from '@/features/customer/ui/CategoryTiles';
 import { CAR_RENTALS_PHOTO } from '@/features/customer/ui/car/carPhotos';
 import { SEND_OR_MOVE_PHOTO } from '@/features/customer/ui/logistics/logisticsPhotos';
 import { SECURITY_CARD_PHOTO } from '@/features/customer/ui/security/securityPhotos';
+import { TRIP_CARD_PHOTO } from '@/features/customer/ui/trips/tripPhotos';
 import { PromoCard } from '@/features/customer/ui/PromoCard';
 import { isConnectionFailure } from '@/features/customer/ui/discoverLabels';
 import { PlaceSheet } from '@/features/customer/ui/PlaceSheet';
@@ -41,6 +42,8 @@ type Props = {
   onOpenLogistics: () => void;
   /** Phase 6: security is asked for too (guards for a place, an event or a person). */
   onOpenSecurity: () => void;
+  /** Trip planning: plan a whole trip (the web's /plan-trip). */
+  onPlanTrip: () => void;
   /** A stale session on a heart: the route signs out so the customer can sign in again. */
   onSignInAgain: () => void;
 };
@@ -50,7 +53,7 @@ const HOTEL_PHOTO = require('../../../../assets/images/auth/hotel.webp') as numb
 const APARTMENT_PHOTO = require('../../../../assets/images/auth/apartment.webp') as number;
 const EVENT_PHOTO = require('../../../../assets/images/auth/event.webp') as number;
 
-type Way = Category | 'car_rentals' | 'logistics' | 'security';
+type Way = Category | 'car_rentals' | 'logistics' | 'security' | 'trips';
 
 const CATEGORIES: readonly Tile<Way>[] = [
   { key: 'hotels', label: 'Hotels', blurb: 'Rooms & suites', image: HOTEL_PHOTO },
@@ -74,6 +77,13 @@ const CATEGORIES: readonly Tile<Way>[] = [
     label: 'Hire security',
     blurb: 'Guards for homes, offices and events',
     image: SECURITY_CARD_PHOTO,
+    badge: 'New',
+  },
+  {
+    key: 'trips',
+    label: 'Plan a trip',
+    blurb: 'Hotel, car, events and more, in one place',
+    image: TRIP_CARD_PHOTO,
     badge: 'New',
   },
 ];
@@ -107,6 +117,7 @@ export function ExploreScreen({
   onOpenCarRental,
   onOpenLogistics,
   onOpenSecurity,
+  onPlanTrip,
   onSignInAgain,
 }: Props) {
   const d = useDensity();
@@ -262,6 +273,7 @@ export function ExploreScreen({
               if (cat === 'car_rentals') onOpenCarRental();
               else if (cat === 'logistics') onOpenLogistics();
               else if (cat === 'security') onOpenSecurity();
+              else if (cat === 'trips') onPlanTrip();
               else onOpenResults({ category: cat });
             }}
             testID="explore-categories"
