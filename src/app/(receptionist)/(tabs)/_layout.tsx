@@ -4,7 +4,7 @@ import { BedDouble, CalendarDays, Users } from 'lucide-react-native';
 import { color, layout, typeVariants } from '@/shared/theme';
 import { fontFamily } from '@/shared/theme/fonts';
 import { DeskTabIcon } from '@/features/receptionist/ui/DeskTabIcon';
-import { useDensity, useWide } from '@/shared/ui';
+import { useDensity, useTabBarPad, useWide } from '@/shared/ui';
 
 const label = typeVariants.labelSm;
 
@@ -12,6 +12,8 @@ const label = typeVariants.labelSm;
 export default function DeskTabsLayout() {
   const wide = useWide();
   const d = useDensity();
+  // The bottom bar only: a tablet's left rail must not take the extra height.
+  const tabBarPad = useTabBarPad(label.maxScale);
   return (
     <Tabs
       screenOptions={{
@@ -27,6 +29,7 @@ export default function DeskTabsLayout() {
           borderRightColor: color.border,
           // Pinned so screens can size from the window (Rooms grid) without measuring.
           ...(wide ? { width: layout.tabletRailWidth, minWidth: layout.tabletRailWidth } : null),
+          ...(wide ? null : tabBarPad),
         },
         tabBarItemStyle: { minHeight: d.controlHeight },
         tabBarLabelStyle: {

@@ -33,7 +33,15 @@ function Weekdays() {
     <View style={{ flexDirection: 'row' }} importantForAccessibility="no-hide-descendants">
       {WEEK.map((w) => (
         <View key={w} style={{ flex: 1 }}>
-          <Text variant="caption" tone="textSecondary" align="center">
+          {/* Capped near XXXL: at the accessibility sizes "Wed" broke into "We / d" in a seventh of
+              an iPhone SE (device check, 2026-11-28). The row is hidden from screen readers. */}
+          <Text
+            variant="caption"
+            tone="textSecondary"
+            align="center"
+            numberOfLines={1}
+            maxScale={WEEKDAY_MAX_SCALE}
+          >
             {w}
           </Text>
         </View>
@@ -45,6 +53,7 @@ function Weekdays() {
 type MonthData = { key: string; title: string; lead: number; days: IsoDate[] };
 
 const WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEKDAY_MAX_SCALE = 1.3;
 const two = (n: number) => String(n).padStart(2, '0');
 
 function buildMonths(today: IsoDate, count: number): MonthData[] {

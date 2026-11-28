@@ -15,7 +15,7 @@ import {
 import { vendorTabs } from '@/features/vendor/domain/vendorTabs';
 import { useVendorSession } from '@/features/vendor/hooks/VendorContext';
 import { borderWidth, color } from '@/shared/theme';
-import { Text, useDensity } from '@/shared/ui';
+import { Text, useDensity, useTabBarPad } from '@/shared/ui';
 
 const LABEL_MAX_SCALE = 1.3;
 // The active icon draws a touch heavier, so the state reads without colour.
@@ -25,6 +25,7 @@ const STROKE_OFF = 1.75;
 // Five tabs per kind of business (vendorTabs); the others stay declared but hidden.
 export default function VendorTabsLayout() {
   const d = useDensity();
+  const tabBarPad = useTabBarPad(LABEL_MAX_SCALE);
   const { vendor } = useVendorSession();
   const shown = new Set<string>(vendorTabs(vendor.kind));
   return (
@@ -39,6 +40,7 @@ export default function VendorTabsLayout() {
           backgroundColor: color.surface,
           borderTopColor: color.border,
           borderTopWidth: borderWidth.hairline,
+          ...tabBarPad,
         },
         tabBarItemStyle: { minHeight: d.controlHeight },
         tabBarLabel: ({ color: tint, focused, children }) => (
