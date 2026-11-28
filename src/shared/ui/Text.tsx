@@ -17,6 +17,8 @@ type Props = {
   maxScale?: number;
   /** Lets the user select and copy the text (codes read out or typed at a desk). */
   selectable?: boolean;
+  /** How many lines the text laid out in (a layout that changes when a label wraps). */
+  onLines?: (lines: number) => void;
   style?: StyleProp<TextStyle>;
   children: ReactNode;
 };
@@ -32,6 +34,7 @@ export function Text({
   accessibilityLiveRegion,
   maxScale,
   selectable,
+  onLines,
   style,
   children,
 }: Props) {
@@ -43,6 +46,13 @@ export function Text({
       accessibilityLiveRegion={accessibilityLiveRegion}
       numberOfLines={numberOfLines}
       selectable={selectable}
+      onTextLayout={
+        onLines === undefined
+          ? undefined
+          : (e) => {
+              onLines(e.nativeEvent.lines.length);
+            }
+      }
       maxFontSizeMultiplier={maxScale ?? v.maxScale}
       style={[
         {

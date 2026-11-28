@@ -27,6 +27,8 @@ type Props = {
   icon?: LucideIcon;
   /** Overrides the label's Dynamic Type cap (gate outcome actions use 1 so they stay on screen). */
   maxScale?: number;
+  /** How many lines the label took (it wraps to two at most). */
+  onLabelLines?: (lines: number) => void;
   testID?: string;
 };
 
@@ -73,6 +75,7 @@ export function Button({
   loading,
   icon,
   maxScale,
+  onLabelLines,
   testID,
 }: Props) {
   const d = useDensity();
@@ -113,7 +116,14 @@ export function Button({
         ) : icon !== undefined ? (
           <Icon as={icon} size="sm" tone={fg} />
         ) : null}
-        <Text variant="button" tone={fg} numberOfLines={2} align="center" maxScale={maxScale}>
+        <Text
+          variant="button"
+          tone={fg}
+          numberOfLines={2}
+          align="center"
+          maxScale={maxScale}
+          onLines={onLabelLines}
+        >
           {label}
         </Text>
       </View>
