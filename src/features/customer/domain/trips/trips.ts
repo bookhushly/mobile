@@ -193,3 +193,34 @@ export function progressLine(t: Trip): string {
   if (booked < total) return `${String(booked)} of ${String(total)} booked`;
   return total === 1 ? 'Booked' : `All ${String(total)} booked`;
 }
+
+export type CrossSellItem = { type: TripServiceType; label: string };
+
+/** The web's TripCrossSell suggestions, by what was just booked. */
+export function crossSell(justBooked: 'hotel' | 'apartment' | 'event'): CrossSellItem[] {
+  switch (justBooked) {
+    case 'hotel':
+      return [
+        { type: 'car_rental', label: 'Rent a car' },
+        { type: 'event', label: 'Book events' },
+      ];
+    case 'apartment':
+      return [
+        { type: 'car_rental', label: 'Rent a car' },
+        { type: 'security', label: 'Add security' },
+      ];
+    case 'event':
+      return [
+        { type: 'hotel', label: 'Book a hotel' },
+        { type: 'car_rental', label: 'Rent a car' },
+      ];
+  }
+}
+
+/** The trip to offer after a booking: the newest still planning, with something left to book. */
+export function openTrip(trips: readonly Trip[]): Trip | null {
+  return (
+    trips.find((t) => t.status === 'planning' && t.services.some((s) => s.status === 'planned')) ??
+    null
+  );
+}

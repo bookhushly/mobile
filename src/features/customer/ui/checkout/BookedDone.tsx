@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
@@ -18,6 +18,8 @@ type Props = {
   note?: string | null;
   onView: () => void;
   onDone: () => void;
+  /** Below the facts: the trip suggestions. */
+  extra?: ReactNode;
 };
 
 const START_SCALE = 0.8;
@@ -43,7 +45,16 @@ function Tick() {
 }
 
 // Spec P20, Mobbin §5: "You're booked", key facts, View tickets / View booking, then Done.
-export function BookedDone({ isEvent, title, when, note = null, email, onView, onDone }: Props) {
+export function BookedDone({
+  isEvent,
+  title,
+  when,
+  note = null,
+  email,
+  onView,
+  onDone,
+  extra,
+}: Props) {
   // Haptic only, never the gate's sounds (not loaded).
   const [feedback] = useState(createFeedback);
   // StrictMode (dev) runs mount effects twice; the ref keeps it to one buzz.
@@ -92,6 +103,7 @@ export function BookedDone({ isEvent, title, when, note = null, email, onView, o
             {`Confirmation sent to ${maskEmail(email)}`}
           </Text>
         ) : null}
+        {extra === undefined ? null : <View style={{ paddingTop: space.s5 }}>{extra}</View>}
       </View>
     </Screen>
   );

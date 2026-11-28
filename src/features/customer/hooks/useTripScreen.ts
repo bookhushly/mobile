@@ -4,6 +4,7 @@ import {
   stateOfDestination,
   type Trip,
   type TripService,
+  type TripServiceType,
 } from '@/features/customer/domain/trips/trips';
 import { CustomerLoadError } from '@/features/customer/hooks/customerKeys';
 import {
@@ -21,8 +22,16 @@ export type TripBooking =
 
 /** Where a trip's planned service is booked, with the trip chosen for it at checkout. */
 export function bookingFor(trip: Trip, s: TripService): TripBooking {
-  const region = trip.destination === null ? {} : { region: stateOfDestination(trip.destination) };
-  switch (s.type) {
+  return bookingForType(s.type, trip.destination);
+}
+
+/** Where a kind of booking starts: listings (in the trip's state, if any) or a request flow. */
+export function bookingForType(
+  type: TripServiceType,
+  destination: string | null = null,
+): TripBooking {
+  const region = destination === null ? {} : { region: stateOfDestination(destination) };
+  switch (type) {
     case 'hotel':
       return { to: 'results', category: 'hotels', ...region };
     case 'apartment':

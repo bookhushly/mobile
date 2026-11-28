@@ -190,6 +190,8 @@ const handlers = {
   onStartAgain: jest.fn(),
   onViewTickets: jest.fn(),
   onViewBooking: jest.fn(),
+  onCrossSell: jest.fn(),
+  onTrip: jest.fn(),
   onDone: jest.fn(),
 };
 
