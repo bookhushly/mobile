@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 
 import { WelcomeScreen } from '@/features/auth/screens/WelcomeScreen';
 import { color } from '@/shared/theme';
@@ -132,5 +132,36 @@ describe('the two actions on a narrow phone (iPhone SE, device check 2026-11-28)
     // Full width it fits again; that must not flip it back.
     await fireEvent(screen.getByText('Create account'), 'textLayout', laidOut(1));
     expect(screen.getByTestId('welcome-actions')).toHaveStyle({ flexDirection: 'column' });
+  });
+});
+
+describe('no jump on the first frame (reduced motion shows it)', () => {
+  const laidOut = (lines: number) => ({
+    nativeEvent: { lines: Array.from({ length: lines }, () => ({ text: 'x' })) },
+  });
+  it('keeps the words and actions hidden until the label’s lines are known', async () => {
+    await render(<WelcomeScreen {...props()} />);
+    expect(screen.getByTestId('welcome-content')).toHaveStyle({ opacity: 0 });
+    await fireEvent(screen.getByText('Create account'), 'textLayout', laidOut(1));
+    expect(screen.getByTestId('welcome-content')).toHaveStyle({ opacity: 1 });
+  });
+  it('shows them already stacked when the label wraps', async () => {
+    await render(<WelcomeScreen {...props()} />);
+    await fireEvent(screen.getByText('Create account'), 'textLayout', laidOut(2));
+    expect(screen.getByTestId('welcome-content')).toHaveStyle({ opacity: 1 });
+    expect(screen.getByTestId('welcome-actions')).toHaveStyle({ flexDirection: 'column' });
+  });
+  it('shows them anyway if no line count ever comes', async () => {
+    jest.useFakeTimers();
+    try {
+      await render(<WelcomeScreen {...props()} />);
+      expect(screen.getByTestId('welcome-content')).toHaveStyle({ opacity: 0 });
+      await act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+      expect(screen.getByTestId('welcome-content')).toHaveStyle({ opacity: 1 });
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

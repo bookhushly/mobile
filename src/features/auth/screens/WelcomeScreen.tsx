@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useContext, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, { Easing, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
@@ -18,6 +18,8 @@ const wordmark = require('../../../../assets/images/logo-wordmark.png') as numbe
 // enough to read as the brand, not a corner label.
 const WORDMARK_HEIGHT = 40;
 const WORDMARK_WIDTH = (WORDMARK_HEIGHT * 1288) / 364;
+// Shows the actions anyway if their label never reports its lines.
+const SETTLE_FALLBACK_MS = motion.duration.moderate;
 // How far above the text the fade starts from clear.
 const FADE_ABOVE_PT = 120;
 // Logo, slides, then actions: a small fade and lift, one after another, no bounce.
@@ -62,6 +64,20 @@ export function WelcomeScreen({
   const fitKey = `${String(width)}:${String(fontScale)}`;
   const [wrappedAt, setWrappedAt] = useState<string | null>(null);
   const stacked = wrappedAt === fitKey;
+  // Hidden until the label's line count is known (one frame), so a phone that stacks never shows
+  // the side-by-side pair first and the bottom-anchored block never jumps up. That showed with
+  // reduced motion, where nothing fades in to cover it. If no count comes, it shows anyway.
+  const [settledAt, setSettledAt] = useState<string | null>(null);
+  const settled = settledAt === fitKey;
+  useEffect(() => {
+    if (settled) return;
+    const t = setTimeout(() => {
+      setSettledAt(fitKey);
+    }, SETTLE_FALLBACK_MS);
+    return () => {
+      clearTimeout(t);
+    };
+  }, [settled, fitKey]);
   return (
     <View style={{ flex: 1 }}>
       {/* Sits at the bottom until large text or the notice outgrow the screen, then scrolls, so the
@@ -80,6 +96,7 @@ export function WelcomeScreen({
           style={{
             paddingHorizontal: layout.formGutter,
             paddingBottom: Math.max(insets.bottom, space.s5),
+            opacity: settled ? 1 : 0,
           }}
         >
           {/* Grows with the text, so large type never rises above the fade onto bare photo. */}
@@ -144,6 +161,7 @@ export function WelcomeScreen({
                   onPress={onCreateAccount}
                   onLabelLines={(lines) => {
                     if (!stacked && lines > 1) setWrappedAt(fitKey);
+                    setSettledAt(fitKey);
                   }}
                 />
               </View>
