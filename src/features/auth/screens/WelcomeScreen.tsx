@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useContext, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, { Easing, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 
@@ -9,7 +9,7 @@ import { WelcomeSlides } from '@/features/auth/components/WelcomeSlides';
 import { WELCOME_ENTERS_AT, welcomeUnderIntro } from '@/features/auth/launchIntro';
 import type { AuthNotice } from '@/features/auth/hooks/useAuthNotice';
 import { color, layout, motion, space } from '@/shared/theme';
-import { Banner, Button, TextLink } from '@/shared/ui';
+import { Banner, Button, TextLink, useDensity } from '@/shared/ui';
 import { useMotionTier } from '@/shared/ui/motion';
 
 const wordmark = require('../../../../assets/images/logo-wordmark.png') as number;
@@ -54,6 +54,14 @@ export function WelcomeScreen({
   const still = useMotionTier() === 'none';
   // Decided once, on the first frame: the intro is about to play over this screen.
   const [after] = useState(() => (welcomeUnderIntro() ? WELCOME_ENTERS_AT : 0));
+  // Side by side where "Create account" fits on one line; stacked where it would wrap (iPhone SE,
+  // 375 pt, or large text: device check 2026-11-28). Latched per width and text size, since the
+  // stacked pill is wide enough to fit and would otherwise flip back.
+  const d = useDensity();
+  const { width, fontScale } = useWindowDimensions();
+  const fitKey = `${String(width)}:${String(fontScale)}`;
+  const [wrappedAt, setWrappedAt] = useState<string | null>(null);
+  const stacked = wrappedAt === fitKey;
   return (
     <View style={{ flex: 1 }}>
       {/* Sits at the bottom until large text or the notice outgrow the screen, then scrolls, so the
@@ -119,12 +127,27 @@ export function WelcomeScreen({
             entering={still ? undefined : enter(2, after)}
             style={{ marginTop: space.s7 }}
           >
-            {/* Side by side, as Nike and IHG do: two equal choices, neither a full-width slab. */}
-            <View testID="welcome-actions" style={{ flexDirection: 'row', gap: space.s3 }}>
-              <View style={{ flex: 1 }}>
-                <Button label="Create account" onInverse="light" onPress={onCreateAccount} />
+            {/* Side by side, as Nike and IHG do: two equal choices, neither a full-width slab. Where
+                "Create account" would wrap (a 375 pt phone, large text) they stack instead, a
+                touch-target gap apart. */}
+            <View
+              testID="welcome-actions"
+              style={{
+                flexDirection: stacked ? 'column' : 'row',
+                gap: stacked ? d.targetGap : space.s3,
+              }}
+            >
+              <View style={stacked ? null : { flex: 1 }}>
+                <Button
+                  label="Create account"
+                  onInverse="light"
+                  onPress={onCreateAccount}
+                  onLabelLines={(lines) => {
+                    if (!stacked && lines > 1) setWrappedAt(fitKey);
+                  }}
+                />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={stacked ? null : { flex: 1 }}>
                 <Button label="Sign in" variant="secondary" onInverse="light" onPress={onSignIn} />
               </View>
             </View>

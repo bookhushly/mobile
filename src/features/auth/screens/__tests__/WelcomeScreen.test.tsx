@@ -115,3 +115,22 @@ it('puts the two choices side by side', async () => {
   await render(<WelcomeScreen {...props()} />);
   expect(screen.getByTestId('welcome-actions')).toHaveStyle({ flexDirection: 'row' });
 });
+
+describe('the two actions on a narrow phone (iPhone SE, device check 2026-11-28)', () => {
+  const laidOut = (lines: number) => ({
+    nativeEvent: { lines: Array.from({ length: lines }, () => ({ text: 'x' })) },
+  });
+  it('stay side by side while "Create account" fits on one line', async () => {
+    await render(<WelcomeScreen {...props()} />);
+    await fireEvent(screen.getByText('Create account'), 'textLayout', laidOut(1));
+    expect(screen.getByTestId('welcome-actions')).toHaveStyle({ flexDirection: 'row' });
+  });
+  it('stack, full width, once its label wraps, and stay stacked', async () => {
+    await render(<WelcomeScreen {...props()} />);
+    await fireEvent(screen.getByText('Create account'), 'textLayout', laidOut(2));
+    expect(screen.getByTestId('welcome-actions')).toHaveStyle({ flexDirection: 'column' });
+    // Full width it fits again; that must not flip it back.
+    await fireEvent(screen.getByText('Create account'), 'textLayout', laidOut(1));
+    expect(screen.getByTestId('welcome-actions')).toHaveStyle({ flexDirection: 'column' });
+  });
+});
